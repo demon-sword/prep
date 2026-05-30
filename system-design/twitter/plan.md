@@ -11,9 +11,9 @@ created: 2026-05-30
 - [x] answers/01-timeline-home-feed.md — section 01: Timeline & Home Feed
 - [x] answers/02-compose-posts-social-actions.md — section 02: Compose, Posts & Social Actions
 - [x] answers/03-profiles-identity-graph-ui.md — section 03: Profiles, Identity & Graph UI
+- [x] answers/04-real-time-updates-notifications.md — section 04: Real-Time Updates & Notifications
 
 ## Next
-- [ ] answers/04-real-time-updates-notifications.md — section 04: Real-Time Updates & Notifications
 - [ ] answers/05-search-explore-direct-messages.md — section 05: Search, Explore & Direct Messages
 - [ ] answers/06-media-upload-playback-accessibility.md — section 06: Media Upload, Playback & Accessibility
 - [ ] answers/07-spaces-communities-live-surfaces.md — section 07: Spaces, Communities & Live Surfaces
