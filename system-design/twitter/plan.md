@@ -17,9 +17,9 @@ created: 2026-05-30
 - [x] answers/07-spaces-communities-live-surfaces.md — section 07: Spaces, Communities & Live Surfaces
 - [x] answers/08-client-state-api-layer-caching.md — section 08: Client State, API Layer & Caching
 - [x] answers/09-auth-security-performance-delivery.md — section 09: Auth, Security, Performance & Delivery
+- [x] answers/10-observability-testing-i18n-moderation-ui.md — section 10: Observability, Testing, i18n & Moderation UI
 
 ## Next
-- [ ] answers/10-observability-testing-i18n-moderation-ui.md — section 10: Observability, Testing, i18n & Moderation UI
 - [ ] md-to-html — run: python3 ralph/scripts/md_to_html.py twitter
 - [ ] architecture-map — write twitter-frontend-architecture.html
 - [ ] interview-template — write twitter-system-design-interview.html
