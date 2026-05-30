@@ -23,7 +23,7 @@ created: 2026-05-30
 - [x] md-to-html — generated section HTML
 - [x] architecture-map — write twitter-frontend-architecture.html
 - [x] interview-template — write twitter-system-design-interview.html
+- [x] index-html — write answers-html/index.html
 
 ## Next
-- [ ] index-html — write answers-html/index.html
 - [ ] validate — run: bash ralph/validate.sh twitter
