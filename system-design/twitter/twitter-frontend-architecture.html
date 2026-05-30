@@ -1,0 +1,944 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Twitter/X Frontend System — Interactive Architecture</title>
+  <meta name="description" content="Interactive architecture map covering all 10 Twitter/X frontend system design prep sections.">
+  <style>
+    :root {
+      --bg: #0f1419;
+      --surface: #16181c;
+      --surface2: #1e2732;
+      --text: #e7e9ea;
+      --muted: #71767b;
+      --border: #2f3336;
+      --accent: #1d9bf0;
+      --accent-soft: rgba(29, 155, 240, 0.15);
+      --ui: #5b9bd5;
+      --client: #70ad47;
+      --transport: #ffc000;
+      --api: #9966cc;
+      --provider: #ed7d31;
+      --data: #4472c4;
+      --security: #e74c3c;
+      --shadow: 0 8px 32px rgba(0,0,0,.35);
+    }
+    @media (prefers-color-scheme: light) {
+      :root {
+        --bg: #ffffff;
+        --surface: #f7f9f9;
+        --surface2: #eff3f4;
+        --text: #0f1419;
+        --muted: #536471;
+        --border: #eff3f4;
+        --accent: #1a8cd8;
+        --accent-soft: rgba(26, 140, 216, 0.12);
+        --shadow: 0 4px 20px rgba(0,0,0,.08);
+      }
+    }
+    *, *::before, *::after { box-sizing: border-box; }
+    html, body { height: 100%; margin: 0; }
+    body {
+      font-family: "Segoe UI", system-ui, -apple-system, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      overflow: hidden;
+    }
+    .app {
+      display: grid;
+      grid-template-columns: 280px 1fr 340px;
+      grid-template-rows: auto 1fr;
+      height: 100vh;
+    }
+    header {
+      grid-column: 1 / -1;
+      display: flex;
+      align-items: center;
+      gap: 1rem;
+      padding: 0.75rem 1.25rem;
+      border-bottom: 1px solid var(--border);
+      background: var(--surface);
+    }
+    header h1 {
+      font-size: 1rem;
+      font-weight: 700;
+      margin: 0;
+      letter-spacing: -0.02em;
+    }
+    header p { margin: 0; font-size: 0.8125rem; color: var(--muted); }
+    .header-links { margin-left: auto; display: flex; gap: 0.75rem; font-size: 0.8125rem; }
+    .header-links a { color: var(--accent); text-decoration: none; }
+    .header-links a:hover { text-decoration: underline; }
+
+    .sidebar {
+      border-right: 1px solid var(--border);
+      background: var(--surface);
+      overflow-y: auto;
+      padding: 1rem;
+    }
+    .sidebar h2 {
+      font-size: 0.6875rem;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      color: var(--muted);
+      margin: 0 0 0.5rem;
+    }
+    .sidebar section { margin-bottom: 1.25rem; }
+    .filter-group { display: flex; flex-wrap: wrap; gap: 0.35rem; }
+    .chip {
+      font-size: 0.75rem;
+      padding: 0.25rem 0.55rem;
+      border-radius: 999px;
+      border: 1px solid var(--border);
+      background: var(--surface2);
+      color: var(--muted);
+      cursor: pointer;
+      user-select: none;
+      transition: all 0.15s;
+    }
+    .chip:hover { border-color: var(--accent); color: var(--text); }
+    .chip.active { background: var(--accent-soft); border-color: var(--accent); color: var(--accent); font-weight: 600; }
+    .chip.layer-ui.active { border-color: var(--ui); color: var(--ui); background: rgba(91,155,213,.12); }
+    .chip.layer-client.active { border-color: var(--client); color: var(--client); background: rgba(112,173,71,.12); }
+    .chip.layer-transport.active { border-color: var(--transport); color: #b8860b; background: rgba(255,192,0,.12); }
+    .chip.layer-api.active { border-color: var(--api); color: var(--api); background: rgba(153,102,204,.12); }
+    .chip.layer-provider.active { border-color: var(--provider); color: var(--provider); background: rgba(237,125,49,.12); }
+    .chip.layer-data.active { border-color: var(--data); color: var(--data); background: rgba(68,114,196,.12); }
+    .chip.layer-security.active { border-color: var(--security); color: var(--security); background: rgba(231,76,60,.12); }
+
+    select, input[type="search"] {
+      width: 100%;
+      font: inherit;
+      font-size: 0.8125rem;
+      padding: 0.45rem 0.65rem;
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      background: var(--surface2);
+      color: var(--text);
+    }
+    .flow-btn {
+      display: block;
+      width: 100%;
+      text-align: left;
+      font: inherit;
+      font-size: 0.8125rem;
+      padding: 0.5rem 0.65rem;
+      margin-bottom: 0.35rem;
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      background: var(--surface2);
+      color: var(--text);
+      cursor: pointer;
+    }
+    .flow-btn:hover, .flow-btn.active { border-color: var(--accent); background: var(--accent-soft); }
+    .legend { font-size: 0.75rem; color: var(--muted); line-height: 1.5; }
+    .legend span { display: inline-block; width: 10px; height: 10px; border-radius: 2px; margin-right: 4px; vertical-align: middle; }
+
+    .canvas-wrap {
+      position: relative;
+      overflow: hidden;
+      background:
+        radial-gradient(circle at 50% 0%, rgba(29,155,240,.08), transparent 50%),
+        var(--bg);
+    }
+    .canvas-toolbar {
+      position: absolute;
+      top: 0.75rem;
+      left: 0.75rem;
+      z-index: 5;
+      display: flex;
+      gap: 0.35rem;
+    }
+    .canvas-toolbar button {
+      font: inherit;
+      font-size: 0.75rem;
+      padding: 0.35rem 0.6rem;
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      background: var(--surface);
+      color: var(--text);
+      cursor: pointer;
+    }
+    .canvas {
+      width: 100%;
+      height: 100%;
+      cursor: grab;
+      touch-action: none;
+    }
+    .canvas.dragging { cursor: grabbing; }
+    .diagram-inner {
+      position: absolute;
+      width: 1300px;
+      height: 920px;
+      transform-origin: 0 0;
+    }
+    svg.connections {
+      position: absolute;
+      inset: 0;
+      width: 100%;
+      height: 100%;
+      pointer-events: none;
+    }
+    svg.connections line, svg.connections path {
+      stroke: var(--border);
+      stroke-width: 1.5;
+      fill: none;
+      transition: stroke 0.2s, stroke-width 0.2s;
+    }
+    svg.connections .flow-active {
+      stroke: var(--accent);
+      stroke-width: 2.5;
+      stroke-dasharray: 8 4;
+      animation: flowDash 0.6s linear infinite;
+    }
+    @keyframes flowDash { to { stroke-dashoffset: -12; } }
+
+    .lane {
+      position: absolute;
+      left: 12px;
+      right: 12px;
+      border: 1px dashed var(--border);
+      border-radius: 10px;
+      background: rgba(255,255,255,.02);
+    }
+    .lane-label {
+      position: absolute;
+      left: 12px;
+      top: 6px;
+      font-size: 0.6875rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      color: var(--muted);
+    }
+    .node {
+      position: absolute;
+      width: 148px;
+      padding: 0.55rem 0.65rem;
+      border-radius: 8px;
+      border: 2px solid var(--border);
+      background: var(--surface);
+      font-size: 0.75rem;
+      line-height: 1.35;
+      cursor: pointer;
+      transition: transform 0.15s, box-shadow 0.15s, opacity 0.2s, border-color 0.15s;
+      box-shadow: var(--shadow);
+    }
+    .node:hover { transform: translateY(-2px); z-index: 10; }
+    .node.selected { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); z-index: 11; }
+    .node.dimmed { opacity: 0.2; pointer-events: none; }
+    .node.highlight { border-color: var(--accent); animation: pulse 1s ease infinite; }
+    @keyframes pulse { 50% { box-shadow: 0 0 0 6px var(--accent-soft); } }
+    .node-title { font-weight: 700; margin-bottom: 0.15rem; }
+    .node-sub { font-size: 0.6875rem; color: var(--muted); }
+    .node-tags { display: flex; flex-wrap: wrap; gap: 2px; margin-top: 0.35rem; }
+    .node-tag {
+      font-size: 0.5625rem;
+      padding: 1px 4px;
+      border-radius: 3px;
+      background: var(--surface2);
+      color: var(--muted);
+    }
+    .node[data-layer="ui"] { border-left: 4px solid var(--ui); }
+    .node[data-layer="client"] { border-left: 4px solid var(--client); }
+    .node[data-layer="transport"] { border-left: 4px solid var(--transport); }
+    .node[data-layer="api"] { border-left: 4px solid var(--api); }
+    .node[data-layer="provider"] { border-left: 4px solid var(--provider); }
+    .node[data-layer="data"] { border-left: 4px solid var(--data); }
+    .node[data-layer="security"] { border-left: 4px solid var(--security); }
+
+    .detail {
+      border-left: 1px solid var(--border);
+      background: var(--surface);
+      overflow-y: auto;
+      padding: 1.25rem;
+    }
+    .detail-empty { color: var(--muted); font-size: 0.9375rem; margin-top: 2rem; text-align: center; }
+    .detail h2 { font-size: 1.125rem; margin: 0 0 0.35rem; }
+    .detail .layer-badge {
+      display: inline-block;
+      font-size: 0.6875rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      padding: 0.2rem 0.5rem;
+      border-radius: 4px;
+      margin-bottom: 0.75rem;
+    }
+    .detail p { font-size: 0.875rem; line-height: 1.6; color: var(--muted); margin: 0 0 0.75rem; }
+    .detail h3 { font-size: 0.8125rem; text-transform: uppercase; letter-spacing: 0.04em; color: var(--accent); margin: 1rem 0 0.4rem; }
+    .detail ul { margin: 0; padding-left: 1.1rem; font-size: 0.8125rem; line-height: 1.55; }
+    .detail li { margin-bottom: 0.3rem; }
+    .section-links { display: flex; flex-wrap: wrap; gap: 0.35rem; margin-top: 0.5rem; }
+    .section-links a {
+      font-size: 0.75rem;
+      padding: 0.25rem 0.5rem;
+      border-radius: 4px;
+      background: var(--accent-soft);
+      color: var(--accent);
+      text-decoration: none;
+    }
+    .section-links a:hover { text-decoration: underline; }
+    .flow-step {
+      font-size: 0.8125rem;
+      padding: 0.5rem 0.65rem;
+      margin-bottom: 0.35rem;
+      border-left: 3px solid var(--border);
+      background: var(--surface2);
+      border-radius: 0 6px 6px 0;
+    }
+    .flow-step.active { border-left-color: var(--accent); background: var(--accent-soft); }
+
+    @media (max-width: 1100px) {
+      .app { grid-template-columns: 1fr; grid-template-rows: auto auto 1fr auto; overflow-y: auto; height: auto; min-height: 100vh; }
+      body { overflow: auto; }
+      .sidebar { border-right: none; border-bottom: 1px solid var(--border); max-height: none; }
+      .canvas-wrap { min-height: 520px; }
+      .detail { border-left: none; border-top: 1px solid var(--border); max-height: none; }
+    }
+  </style>
+</head>
+<body>
+  <div class="app">
+    <header>
+      <div>
+        <h1>Twitter/X Frontend System Architecture</h1>
+        <p>Interactive map · all 10 prep sections</p>
+      </div>
+      <div class="header-links">
+        <a href="answers-html/index.html">Answer pages</a>
+        <a href="twitter-design-doc.md">Question bank</a>
+      </div>
+    </header>
+
+    <aside class="sidebar">
+      <section>
+        <h2>Search</h2>
+        <input type="search" id="search" placeholder="Filter nodes…" autocomplete="off">
+      </section>
+      <section>
+        <h2>Layer filter</h2>
+        <div class="filter-group" id="layerFilters"></div>
+      </section>
+      <section>
+        <h2>Section filter</h2>
+        <div class="filter-group" id="sectionFilters"></div>
+      </section>
+      <section>
+        <h2>Walk a flow</h2>
+        <div id="flowButtons"></div>
+      </section>
+      <section>
+        <h2>Legend</h2>
+        <div class="legend" id="legend"></div>
+      </section>
+    </aside>
+
+    <main class="canvas-wrap">
+      <div class="canvas-toolbar">
+        <button type="button" id="zoomIn">+</button>
+        <button type="button" id="zoomOut">−</button>
+        <button type="button" id="resetView">Reset view</button>
+      </div>
+      <div class="canvas" id="canvas">
+        <div class="diagram-inner" id="diagram">
+          <svg class="connections" id="connections"></svg>
+        </div>
+      </div>
+    </main>
+
+    <aside class="detail" id="detailPanel">
+      <div class="detail-empty" id="detailEmpty">
+        Click a node or run a flow walkthrough to see details, interview angles, and links to answer sections.
+      </div>
+      <div id="detailContent" hidden></div>
+    </aside>
+  </div>
+
+  <script>
+    const LAYERS = {
+      ui: { label: 'UI Surfaces', color: 'var(--ui)' },
+      client: { label: 'Client State', color: 'var(--client)' },
+      transport: { label: 'Transport', color: 'var(--transport)' },
+      api: { label: 'API / BFF', color: 'var(--api)' },
+      provider: { label: 'Providers', color: 'var(--provider)' },
+      data: { label: 'Data', color: 'var(--data)' },
+      security: { label: 'Security & Ops', color: 'var(--security)' }
+    };
+
+    const SECTIONS = [
+      { id: '01', name: 'Timeline & Home Feed', file: 'answers-html/01-timeline-home-feed.html' },
+      { id: '02', name: 'Compose & Social Actions', file: 'answers-html/02-compose-posts-social-actions.html' },
+      { id: '03', name: 'Profiles & Identity', file: 'answers-html/03-profiles-identity-graph-ui.html' },
+      { id: '04', name: 'Real-Time & Notifications', file: 'answers-html/04-real-time-updates-notifications.html' },
+      { id: '05', name: 'Search, Explore & DMs', file: 'answers-html/05-search-explore-direct-messages.html' },
+      { id: '06', name: 'Media & Accessibility', file: 'answers-html/06-media-upload-playback-accessibility.html' },
+      { id: '07', name: 'Spaces & Communities', file: 'answers-html/07-spaces-communities-live-surfaces.html' },
+      { id: '08', name: 'Client State & Caching', file: 'answers-html/08-client-state-api-layer-caching.html' },
+      { id: '09', name: 'Auth & Performance', file: 'answers-html/09-auth-security-performance-delivery.html' },
+      { id: '10', name: 'Observability & Moderation', file: 'answers-html/10-observability-testing-i18n-moderation-ui.html' }
+    ];
+
+    const NODES = [
+      { id: 'homeTimeline', layer: 'ui', x: 40, y: 48, title: 'Home Timeline', sub: 'Following · For You · virtualized', sections: ['01','04','09'],
+        desc: 'Dual feed modes with independent scroll position, cursor pagination, and bi-directional “N new posts” banner without resetting the virtualizer.',
+        bullets: ['Separate cache keys per feedMode + viewerId', 'Sentinel prefetch ~3 viewports from bottom', 'Freeze window prevents re-rank shuffle above viewport', 'Skeleton rows match tweet card aspect ratios for CLS'],
+        questions: ['Following vs For You independent scroll?', 'N new posts banner: prepend vs replace?', 'Hybrid fan-out lag UX?'] },
+      { id: 'composeBar', layer: 'ui', x: 200, y: 48, title: 'Compose Bar', sub: 'Reply · quote · poll · schedule', sections: ['02','06'],
+        desc: 'Inline and modal compose with mention/hashtag parsing, character counting, media attachments, and idempotent client_tweet_id on publish.',
+        bullets: ['Optimistic bubble with pending status pill', 'Draft persisted per account in IndexedDB', 'Post button lock + server idempotency key', 'Non-blocking media upload progress in footer'],
+        questions: ['Optimistic post + reconcile server ID?', 'Double-tap Post prevention?', 'Offline publish queue replay?'] },
+      { id: 'tweetCard', layer: 'ui', x: 360, y: 48, title: 'Tweet Card', sub: 'Actions · thread · quote', sections: ['01','02','10'],
+        desc: 'Reusable card for timeline, profile, search, and notifications with inline like/repost/bookmark, thread collapse, and quote-tweet nesting.',
+        bullets: ['Entity-driven render from normalized store', 'Optimistic engagement with rollback on 403/429', 'Show this thread + paginated replies', 'Moderation labels overlay without remounting list'],
+        questions: ['Rollback optimistic like on rate limit?', 'Propagate tweet_deleted to all surfaces?', 'Batch counter updates in virtualized list?'] },
+      { id: 'profileSurface', layer: 'ui', x: 520, y: 48, title: 'Profile Surface', sub: 'Tabs · header · graph actions', sections: ['03','07'],
+        desc: 'Header paints from metadata cache; tweets/replies/media/likes tabs each paginate with independent cursors and block/mute gating.',
+        bullets: ['LCP-priority avatar/banner with srcset', 'Protected account CTA + gated tabs', 'Deep-link /status/:id scroll-into-view in tab feed', 'Community role + verification badge components'],
+        questions: ['Profile tabs with independent cursors?', 'You\'re blocked vs empty vs deleted UX?', 'Multi-account profile cache isolation?'] },
+      { id: 'notificationsTab', layer: 'ui', x: 680, y: 48, title: 'Notifications', sub: 'Grouped · unread · deep links', sections: ['04','03'],
+        desc: 'Day-grouped notification list with type filters, unread badges, and deep links into tweets, DMs, or Spaces with scroll context preserved.',
+        bullets: ['Unread count vs per-item read state', 'Mark all read optimistic + background sync', 'Hydrate sparse push payloads via REST', 'Per-category preference respects in-app badges'],
+        questions: ['Unread badge math across devices?', 'Deep-link into correct tweet context?', 'Out-of-order delete before create?'] },
+      { id: 'searchExplore', layer: 'ui', x: 840, y: 48, title: 'Search & Explore', sub: 'Typeahead · trends · filters', sections: ['05'],
+        desc: 'Debounced typeahead across accounts/posts/hashtags; Explore mixes trends, news, and promoted cards with URL-persisted filters.',
+        bullets: ['AbortController cancels stale typeahead', 'Query highlight without breaking @mentions', '429 retry-after UX, not silent empty', 'Shareable URL state for people/latest/media tabs'],
+        questions: ['Typeahead debounce + cancellation?', 'Offline search with stale index label?', 'Rate-limited search UX?'] },
+      { id: 'dmInbox', layer: 'ui', x: 40, y: 130, title: 'DM Inbox', sub: 'Threads · requests · presence', sections: ['05','04'],
+        desc: 'Conversation list with previews, unread badges, request folder, and virtualized message threads with heterogeneous media height.',
+        bullets: ['Cursor pagination for message history', 'Typing indicators respect block graph', 'Encrypted DM key-change warnings', 'Jump from mention to correct conversation id'],
+        questions: ['DM thread virtualization with images?', 'Typing indicator privacy with blocks?', 'Encrypted DM trust UI?'] },
+      { id: 'mediaPlayer', layer: 'ui', x: 200, y: 130, title: 'Media Player', sub: 'Upload · HLS · lightbox · a11y', sections: ['06','09'],
+        desc: 'Inline image/video with blurhash placeholders, progressive playback, alt-text editor, and accessible lightbox with focus trap.',
+        bullets: ['Aspect-ratio boxes prevent CLS in feed', 'Autoplay mute-by-default + data-saver cap', 'Lightbox keyboard trap + focus return', 'Sensitive/interstitial without breaking virtualizer'],
+        questions: ['INIT→APPEND→FINALIZE upload flow?', 'Prefetch next visible video manifest?', 'Alt text required before post?'] },
+      { id: 'spacesLive', layer: 'ui', x: 360, y: 130, title: 'Spaces & Communities', sub: 'Live audio · roles · mod queue', sections: ['07','10'],
+        desc: 'Spaces dock with host/speaker/listener roles, request-to-speak, live captions; community timelines and moderation queues.',
+        bullets: ['Optimistic promote/demote speaker roster', 'Listener-only mode minimizes background CPU', 'Live listener count via lightweight patches', 'Report flow tied to real-time room state'],
+        questions: ['WebRTC speakers vs CDN listeners split?', 'Out-of-order speaker roster events?', 'Community join/leave + rules UX?'] },
+      { id: 'moderationUI', layer: 'ui', x: 520, y: 130, title: 'Moderation UI', sub: 'Report · hide · labels · appeal', sections: ['10','03'],
+        desc: 'Non-blocking report/hide/not-interested flows, visibility-limited labels, content warnings, and geo-aware withholdings on tweet cards.',
+        bullets: ['Sheet/drawer avoids blocking scroll thread', 'Consistent label component across surfaces', 'Appeal status polled without full refetch', 'Age gates + sensitive media interstitials'],
+        questions: ['Report flow without blocking feed?', 'Visibility limited label consistency?', 'Geo-aware withholding UI?'] },
+
+      { id: 'entityStore', layer: 'client', x: 80, y: 200, title: 'Entity Store', sub: 'Tweet · user · media by id', sections: ['08','01','02'],
+        desc: 'Normalized map of tweets, users, and media keyed by id; single source for card render across timeline, profile, search, and notifications.',
+        bullets: ['Merge pages without duplicate ids', 'Patch engagement counts in place', 'Invalidate on tweet_edited / tweet_deleted events', 'Partial GraphQL errors render missing attachment slots'],
+        questions: ['UI state vs entity store vs RQ cache?', 'Cursor-stable cache merge overlaps?', 'Partial hydration failure UX?'] },
+      { id: 'rqCache', layer: 'client', x: 280, y: 200, title: 'React Query Cache', sub: 'Timeline · profile · search keys', sections: ['08','03','05'],
+        desc: 'Server-state layer with keys scoped by feedMode, cursor, viewerId; stale-while-revalidate for profiles and static config.',
+        bullets: ['queryKey: [timeline, mode, cursor, accountId]', 'invalidateQueries on follow graph change (not clear all)', 'revalidateOnFocus tradeoffs for counts', 'ETag/If-None-Match on tweet detail'],
+        questions: ['Timeline query key design?', 'Following graph invalidation scope?', 'GraphQL vs REST + CDN at X scale?'] },
+      { id: 'feedVirtualizer', layer: 'client', x: 480, y: 200, title: 'Feed Virtualizer', sub: 'Scroll anchor · height cache', sections: ['01','09','10'],
+        desc: 'Windowed DOM for variable-height tweets with ResizeObserver height cache, scroll anchoring, and bi-directional prepend support.',
+        bullets: ['Stable row keys by tweet id', 'Anchor scroll on prepend from new-posts banner', 'Measured height cache persisted per session', 'Promoted insertions above freeze window only'],
+        questions: ['Infinite scroll with variable heights?', 'Keep scroll stable on re-rank above?', 'Test sentinel + duplicate page edges?'] },
+      { id: 'realtimePipeline', layer: 'client', x: 680, y: 200, title: 'Realtime Pipeline', sub: 'Dedup · batch · reconnect', sections: ['04','01'],
+        desc: 'Normalizes WebSocket/SSE events into store patches: new tweets, counter deltas, deletes; dedups against in-flight pagination.',
+        bullets: ['Exponential backoff reconnect + jitter', 'Dedup event ids already in REST pages', 'Batch like/repost counter updates per frame', 'Out-of-order delete-before-create handling'],
+        questions: ['WebSocket vs SSE vs polling?', 'Dedup socket + REST pagination?', 'Thundering herd on fleet outage reconnect?'] },
+      { id: 'optimisticActions', layer: 'client', x: 880, y: 200, title: 'Optimistic Actions', sub: 'Post · like · repost · bookmark', sections: ['02','04','10'],
+        desc: 'Immediate UI for mutations with rollback, undo-repost grace window, and correlation ids for publish tracing.',
+        bullets: ['client_tweet_id idempotent publish retry', 'Rollback counts on 403/429 with toast', 'Undo repost within grace window', 'Emit rollback metrics to RUM pipeline'],
+        questions: ['Optimistic post reconcile flow?', 'Undo repost grace window?', 'Trace publish with correlation ids?'] },
+      { id: 'uploadManager', layer: 'client', x: 1080, y: 200, title: 'Upload Manager', sub: 'Chunked · resume · prioritize', sections: ['06','02','07'],
+        desc: 'INIT→APPEND→FINALIZE chunked uploads with per-chunk retry, session resume in IndexedDB, and concurrency caps per tab.',
+        bullets: ['Retry failed chunks without full restart', 'Prioritize compose-attached upload on Post', 'STATUS poll until processing complete', 'Resume APPEND after socket drop mid-upload'],
+        questions: ['Chunk retry without restart?', 'Cap concurrent uploads per session?', 'Upload resume after reconnect?'] },
+      { id: 'accountContext', layer: 'client', x: 480, y: 280, title: 'Account Context', sub: 'Multi-account · switch · isolate', sections: ['03','09','08'],
+        desc: 'Per-account namespaces for cache, socket, drafts, and rate-limit buckets; clean teardown on switch without leaking state.',
+        bullets: ['Abort in-flight requests + close socket on switch', 'Separate IndexedDB namespaces per account', 'Notification badge resets per active account', 'Service worker scope respects active session'],
+        questions: ['Multi-account without cache leak?', 'Switch with open compose on both?', 'Token storage: httpOnly vs memory?'] },
+
+      { id: 'restBff', layer: 'transport', x: 160, y: 352, title: 'REST / GraphQL BFF', sub: 'Aggregate · batch · cursors', sections: ['08','01','05'],
+        desc: 'Primary read/write transport: timeline pages, social actions, search, profile tabs; optional GraphQL for field expansion or BFF aggregation.',
+        bullets: ['Home aggregate: timeline + suggestions + ads', 'Cursor tokens opaque to client parsing', 'Coalesce parallel fetches on first paint', 'Rate-limit headers → client countdown UX'],
+        questions: ['BFF one round trip vs parallel REST?', 'GraphQL on read-heavy feed?', 'Rate-limit UX for post/like/search?'] },
+      { id: 'websocket', layer: 'transport', x: 480, y: 352, title: 'WebSocket / SSE', sub: 'Live events · presence', sections: ['04','07','05'],
+        desc: 'Push channel for timeline freshness, engagement deltas, DM typing, Spaces roster updates; SSE fallback where unidirectional suffices.',
+        bullets: ['Session-bound channel per account', 'Heartbeat + Last-Event-ID resume', 'Separate channels: home vs DM vs Space', 'Lightweight patches, not full feed refetch'],
+        questions: ['When WebSocket vs SSE?', 'Reconnect without duplicate events?', 'Spaces signaling vs media path?'] },
+      { id: 'cdnEdge', layer: 'transport', x: 800, y: 352, title: 'CDN Edge', sub: 'Static · tweet JSON · media', sections: ['09','06','08'],
+        desc: 'Edge-cached bundles, emoji fonts, read-only tweet JSON, and media variants; TTL aligned with delete propagation.',
+        bullets: ['Immutable hashed JS/CSS long TTL', 'Tweet JSON short TTL + stale-while-revalidate', 'Responsive srcset from CDN variants', 'Deleted tweet must not resurrect from cache'],
+        questions: ['CDN TTL vs delete propagation?', 'Service worker cache for static assets?', 'Code-split routes defer heavy players?'] },
+
+      { id: 'timelineBff', layer: 'api', x: 80, y: 504, title: 'Timeline BFF', sub: 'Fan-out · rank · inject ads', sections: ['01','08'],
+        desc: 'Server-side home feed assembly: hybrid fan-out merge, For You ranking, ad/promoted insertion contracts, cursor pagination.',
+        bullets: ['Push timelines + pull merge for mega accounts', 'Version token for re-rank freeze window', 'Partial freshness warnings in response meta', 'Hydrate tweet ids → full objects in one response'],
+        questions: ['Hybrid fan-out client assumptions?', 'Re-rank without reshuffling viewport?', 'Cold-start fan-out-on-read skeleton UX?'] },
+      { id: 'socialGraphSvc', layer: 'api', x: 280, y: 504, title: 'Social Graph Svc', sub: 'Follow · block · mute', sections: ['03','02'],
+        desc: 'Graph mutations and enforcement: follow requests, block/mute/restrict reflected immediately in feed, search, and DM eligibility.',
+        bullets: ['Block graph checked at render + API', 'Follower count eventual consistency patches', 'Protected account follow-request flow', 'Graph change events invalidate scoped caches'],
+        questions: ['Block/mute reflect in all surfaces?', 'Real-time follower count without flash?', 'Protected account gating?'] },
+      { id: 'searchDmSvc', layer: 'api', x: 480, y: 504, title: 'Search & DM Svc', sub: 'Typeahead · threads · E2EE', sections: ['05'],
+        desc: 'Search index queries with filters; DM conversation CRUD, read receipts, encrypted message envelopes, and request inbox.',
+        bullets: ['Separate ranking for people vs latest vs media', 'Conversation id stable across clients', 'Encrypted payload indicators only on client', 'DM rate limits distinct from timeline'],
+        questions: ['Preserve search filters in URL?', 'DM cursor pagination contract?', 'Encrypted DM device trust UI?'] },
+      { id: 'mediaPipeline', layer: 'api', x: 680, y: 504, title: 'Media Pipeline', sub: 'Upload · transcode · STATUS', sections: ['06'],
+        desc: 'Chunk ingest, virus scan, transcode to HLS/MP4 variants, blurhash generation, and processing STATUS polling endpoint.',
+        bullets: ['INIT returns media_id + segment size', 'FINALIZE triggers async transcode job', 'STATUS: pending → processing → succeeded/failed', 'Copyright/geo-restrict errors post-processing'],
+        questions: ['STATUS poll until playable?', 'GIF vs video detection client-side?', 'Post-processing error surfacing?'] },
+      { id: 'notifSvc', layer: 'api', x: 880, y: 504, title: 'Notification Svc', sub: 'Fan-out · grouping · push', sections: ['04'],
+        desc: 'Groups mention/repost/follow events, maintains read state, coordinates web push with in-app badge sync.',
+        bullets: ['Grouped by day and notification type', 'Sparse payloads hydrated client-side', 'Mark-all-read idempotent endpoint', 'Push prefs per category'],
+        questions: ['Grouped notifications model?', 'Mark all read optimistic sync?', 'Push prefs vs in-app badges?'] },
+
+      { id: 'rankingAds', layer: 'provider', x: 320, y: 656, title: 'Ranking & Ads', sub: 'For You · promoted · inject', sections: ['01','09'],
+        desc: 'ML ranking for For You feed and ad server for promoted tweets; insertion slots contracted to minimize CLS.',
+        bullets: ['Candidate list separate from displayed list', 'Promoted slots with fixed height contracts', 'Re-rank version token for client freeze', 'Live event traffic shaping hooks'],
+        questions: ['Promoted tweet injection + CLS?', 'For You re-rank during live event?', 'Freeze window vs ad insertion?'] },
+      { id: 'liveAudioBackend', layer: 'provider', x: 640, y: 656, title: 'Live Audio Backend', sub: 'WebRTC · HLS · captions', sections: ['07'],
+        desc: 'Spaces media path: WebRTC for speakers, CDN/HLS for listeners; caption stream and recording disclosure metadata.',
+        bullets: ['Signaling separate from listener CDN path', 'ICE restart on network switch', 'Live caption stream for a11y', 'Recording disclosure flags in room metadata'],
+        questions: ['Signaling vs media client split?', 'ICE failure mid-Space recovery?', 'Live captions for accessibility?'] },
+
+      { id: 'authBoundary', layer: 'security', x: 40, y: 656, title: 'Auth Boundary', sub: 'OAuth · tokens · CSRF', sections: ['09','03'],
+        desc: 'Session lifecycle: OAuth login, token refresh, httpOnly cookies, CSRF on mutations, degraded read-only on refresh failure.',
+        bullets: ['Refresh without losing compose drafts', 'Per-account session isolation in storage', 'CSRF token on mutating REST/GraphQL', 'Read-only degraded mode mid-session'],
+        questions: ['Token refresh without losing drafts?', 'httpOnly cookies vs memory tokens?', 'Degraded read-only on auth failure?'] },
+      { id: 'contentSanitizer', layer: 'security', x: 880, y: 656, title: 'Content Sanitizer', sub: 'XSS · CSP · embeds', sections: ['09','06','10'],
+        desc: 'Sanitizes tweet HTML, link preview cards, and third-party embeds; CSP allows ads/analytics without user-content script injection.',
+        bullets: ['Allowlist tags/attrs for rendered tweet text', 'Sandbox third-party embed iframes', 'CSP nonces for inline analytics only', 'Link preview fetch via server proxy'],
+        questions: ['XSS from tweet text and cards?', 'CSP with ads + link previews?', 'Third-party embed sandbox?'] },
+      { id: 'rumPipeline', layer: 'security', x: 1080, y: 504, title: 'RUM & Observability', sub: 'LCP · INP · feed lag', sections: ['10','09'],
+        desc: 'Client telemetry: Core Web Vitals attribution to tweet cards/ads, feed freshness lag, socket reconnect rate, optimistic rollback frequency.',
+        bullets: ['Correlation id on publish → visibility', 'Component-level INP attribution', 'Stream recorder for ranking regressions', 'i18n/RTL layout regression hooks'],
+        questions: ['Feed freshness lag metrics?', 'Mock WebSocket in integration tests?', 'RTL without breaking truncation?'] },
+
+      { id: 'tweetCache', layer: 'data', x: 120, y: 808, title: 'Tweet Object Cache', sub: 'Edge JSON · ETag', sections: ['08','01'],
+        desc: 'Server/edge cache of tweet JSON blobs keyed by id; short TTL with invalidation on edit/delete events.',
+        bullets: ['ETag on tweet detail responses', 'Delete tombstone propagates to edge purge', 'Engagement counts may bypass full object cache', 'Read-through on cache miss from origin DB'],
+        questions: ['ETag tweet detail + fresh counts?', 'Delete vs CDN resurrected tweet?', 'Partial cache at edge?'] },
+      { id: 'timelineFanout', layer: 'data', x: 360, y: 808, title: 'Timeline Fan-out Store', sub: 'Push · pull · cursors', sections: ['01','08'],
+        desc: 'Precomputed home timelines for normal accounts; pull-merge for high-follower authors; cursor pages materialized at read time.',
+        bullets: ['Push on write for typical users', 'Pull merge on read for mega accounts', 'Cursor encodes rank version + position', 'Incomplete fan-out flagged in response'],
+        questions: ['Hybrid fan-out client impact?', 'What\'s in the pagination cursor?', 'Fan-out lag warning UX?'] },
+      { id: 'mediaCdn', layer: 'data', x: 600, y: 808, title: 'Media CDN', sub: 'Variants · HLS · blurhash', sections: ['06','09'],
+        desc: 'Object storage backing CDN with responsive image variants, video manifests, and blurhash/LQIP metadata for placeholders.',
+        bullets: ['srcset widths generated at transcode', 'HLS master manifest per video', 'Geo-restricted media 403 at edge', 'Sensitive content blur variant'],
+        questions: ['Blurhash + srcset from CDN?', 'HLS vs progressive MP4 tradeoff?', 'Geo-restricted media errors?'] },
+      { id: 'indexedDb', layer: 'data', x: 840, y: 808, title: 'IndexedDB', sub: 'Drafts · outbox · upload sess', sections: ['02','08','07'],
+        desc: 'Browser persistence for compose drafts, failed publish outbox, upload chunk checkpoints, and optional offline timeline pages.',
+        bullets: ['Key namespace: accountId:resourceType:id', 'Evict oldest drafts on storage pressure', 'Upload session resume after tab crash', 'Leader tab drains outbox on reconnect'],
+        questions: ['Draft eviction under storage pressure?', 'Offline publish queue replay?', 'Upload session resume in IDB?'] }
+    ];
+
+    const EDGES = [
+      ['homeTimeline', 'feedVirtualizer', 'windowed rows'],
+      ['homeTimeline', 'rqCache', 'fetchNextPage'],
+      ['homeTimeline', 'realtimePipeline', 'new posts banner'],
+      ['composeBar', 'optimisticActions', 'optimistic post'],
+      ['composeBar', 'uploadManager', 'attach media'],
+      ['composeBar', 'indexedDb', 'draft persist'],
+      ['tweetCard', 'entityStore', 'hydrate render'],
+      ['tweetCard', 'optimisticActions', 'like/repost'],
+      ['tweetCard', 'moderationUI', 'report/hide'],
+      ['profileSurface', 'rqCache', 'tab cursors'],
+      ['profileSurface', 'socialGraphSvc', 'follow/block'],
+      ['notificationsTab', 'notifSvc', 'paginate'],
+      ['notificationsTab', 'entityStore', 'hydrate actors'],
+      ['searchExplore', 'searchDmSvc', 'typeahead/query'],
+      ['dmInbox', 'searchDmSvc', 'thread pages'],
+      ['dmInbox', 'websocket', 'typing/presence'],
+      ['mediaPlayer', 'uploadManager', 'progress UI'],
+      ['mediaPlayer', 'mediaCdn', 'playback src'],
+      ['spacesLive', 'websocket', 'roster patches'],
+      ['spacesLive', 'liveAudioBackend', 'WebRTC/HLS'],
+      ['entityStore', 'tweetCard', 'patch render'],
+      ['rqCache', 'entityStore', 'normalize pages'],
+      ['rqCache', 'restBff', 'stale-while-revalidate'],
+      ['feedVirtualizer', 'homeTimeline', 'scroll anchor'],
+      ['realtimePipeline', 'entityStore', 'patch/delete'],
+      ['realtimePipeline', 'websocket', 'subscribe'],
+      ['optimisticActions', 'restBff', 'mutations'],
+      ['uploadManager', 'mediaPipeline', 'INIT/APPEND'],
+      ['uploadManager', 'indexedDb', 'chunk checkpoint'],
+      ['accountContext', 'rqCache', 'namespace switch'],
+      ['accountContext', 'websocket', 'reconnect per account'],
+      ['restBff', 'timelineBff', 'home feed'],
+      ['restBff', 'socialGraphSvc', 'graph ops'],
+      ['restBff', 'searchDmSvc', 'search/DM'],
+      ['restBff', 'mediaPipeline', 'finalize upload'],
+      ['restBff', 'authBoundary', 'Bearer/cookie'],
+      ['websocket', 'realtimePipeline', 'push events'],
+      ['cdnEdge', 'mediaCdn', 'media variants'],
+      ['cdnEdge', 'tweetCache', 'edge tweet JSON'],
+      ['timelineBff', 'timelineFanout', 'cursor read'],
+      ['timelineBff', 'rankingAds', 'For You + ads'],
+      ['timelineBff', 'tweetCache', 'hydrate ids'],
+      ['mediaPipeline', 'mediaCdn', 'transcoded assets'],
+      ['notifSvc', 'websocket', 'push notify'],
+      ['indexedDb', 'optimisticActions', 'offline outbox'],
+      ['contentSanitizer', 'tweetCard', 'safe HTML'],
+      ['authBoundary', 'accountContext', 'session ctx'],
+      ['rumPipeline', 'homeTimeline', 'vitals attribution'],
+      ['rumPipeline', 'realtimePipeline', 'reconnect metrics']
+    ];
+
+    const FLOWS = {
+      postTweet: {
+        title: 'Compose → upload → optimistic timeline',
+        sections: ['02','06','01','10'],
+        steps: [
+          { nodes: ['composeBar', 'uploadManager'], text: 'User attaches video; INIT→APPEND chunks with per-chunk retry and progress in compose footer' },
+          { nodes: ['composeBar', 'optimisticActions', 'entityStore'], text: 'Post tapped; optimistic tweet with client_tweet_id inserted at timeline top via entity store' },
+          { nodes: ['restBff', 'mediaPipeline', 'timelineBff'], text: 'FINALIZE upload; create tweet API with idempotency key; server assigns canonical id' },
+          { nodes: ['optimisticActions', 'homeTimeline', 'feedVirtualizer'], text: 'Reconcile optimistic id → server id; virtualizer anchors scroll if user was mid-feed' },
+          { nodes: ['rumPipeline'], text: 'Emit correlation-id trace: upload → create → fan-out visibility lag metric' }
+        ]
+      },
+      freshFeed: {
+        title: 'Socket event → N new posts banner',
+        sections: ['04','01'],
+        steps: [
+          { nodes: ['websocket', 'realtimePipeline'], text: 'Push arrives for new tweets; pipeline normalizes and dedups against in-flight pagination' },
+          { nodes: ['realtimePipeline', 'entityStore'], text: 'Hydrate tweet ids into entity store; skip duplicates already in visible window' },
+          { nodes: ['homeTimeline'], text: 'Show “N new posts” banner instead of auto-prepend while user reads mid-scroll' },
+          { nodes: ['feedVirtualizer', 'homeTimeline'], text: 'User taps banner; prepend with scroll anchoring so viewport tweet stays fixed' },
+          { nodes: ['rqCache'], text: 'Merge cursor cache without overlapping id edges on next fetchNextPage' }
+        ]
+      },
+      accountSwitch: {
+        title: 'Multi-account switch teardown',
+        sections: ['03','09','08','04'],
+        steps: [
+          { nodes: ['accountContext'], text: 'User selects Account B; abort in-flight REST and close Account A WebSocket' },
+          { nodes: ['rqCache', 'entityStore', 'indexedDb'], text: 'Swap to Account B namespaces; do not global queryClient.clear()' },
+          { nodes: ['composeBar', 'indexedDb'], text: 'Restore Account B draft from IDB; Account A draft remains isolated' },
+          { nodes: ['websocket', 'notificationsTab'], text: 'Open Account B socket; reset badge to B\'s unread count' },
+          { nodes: ['homeTimeline', 'rqCache'], text: 'Paint B\'s Following/For You from cache or stale-while-revalidate fetch' }
+        ]
+      },
+      forYouRerank: {
+        title: 'For You re-rank during scroll',
+        sections: ['01','09','10'],
+        steps: [
+          { nodes: ['timelineBff', 'rankingAds'], text: 'Server returns new rank version with promoted slots above user\'s freeze window' },
+          { nodes: ['realtimePipeline', 'feedVirtualizer'], text: 'Client applies inserts only above frozen index; viewport rows untouched' },
+          { nodes: ['homeTimeline', 'tweetCard'], text: 'Promoted tweets use fixed-height contract skeletons to control CLS' },
+          { nodes: ['rqCache'], text: 'Candidate list updated separately from displayed list in cache' },
+          { nodes: ['rumPipeline'], text: 'Log re-rank shuffle prevented count and CLS for ad slots' }
+        ]
+      },
+      spaceLive: {
+        title: 'Join Space as listener',
+        sections: ['07','04'],
+        steps: [
+          { nodes: ['spacesLive', 'searchExplore'], text: 'User opens Space from dock or notification deep link; stale state shows refresh affordance' },
+          { nodes: ['websocket', 'spacesLive'], text: 'Subscribe to room channel; roster and title patch without full reload' },
+          { nodes: ['liveAudioBackend', 'mediaPlayer'], text: 'Listener path: HLS from CDN, not WebRTC; captions stream to media player' },
+          { nodes: ['spacesLive'], text: 'Request-to-speak queues optimistic permission; host promote/demote patches roster' },
+          { nodes: ['moderationUI'], text: 'Report speaker ties to live room id; moderation outcome reflected in room shell' }
+        ]
+      },
+      deletedTweet: {
+        title: 'Socket delete vs CDN-cached REST',
+        sections: ['04','08','09','10'],
+        steps: [
+          { nodes: ['websocket', 'realtimePipeline'], text: 'tweet_deleted event arrives before CDN TTL expires on REST response' },
+          { nodes: ['entityStore', 'tweetCard'], text: 'Immediately tombstone in entity store; cards show “This post is unavailable”' },
+          { nodes: ['rqCache', 'tweetCache'], text: 'Invalidate tweet detail queries; bypass stale CDN JSON on next fetch' },
+          { nodes: ['homeTimeline', 'profileSurface', 'notificationsTab'], text: 'All surfaces reading same entity id update consistently without full page reload' },
+          { nodes: ['rumPipeline'], text: 'Metric: delete visibility lag (socket vs REST cache hit)' }
+        ]
+      }
+    };
+
+    const LANES = [
+      { y: 28, h: 130, label: 'UI Surfaces', layer: 'ui' },
+      { y: 178, h: 130, label: 'Client State & Pipelines', layer: 'client' },
+      { y: 330, h: 110, label: 'Transport', layer: 'transport' },
+      { y: 482, h: 130, label: 'API / BFF', layer: 'api' },
+      { y: 634, h: 110, label: 'Providers & Security', layer: 'provider' },
+      { y: 786, h: 110, label: 'Data', layer: 'data' }
+    ];
+
+    let scale = 0.78;
+    let panX = 10;
+    let panY = 10;
+    let activeLayers = new Set(Object.keys(LAYERS));
+    let activeSections = new Set(SECTIONS.map(s => s.id));
+    let selectedNode = null;
+    let activeFlow = null;
+    let flowStepIndex = -1;
+    let searchQuery = '';
+
+    const diagram = document.getElementById('diagram');
+    const connections = document.getElementById('connections');
+    const canvas = document.getElementById('canvas');
+
+    function nodeCenter(id) {
+      const n = NODES.find(x => x.id === id);
+      return { x: n.x + 74, y: n.y + 28 };
+    }
+
+    function renderLanes() {
+      diagram.querySelectorAll('.lane').forEach(el => el.remove());
+      LANES.forEach(lane => {
+        if (!activeLayers.has(lane.layer) && lane.layer !== 'security') return;
+        const el = document.createElement('div');
+        el.className = 'lane';
+        el.style.top = lane.y + 'px';
+        el.style.height = lane.h + 'px';
+        el.innerHTML = `<span class="lane-label">${lane.label}</span>`;
+        diagram.insertBefore(el, connections);
+      });
+    }
+
+    function nodeMatchesFilters(n) {
+      const q = searchQuery.toLowerCase();
+      const matchSearch = !q || n.title.toLowerCase().includes(q) || n.sub.toLowerCase().includes(q) || n.desc.toLowerCase().includes(q);
+      const matchLayer = activeLayers.has(n.layer);
+      const matchSection = n.sections.some(s => activeSections.has(s));
+      return matchSearch && matchLayer && matchSection;
+    }
+
+    function getActiveFlowStep() {
+      if (!activeFlow || flowStepIndex < 0) return null;
+      return FLOWS[activeFlow]?.steps[flowStepIndex] || null;
+    }
+
+    function getFlowHighlightEdges(stepNodes) {
+      const inStep = new Set(stepNodes);
+      return EDGES.filter(([from, to]) => inStep.has(from) && inStep.has(to));
+    }
+
+    function renderNodes() {
+      diagram.querySelectorAll('.node').forEach(el => el.remove());
+      const flowStep = getActiveFlowStep();
+      const flowNodeIds = flowStep ? new Set(flowStep.nodes) : null;
+
+      NODES.forEach(n => {
+        const el = document.createElement('div');
+        el.className = 'node';
+        el.dataset.id = n.id;
+        el.dataset.layer = n.layer;
+        el.style.left = n.x + 'px';
+        el.style.top = n.y + 'px';
+
+        const visible = nodeMatchesFilters(n);
+        if (!visible) {
+          el.classList.add('dimmed');
+        } else if (flowNodeIds && !flowNodeIds.has(n.id)) {
+          el.classList.add('dimmed');
+        }
+
+        if (flowNodeIds && flowNodeIds.has(n.id) && visible) {
+          el.classList.add('highlight');
+        }
+        if (selectedNode === n.id) el.classList.add('selected');
+
+        el.innerHTML = `
+          <div class="node-title">${n.title}</div>
+          <div class="node-sub">${n.sub}</div>
+          <div class="node-tags">${n.sections.map(s => `<span class="node-tag">${s}</span>`).join('')}</div>
+        `;
+        el.addEventListener('click', () => selectNode(n.id));
+        diagram.appendChild(el);
+      });
+    }
+
+    function renderEdges(highlightPairs) {
+      const hl = new Set((highlightPairs || []).map(p => p.join('|')));
+      connections.innerHTML = '';
+      EDGES.forEach(([from, to, label]) => {
+        const a = nodeCenter(from);
+        const b = nodeCenter(to);
+        const line = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+        line.setAttribute('x1', a.x);
+        line.setAttribute('y1', a.y);
+        line.setAttribute('x2', b.x);
+        line.setAttribute('y2', b.y);
+        if (hl.has(from + '|' + to) || hl.has(to + '|' + from)) line.classList.add('flow-active');
+        const nf = NODES.find(n => n.id === from);
+        const nt = NODES.find(n => n.id === to);
+        const visible = nf && nt &&
+          activeLayers.has(nf.layer) && activeLayers.has(nt.layer) &&
+          nf.sections.some(s => activeSections.has(s)) &&
+          nt.sections.some(s => activeSections.has(s));
+        if (!visible) line.style.opacity = '0.15';
+        connections.appendChild(line);
+      });
+    }
+
+    function applyTransform() {
+      diagram.style.transform = `translate(${panX}px, ${panY}px) scale(${scale})`;
+    }
+
+    function selectNode(id) {
+      selectedNode = id;
+      activeFlow = null;
+      flowStepIndex = -1;
+      document.querySelectorAll('.flow-btn').forEach(b => b.classList.remove('active'));
+      renderNodes();
+      renderEdges();
+      showNodeDetail(id);
+    }
+
+    function showNodeDetail(id) {
+      const n = NODES.find(x => x.id === id);
+      if (!n) return;
+      document.getElementById('detailEmpty').hidden = true;
+      const content = document.getElementById('detailContent');
+      content.hidden = false;
+      const layer = LAYERS[n.layer];
+      content.innerHTML = `
+        <span class="layer-badge" style="background:${layer.color}22;color:${layer.color}">${layer.label}</span>
+        <h2>${n.title}</h2>
+        <p>${n.desc}</p>
+        <h3>Key mechanisms</h3>
+        <ul>${n.bullets.map(b => `<li>${b}</li>`).join('')}</ul>
+        <h3>Interview questions</h3>
+        <ul>${n.questions.map(q => `<li>${q}</li>`).join('')}</ul>
+        <h3>Prep sections</h3>
+        <div class="section-links">${n.sections.map(s => {
+          const sec = SECTIONS.find(x => x.id === s);
+          return sec ? `<a href="${sec.file}">§${s} ${sec.name}</a>` : '';
+        }).join('')}</div>
+      `;
+    }
+
+    function showFlowDetail(flowKey) {
+      const flow = FLOWS[flowKey];
+      document.getElementById('detailEmpty').hidden = true;
+      const content = document.getElementById('detailContent');
+      content.hidden = false;
+      content.innerHTML = `
+        <h2>${flow.title}</h2>
+        <p>Click steps to highlight nodes on the diagram.</p>
+        <h3>Steps</h3>
+        ${flow.steps.map((step, i) => `
+          <div class="flow-step${i === flowStepIndex ? ' active' : ''}" data-step="${i}">
+            <strong>${i + 1}.</strong> ${step.text}
+          </div>
+        `).join('')}
+        <h3>Related sections</h3>
+        <div class="section-links">${flow.sections.map(s => {
+          const sec = SECTIONS.find(x => x.id === s);
+          return sec ? `<a href="${sec.file}">§${s} ${sec.name}</a>` : '';
+        }).join('')}</div>
+      `;
+      content.querySelectorAll('.flow-step').forEach(el => {
+        el.addEventListener('click', () => {
+          const idx = Number(el.dataset.step);
+          highlightFlowStep(flowKey, idx);
+          showFlowDetail(flowKey);
+        });
+      });
+    }
+
+    function highlightFlowStep(flowKey, stepIndex) {
+      const flow = FLOWS[flowKey];
+      const step = flow?.steps[stepIndex];
+      if (!step) return;
+      activeFlow = flowKey;
+      flowStepIndex = stepIndex;
+      renderNodes();
+      renderEdges(getFlowHighlightEdges(step.nodes));
+    }
+
+    function startFlow(flowKey) {
+      activeFlow = flowKey;
+      flowStepIndex = 0;
+      selectedNode = null;
+      document.querySelectorAll('.flow-btn').forEach(b => b.classList.toggle('active', b.dataset.flow === flowKey));
+      renderNodes();
+      highlightFlowStep(flowKey, 0);
+      showFlowDetail(flowKey);
+    }
+
+    function buildFilters() {
+      const lf = document.getElementById('layerFilters');
+      Object.entries(LAYERS).forEach(([key, val]) => {
+        const chip = document.createElement('button');
+        chip.type = 'button';
+        chip.className = `chip layer-${key} active`;
+        chip.textContent = val.label;
+        chip.addEventListener('click', () => {
+          if (activeLayers.has(key)) { activeLayers.delete(key); chip.classList.remove('active'); }
+          else { activeLayers.add(key); chip.classList.add('active'); }
+          refresh();
+        });
+        lf.appendChild(chip);
+      });
+
+      const sf = document.getElementById('sectionFilters');
+      SECTIONS.forEach(sec => {
+        const chip = document.createElement('button');
+        chip.type = 'button';
+        chip.className = 'chip active';
+        chip.textContent = sec.id + ' ' + sec.name;
+        chip.addEventListener('click', () => {
+          if (activeSections.has(sec.id)) { activeSections.delete(sec.id); chip.classList.remove('active'); }
+          else { activeSections.add(sec.id); chip.classList.add('active'); }
+          refresh();
+        });
+        sf.appendChild(chip);
+      });
+
+      const fb = document.getElementById('flowButtons');
+      Object.entries(FLOWS).forEach(([key, flow]) => {
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        btn.className = 'flow-btn';
+        btn.dataset.flow = key;
+        btn.textContent = flow.title;
+        btn.addEventListener('click', () => startFlow(key));
+        fb.appendChild(btn);
+      });
+
+      const legend = document.getElementById('legend');
+      Object.entries(LAYERS).forEach(([key, val]) => {
+        legend.innerHTML += `<div><span style="background:${val.color}"></span>${val.label}</div>`;
+      });
+    }
+
+    function refresh() {
+      renderLanes();
+      renderNodes();
+      if (activeFlow && flowStepIndex >= 0) {
+        const step = FLOWS[activeFlow]?.steps[flowStepIndex];
+        renderEdges(step ? getFlowHighlightEdges(step.nodes) : []);
+      } else {
+        renderEdges();
+      }
+    }
+
+    document.getElementById('search').addEventListener('input', e => {
+      searchQuery = e.target.value;
+      refresh();
+    });
+
+    document.getElementById('zoomIn').addEventListener('click', () => { scale = Math.min(1.4, scale + 0.1); applyTransform(); });
+    document.getElementById('zoomOut').addEventListener('click', () => { scale = Math.max(0.45, scale - 0.1); applyTransform(); });
+    document.getElementById('resetView').addEventListener('click', () => { scale = 0.78; panX = 10; panY = 10; applyTransform(); });
+
+    let dragging = false;
+    let lastX = 0, lastY = 0;
+    canvas.addEventListener('pointerdown', e => {
+      if (e.target.closest('.node')) return;
+      dragging = true;
+      lastX = e.clientX;
+      lastY = e.clientY;
+      canvas.classList.add('dragging');
+      canvas.setPointerCapture(e.pointerId);
+    });
+    canvas.addEventListener('pointermove', e => {
+      if (!dragging) return;
+      panX += e.clientX - lastX;
+      panY += e.clientY - lastY;
+      lastX = e.clientX;
+      lastY = e.clientY;
+      applyTransform();
+    });
+    canvas.addEventListener('pointerup', () => { dragging = false; canvas.classList.remove('dragging'); });
+
+    buildFilters();
+    renderLanes();
+    renderNodes();
+    renderEdges();
+    applyTransform();
+  </script>
+</body>
+</html>

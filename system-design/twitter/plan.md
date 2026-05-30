@@ -19,9 +19,11 @@ created: 2026-05-30
 - [x] answers/09-auth-security-performance-delivery.md — section 09: Auth, Security, Performance & Delivery
 - [x] answers/10-observability-testing-i18n-moderation-ui.md — section 10: Observability, Testing, i18n & Moderation UI
 
+## Done (continued)
+- [x] md-to-html — generated section HTML
+- [x] architecture-map — write twitter-frontend-architecture.html
+
 ## Next
-- [ ] md-to-html — run: python3 ralph/scripts/md_to_html.py twitter
-- [ ] architecture-map — write twitter-frontend-architecture.html
 - [ ] interview-template — write twitter-system-design-interview.html
 - [ ] index-html — write answers-html/index.html
 - [ ] validate — run: bash ralph/validate.sh twitter
