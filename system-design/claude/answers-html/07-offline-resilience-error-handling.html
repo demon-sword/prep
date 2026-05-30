@@ -1,0 +1,623 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Section 7 — Offline, Resilience &amp; Error Handling</title>
+  <style>
+    :root {
+      --bg: #fafbfc;
+      --surface: #ffffff;
+      --text: #1a1d21;
+      --text-muted: #57606a;
+      --border: #d8dee4;
+      --accent: #0969da;
+      --accent-soft: #ddf4ff;
+      --accent-hover: #0550ae;
+      --code-bg: #f0f3f6;
+      --table-header: #f6f8fa;
+      --toc-bg: #f6f8fa;
+      --shadow: 0 1px 3px rgba(27, 31, 36, 0.08);
+    }
+
+    @media (prefers-color-scheme: dark) {
+      :root {
+        --bg: #0d1117;
+        --surface: #161b22;
+        --text: #e6edf3;
+        --text-muted: #8b949e;
+        --border: #30363d;
+        --accent: #58a6ff;
+        --accent-soft: #21262d;
+        --accent-hover: #79c0ff;
+        --code-bg: #21262d;
+        --table-header: #21262d;
+        --toc-bg: #161b22;
+        --shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
+      }
+    }
+
+    *, *::before, *::after { box-sizing: border-box; }
+
+    html {
+      scroll-behavior: smooth;
+      scroll-padding-top: 5.5rem;
+    }
+
+    .site-nav {
+      position: sticky;
+      top: 0;
+      z-index: 100;
+      background: rgba(250, 251, 252, 0.92);
+      backdrop-filter: blur(10px);
+      -webkit-backdrop-filter: blur(10px);
+      border-bottom: 1px solid var(--border);
+      box-shadow: var(--shadow);
+    }
+
+    @media (prefers-color-scheme: dark) {
+      .site-nav { background: rgba(13, 17, 23, 0.94); }
+    }
+
+    .site-nav-inner {
+      max-width: 52rem;
+      margin: 0 auto;
+      padding: 0.75rem 1.5rem;
+    }
+
+    .site-nav-title {
+      font-size: 0.8125rem;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+      color: var(--text-muted);
+      margin: 0 0 0.5rem;
+    }
+
+    .site-nav .toc {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.35rem 0.75rem;
+      margin: 0;
+      padding: 0;
+      list-style: none;
+      font-size: 0.8125rem;
+    }
+
+    .site-nav .toc a {
+      color: var(--accent);
+      text-decoration: none;
+      white-space: nowrap;
+    }
+
+    .site-nav .toc a:hover { text-decoration: underline; }
+
+    article.qa {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 1.5rem 1.75rem;
+      box-shadow: var(--shadow);
+    }
+
+    body {
+      margin: 0;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Noto Sans", Helvetica, Arial, sans-serif;
+      font-size: 16px;
+      line-height: 1.6;
+      color: var(--text);
+      background: var(--bg);
+    }
+
+    .page {
+      max-width: 52rem;
+      margin: 0 auto;
+      padding: 2rem 1.5rem 4rem;
+    }
+
+    header {
+      margin-bottom: 2rem;
+      padding-bottom: 1.5rem;
+      border-bottom: 1px solid var(--border);
+    }
+
+    header h1 {
+      margin: 0 0 0.75rem;
+      font-size: 1.75rem;
+      font-weight: 700;
+      letter-spacing: -0.02em;
+      line-height: 1.25;
+    }
+
+    .intro {
+      margin: 0;
+      color: var(--text-muted);
+      font-size: 1.05rem;
+    }
+
+    nav.toc {
+      background: var(--toc-bg);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 1.25rem 1.5rem;
+      margin-bottom: 2.5rem;
+      box-shadow: var(--shadow);
+    }
+
+    nav.toc h2 {
+      margin: 0 0 0.75rem;
+      font-size: 0.875rem;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+      color: var(--text-muted);
+    }
+
+    nav.toc ol {
+      margin: 0;
+      padding-left: 1.25rem;
+    }
+
+    nav.toc ol ol {
+      margin-top: 0.35rem;
+      padding-left: 1.25rem;
+    }
+
+    nav.toc li {
+      margin: 0.35rem 0;
+    }
+
+    nav.toc a {
+      color: var(--accent);
+      text-decoration: none;
+    }
+
+    nav.toc a:hover {
+      color: var(--accent-hover);
+      text-decoration: underline;
+    }
+
+    main section {
+      margin-bottom: 2.5rem;
+    }
+
+    main > section > h2 {
+      margin: 0 0 1.5rem;
+      font-size: 1.35rem;
+      font-weight: 600;
+      padding-bottom: 0.5rem;
+      border-bottom: 2px solid var(--border);
+    }
+
+    article {
+      margin-bottom: 2rem;
+      padding-bottom: 2rem;
+      border-bottom: 1px solid var(--border);
+    }
+
+    article:last-child {
+      border-bottom: none;
+      padding-bottom: 0;
+      margin-bottom: 0;
+    }
+
+    article h3 {
+      margin: 0 0 1rem;
+      font-size: 1.1rem;
+      font-weight: 600;
+      line-height: 1.4;
+    }
+
+    article h3 a {
+      color: inherit;
+      text-decoration: none;
+    }
+
+    article h3 a:hover {
+      color: var(--accent);
+    }
+
+    p {
+      margin: 0 0 1rem;
+    }
+
+    p:last-child {
+      margin-bottom: 0;
+    }
+
+    strong {
+      font-weight: 600;
+    }
+
+    code {
+      font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+      font-size: 0.875em;
+      background: var(--code-bg);
+      padding: 0.15em 0.4em;
+      border-radius: 4px;
+      border: 1px solid var(--border);
+    }
+
+    .table-wrap {
+      overflow-x: auto;
+      margin: 1rem 0;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      box-shadow: var(--shadow);
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 0.9rem;
+      background: var(--surface);
+    }
+
+    th, td {
+      padding: 0.65rem 0.85rem;
+      text-align: left;
+      border-bottom: 1px solid var(--border);
+      vertical-align: top;
+    }
+
+    tr:last-child th,
+    tr:last-child td {
+      border-bottom: none;
+    }
+
+    thead th {
+      background: var(--table-header);
+      font-weight: 600;
+    }
+
+    tbody tr:hover td {
+      background: var(--toc-bg);
+    }
+
+    .quick-ref h2 {
+      margin-top: 0.5rem;
+    }
+
+    footer {
+      margin-top: 3rem;
+      padding-top: 1.5rem;
+      border-top: 1px solid var(--border);
+      text-align: center;
+      color: var(--text-muted);
+      font-size: 0.9rem;
+    }
+
+    footer a {
+      color: var(--accent);
+      text-decoration: none;
+    }
+
+    footer a:hover {
+      text-decoration: underline;
+      color: var(--accent-hover);
+    }
+
+    .mermaid-wrap {
+      margin: 0 0 1rem;
+      padding: 1rem;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      overflow-x: auto;
+    }
+
+    .mermaid { text-align: center; }
+
+    .mermaid-wrap pre.mermaid:not([data-mermaid-rendered]) {
+      background: transparent;
+      color: var(--text-muted);
+      min-height: 0;
+    }
+  </style>
+  <link rel="stylesheet" href="assets/interactive.css">
+</head>
+<body>
+
+  <nav class="site-nav" aria-label="Table of contents">
+    <div class="site-nav-inner">
+      <p class="site-nav-title">On this page</p>
+      <ol class="toc">
+        <li><a href="#sse-disconnect">SSE disconnect</a></li>
+        <li><a href="#offline-queue">Offline queue</a></li>
+        <li><a href="#error-taxonomy">Error taxonomy</a></li>
+        <li><a href="#sse-backoff">SSE backoff</a></li>
+        <li><a href="#resume-stream">Resume stream</a></li>
+        <li><a href="#partial-persisted">Partial persist</a></li>
+        <li><a href="#degraded-ui">Degraded UI</a></li>
+        <li><a href="#mcp-retry">MCP retry</a></li>
+        <li><a href="#rate-limit-ux">Rate limit UX</a></li>
+        <li><a href="#quick-reference">Quick reference</a></li>
+      </ol>
+    </div>
+  </nav>
+
+  <div class="page">
+    <header>
+      <h1>Section 7 — Offline, Resilience &amp; Error Handling</h1>
+      <p class="intro">Interview-prep answers for Claude-style AI chat frontends. Each question is self-contained; together they describe a coherent resilience layer.</p>
+    </header>
+
+    <main>
+      <section id="core">
+        <h2>Core</h2>
+
+        <article class="qa" id="sse-disconnect">
+          <h3 class="question">What do you show if the SSE stream disconnects at token 200 of 800?</h3>
+          <p><strong>Problem framing:</strong> SSE disconnect mid-stream (e.g. token 200 of 800) leaves partial assistant text on screen — the user must never lose visible progress or stare at a blank bubble.</p>
+          <p><strong>Approach:</strong> Keep the <strong>250 tokens already rendered</strong> on screen — never wipe the partial assistant message. Append a lightweight <strong>inline status</strong> on that message: e.g. “Connection interrupted” with actions <strong>Retry</strong>, <strong>Continue</strong> (if resume is supported), and <strong>Dismiss</strong>. Visually distinguish <em>incomplete</em> from <em>complete</em>: a subtle left border, pulsing dot, or “still generating” affordance that stops animating on disconnect.</p>
+          <p>Do <strong>not</strong> block the composer unless the last turn is still logically “in flight” on the server. If the user can send another message, allow it, but show a banner that the previous reply may still be finishing server-side. On retry, default to <strong>resume</strong> when the backend exposes <code>stream_id</code> + <code>offset</code>; otherwise <strong>regenerate from the same user turn</strong> with an idempotency key so you do not double-charge or duplicate rows.</p>
+          <p><strong>Tradeoffs:</strong> Persist client state immediately: <code>message_id</code>, <code>accumulated_text</code>, <code>token_count</code> or last <code>event_id</code>, <code>status: interrupted</code>. That makes refresh-safe UX and powers “Continue” without guessing. If the product policy is “all or nothing,” mark the DB row <code>partial: true</code> and offer “Regenerate” instead of presenting a truncated answer as final — but still show the partial text so the user is not staring at a blank bubble.</p>
+          <div class="demo-panel" data-demo="decision-tree" data-tree='{"question":"SSE dropped at token 200 of 800 — first move?","options":[{"label":"Wipe partial bubble and restart spinner","result":"WRONG — keep rendered tokens; never blank the assistant message"},{"label":"Show partial text + inline status","next":{"question":"Backend exposes stream_id + offset?","options":[{"label":"Yes","result":"Default Continue (resume); Retry as fallback with idempotency key"},{"label":"No","result":"Retry — regenerate from same user turn; dedupe with Idempotency-Key"}]}},{"label":"Block composer until resolved","result":"Only if turn still in-flight server-side; else allow new sends + banner about prior reply"}]}'>
+            <p class="demo-panel-title">Try it: mid-stream disconnect UX</p>
+            <p class="demo-panel-desc">Walk the partial-retain → resume vs retry decision.</p>
+            <div class="decision-tree"><div data-tree-root></div><div class="decision-result"></div></div>
+          </div>
+        </article>
+
+        <article class="qa" id="offline-queue">
+          <h3 class="question">How do you queue a user message sent while offline and replay it on reconnect?</h3>
+          <p><strong>Problem framing:</strong> A user message sent while offline must survive refresh and replay on reconnect without duplicate sends or lost turns.</p>
+          <p><strong>Approach:</strong> Treat outbound sends as <strong>durable jobs</strong> in an outbox, not fire-and-forget fetches. On send while offline: (1) optimistically append the user message to local state with <code>client_message_id</code> (UUID), <code>status: pending</code>; (2) enqueue <code>{ client_message_id, conversation_id, payload, created_at, retry_count }</code> in <strong>IndexedDB</strong> (survives refresh) with a memory mirror for the current session; (3) disable only actions that require live inference (e.g. “Stop”) until online.</p>
+          <p>On <code>online</code> / <code>visibilitychange</code> / successful health check: drain the outbox <strong>FIFO per conversation</strong> (parallel across conversations is fine). Each replay uses <code>Idempotency-Key: client_message_id</code> so the API returns the existing assistant message if the first attempt actually succeeded. Update UI: <code>pending → sending → streaming | failed</code>. Failed items stay in the outbox with error copy and <strong>Retry</strong> / <strong>Discard</strong>; cap retries and surface a dead-letter state after N attempts.</p>
+          <p><strong>Tradeoffs:</strong> Conflict rules: if the user edited the conversation while offline, re-validate <code>conversation_revision</code> or <code>parent_message_id</code> before replay — stale jobs should prompt “Send anyway?” or auto-attach to the latest leaf. For multi-tab, use <code>BroadcastChannel</code> or <code>storage</code> events so one tab’s drain does not duplicate sends; leader election or a single “sync worker” tab is enough at scale.</p>
+          <div class="demo-panel" data-demo="stop-chain">
+            <p class="demo-panel-title">Try it: outbox drain chain</p>
+            <p class="demo-panel-desc">Click to trace offline send → IndexedDB → reconnect drain → stream.</p>
+            <div class="demo-controls"><button type="button" class="demo-btn">Simulate reconnect drain</button></div>
+            <div class="cancel-chain">
+              <span class="cancel-step">Pending UI</span><span class="cancel-arrow">→</span>
+              <span class="cancel-step">IndexedDB</span><span class="cancel-arrow">→</span>
+              <span class="cancel-step">API replay</span><span class="cancel-arrow">→</span>
+              <span class="cancel-step">Streaming</span>
+            </div>
+          </div>
+        </article>
+
+        <article class="qa" id="error-taxonomy">
+          <h3 class="question">How do you distinguish a rate-limit error from a model error from a network error?</h3>
+          <p><strong>Problem framing:</strong> Rate limits, model failures, and network errors look similar to users but need different retry policies and copy — you need a single normalized taxonomy.</p>
+          <p><strong>Approach:</strong> Use a <strong>single error taxonomy</strong> at the HTTP + application layer, then map to user-facing copy and retry policy.</p>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Signal</th>
+                  <th>Rate limit</th>
+                  <th>Model / provider</th>
+                  <th>Network</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td>HTTP</td>
+                  <td><code>429</code>, sometimes <code>503</code> with <code>Retry-After</code></td>
+                  <td><code>400</code>, <code>422</code>, <code>500</code>, <code>502</code>, provider <code>529</code> overloaded</td>
+                  <td>No response, <code>502</code>/<code>504</code>, browser <code>TypeError</code>, SSE <code>error</code> without JSON body</td>
+                </tr>
+                <tr>
+                  <td>Headers</td>
+                  <td><code>Retry-After</code>, <code>X-RateLimit-Remaining</code>, <code>X-RateLimit-Reset</code></td>
+                  <td>Provider <code>request-id</code>, error <code>type</code> in JSON (<code>invalid_request_error</code>, <code>overloaded</code>)</td>
+                  <td>—</td>
+                </tr>
+                <tr>
+                  <td>Body</td>
+                  <td><code>error: rate_limit_exceeded</code>, <code>limit</code>, <code>reset_at</code></td>
+                  <td>Structured <code>message</code>, <code>param</code>, <code>code</code></td>
+                  <td>Often empty or HTML from proxy</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <p>Normalize in a client <code>parseApiError(response, event)</code> → <code>{ category, retryable, retryAfterMs, requestId, raw }</code>. <strong>Rate limit</strong>: retryable after delay; never auto-retry in a tight loop. <strong>Model</strong>: usually not retryable for the same payload (fix input); retry only for <code>529</code>/overload with backoff. <strong>Network</strong>: retryable with backoff; distinguish “failed to connect” (offline) from “stream reset mid-flight” (resume path).</p>
+          <p><strong>Tradeoffs:</strong> SSE adds nuance: a clean <code>event: error</code> with JSON is model/rate-limit; an abrupt TCP close without terminal event is <strong>network/interrupted stream</strong>. Log <code>category</code> + <code>request_id</code> to analytics; never show raw provider stacks in the UI.</p>
+          <div class="demo-panel" data-demo="protocol-picker" data-scenarios='[{"prompt":"HTTP 429 + Retry-After + error: rate_limit_exceeded in JSON","answer":"Rate limit","explain":"Retryable after delay; never auto-retry in a tight loop."},{"prompt":"HTTP 422 + invalid_request_error with param in structured JSON body","answer":"Model","explain":"Fix input; same payload usually not retryable."},{"prompt":"SSE TCP close mid-stream — no terminal event, empty body","answer":"Network","explain":"Interrupted stream — resume path with backoff, not model error."}]'>
+            <p class="demo-panel-title">Quiz: classify the error signal</p>
+            <p class="demo-panel-desc" data-scenario></p>
+            <div class="protocol-cards">
+              <div class="protocol-card">Rate limit</div>
+              <div class="protocol-card">Model</div>
+              <div class="protocol-card">Network</div>
+            </div>
+            <div class="demo-controls"><button type="button" class="demo-btn secondary" data-next>Next scenario</button></div>
+            <div class="decision-result"></div>
+          </div>
+        </article>
+
+        <article class="qa" id="sse-backoff">
+          <h3 class="question">How do you implement exponential backoff on the SSE reconnect?</h3>
+          <p><strong>Problem framing:</strong> SSE reconnect loops can thundering-herd the gateway after transient drops — backoff must distinguish retryable disconnects from hard auth/validation failures.</p>
+          <p><strong>Approach:</strong> Reconnect only for <strong>retryable</strong> disconnects (network, <code>502</code>/<code>504</code>, optional <code>529</code>), not for <code>401</code>/<code>403</code>/<code>400</code>. Track <code>attempt</code> per <code>stream_id</code> (or per <code>generation_job_id</code>), capped (e.g. 5–8 attempts). Delay: <code>baseMs * 2^attempt + jitter</code>, with jitter uniform in <code>[0, 0.3 * delay]</code> to avoid thundering herd; honor <code>Retry-After</code> when present (use <code>max(computed, retryAfter)</code>).</p>
+          <p>Flow: on <code>EventSource</code> <code>error</code> or fetch stream abort → set message status <code>reconnecting</code> → <code>scheduleReconnect(attempt + 1)</code>. <strong>Full jitter</strong> variant: pick random delay in <code>[0, cap]</code> for large fleets. Reset <code>attempt</code> to 0 after any successful <code>event: message_start</code> or terminal <code>event: done</code>. Use <strong>AbortController</strong> so a user “Stop” or navigation cancels pending timers.</p>
+          <p><strong>Tradeoffs:</strong> Pass resume context on reconnect: <code>Last-Event-ID</code> header or query <code>?cursor=&lt;last_event_id&gt;</code> if the server supports it; otherwise backoff applies to <strong>starting a new stream</strong> bound to the same <code>generation_id</code>. Expose attempt in devtools; in UI show “Reconnecting (3/5)…” not raw milliseconds. Combine with <strong>circuit breaker</strong>: if the health endpoint fails for 30s, stop reconnect loops and switch to offline/degraded mode.</p>
+          <div class="demo-panel" data-demo="stop-chain">
+            <p class="demo-panel-title">Try it: reconnect propagation</p>
+            <p class="demo-panel-desc">SSE error → schedule backoff → reconnect with Last-Event-ID.</p>
+            <div class="demo-controls"><button type="button" class="demo-btn">Trigger reconnect</button></div>
+            <div class="cancel-chain">
+              <span class="cancel-step">SSE error</span><span class="cancel-arrow">→</span>
+              <span class="cancel-step">Backoff</span><span class="cancel-arrow">→</span>
+              <span class="cancel-step">Reconnect</span><span class="cancel-arrow">→</span>
+              <span class="cancel-step">Resume</span>
+            </div>
+          </div>
+        </article>
+      </section>
+
+      <section id="deep">
+        <h2>Deep</h2>
+
+        <article class="qa" id="resume-stream">
+          <h3 class="question">How do you implement a "resume stream" — continue generation from where it dropped?</h3>
+          <p><strong>Problem framing:</strong> “Resume stream” cannot rely on client-held partial text alone — it needs a server-side generation lease with checkpointed output.</p>
+          <p><strong>Approach:</strong> Resume needs a <strong>server-side generation lease</strong>, not only client hope. When streaming starts, return <code>generation_id</code> (and optionally <code>stream_id</code>) in the first SSE event or response headers. The model runtime checkpoints incrementally: append deltas to a buffer (Redis/DB) keyed by <code>generation_id</code>, with monotonic <code>event_id</code> or byte <code>offset</code>. Client stores <code>last_event_id</code> from each SSE <code>id:</code> field or explicit <code>event: chunk</code> payload.</p>
+          <p>On disconnect, client calls <code>GET /v1/generations/{id}/stream?after={last_event_id}</code> or <code>POST .../resume</code> with the same idempotency key. Server reads from checkpoint and <strong>replays</strong> already-produced tokens (fast) then continues inference if the worker is still alive; if the worker died, either resume from last KV checkpoint (provider permitting) or return <code>409</code> with <code>resume_unavailable</code> and fall back to regenerate. Anthropic/OpenAI often cannot truly continue arbitrary mid-generation token streams — product honesty: “resume” may mean <strong>replay cached output + complete from truncated context</strong> via a server-side prompt that includes partial assistant text and asks to continue, which is not bitwise-identical but is good UX.</p>
+          <p><strong>Tradeoffs:</strong> Contract sketch: events include <code>id</code>, <code>generation_id</code>, <code>done: false</code>; terminal <code>event: done</code> seals the generation. Idempotent resume: duplicate resume requests attach to the same subscriber fan-out or return the same chunk sequence. Cap resume window (e.g. 15 minutes) then force regenerate. Security: resume requires same session/auth as the original stream.</p>
+          <div class="demo-panel" data-demo="decision-tree" data-tree='{"question":"Client calls resume — what does the server have?","options":[{"label":"generation_id + checkpoint buffer, worker alive","result":"Replay cached tokens fast, then continue inference from offset"},{"label":"Worker died, no provider checkpoint","result":"409 resume_unavailable — regenerate with partial text in server prompt"},{"label":"Only client-held partial (no server lease)","result":"Honest UX: replay cache if any + continue-from-truncated-context prompt"},{"label":"Resume window expired (&gt;15 min)","result":"Force regenerate — cap resume TTL"}]}'>
+            <p class="demo-panel-title">Try it: resume stream decision tree</p>
+            <p class="demo-panel-desc">Resume needs a server-side lease — walk replay vs regenerate.</p>
+            <div class="decision-tree"><div data-tree-root></div><div class="decision-result"></div></div>
+          </div>
+        </article>
+
+        <article class="qa" id="partial-persisted">
+          <h3 class="question">How do you handle a partial message that was persisted to the DB mid-stream before disconnect?</h3>
+          <p><strong>Problem framing:</strong> The DB may hold a partial assistant row mid-stream before disconnect — presentation and persistence must stay aligned without marking incomplete rows as final.</p>
+          <p><strong>Approach:</strong> Split <strong>persistence</strong> from <strong>presentation</strong>. While streaming, upsert an assistant row early: <code>id</code>, <code>conversation_id</code>, <code>role: assistant</code>, <code>content: ''</code>, <code>status: streaming</code>, <code>generation_id</code>. Append text on a debounced schedule (e.g. every 300–500ms or every N tokens) or on each chunk server-side — tradeoff: more DB writes vs fresher recovery.</p>
+          <p>On disconnect: set <code>status: interrupted</code> (or keep <code>streaming</code> until TTL if resume is likely). <strong>Do not</strong> mark <code>status: complete</code> without a terminal <code>done</code> event. Client merges DB fetch on reload: if <code>interrupted</code>, show partial body + recovery actions. If resume succeeds, flip <code>status: complete</code> and set <code>content</code> to final canonical text (overwrite duplicates idempotently by <code>generation_id</code>).</p>
+          <p><strong>Tradeoffs:</strong> Edge cases: (1) <strong>Duplicate partials</strong> — use <code>generation_id</code> unique constraint, one row per generation. (2) <strong>User deletes message while streaming</strong> — tombstone wins; cancel server job. (3) <strong>Branching</strong> — partial belongs to a specific <code>parent_message_id</code>; resume must not attach to wrong branch. (4) <strong>Billing</strong> — charge on completed tokens or provider usage record, not on partial row save. For search/indexing, exclude <code>interrupted</code> from embeddings until complete or explicitly marked abandoned.</p>
+          <div class="demo-panel" data-demo="decision-tree" data-tree='{"question":"Assistant row in DB — what status?","options":[{"label":"Terminal event: done received","result":"status: complete — canonical content; safe for search/embeddings"},{"label":"Stream active, chunks arriving","result":"status: streaming — debounced upserts every 300–500ms or N tokens"},{"label":"Disconnect, resume likely within TTL","result":"status: interrupted — partial body + Continue/Retry; not complete"},{"label":"User deleted message mid-stream","result":"Tombstone wins — cancel server job; no complete without done"}]}'>
+            <p class="demo-panel-title">Try it: partial persistence status</p>
+            <p class="demo-panel-desc">Split persistence from presentation — never mark complete without done.</p>
+            <div class="decision-tree"><div data-tree-root></div><div class="decision-result"></div></div>
+          </div>
+        </article>
+
+        <article class="qa" id="degraded-ui">
+          <h3 class="question">How do you show a degraded-mode UI when the inference cluster is slow (p99 &gt; 10s)?</h3>
+          <p><strong>Problem framing:</strong> When inference p99 exceeds ~10s, an endless spinner erodes trust — slowness must become a visible, manageable mode.</p>
+          <p><strong>Approach:</strong> Treat slowness as a <strong>first-class mode</strong>, not a spinner that never ends. Signals: client-side TTFB &gt; 3s, server <code>X-Queue-Depth</code>, synthetic health <code>p99_latency_ms</code>, or explicit <code>503</code>/<code>529</code> with <code>degraded: true</code>. UI layers: (1) <strong>Expectation</strong> — replace generic “Thinking…” with “High demand — responses may take up to 30s.” (2) <strong>Progress</strong> — staged status from SSE (<code>queued</code>, <code>routing</code>, <code>tokens</code>) or indeterminate progress with elapsed time. (3) <strong>Escape hatches</strong> — “Cancel”, “Try faster model” (haiku/mini), “Notify me when done” (email/push via job id).</p>
+          <p>System behavior: enable <strong>request shedding</strong> at the gateway (queue cap), route to fallback model, or return <code>Retry-After</code>. Client-side <strong>adaptive timeout</strong>: after 10s, offer continue waiting vs switch model vs draft-only mode (compose without inference). Avoid alarm red banners; use neutral tone and amber only if user-initiated actions fail. Cache <strong>recent</strong> successful health in <code>sessionStorage</code> to pre-warm copy: “We’re experiencing slower responses” on next send without waiting 10s again.</p>
+          <p><strong>Tradeoffs:</strong> Optional: degrade features — disable image gen, MCP tools, or long context when <code>degraded</code> flag is set. Metrics: track abandonment rate vs degraded banner shown to tune thresholds.</p>
+          <div class="demo-panel" data-demo="typing-bubble">
+            <p class="demo-panel-title">Try it: generic → degraded expectation</p>
+            <p class="demo-panel-desc">Same bubble — “Thinking…” crossfades into high-demand copy.</p>
+            <div class="demo-controls"><button type="button" class="demo-btn">Simulate degraded mode</button></div>
+            <div class="bubble-demo">
+              <div class="typing-dots"><span></span><span></span><span></span></div>
+              <div class="bubble-text">High demand — responses may take up to 30s. You can cancel or try a faster model.</div>
+            </div>
+          </div>
+        </article>
+
+        <article class="qa" id="mcp-retry">
+          <h3 class="question">What is your retry strategy for a failed MCP tool call — retry immediately, after delay, or ask user?</h3>
+          <p><strong>Problem framing:</strong> MCP tool failures span transient network blips, auth errors, and schema mismatches — blind agent-loop retries waste quota and confuse users.</p>
+          <p><strong>Approach:</strong> Default: <strong>do not</strong> blindly retry in the agent loop; classify the failure first.</p>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Failure type</th>
+                  <th>Strategy</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td>Transient network / <code>502</code> / timeout to MCP host</td>
+                  <td>1–2 automatic retries with short exponential backoff (e.g. 500ms, 2s), same tool + same args if idempotent</td>
+                </tr>
+                <tr>
+                  <td>Rate limit / <code>429</code> on tool server</td>
+                  <td>Backoff per <code>Retry-After</code>; surface “Tool busy, retrying…”</td>
+                </tr>
+                <tr>
+                  <td>Auth / <code>401</code> / <code>403</code></td>
+                  <td>No retry; prompt user to reconnect integration</td>
+                </tr>
+                <tr>
+                  <td>Validation / <code>400</code> / schema mismatch</td>
+                  <td>No retry; show tool error to user/model for corrected args</td>
+                </tr>
+                <tr>
+                  <td>Unknown / <code>500</code> from tool</td>
+                  <td><strong>Ask user</strong> after one safe retry: “Jira failed — Retry / Skip / Edit args”</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <p>Idempotency: pass <code>tool_call_id</code> to MCP; for mutating tools (create ticket, charge card), require <strong>explicit user confirm</strong> on retry or use idempotency keys on the tool side. In the UI, show tool rows as <code>running → failed</code> with expandable stderr; “Retry” button sends a new <code>tool_call</code> with <code>retry_of: id</code> so audit logs stay clear. Agent policy: cap total automatic tool retries per turn (e.g. 3) to prevent runaway loops; then halt with a summary message.</p>
+          <p><strong>Tradeoffs:</strong> Long-running tools: heartbeat SSE + cancel; retry only if the server reports <code>status: unknown</code> (job may still be running) — use <strong>poll job status</strong> before re-executing.</p>
+          <div class="demo-panel" data-demo="decision-tree" data-tree='{"question":"MCP tool call failed — classify first","options":[{"label":"502 / timeout to MCP host","result":"1–2 auto retries, short backoff (500ms, 2s) — same args if idempotent"},{"label":"429 on tool server","result":"Backoff per Retry-After; surface Tool busy, retrying…"},{"label":"401 / 403 auth failure","result":"No retry — prompt user to reconnect integration"},{"label":"400 / schema mismatch","result":"No retry — show error for corrected args"},{"label":"500 unknown from tool","result":"Ask user after one safe retry: Retry / Skip / Edit args"}]}'>
+            <p class="demo-panel-title">Try it: MCP retry decision tree</p>
+            <p class="demo-panel-desc">Do not blindly retry — map failure type to strategy.</p>
+            <div class="decision-tree"><div data-tree-root></div><div class="decision-result"></div></div>
+          </div>
+        </article>
+
+        <article class="qa" id="rate-limit-ux">
+          <h3 class="question">How do you surface rate limit information (e.g. requests remaining) to the user without alarming them?</h3>
+          <p><strong>Problem framing:</strong> Rate-limit headers carry useful quota data, but surfacing them loudly on every send creates anxiety — the UX must stay low-salience until limits are actually tight.</p>
+          <p><strong>Approach:</strong> Ingest limits from headers on <strong>every</strong> successful API response: <code>X-RateLimit-Limit</code>, <code>Remaining</code>, <code>Reset</code> (or OAuth-style <code>RateLimit-*</code>). Store in a small client quota store keyed by <code>scope</code> (user, org, model tier). Display in <strong>low-salience</strong> chrome: settings footer, account menu, or a slim usage pill — not a modal on every send.</p>
+          <p>Copy rules: green/neutral when remaining &gt; 20%; subtle text when 10–20% (“Daily messages: 8 left”); only when &lt; 5% or after a soft <code>429</code> use inline composer hint: “You’re nearing today’s limit.” After hard limit: disable send with clear reset time in local timezone (“Resets today at 6:00 PM IST”) and one upgrade/help link — no red error chrome unless they actually hit the wall.</p>
+          <p><strong>Tradeoffs:</strong> Avoid countdown timers that tick every second (anxiety). Prefer <strong>bucket reset time</strong> over live RPM. For team plans, show org pool separately from personal. Never expose raw header names; map to product language (“messages”, “files”, “priority requests”). Optional: progressive disclosure — hover “?” on usage pill for breakdown by feature. Post-limit, preserve read/history access; only block new inference.</p>
+          <div class="demo-panel" data-demo="backpressure">
+            <p class="demo-panel-title">Try it: quota usage vs salience</p>
+            <p class="demo-panel-desc">Drag to simulate % of daily limit consumed — gauge maps to UX tone.</p>
+            <div class="demo-controls">
+              <label>Quota used: <input type="range" min="0" max="100" value="15"></label>
+            </div>
+            <div class="gauge-wrap"><div class="gauge-fill"></div></div>
+            <div class="demo-metrics"><span class="demo-metric">UX tone: <strong data-metric="lag">75ms</strong></span></div>
+          </div>
+        </article>
+      </section>
+
+      <section id="quick-reference" class="quick-ref">
+        <h2>Quick reference — policies at a glance</h2>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Scenario</th>
+                <th>User sees</th>
+                <th>Retry</th>
+                <th>Persist</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td>SSE drop mid-stream</td>
+                <td>Partial text + Continue/Retry</td>
+                <td>Backoff + resume if available</td>
+                <td><code>interrupted</code> assistant row</td>
+              </tr>
+              <tr>
+                <td>Offline send</td>
+                <td>Optimistic user bubble + pending</td>
+                <td>Outbox on reconnect</td>
+                <td>IndexedDB outbox</td>
+              </tr>
+              <tr>
+                <td>429</td>
+                <td>Soft limit copy / reset time</td>
+                <td>After <code>Retry-After</code></td>
+                <td>—</td>
+              </tr>
+              <tr>
+                <td>Model 400</td>
+                <td>Actionable error, no spin</td>
+                <td>Fix input</td>
+                <td>—</td>
+              </tr>
+              <tr>
+                <td>MCP tool fail</td>
+                <td>Tool row failed + actions</td>
+                <td>1–2 if idempotent, else ask</td>
+                <td>Audit <code>tool_call_id</code></td>
+              </tr>
+              <tr>
+                <td>Slow cluster (p99 &gt; 10s)</td>
+                <td>Degraded banner + staged status</td>
+                <td>Fallback model / queue</td>
+                <td>—</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+    </main>
+
+    <footer>
+      <p><a href="index.html">← All sections</a></p>
+    </footer>
+  </div>
+
+  <script src="assets/interactive.js" defer></script>
+</body>
+</html>

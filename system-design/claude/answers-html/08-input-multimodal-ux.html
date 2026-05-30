@@ -1,0 +1,396 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Section 8 — Input &amp; Multimodal UX | System Design Answers</title>
+  <meta name="description" content="Interview-prep answers for Claude-style AI chat frontends: composable input, attachments, slash commands, voice, PDFs, and multimodal send paths.">
+  <style>
+    :root {
+      --bg: #f8f9fb;
+      --surface: #ffffff;
+      --text: #1a1d26;
+      --text-muted: #5c6370;
+      --border: #e2e6ed;
+      --accent: #3d5a80;
+      --accent-soft: #eef2f7;
+      --code-bg: #f0f2f6;
+      --pre-bg: #1e2433;
+      --pre-text: #e8ecf4;
+      --nav-bg: rgba(248, 249, 251, 0.92);
+      --shadow: 0 1px 3px rgba(0, 0, 0, 0.06);
+    }
+
+    @media (prefers-color-scheme: dark) {
+      :root {
+        --bg: #12151c;
+        --surface: #1a1f2a;
+        --text: #e8ecf4;
+        --text-muted: #9aa3b2;
+        --border: #2d3548;
+        --accent: #8cb4d9;
+        --accent-soft: #232a38;
+        --code-bg: #252d3d;
+        --pre-bg: #0d1017;
+        --pre-text: #d4dae6;
+        --nav-bg: rgba(18, 21, 28, 0.94);
+        --shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
+      }
+    }
+
+    *, *::before, *::after { box-sizing: border-box; }
+
+    html {
+      scroll-behavior: smooth;
+      scroll-padding-top: 5.5rem;
+    }
+
+    body {
+      margin: 0;
+      font-family: "Segoe UI", system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
+      font-size: 1.0625rem;
+      line-height: 1.65;
+      color: var(--text);
+      background: var(--bg);
+    }
+
+    .site-nav {
+      position: sticky;
+      top: 0;
+      z-index: 100;
+      background: var(--nav-bg);
+      backdrop-filter: blur(10px);
+      -webkit-backdrop-filter: blur(10px);
+      border-bottom: 1px solid var(--border);
+      box-shadow: var(--shadow);
+    }
+
+    .site-nav-inner {
+      max-width: 900px;
+      margin: 0 auto;
+      padding: 0.75rem 1.5rem;
+    }
+
+    .site-nav-title {
+      font-size: 0.8125rem;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+      color: var(--text-muted);
+      margin: 0 0 0.5rem;
+    }
+
+    .toc {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.35rem 0.75rem;
+      margin: 0;
+      padding: 0;
+      list-style: none;
+      font-size: 0.8125rem;
+    }
+
+    .toc a {
+      color: var(--accent);
+      text-decoration: none;
+      white-space: nowrap;
+    }
+
+    .toc a:hover { text-decoration: underline; }
+
+    .page {
+      max-width: 900px;
+      margin: 0 auto;
+      padding: 2rem 1.5rem 4rem;
+    }
+
+    header.page-header {
+      margin-bottom: 2.5rem;
+      padding-bottom: 1.5rem;
+      border-bottom: 1px solid var(--border);
+    }
+
+    h1 {
+      font-size: 1.75rem;
+      font-weight: 700;
+      line-height: 1.25;
+      margin: 0 0 0.75rem;
+      letter-spacing: -0.02em;
+    }
+
+    .lead {
+      margin: 0;
+      color: var(--text-muted);
+      font-size: 1.05rem;
+    }
+
+    h2.section {
+      font-size: 1.35rem;
+      font-weight: 700;
+      margin: 2.5rem 0 1.25rem;
+      padding-top: 0.5rem;
+      color: var(--accent);
+      border-bottom: 2px solid var(--accent-soft);
+      padding-bottom: 0.35rem;
+    }
+
+    article.qa {
+      margin-bottom: 2.75rem;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 1.5rem 1.75rem;
+      box-shadow: var(--shadow);
+    }
+
+    h3.question {
+      font-size: 1.2rem;
+      font-weight: 600;
+      line-height: 1.35;
+      margin: 0 0 1rem;
+    }
+
+    article.qa p { margin: 0 0 1rem; }
+    article.qa p:last-child { margin-bottom: 0; }
+
+    strong { font-weight: 600; }
+
+    ol, ul {
+      margin: 0 0 1rem;
+      padding-left: 1.35rem;
+    }
+
+    li { margin-bottom: 0.35rem; }
+    li:last-child { margin-bottom: 0; }
+
+    code {
+      font-family: ui-monospace, "Cascadia Code", "Source Code Pro", Menlo, Consolas, monospace;
+      font-size: 0.88em;
+      background: var(--code-bg);
+      padding: 0.15em 0.4em;
+      border-radius: 4px;
+    }
+
+    pre {
+      margin: 0 0 1rem;
+      padding: 1rem 1.15rem;
+      background: var(--pre-bg);
+      color: var(--pre-text);
+      border-radius: 8px;
+      overflow-x: auto;
+      font-size: 0.875rem;
+      line-height: 1.5;
+    }
+
+    pre code {
+      background: none;
+      padding: 0;
+      font-size: inherit;
+      color: inherit;
+    }
+
+    footer.page-footer {
+      max-width: 900px;
+      margin: 0 auto;
+      padding: 1.5rem;
+      border-top: 1px solid var(--border);
+      font-size: 0.9375rem;
+    }
+
+    footer.page-footer a {
+      color: var(--accent);
+      text-decoration: none;
+      font-weight: 500;
+    }
+
+    footer.page-footer a:hover { text-decoration: underline; }
+  </style>
+  <link rel="stylesheet" href="assets/interactive.css">
+</head>
+<body>
+
+  <nav class="site-nav" aria-label="Table of contents">
+    <div class="site-nav-inner">
+      <p class="site-nav-title">On this page</p>
+      <ol class="toc">
+        <li><a href="#textarea-auto-grow">Textarea auto-grow</a></li>
+        <li><a href="#large-file-uploads">Large file uploads</a></li>
+        <li><a href="#inline-image">Inline image</a></li>
+        <li><a href="#slash-commands">Slash commands</a></li>
+        <li><a href="#voice-input">Voice input</a></li>
+        <li><a href="#pdf-upload">PDF upload</a></li>
+        <li><a href="#token-count">Token count</a></li>
+        <li><a href="#drag-drop-paste">Drag-drop &amp; paste</a></li>
+        <li><a href="#mixed-multimodal">Mixed multimodal</a></li>
+      </ol>
+    </div>
+  </nav>
+
+  <main class="page">
+    <header class="page-header">
+      <h1>Section 8 — Input &amp; Multimodal UX</h1>
+      <p class="lead">Interview-prep answers for Claude-style AI chat frontends: composable input, attachments, and multimodal send paths.</p>
+    </header>
+
+    <h2 class="section" id="core">Core</h2>
+
+    <article class="qa" id="textarea-auto-grow">
+      <h3 class="question">How do you implement a textarea that grows with content but caps at a max height?</h3>
+      <p><strong>Problem framing:</strong> The composer must expand as the user types multi-line prompts without pushing the message list off-screen or forcing manual resize handles.</p>
+      <p><strong>Approach:</strong> Use a <strong>controlled or semi-controlled</strong> <code>&lt;textarea&gt;</code> (or <code>contenteditable</code> only if you need rich inline formatting) and drive height from <strong>scroll height</strong>, not line-count heuristics. On every input event (and when value is set programmatically, e.g. voice or slash-command insertion), set <code>style.height = 'auto'</code>, read <code>scrollHeight</code>, then set <code>height = min(scrollHeight, maxPx)</code> and toggle <code>overflow-y: auto</code> once you hit the cap. Debounce is usually unnecessary at human typing speeds; batch with <code>requestAnimationFrame</code> if you also resize on window resize or font load.</p>
+      <p>The <strong>max height</strong> should be a product constant (e.g. 200px on mobile, 280px desktop) tied to layout: the composer stays above the keyboard/safe area and does not push the message list off-screen. When capped, internal scroll preserves caret visibility via <code>scrollTop</code> adjustment on selection change. For accessibility, expose the same behavior with <code>resize: none</code> and ensure focus ring and contrast are not clipped by a parent <code>overflow: hidden</code>.</p>
+      <p><strong>Tradeoffs:</strong> Enter-to-send and Shift+Enter-for-newline are orthogonal; growing height should not change keyboard handling. If you mirror ChatGPT/Claude, the send button enables when <code>trim(value).length &gt; 0</code> or attachments exist, independent of height. <strong>Pitfall:</strong> Resizing mid-IME composition on some browsers—listen to <code>compositionend</code>. <strong>Pitfall:</strong> Not resetting height after send leaves a tall empty box.</p>
+      <div class="demo-panel" data-demo="textarea-grow">
+        <p class="demo-panel-title">Try it: scrollHeight auto-grow with cap</p>
+        <p class="demo-panel-desc">Type or paste lines — height grows until max, then scrolls internally.</p>
+        <div class="demo-controls">
+          <label>Max height: <strong data-metric="max">200px</strong>
+            <input type="range" min="80" max="280" value="200" step="20">
+          </label>
+        </div>
+        <textarea class="textarea-grow-demo" rows="1" placeholder="Type multiple lines…">Line one</textarea>
+        <div class="demo-metrics">
+          <span class="demo-metric">Height: <strong data-metric="height">—</strong>px</span>
+          <span class="demo-metric">Capped: <strong data-metric="capped">no</strong></span>
+        </div>
+      </div>
+    </article>
+
+    <article class="qa" id="large-file-uploads">
+      <h3 class="question">How do you handle large file uploads — chunking, progress, cancellation?</h3>
+      <p><strong>Problem framing:</strong> Attachments above a few MB cannot block the composer or stream through the app server; users need progress, resume, and reliable cancel.</p>
+      <p><strong>Approach:</strong> Treat uploads as <strong>first-class async jobs</strong> with their own state machine: <code>queued → uploading → processing → ready | failed | cancelled</code>. For files above a threshold (e.g. 5–10 MB), use <strong>multipart upload</strong> to object storage (S3 multipart, GCS resumable, or tus protocol) from the browser via presigned URLs from your API—never stream huge blobs through your app server if you can avoid it. The client splits into fixed-size chunks (5–8 MB is common), uploads parts in parallel with a small concurrency limit (3–4), and reports aggregate progress as <code>sum(bytesUploaded) / file.size</code>.</p>
+      <p><strong>Progress UI</strong> binds to the job: per-file bar in the composer chip list, optional throughput and ETA for slow networks. <strong>Cancellation</strong> uses <code>AbortController</code> on in-flight <code>fetch</code>/XHR and calls a backend <code>abortMultipart(uploadId)</code> to delete incomplete parts so you do not leak storage. On success, persist only a <strong>stable attachment reference</strong> (<code>fileId</code>, <code>mime</code>, <code>size</code>, optional <code>sha256</code>) in the message payload—not the raw bytes in conversation JSON.</p>
+      <p><strong>Tradeoffs:</strong> Idempotent <code>uploadId</code> + part ETags let you resume after tab refresh if you store upload session metadata in IndexedDB. Server-side virus scan, MIME sniffing, and size quotas run in a worker after upload completes. <strong>Pitfall:</strong> Attaching to the model before <code>ready</code>. <strong>Pitfall:</strong> Cancel without <code>abortMultipart</code> — orphaned parts leak storage.</p>
+      <div class="demo-panel" data-demo="upload-progress">
+        <p class="demo-panel-title">Try it: upload job progress + cancel</p>
+        <p class="demo-panel-desc">Simulated multipart upload — cancel aborts in-flight parts.</p>
+        <div class="demo-controls">
+          <button type="button" class="demo-btn">Start upload</button>
+          <button type="button" class="demo-btn secondary" data-cancel disabled>Cancel</button>
+        </div>
+        <div class="gauge-wrap"><div class="gauge-fill"></div></div>
+        <div class="demo-metrics"><span class="demo-metric">Status: <strong data-metric="status">queued</strong></span></div>
+      </div>
+    </article>
+
+    <article class="qa" id="inline-image">
+      <h3 class="question">How do you render an image uploaded by the user inline in the conversation?</h3>
+      <p><strong>Problem framing:</strong> Users expect immediate visual feedback in the thread while uploads finish; the UI must align with provider multimodal schemas without embedding megabytes in state.</p>
+      <p><strong>Approach:</strong> Model a user message as <strong>ordered content blocks</strong>: <code>{ type: 'text', text }</code> and <code>{ type: 'image', source: { type: 'url' | 'base64', ... } }</code> aligned with your provider’s multimodal schema (Anthropic image blocks, OpenAI <code>image_url</code>, etc.). In the thread UI, render user bubbles with a <strong>thumbnail strip</strong> above or beside text: <code>object-fit: cover</code>, max dimensions (e.g. 240×240 preview, click to lightbox), and <code>loading="lazy"</code> for history.</p>
+      <p>For <strong>immediate preview</strong> before upload finishes, use <code>URL.createObjectURL(file)</code> in the composer and revoke on unmount or after CDN URL replaces it. After upload, store and display the <strong>CDN/signed URL</strong> only; avoid embedding multi-MB base64 in React state or localStorage. Alt text can default to filename; optional user-editable alt for accessibility.</p>
+      <p><strong>Tradeoffs:</strong> Flex column inside the bubble—images first, then text—so streaming assistant replies do not reflow oddly. <strong>Pitfall:</strong> Keeping blob URLs after CDN swap — memory leak. <strong>Pitfall:</strong> Deleting the whole draft when one image fails moderation.</p>
+      <div class="demo-panel" data-demo="content-blocks">
+        <p class="demo-panel-title">Try it: blob preview → CDN URL swap</p>
+        <p class="demo-panel-desc">Toggle between immediate object URL preview and persisted CDN reference.</p>
+        <div class="demo-controls"><button type="button" class="demo-btn secondary" data-toggle>Swap to CDN URL</button></div>
+        <div class="content-block-preview"></div>
+        <div class="demo-metrics"><span class="demo-metric">Image source: <strong data-metric="source">createObjectURL</strong></span></div>
+      </div>
+    </article>
+
+    <article class="qa" id="slash-commands">
+      <h3 class="question">How do you implement slash commands (e.g. <code>/search</code>, <code>/summarize</code>) in the input box?</h3>
+      <p><strong>Problem framing:</strong> Power users expect discoverable shortcuts in the composer without breaking normal text entry or accidental sends.</p>
+      <p><strong>Approach:</strong> Parse the <strong>leading token</strong> of the composer value on change: if input matches <code>^/(\w*)$</code> at start of line (or after optional whitespace), enter <strong>command mode</strong> and show a filtered <strong>typeahead menu</strong> (fuzzy match on command names and aliases). Selecting a command replaces or completes the token and may open <strong>parameter UI</strong>—second menu for scope, or a modal for required args—before send.</p>
+      <p>Architecturally, slash commands are <strong>client-side intents</strong> that map to one of: (1) <strong>prompt templates</strong> injected at send time, (2) <strong>routing</strong> to a different API (<code>/search</code> → RAG endpoint), or (3) <strong>tool/MCP invocation</strong> with pre-filled arguments. Keep a registry <code>{ name, description, argsSchema, handler }</code> so product can add commands without touching the textarea component.</p>
+      <p><strong>Tradeoffs:</strong> Keyboard nav (↑↓, Enter, Esc), highlight matched substring, hide menu on blur unless clicking menu. Do not send on Enter while the menu is open—Enter selects. <strong>Pitfall:</strong> Activating on <code>/</code> mid-paste of file paths. <strong>Pitfall:</strong> Trusting client-only side effects for auth or billing.</p>
+      <div class="demo-panel" data-demo="slash-menu" data-commands='[{"name":"search","desc":"Search knowledge base"},{"name":"summarize","desc":"Summarize thread"},{"name":"code","desc":"Generate code snippet"}]'>
+        <p class="demo-panel-title">Try it: slash typeahead menu</p>
+        <p class="demo-panel-desc">Type <code>/</code> at the start — filtered commands appear; click to complete.</p>
+        <div class="slash-input-wrap">
+          <input type="text" placeholder="/search or /sum…" autocomplete="off">
+          <div class="slash-menu" hidden></div>
+        </div>
+      </div>
+    </article>
+
+    <h2 class="section" id="deep">Deep</h2>
+
+    <article class="qa" id="voice-input">
+      <h3 class="question">How do you implement voice input with live transcription feeding into the chat input?</h3>
+      <p><strong>Problem framing:</strong> Partial speech-to-text must merge into the same controlled composer state as typing, without fighting slash commands, token counts, or attachments.</p>
+      <p><strong>Approach:</strong> Use the <strong>Web Speech API</strong> (<code>SpeechRecognition</code> / <code>webkitSpeechRecognition</code>) for a zero-backend MVP in Chromium, or <strong>streaming STT</strong> (Deepgram, Whisper API, Google STT) over WebSocket for cross-browser and better accuracy. Flow: mic button → permission prompt → <code>MediaStream</code> + recognition session → <strong>partial transcripts</strong> append or replace a “live” segment in the composer while <strong>final</strong> segments commit to the stable textarea value.</p>
+      <p>Maintain two buffers: <strong>committedText</strong> (what the user had before dictation) and <strong>interimText</strong> (unstable partial). UI shows <code>committedText + interimText</code> with interim styled (gray/italic); on <code>result</code> event with <code>isFinal</code>, merge into <code>committedText</code> and clear interim.</p>
+      <p><strong>Tradeoffs:</strong> Show a pulsing indicator and “Listening…” state; handle <code>no-speech</code>, <code>network</code>, and <code>not-allowed</code> with toasts. Offer <strong>push-to-talk</strong> vs <strong>toggle</strong> modes. <strong>Pitfall:</strong> Echo from TTS during recording—pause recognition during playback. <strong>Pitfall:</strong> Separate dictation state from composer—slash commands break.</p>
+      <div class="demo-panel" data-demo="voice-transcript">
+        <p class="demo-panel-title">Try it: committed + interim transcript buffers</p>
+        <p class="demo-panel-desc">Partial text appears italic; final segments merge into stable value.</p>
+        <div class="demo-controls"><button type="button" class="demo-btn">Simulate dictation</button></div>
+        <div class="voice-display-wrap">
+          <span class="voice-display">Summarize this thread: </span><span class="voice-interim"></span>
+        </div>
+      </div>
+    </article>
+
+    <article class="qa" id="pdf-upload">
+      <h3 class="question">How do you handle a PDF upload — extract text client-side or send the raw file?</h3>
+      <p><strong>Problem framing:</strong> PDFs vary from small text-native docs to large scanned files; the wrong extraction path blocks the UI or sends unusable content to the model.</p>
+      <p><strong>Approach:</strong> Use a <strong>hybrid strategy</strong> keyed by page count, file size, and product capabilities. <strong>Small/text-native PDFs</strong> (≤ ~20 pages, ≤ few MB): client-side extraction with <code>pdf.js</code> gives fast preview, immediate token estimates, and lets the user see what will be sent. <strong>Large, scanned, or encrypted PDFs</strong>: upload raw file to storage, run <strong>server-side OCR/extraction</strong> (Unstructured, Textract, custom pipeline), and attach a <code>fileId</code> the model path resolves when <code>ready</code>.</p>
+      <p>Do <strong>not</strong> rely on client extraction alone for vision models: if the deployment supports <strong>document vision</strong>, you may send pages as images or use the provider’s native PDF support when available—still via upload reference, not base64 in JSON. <strong>Security:</strong> PDFs are a common malware and prompt-injection vector; scan server-side, strip JavaScript/actions, and cap pages/tokens ingested.</p>
+      <p><strong>Tradeoffs:</strong> State machine: <code>uploaded → extracting → preview ready → (user confirms) included in message</code>. Cache extraction by <code>contentHash</code> so re-upload in another thread does not re-OCR. <strong>Pitfall:</strong> Blocking the UI thread on OCR for 100-page files. <strong>Pitfall:</strong> Client-only extraction for scanned PDFs — garbage text to the model.</p>
+      <div class="demo-panel" data-demo="decision-tree" data-tree='{"question":"PDF arrives — what path?","options":[{"label":"≤20 pages, text-native, few MB","result":"Client pdf.js extract — fast preview + token estimate; send text block"},{"label":"Large, scanned, or encrypted","result":"Upload raw → server OCR/extraction → attach fileId when ready"},{"label":"Vision model + native PDF support","result":"Upload reference only — provider resolves pages; never base64 in JSON"},{"label":"Extraction fails client-side","next":{"question":"Policy allows raw upload?","options":[{"label":"Yes","result":"Fallback: send original to backend pipeline"},{"label":"No","result":"Surface typed error — do not attach to message"}]}}]}'>
+        <p class="demo-panel-title">Try it: PDF extraction decision tree</p>
+        <p class="demo-panel-desc">Client preview vs server OCR vs vision-native — pick by size and content type.</p>
+        <div class="decision-tree"><div data-tree-root></div><div class="decision-result"></div></div>
+      </div>
+    </article>
+
+    <article class="qa" id="token-count">
+      <h3 class="question">How do you show a token count estimate for the current input before the user sends?</h3>
+      <p><strong>Problem framing:</strong> Users need early feedback on context budget before send; counting must not block typing or IME composition.</p>
+      <p><strong>Approach:</strong> Run a <strong>client-side tokenizer</strong> that matches the deployment model family: <code>tiktoken</code> wasm port, <code>@anthropic-ai/tokenizer</code>, or a small WASM build per provider. On composer <code>input</code>, debounce 150–300ms and compute <code>count = encode(text).length + attachmentTokens</code>. Display a subtle <strong>footer counter</strong> (“~1,240 tokens”) and optional <strong>context budget bar</strong> when the thread already has history—<code>remaining = contextWindow - threadTokens - draftTokens</code>.</p>
+      <p><strong>Attachments:</strong> Images use provider-specific rules (tiles, patches, or fixed cost per image); PDFs use extracted text length; unknown files show “—” until processing completes. <strong>Performance:</strong> worker thread for tokenize so typing stays smooth; cache encodings for unchanged prefixes when only appending.</p>
+      <p><strong>Tradeoffs:</strong> Label as estimate; server does final count before billing. Warn soft threshold at 80% of context, hard disable send at 100%. <strong>Pitfall:</strong> Tokenizing on every keystroke without debounce. <strong>Pitfall:</strong> Same counter when switching models — tokenizers differ.</p>
+      <div class="demo-panel" data-demo="token-counter" data-budget="8000">
+        <p class="demo-panel-title">Try it: debounced token estimate + budget bar</p>
+        <p class="demo-panel-desc">~chars/4 estimate with 8k context budget (debounced 200ms).</p>
+        <textarea rows="3" style="width:100%;font:inherit;font-size:0.875rem;padding:0.5rem;border-radius:6px;border:1px solid var(--border);background:var(--surface);color:var(--text);">Paste a long draft here to watch the budget fill…</textarea>
+        <div class="gauge-wrap"><div class="gauge-fill"></div></div>
+        <div class="demo-metrics">
+          <span class="demo-metric">Tokens: <strong data-metric="tokens">~0</strong></span>
+          <span class="demo-metric">Remaining: <strong data-metric="remaining">8000</strong></span>
+        </div>
+      </div>
+    </article>
+
+    <article class="qa" id="drag-drop-paste">
+      <h3 class="question">How do you implement drag-and-drop file attachment with paste-from-clipboard support?</h3>
+      <p><strong>Problem framing:</strong> Files arrive from file picker, drag-and-drop, and paste (screenshots)—all must funnel through one validation and upload pipeline.</p>
+      <p><strong>Approach:</strong> Centralize on one <strong>AttachmentController</strong> that accepts <code>File[]</code> from any source: <code>&lt;input type="file" multiple&gt;</code>, drag-and-drop, and paste. For drag-and-drop, register <code>dragenter</code>/<code>dragover</code>/<code>drop</code> on the composer <strong>drop zone</strong>; <code>preventDefault</code> on dragover to allow drop; validate <code>dataTransfer.types</code> includes <code>Files</code>. Show a <strong>drop highlight</strong> state and reject non-file drags.</p>
+      <p><strong>Paste:</strong> listen to <code>paste</code> on the textarea. If <code>clipboardData.files.length &gt; 0</code>, treat as attachment (screenshots, copied files); else if plain text, insert at caret. Images from screenshot tools often arrive as a single anonymous <code>image.png</code>—good default. Normalize each <code>File</code> through the same pipeline: type allowlist, max size, virus scan queue, preview generation.</p>
+      <p><strong>Tradeoffs:</strong> Dedupe by name+size+lastModified; show chips with remove (×). <strong>Pitfall:</strong> Dragging a URL from the address bar — offer “Attach link” vs file. <strong>Pitfall:</strong> Relying on drag-only — file picker must be keyboard-reachable.</p>
+      <div class="demo-panel" data-demo="decision-tree" data-tree='{"question":"Input event — what source?","options":[{"label":"clipboardData.files.length &gt; 0","result":"Attachment pipeline — screenshot or copied file (often image.png)"},{"label":"Plain text only in clipboard","result":"Insert at caret — normal typing path"},{"label":"dataTransfer has Files on drop","result":"AttachmentController.addFiles — same pipeline as picker"},{"label":"text/uri-list from browser bar drag","next":{"question":"Is it a fetchable URL or local path?","options":[{"label":"HTTP(S) URL","result":"Offer Attach link vs Fetch preview — not always a File"},{"label":"Local file path (OS)","result":"Reject or map to File if browser exposes it"}]}}]}'>
+        <p class="demo-panel-title">Try it: paste vs drop vs URL decision tree</p>
+        <p class="demo-panel-desc">Route every ingress path through AttachmentController or caret insert.</p>
+        <div class="decision-tree"><div data-tree-root></div><div class="decision-result"></div></div>
+      </div>
+    </article>
+
+    <article class="qa" id="mixed-multimodal">
+      <h3 class="question">How do you handle mixed multimodal input — image + text + file in one message?</h3>
+      <p><strong>Problem framing:</strong> One user turn may contain images, text, and documents—providers expect a single atomic payload, not parallel messages.</p>
+      <p><strong>Approach:</strong> Define a <strong>single user message schema</strong> with an ordered <code>content: ContentBlock[]</code> array: e.g. <code>[image, image, text, documentRef]</code>. The composer is a <strong>unified attachment strip</strong> (thumbnails + file chips) plus one text field; send is enabled when any block is non-empty. On submit, atomically build one API payload—providers expect one <code>user</code> turn with multiple parts, not parallel messages.</p>
+      <p><strong>Ordering policy:</strong> typically <strong>visuals first, then text, then documents</strong> so prompt structure matches model training. <strong>Upload gating:</strong> wait for all blobs to reach <code>ready</code> or block with “Uploading 2/3…”. <strong>Token budgeting:</strong> sum estimates across blocks; truncate or warn when over limit, with per-block removal.</p>
+      <p><strong>Tradeoffs:</strong> User bubble composes sub-renderers per block type; assistant streaming stays unchanged. <strong>API normalization layer:</strong> map internal blocks to Anthropic/OpenAI/Gemini shapes in one adapter. <strong>Pitfall:</strong> Inconsistent lifecycle across block types — upload, extract, tokenize, send must be atomic. <strong>Pitfall:</strong> One failed image deleting the whole draft.</p>
+      <div class="demo-panel" data-demo="protocol-picker" data-scenarios='[{"prompt":"User sends 2 images + question text + PDF — block order for API?","answer":"Visuals first","explain":"Images first, then text, then document refs — matches model training structure."},{"prompt":"One of three attachments still uploading — send button?","answer":"Block send","explain":"Wait for all blobs ready or show Uploading 2/3 — atomic user turn."},{"prompt":"Map ContentBlock[] to Anthropic vs OpenAI shapes — where?","answer":"Adapter layer","explain":"Single normalization adapter — UI never branches per provider."}]'>
+        <p class="demo-panel-title">Quiz: mixed multimodal send policy</p>
+        <p class="demo-panel-desc" data-scenario></p>
+        <div class="protocol-cards">
+          <div class="protocol-card">Visuals first</div>
+          <div class="protocol-card">Block send</div>
+          <div class="protocol-card">Adapter layer</div>
+        </div>
+        <div class="demo-controls"><button type="button" class="demo-btn secondary" data-next>Next scenario</button></div>
+        <div class="decision-result"></div>
+      </div>
+    </article>
+  </main>
+
+  <footer class="page-footer">
+    <a href="index.html">← All sections</a>
+  </footer>
+
+  <script src="assets/interactive.js" defer></script>
+</body>
+</html>

@@ -1,0 +1,904 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Claude Frontend System — Interactive Architecture</title>
+  <meta name="description" content="Interactive architecture map covering all 10 Claude-style AI chat frontend system design prep sections.">
+  <style>
+    :root {
+      --bg: #0f1219;
+      --surface: #171c28;
+      --surface2: #1e2536;
+      --text: #e8ecf4;
+      --muted: #8b95a8;
+      --border: #2d3548;
+      --accent: #c97840;
+      --accent-soft: rgba(201, 120, 64, 0.15);
+      --ui: #5b9bd5;
+      --client: #70ad47;
+      --transport: #ffc000;
+      --api: #9966cc;
+      --provider: #ed7d31;
+      --data: #4472c4;
+      --security: #e74c3c;
+      --shadow: 0 8px 32px rgba(0,0,0,.35);
+    }
+    @media (prefers-color-scheme: light) {
+      :root {
+        --bg: #f4f2ef;
+        --surface: #fff;
+        --surface2: #faf8f5;
+        --text: #1a1d26;
+        --muted: #5c6370;
+        --border: #e2e6ed;
+        --accent: #b85c28;
+        --accent-soft: rgba(184, 92, 40, 0.1);
+        --shadow: 0 4px 20px rgba(0,0,0,.08);
+      }
+    }
+    *, *::before, *::after { box-sizing: border-box; }
+    html, body { height: 100%; margin: 0; }
+    body {
+      font-family: "Segoe UI", system-ui, -apple-system, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      overflow: hidden;
+    }
+    .app {
+      display: grid;
+      grid-template-columns: 280px 1fr 340px;
+      grid-template-rows: auto 1fr;
+      height: 100vh;
+    }
+    header {
+      grid-column: 1 / -1;
+      display: flex;
+      align-items: center;
+      gap: 1rem;
+      padding: 0.75rem 1.25rem;
+      border-bottom: 1px solid var(--border);
+      background: var(--surface);
+    }
+    header h1 {
+      font-size: 1rem;
+      font-weight: 700;
+      margin: 0;
+      letter-spacing: -0.02em;
+    }
+    header p { margin: 0; font-size: 0.8125rem; color: var(--muted); }
+    .header-links { margin-left: auto; display: flex; gap: 0.75rem; font-size: 0.8125rem; }
+    .header-links a { color: var(--accent); text-decoration: none; }
+    .header-links a:hover { text-decoration: underline; }
+
+    .sidebar {
+      border-right: 1px solid var(--border);
+      background: var(--surface);
+      overflow-y: auto;
+      padding: 1rem;
+    }
+    .sidebar h2 {
+      font-size: 0.6875rem;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      color: var(--muted);
+      margin: 0 0 0.5rem;
+    }
+    .sidebar section { margin-bottom: 1.25rem; }
+    .filter-group { display: flex; flex-wrap: wrap; gap: 0.35rem; }
+    .chip {
+      font-size: 0.75rem;
+      padding: 0.25rem 0.55rem;
+      border-radius: 999px;
+      border: 1px solid var(--border);
+      background: var(--surface2);
+      color: var(--muted);
+      cursor: pointer;
+      user-select: none;
+      transition: all 0.15s;
+    }
+    .chip:hover { border-color: var(--accent); color: var(--text); }
+    .chip.active { background: var(--accent-soft); border-color: var(--accent); color: var(--accent); font-weight: 600; }
+    .chip.layer-ui.active { border-color: var(--ui); color: var(--ui); background: rgba(91,155,213,.12); }
+    .chip.layer-client.active { border-color: var(--client); color: var(--client); background: rgba(112,173,71,.12); }
+    .chip.layer-transport.active { border-color: var(--transport); color: #b8860b; background: rgba(255,192,0,.12); }
+    .chip.layer-api.active { border-color: var(--api); color: var(--api); background: rgba(153,102,204,.12); }
+    .chip.layer-provider.active { border-color: var(--provider); color: var(--provider); background: rgba(237,125,49,.12); }
+    .chip.layer-data.active { border-color: var(--data); color: var(--data); background: rgba(68,114,196,.12); }
+    .chip.layer-security.active { border-color: var(--security); color: var(--security); background: rgba(231,76,60,.12); }
+
+    select, input[type="search"] {
+      width: 100%;
+      font: inherit;
+      font-size: 0.8125rem;
+      padding: 0.45rem 0.65rem;
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      background: var(--surface2);
+      color: var(--text);
+    }
+    .flow-btn {
+      display: block;
+      width: 100%;
+      text-align: left;
+      font: inherit;
+      font-size: 0.8125rem;
+      padding: 0.5rem 0.65rem;
+      margin-bottom: 0.35rem;
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      background: var(--surface2);
+      color: var(--text);
+      cursor: pointer;
+    }
+    .flow-btn:hover, .flow-btn.active { border-color: var(--accent); background: var(--accent-soft); }
+    .legend { font-size: 0.75rem; color: var(--muted); line-height: 1.5; }
+    .legend span { display: inline-block; width: 10px; height: 10px; border-radius: 2px; margin-right: 4px; vertical-align: middle; }
+
+    .canvas-wrap {
+      position: relative;
+      overflow: hidden;
+      background:
+        radial-gradient(circle at 50% 0%, rgba(201,120,64,.06), transparent 50%),
+        var(--bg);
+    }
+    .canvas-toolbar {
+      position: absolute;
+      top: 0.75rem;
+      left: 0.75rem;
+      z-index: 5;
+      display: flex;
+      gap: 0.35rem;
+    }
+    .canvas-toolbar button {
+      font: inherit;
+      font-size: 0.75rem;
+      padding: 0.35rem 0.6rem;
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      background: var(--surface);
+      color: var(--text);
+      cursor: pointer;
+    }
+    .canvas {
+      width: 100%;
+      height: 100%;
+      cursor: grab;
+      touch-action: none;
+    }
+    .canvas.dragging { cursor: grabbing; }
+    .diagram-inner {
+      position: absolute;
+      width: 1200px;
+      height: 920px;
+      transform-origin: 0 0;
+    }
+    svg.connections {
+      position: absolute;
+      inset: 0;
+      width: 100%;
+      height: 100%;
+      pointer-events: none;
+    }
+    svg.connections line, svg.connections path {
+      stroke: var(--border);
+      stroke-width: 1.5;
+      fill: none;
+      transition: stroke 0.2s, stroke-width 0.2s;
+    }
+    svg.connections .flow-active {
+      stroke: var(--accent);
+      stroke-width: 2.5;
+      stroke-dasharray: 8 4;
+      animation: flowDash 0.6s linear infinite;
+    }
+    @keyframes flowDash { to { stroke-dashoffset: -12; } }
+
+    .lane {
+      position: absolute;
+      left: 12px;
+      right: 12px;
+      border: 1px dashed var(--border);
+      border-radius: 10px;
+      background: rgba(255,255,255,.02);
+    }
+    .lane-label {
+      position: absolute;
+      left: 12px;
+      top: 6px;
+      font-size: 0.6875rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      color: var(--muted);
+    }
+    .node {
+      position: absolute;
+      width: 148px;
+      padding: 0.55rem 0.65rem;
+      border-radius: 8px;
+      border: 2px solid var(--border);
+      background: var(--surface);
+      font-size: 0.75rem;
+      line-height: 1.35;
+      cursor: pointer;
+      transition: transform 0.15s, box-shadow 0.15s, opacity 0.2s, border-color 0.15s;
+      box-shadow: var(--shadow);
+    }
+    .node:hover { transform: translateY(-2px); z-index: 10; }
+    .node.selected { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); z-index: 11; }
+    .node.dimmed { opacity: 0.2; pointer-events: none; }
+    .node.highlight { border-color: var(--accent); animation: pulse 1s ease infinite; }
+    @keyframes pulse { 50% { box-shadow: 0 0 0 6px var(--accent-soft); } }
+    .node-title { font-weight: 700; margin-bottom: 0.15rem; }
+    .node-sub { font-size: 0.6875rem; color: var(--muted); }
+    .node-tags { display: flex; flex-wrap: wrap; gap: 2px; margin-top: 0.35rem; }
+    .node-tag {
+      font-size: 0.5625rem;
+      padding: 1px 4px;
+      border-radius: 3px;
+      background: var(--surface2);
+      color: var(--muted);
+    }
+    .node[data-layer="ui"] { border-left: 4px solid var(--ui); }
+    .node[data-layer="client"] { border-left: 4px solid var(--client); }
+    .node[data-layer="transport"] { border-left: 4px solid var(--transport); }
+    .node[data-layer="api"] { border-left: 4px solid var(--api); }
+    .node[data-layer="provider"] { border-left: 4px solid var(--provider); }
+    .node[data-layer="data"] { border-left: 4px solid var(--data); }
+    .node[data-layer="security"] { border-left: 4px solid var(--security); }
+
+    .detail {
+      border-left: 1px solid var(--border);
+      background: var(--surface);
+      overflow-y: auto;
+      padding: 1.25rem;
+    }
+    .detail-empty { color: var(--muted); font-size: 0.9375rem; margin-top: 2rem; text-align: center; }
+    .detail h2 { font-size: 1.125rem; margin: 0 0 0.35rem; }
+    .detail .layer-badge {
+      display: inline-block;
+      font-size: 0.6875rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      padding: 0.2rem 0.5rem;
+      border-radius: 4px;
+      margin-bottom: 0.75rem;
+    }
+    .detail p { font-size: 0.875rem; line-height: 1.6; color: var(--muted); margin: 0 0 0.75rem; }
+    .detail h3 { font-size: 0.8125rem; text-transform: uppercase; letter-spacing: 0.04em; color: var(--accent); margin: 1rem 0 0.4rem; }
+    .detail ul { margin: 0; padding-left: 1.1rem; font-size: 0.8125rem; line-height: 1.55; }
+    .detail li { margin-bottom: 0.3rem; }
+    .section-links { display: flex; flex-wrap: wrap; gap: 0.35rem; margin-top: 0.5rem; }
+    .section-links a {
+      font-size: 0.75rem;
+      padding: 0.25rem 0.5rem;
+      border-radius: 4px;
+      background: var(--accent-soft);
+      color: var(--accent);
+      text-decoration: none;
+    }
+    .section-links a:hover { text-decoration: underline; }
+    .flow-step {
+      font-size: 0.8125rem;
+      padding: 0.5rem 0.65rem;
+      margin-bottom: 0.35rem;
+      border-left: 3px solid var(--border);
+      background: var(--surface2);
+      border-radius: 0 6px 6px 0;
+    }
+    .flow-step.active { border-left-color: var(--accent); background: var(--accent-soft); }
+
+    @media (max-width: 1100px) {
+      .app { grid-template-columns: 1fr; grid-template-rows: auto auto 1fr auto; overflow-y: auto; height: auto; min-height: 100vh; }
+      body { overflow: auto; }
+      .sidebar { border-right: none; border-bottom: 1px solid var(--border); max-height: none; }
+      .canvas-wrap { min-height: 520px; }
+      .detail { border-left: none; border-top: 1px solid var(--border); max-height: none; }
+    }
+  </style>
+</head>
+<body>
+  <div class="app">
+    <header>
+      <div>
+        <h1>Claude Frontend System Architecture</h1>
+        <p>Interactive map · all 10 prep sections</p>
+      </div>
+      <div class="header-links">
+        <a href="answers-html/index.html">Answer pages</a>
+        <a href="Claude-design-doc.md">Question bank</a>
+      </div>
+    </header>
+
+    <aside class="sidebar">
+      <section>
+        <h2>Search</h2>
+        <input type="search" id="search" placeholder="Filter nodes…" autocomplete="off">
+      </section>
+      <section>
+        <h2>Layer filter</h2>
+        <div class="filter-group" id="layerFilters"></div>
+      </section>
+      <section>
+        <h2>Section filter</h2>
+        <div class="filter-group" id="sectionFilters"></div>
+      </section>
+      <section>
+        <h2>Walk a flow</h2>
+        <div id="flowButtons"></div>
+      </section>
+      <section>
+        <h2>Legend</h2>
+        <div class="legend" id="legend"></div>
+      </section>
+    </aside>
+
+    <main class="canvas-wrap">
+      <div class="canvas-toolbar">
+        <button type="button" id="zoomIn">+</button>
+        <button type="button" id="zoomOut">−</button>
+        <button type="button" id="resetView">Reset view</button>
+      </div>
+      <div class="canvas" id="canvas">
+        <div class="diagram-inner" id="diagram">
+          <svg class="connections" id="connections"></svg>
+        </div>
+      </div>
+    </main>
+
+    <aside class="detail" id="detailPanel">
+      <div class="detail-empty" id="detailEmpty">
+        Click a node or run a flow walkthrough to see details, interview angles, and links to answer sections.
+      </div>
+      <div id="detailContent" hidden></div>
+    </aside>
+  </div>
+
+  <script>
+    const LAYERS = {
+      ui: { label: 'UI Surfaces', color: 'var(--ui)' },
+      client: { label: 'Client State', color: 'var(--client)' },
+      transport: { label: 'Transport', color: 'var(--transport)' },
+      api: { label: 'API / BFF', color: 'var(--api)' },
+      provider: { label: 'Providers', color: 'var(--provider)' },
+      data: { label: 'Data', color: 'var(--data)' },
+      security: { label: 'Security', color: 'var(--security)' }
+    };
+
+    const SECTIONS = [
+      { id: '01', name: 'Streaming', file: 'answers-html/01-streaming-real-time-rendering.html' },
+      { id: '02', name: 'State', file: 'answers-html/02-conversation-state-management.html' },
+      { id: '03', name: 'MCP Tools', file: 'answers-html/03-mcp-tool-use-ui.html' },
+      { id: '04', name: 'Artifacts', file: 'answers-html/04-artifacts-sandboxed-rendering.html' },
+      { id: '05', name: 'Performance', file: 'answers-html/05-performance-scalability.html' },
+      { id: '06', name: 'Auth', file: 'answers-html/06-auth-security-multitenancy.html' },
+      { id: '07', name: 'Resilience', file: 'answers-html/07-offline-resilience-error-handling.html' },
+      { id: '08', name: 'Input', file: 'answers-html/08-input-multimodal-ux.html' },
+      { id: '09', name: 'Providers', file: 'answers-html/09-api-design-provider-abstraction.html' },
+      { id: '10', name: 'Killer Qs', file: 'answers-html/10-killer-questions.html' }
+    ];
+
+    const NODES = [
+      { id: 'composer', layer: 'ui', x: 40, y: 48, title: 'Composer', sub: 'Input · attach · send/stop', sections: ['02','08','01'],
+        desc: 'Captures drafts, multimodal attachments, slash commands, token estimate, and stop-generation. Never part of the committed message graph until send.',
+        bullets: ['Auto-grow textarea with max height cap', 'AttachmentController: drag/drop/paste', 'AbortController wired to active SSE stream', 'Draft in localStorage/IDB, separate from graph'],
+        questions: ['Draft persistence', 'Mixed multimodal send', 'Stop generation chain'] },
+      { id: 'sidebar', layer: 'ui', x: 220, y: 48, title: 'Sidebar', sub: '10k convos · search', sections: ['05','10','02'],
+        desc: 'Virtualized conversation list with metadata-only rows, cursor pagination, FTS search, optimistic rename/delete.',
+        bullets: ['Prefetch on hover/focus', 'IndexedDB cache ~1000 rows', 'No message bodies in list rows'],
+        questions: ['Sidebar at 10k scale', 'Preload next conversation'] },
+      { id: 'msgList', layer: 'ui', x: 400, y: 48, title: 'Message List', sub: 'Virtualized thread', sections: ['01','05','02'],
+        desc: 'Windowed view of active branch path. Pinned streaming row, scroll anchoring, dynamic height cache.',
+        bullets: ['Only visible rows in DOM', 'isPinnedToBottom + "New messages ↓"', 'Stable keys per markdown block'],
+        questions: ['Virtualize 500 messages', 'Scroll anchoring', 'Avoid full-list re-render'] },
+      { id: 'streamBubble', layer: 'ui', x: 580, y: 48, title: 'Streaming Bubble', sub: 'Typing → tokens → done', sections: ['01'],
+        desc: 'Single assistant slot: pending indicator crossfades into incremental markdown render.',
+        bullets: ['rAF batching decouples network from paint', 'Incomplete fence/table state machines', 'Backpressure: pause read(), shed highlight'],
+        questions: ['Layout thrash', 'Token throttle', 'Open code fence', 'Backpressure'] },
+      { id: 'toolPills', layer: 'ui', x: 760, y: 48, title: 'Tool Pills', sub: 'HITL · chains · audit', sections: ['03','06','10'],
+        desc: 'Per tool_use_id UI: loading → success/error, confirm card for destructive actions, trust/egress disclosure.',
+        bullets: ['UI lock + idempotency key on confirm', 'Multi-step stepper in one turn', 'Activity drawer for audit trail'],
+        questions: ['Double confirm in 200ms', 'tool_result as user role', 'MCP OAuth expiry'] },
+      { id: 'artifactPanel', layer: 'ui', x: 940, y: 48, title: 'Artifact Panel', sub: 'Editor + preview', sections: ['04','10'],
+        desc: 'Code editor + sandboxed live preview with version timeline, diff, revert.',
+        bullets: ['Heartbeat detects infinite render loops', 'postMessage bridge host ↔ iframe', 'Debounced compile in worker'],
+        questions: ['iframe sandbox + CSP', 'Infinite loop detection', 'Version/revert'] },
+
+      { id: 'convStore', layer: 'client', x: 120, y: 200, title: 'Conversation Store', sub: 'Graph view + active leaf', sections: ['02','10'],
+        desc: 'Client mirror of server message tree. Derives linear visible path via active_leaf_id. Optimistic nodes with clientRequestId.',
+        bullets: ['Edit = sibling fork, not overwrite', 'Branch switcher swaps active leaf', 'BroadcastChannel for multi-tab'],
+        questions: ['Edit message N', 'Branching model', 'Multi-tab sync'] },
+      { id: 'streamPipeline', layer: 'client', x: 320, y: 200, title: 'Streaming Pipeline', sub: 'Buffer · parse · patch', sections: ['01','05'],
+        desc: 'Token ring buffer → rAF flush → incremental markdown blocks → stable DOM patch.',
+        bullets: ['Refs hold hot string; state commits per frame', 'startTransition for responsiveness', 'Canonical string never dropped on shed work'],
+        questions: ['Buffer interval', 'Debounced markdown parse', 'Render lag metrics'] },
+      { id: 'branchAsm', layer: 'client', x: 520, y: 200, title: 'Branch Assembler', sub: 'pathToLeaf · token budget', sections: ['02','09','10'],
+        desc: 'Walk active leaf to root, reverse to chronological order, apply context window truncate/summarize policy.',
+        bullets: ['Preview on client; server authoritative', 'IR blocks compiled at adapter boundary', 'Summary nodes on long threads'],
+        questions: ['Context window strategy', 'Reassemble after edit', 'Provider normalization'] },
+      { id: 'outbox', layer: 'client', x: 720, y: 200, title: 'Outbox Queue', sub: 'Offline · IDB', sections: ['07','02'],
+        desc: 'IndexedDB queue for offline sends and upload resume. FIFO drain on reconnect with Idempotency-Key.',
+        bullets: ['Optimistic user bubble while queued', 'Leader election across tabs', 'Conflict on conversation_revision mismatch'],
+        questions: ['Offline message queue', 'Stream drop recovery'] },
+      { id: 'clientCache', layer: 'client', x: 920, y: 200, title: 'Client Cache', sub: 'Memory · IDB · RQ', sections: ['05','02'],
+        desc: 'Three-tier: in-memory hot set, IndexedDB pages, React Query server sync. Org-scoped namespaces.',
+        bullets: ['LRU ~20 threads in memory', 'Paginated history prepend on scroll-up', 'Height cache for virtualizer'],
+        questions: ['Caching strategy', 'Lazy-load history'] },
+
+      { id: 'rest', layer: 'transport', x: 200, y: 352, title: 'REST', sub: 'CRUD · control · upload', sections: ['01','07','08','03'],
+        desc: 'Send message, cancel, tool execute, paginated history, presigned uploads, search, share links.',
+        bullets: ['Idempotency-Key on destructive ops', 'PATCH events + revision vector', 'parseApiError taxonomy'],
+        questions: ['Cancel/retry control plane', 'Error taxonomy', 'Chunked uploads'] },
+      { id: 'sse', layer: 'transport', x: 480, y: 352, title: 'SSE Stream', sub: 'Token · tool · status', sections: ['01','07','09'],
+        desc: 'Default LLM output transport. fetch + ReadableStream or EventSource with Last-Event-ID reconnect.',
+        bullets: ['AbortController closes HTTP → stops billing', 'Resume via generation_id + cursor', 'Exponential backoff on drop'],
+        questions: ['SSE vs WebSocket', 'Stream drop at token 400', 'Resume stream'] },
+      { id: 'ws', layer: 'transport', x: 760, y: 352, title: 'WebSocket', sub: 'Optional sync', sections: ['01','02'],
+        desc: 'Bidirectional session sync, presence, async job updates. Hybrid: SSE tokens + WS patches.',
+        bullets: ['Manual heartbeat + resume protocol', 'Use when client→server churn is high', 'Not default for pure completion streams'],
+        questions: ['When to pick WS', 'Multi-tab fan-out'] },
+
+      { id: 'gateway', layer: 'api', x: 80, y: 504, title: 'API Gateway', sub: 'Auth · rate limit', sections: ['06','07'],
+        desc: 'JWT validation, org context, rate limiting, request shedding, stream lease issuance.',
+        bullets: ['ctx from claims never body user_id', 'session_version invalidates access tokens', 'Stream lease for in-flight generation'],
+        questions: ['JWT + RLS scoping', 'Session invalidate mid-stream', 'Rate limit UX'] },
+      { id: 'convSvc', layer: 'api', x: 280, y: 504, title: 'Conversation Svc', sub: 'Graph CRUD · share', sections: ['02','06','10'],
+        desc: 'Message nodes tree, branching edits, public share tokens, conversation search metadata.',
+        bullets: ['message_nodes: parent_id, status, branch_label', 'active_leaf_id on conversation row', '409 on concurrent generation'],
+        questions: ['Edit creates sibling node', 'Public share permissions', 'Org isolation'] },
+      { id: 'streamGw', layer: 'api', x: 480, y: 504, title: 'Stream Gateway', sub: 'Checkpoints · replay', sections: ['01','07','10'],
+        desc: 'Inference proxy: streams normalized events, writes partial checkpoints, supports resume cursor.',
+        bullets: ['Debounced DB checkpoint every N tokens', 'Redis event buffer for Last-Event-ID', 'generation_id correlates client/server'],
+        questions: ['Partial persist mid-stream', 'Continue from prefix fallback'] },
+      { id: 'orchestrator', layer: 'api', x: 680, y: 504, title: 'Agent Orchestrator', sub: 'Tool loop · tasks', sections: ['03','09','10'],
+        desc: 'Runs LLM ↔ tool cycles, agent task state machine, pause/resume on auth_required.',
+        bullets: ['pending_tool_executions table', 'paused_auth + SSE auth_required event', 'Resume with same idempotency key'],
+        questions: ['Multi-step tool chains', 'MCP OAuth mid-task', '529 fallback routing'] },
+      { id: 'mcpClient', layer: 'api', x: 880, y: 504, title: 'MCP Client', sub: 'Policy · egress · audit', sections: ['03','06'],
+        desc: 'Sandboxed tool execution with allowlisted egress, data minimization, immutable audit log.',
+        bullets: ['Never pass full history to hostile MCP', 'Policy engine before network', 'Hashes in compliance log'],
+        questions: ['Trust boundary UI', 'Malicious MCP exfiltration', 'Audit logging'] },
+
+      { id: 'irAdapter', layer: 'provider', x: 320, y: 656, title: 'IR + Adapters', sub: 'Anthropic · OpenAI · Gemini', sections: ['09','03'],
+        desc: 'Internal representation compiled at boundary: system field vs message, tool_use vs tool role, thinking blocks.',
+        bullets: ['CapabilityResolver not if(provider) in UI', 'NormalizedStreamEvent reducer', 'Model alias → pinned model_id per message'],
+        questions: ['Normalize history', 'Streaming adapter', 'Extended thinking flag'] },
+      { id: 'llm', layer: 'provider', x: 560, y: 656, title: 'LLM APIs', sub: 'Primary + fallback', sections: ['09','01','07'],
+        desc: 'Provider SDK streams with 529 backoff, capability-matched fallback, cost estimation pre-send.',
+        bullets: ['No silent stitch of two models in one bubble', 'Mid-stream: surface interrupted', 'Token counter per provider shape'],
+        questions: ['Model fallback', 'Cost estimate', 'Model deprecation'] },
+      { id: 'mcpServers', layer: 'provider', x: 800, y: 656, title: 'MCP Servers', sub: 'Slack · Calendar · …', sections: ['03','06'],
+        desc: 'Third-party integrations via OAuth token vault (server-only refresh with serialized lock).',
+        bullets: ['OAuth refresh mid-conversation', 'Scoped args only', 'Timeout → pill failed + user retry/skip'],
+        questions: ['OAuth token refresh', 'Tool timeout 30s'] },
+
+      { id: 'pgGraph', layer: 'data', x: 160, y: 808, title: 'Postgres Graph', sub: 'Nodes · branches · ACL', sections: ['02','06','10'],
+        desc: 'Source of truth: message tree, memberships, shares, agent_tasks, artifact version chain.',
+        bullets: ['RLS: org_id + owner_user_id', 'status: streaming → interrupted → final', 'Unique generation_id constraint'],
+        questions: ['Tree vs linear array', 'Partial message in DB'] },
+      { id: 'redis', layer: 'data', x: 400, y: 808, title: 'Redis', sub: 'Locks · replay · dedup', sections: ['07','03','02'],
+        desc: 'Active branch pointer, SSE replay buffer, idempotency TTL, session denylist, stream checkpoints.',
+        bullets: ['(user_id, idempotency_key) dedup', 'Short TTL event buffer', 'Refresh lock for OAuth'],
+        questions: ['Double booking dedup', 'SSE reconnect replay'] },
+      { id: 'objectStore', layer: 'data', x: 640, y: 808, title: 'Object Storage', sub: 'Uploads · artifacts', sections: ['08','04','06'],
+        desc: 'Quarantine bucket, presigned multipart uploads, attachment CDN URLs, WORM audit exports.',
+        bullets: ['Magic-byte sniff at ingest', 'Stable fileId refs not base64 in state', 'Per-org S3 prefix'],
+        questions: ['Large file uploads', 'PDF extract pipeline', 'Upload quarantine'] },
+      { id: 'indexedDb', layer: 'data', x: 880, y: 808, title: 'IndexedDB', sub: 'Client pages · outbox', sections: ['05','07','02'],
+        desc: 'Browser persistence: message pages, sidebar cache, offline outbox, upload session resume.',
+        bullets: ['Key: userId:orgId:conversationId', 'BroadcastChannel invalidation', 'Partial stream on disconnect'],
+        questions: ['Client cache tiers', 'Offline replay'] },
+
+      { id: 'authBoundary', layer: 'security', x: 40, y: 656, title: 'Auth Boundary', sub: 'JWT · org · RLS', sections: ['06'],
+        desc: 'Every request derives tenant from token/key record. Defense in depth: API filter + Postgres RLS.',
+        bullets: ['Multi-org context switch aborts streams', 'API key org bound, scopes enforced', 'Share token capability URL'],
+        questions: ['Org switching', 'API key scope', 'Public link permissions'] },
+      { id: 'sandbox', layer: 'security', x: 1040, y: 200, title: 'Sandbox iframe', sub: 'CSP · postMessage', sections: ['04','10'],
+        desc: 'Origin-isolated artifact preview. allow-scripts only, no allow-same-origin. Heartbeat + render budget.',
+        bullets: ['CDN imports via vendor proxy or block', 'Kill iframe on RENDER_LOOP', 'Replace iframe as recovery unit'],
+        questions: ['Sandbox attacks prevented', 'Infinite loop in React artifact'] },
+      { id: 'contentFw', layer: 'security', x: 1040, y: 504, title: 'Content Firewall', sub: 'Upload · inject', sections: ['06','08'],
+        desc: 'Extracted upload text wrapped as untrusted document; never in system role. Instruction pattern stripping.',
+        bullets: ['Client extract vs server OCR for PDF', 'Prompt injection via hidden PDF text', 'Page/token caps'],
+        questions: ['Prompt injection uploads', 'PDF handling'] }
+    ];
+
+    const EDGES = [
+      ['composer', 'rest', 'POST send'],
+      ['composer', 'sse', 'Abort stop'],
+      ['composer', 'convStore', 'optimistic user node'],
+      ['sidebar', 'clientCache', 'prefetch metadata'],
+      ['msgList', 'streamPipeline', 'render commits'],
+      ['streamBubble', 'streamPipeline', 'token buffer'],
+      ['toolPills', 'rest', 'confirm execute'],
+      ['artifactPanel', 'sandbox', 'postMessage'],
+      ['convStore', 'branchAsm', 'active leaf path'],
+      ['convStore', 'outbox', 'offline queue'],
+      ['streamPipeline', 'convStore', 'finalize assistant'],
+      ['streamPipeline', 'artifactPanel', 'code fence deltas'],
+      ['branchAsm', 'rest', 'compiled context preview'],
+      ['clientCache', 'msgList', 'history pages'],
+      ['rest', 'gateway', 'HTTP'],
+      ['sse', 'streamGw', 'token stream'],
+      ['ws', 'convSvc', 'patch events'],
+      ['gateway', 'convSvc', 'authorized'],
+      ['convSvc', 'pgGraph', 'persist graph'],
+      ['streamGw', 'orchestrator', 'generation job'],
+      ['streamGw', 'sse', 'normalized events'],
+      ['orchestrator', 'irAdapter', 'IR compile'],
+      ['orchestrator', 'mcpClient', 'tool_use'],
+      ['mcpClient', 'mcpServers', 'scoped call'],
+      ['mcpClient', 'convStore', 'tool_result blocks'],
+      ['irAdapter', 'llm', 'provider SDK'],
+      ['streamGw', 'redis', 'checkpoints'],
+      ['mcpClient', 'redis', 'idempotency'],
+      ['rest', 'objectStore', 'presign upload'],
+      ['clientCache', 'indexedDb', 'hydrate'],
+      ['authBoundary', 'gateway', 'ctx claims'],
+      ['contentFw', 'orchestrator', 'sanitized blocks'],
+      ['objectStore', 'contentFw', 'extract pipeline']
+    ];
+
+    const FLOWS = {
+      send: {
+        title: 'Send message → stream response',
+        steps: [
+          { nodes: ['composer'], text: 'User sends; optimistic user node appended to store' },
+          { nodes: ['rest', 'gateway', 'convSvc'], text: 'POST validated; graph node persisted; generation leased' },
+          { nodes: ['streamGw', 'orchestrator', 'irAdapter', 'llm'], text: 'IR compiled; provider streams tokens' },
+          { nodes: ['sse', 'streamPipeline', 'streamBubble'], text: 'SSE chunks batched via rAF into markdown blocks' },
+          { nodes: ['convStore', 'pgGraph'], text: 'Stream end finalizes assistant node in graph + DB' }
+        ],
+        sections: ['01','02','09']
+      },
+      tool: {
+        title: 'Tool call → HITL confirm → resume',
+        steps: [
+          { nodes: ['llm', 'orchestrator'], text: 'Model emits tool_use block in stream' },
+          { nodes: ['toolPills', 'streamBubble'], text: 'Pill shows loading; sensitive tools show confirm + egress disclosure' },
+          { nodes: ['rest', 'mcpClient', 'redis'], text: 'Confirm POST with idempotency key; dedup if double-clicked' },
+          { nodes: ['mcpServers'], text: 'MCP executes with minimized args; audit log written' },
+          { nodes: ['convStore', 'orchestrator', 'llm'], text: 'tool_result as user blocks; model turn resumes' }
+        ],
+        sections: ['03','10']
+      },
+      drop: {
+        title: 'Stream drops at token 400/1000',
+        steps: [
+          { nodes: ['sse', 'streamPipeline'], text: 'TCP close; partial text retained in bubble (never blank)' },
+          { nodes: ['streamGw', 'redis', 'pgGraph'], text: 'Checkpoint row status=interrupted; cursor persisted' },
+          { nodes: ['streamBubble', 'rest'], text: 'UI: Continue (resume cursor) | Retry (idempotent regen)' },
+          { nodes: ['outbox', 'indexedDb'], text: 'Client mirrors partial in IDB for refresh survival' }
+        ],
+        sections: ['07','10','01']
+      },
+      edit: {
+        title: 'Edit message N → branch regen',
+        steps: [
+          { nodes: ['composer', 'convStore'], text: 'Edit creates sibling node under same parent (fork, not overwrite)' },
+          { nodes: ['branchAsm'], text: 'New active_leaf; path reassembled with token budget' },
+          { nodes: ['convSvc', 'pgGraph'], text: 'Server persists branch; returns branch_generation/version' },
+          { nodes: ['msgList'], text: 'UI swaps visible path; optional branch switcher keeps both subtrees' }
+        ],
+        sections: ['02','10']
+      },
+      artifact: {
+        title: 'Artifact stream → sandbox preview',
+        steps: [
+          { nodes: ['streamPipeline', 'artifactPanel'], text: 'Code fence deltas debounced in worker' },
+          { nodes: ['sandbox'], text: 'postMessage ARTIFACT_UPDATE; CSP-isolated render' },
+          { nodes: ['sandbox'], text: 'Heartbeat detects infinite loop → kill iframe → error UI' },
+          { nodes: ['pgGraph', 'objectStore'], text: 'Version chain persisted; revert-to-N available' }
+        ],
+        sections: ['04','10']
+      },
+      auth: {
+        title: 'MCP OAuth expires mid-agent-task',
+        steps: [
+          { nodes: ['mcpClient', 'mcpServers'], text: '401 on tool call; orchestrator → paused_auth' },
+          { nodes: ['sse', 'toolPills'], text: 'SSE auth_required event; UI modal Reconnect Slack' },
+          { nodes: ['orchestrator', 'redis'], text: 'Task checkpoint: completed_steps[], pending_tool_call' },
+          { nodes: ['rest', 'mcpClient'], text: 'After OAuth: POST /tasks/:id/resume same idempotency key' }
+        ],
+        sections: ['03','06','10']
+      }
+    };
+
+    const LANES = [
+      { y: 28, h: 130, label: 'UI Surfaces', layer: 'ui' },
+      { y: 178, h: 130, label: 'Client State & Pipelines', layer: 'client' },
+      { y: 330, h: 110, label: 'Transport', layer: 'transport' },
+      { y: 482, h: 130, label: 'API / BFF', layer: 'api' },
+      { y: 634, h: 110, label: 'Providers', layer: 'provider' },
+      { y: 786, h: 110, label: 'Data', layer: 'data' }
+    ];
+
+    let scale = 0.82;
+    let panX = 20;
+    let panY = 10;
+    let activeLayers = new Set(Object.keys(LAYERS));
+    let activeSections = new Set(SECTIONS.map(s => s.id));
+    let selectedNode = null;
+    let activeFlow = null;
+    let flowStepIndex = -1;
+    let searchQuery = '';
+
+    const diagram = document.getElementById('diagram');
+    const connections = document.getElementById('connections');
+    const canvas = document.getElementById('canvas');
+
+    function nodeCenter(id) {
+      const n = NODES.find(x => x.id === id);
+      return { x: n.x + 74, y: n.y + 28 };
+    }
+
+    function renderLanes() {
+      diagram.querySelectorAll('.lane').forEach(el => el.remove());
+      LANES.forEach(lane => {
+        if (!activeLayers.has(lane.layer) && lane.layer !== 'security') return;
+        const el = document.createElement('div');
+        el.className = 'lane';
+        el.style.top = lane.y + 'px';
+        el.style.height = lane.h + 'px';
+        el.innerHTML = `<span class="lane-label">${lane.label}</span>`;
+        diagram.insertBefore(el, connections);
+      });
+    }
+
+    function nodeMatchesFilters(n) {
+      const q = searchQuery.toLowerCase();
+      const matchSearch = !q || n.title.toLowerCase().includes(q) || n.sub.toLowerCase().includes(q) || n.desc.toLowerCase().includes(q);
+      const matchLayer = activeLayers.has(n.layer);
+      const matchSection = n.sections.some(s => activeSections.has(s));
+      return matchSearch && matchLayer && matchSection;
+    }
+
+    function getActiveFlowStep() {
+      if (!activeFlow || flowStepIndex < 0) return null;
+      return FLOWS[activeFlow]?.steps[flowStepIndex] || null;
+    }
+
+    function getFlowHighlightEdges(stepNodes) {
+      const inStep = new Set(stepNodes);
+      return EDGES.filter(([from, to]) => inStep.has(from) && inStep.has(to));
+    }
+
+    function renderNodes() {
+      diagram.querySelectorAll('.node').forEach(el => el.remove());
+      const flowStep = getActiveFlowStep();
+      const flowNodeIds = flowStep ? new Set(flowStep.nodes) : null;
+
+      NODES.forEach(n => {
+        const el = document.createElement('div');
+        el.className = 'node';
+        el.dataset.id = n.id;
+        el.dataset.layer = n.layer;
+        el.style.left = n.x + 'px';
+        el.style.top = n.y + 'px';
+
+        const visible = nodeMatchesFilters(n);
+        if (!visible) {
+          el.classList.add('dimmed');
+        } else if (flowNodeIds && !flowNodeIds.has(n.id)) {
+          el.classList.add('dimmed');
+        }
+
+        if (flowNodeIds && flowNodeIds.has(n.id) && visible) {
+          el.classList.add('highlight');
+        }
+        if (selectedNode === n.id) el.classList.add('selected');
+
+        el.innerHTML = `
+          <div class="node-title">${n.title}</div>
+          <div class="node-sub">${n.sub}</div>
+          <div class="node-tags">${n.sections.map(s => `<span class="node-tag">${s}</span>`).join('')}</div>
+        `;
+        el.addEventListener('click', () => selectNode(n.id));
+        diagram.appendChild(el);
+      });
+    }
+
+    function renderEdges(highlightPairs) {
+      const hl = new Set((highlightPairs || []).map(p => p.join('|')));
+      connections.innerHTML = '';
+      EDGES.forEach(([from, to, label]) => {
+        const a = nodeCenter(from);
+        const b = nodeCenter(to);
+        const line = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+        line.setAttribute('x1', a.x);
+        line.setAttribute('y1', a.y);
+        line.setAttribute('x2', b.x);
+        line.setAttribute('y2', b.y);
+        if (hl.has(from + '|' + to) || hl.has(to + '|' + from)) line.classList.add('flow-active');
+        const nf = NODES.find(n => n.id === from);
+        const nt = NODES.find(n => n.id === to);
+        const visible = nf && nt &&
+          activeLayers.has(nf.layer) && activeLayers.has(nt.layer) &&
+          nf.sections.some(s => activeSections.has(s)) &&
+          nt.sections.some(s => activeSections.has(s));
+        if (!visible) line.style.opacity = '0.15';
+        connections.appendChild(line);
+      });
+    }
+
+    function applyTransform() {
+      diagram.style.transform = `translate(${panX}px, ${panY}px) scale(${scale})`;
+    }
+
+    function selectNode(id) {
+      selectedNode = id;
+      activeFlow = null;
+      flowStepIndex = -1;
+      document.querySelectorAll('.flow-btn').forEach(b => b.classList.remove('active'));
+      renderNodes();
+      renderEdges();
+      showNodeDetail(id);
+    }
+
+    function showNodeDetail(id) {
+      const n = NODES.find(x => x.id === id);
+      if (!n) return;
+      document.getElementById('detailEmpty').hidden = true;
+      const content = document.getElementById('detailContent');
+      content.hidden = false;
+      const layer = LAYERS[n.layer];
+      content.innerHTML = `
+        <span class="layer-badge" style="background:${layer.color}22;color:${layer.color}">${layer.label}</span>
+        <h2>${n.title}</h2>
+        <p>${n.desc}</p>
+        <h3>Key mechanisms</h3>
+        <ul>${n.bullets.map(b => `<li>${b}</li>`).join('')}</ul>
+        <h3>Interview questions</h3>
+        <ul>${n.questions.map(q => `<li>${q}</li>`).join('')}</ul>
+        <h3>Prep sections</h3>
+        <div class="section-links">${n.sections.map(s => {
+          const sec = SECTIONS.find(x => x.id === s);
+          return sec ? `<a href="${sec.file}">§${s} ${sec.name}</a>` : '';
+        }).join('')}</div>
+      `;
+    }
+
+    function showFlowDetail(flowKey) {
+      const flow = FLOWS[flowKey];
+      document.getElementById('detailEmpty').hidden = true;
+      const content = document.getElementById('detailContent');
+      content.hidden = false;
+      content.innerHTML = `
+        <h2>${flow.title}</h2>
+        <p>Click steps to highlight nodes on the diagram.</p>
+        <h3>Steps</h3>
+        ${flow.steps.map((step, i) => `
+          <div class="flow-step${i === flowStepIndex ? ' active' : ''}" data-step="${i}">
+            <strong>${i + 1}.</strong> ${step.text}
+          </div>
+        `).join('')}
+        <h3>Related sections</h3>
+        <div class="section-links">${flow.sections.map(s => {
+          const sec = SECTIONS.find(x => x.id === s);
+          return sec ? `<a href="${sec.file}">§${s} ${sec.name}</a>` : '';
+        }).join('')}</div>
+      `;
+      content.querySelectorAll('.flow-step').forEach(el => {
+        el.addEventListener('click', () => {
+          const idx = Number(el.dataset.step);
+          highlightFlowStep(flowKey, idx);
+          showFlowDetail(flowKey);
+        });
+      });
+    }
+
+    function highlightFlowStep(flowKey, stepIndex) {
+      const flow = FLOWS[flowKey];
+      const step = flow?.steps[stepIndex];
+      if (!step) return;
+      activeFlow = flowKey;
+      flowStepIndex = stepIndex;
+      renderNodes();
+      renderEdges(getFlowHighlightEdges(step.nodes));
+    }
+
+    function startFlow(flowKey) {
+      activeFlow = flowKey;
+      flowStepIndex = 0;
+      selectedNode = null;
+      document.querySelectorAll('.flow-btn').forEach(b => b.classList.toggle('active', b.dataset.flow === flowKey));
+      renderNodes();
+      highlightFlowStep(flowKey, 0);
+      showFlowDetail(flowKey);
+    }
+
+    function buildFilters() {
+      const lf = document.getElementById('layerFilters');
+      Object.entries(LAYERS).forEach(([key, val]) => {
+        const chip = document.createElement('button');
+        chip.type = 'button';
+        chip.className = `chip layer-${key} active`;
+        chip.textContent = val.label;
+        chip.addEventListener('click', () => {
+          if (activeLayers.has(key)) { activeLayers.delete(key); chip.classList.remove('active'); }
+          else { activeLayers.add(key); chip.classList.add('active'); }
+          refresh();
+        });
+        lf.appendChild(chip);
+      });
+
+      const sf = document.getElementById('sectionFilters');
+      SECTIONS.forEach(sec => {
+        const chip = document.createElement('button');
+        chip.type = 'button';
+        chip.className = 'chip active';
+        chip.textContent = sec.id + ' ' + sec.name;
+        chip.addEventListener('click', () => {
+          if (activeSections.has(sec.id)) { activeSections.delete(sec.id); chip.classList.remove('active'); }
+          else { activeSections.add(sec.id); chip.classList.add('active'); }
+          refresh();
+        });
+        sf.appendChild(chip);
+      });
+
+      const fb = document.getElementById('flowButtons');
+      Object.entries(FLOWS).forEach(([key, flow]) => {
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        btn.className = 'flow-btn';
+        btn.dataset.flow = key;
+        btn.textContent = flow.title;
+        btn.addEventListener('click', () => startFlow(key));
+        fb.appendChild(btn);
+      });
+
+      const legend = document.getElementById('legend');
+      Object.entries(LAYERS).forEach(([key, val]) => {
+        legend.innerHTML += `<div><span style="background:${val.color}"></span>${val.label}</div>`;
+      });
+    }
+
+    function refresh() {
+      renderLanes();
+      renderNodes();
+      if (activeFlow && flowStepIndex >= 0) {
+        const step = FLOWS[activeFlow]?.steps[flowStepIndex];
+        renderEdges(step ? getFlowHighlightEdges(step.nodes) : []);
+      } else {
+        renderEdges();
+      }
+    }
+
+    document.getElementById('search').addEventListener('input', e => {
+      searchQuery = e.target.value;
+      refresh();
+    });
+
+    document.getElementById('zoomIn').addEventListener('click', () => { scale = Math.min(1.4, scale + 0.1); applyTransform(); });
+    document.getElementById('zoomOut').addEventListener('click', () => { scale = Math.max(0.45, scale - 0.1); applyTransform(); });
+    document.getElementById('resetView').addEventListener('click', () => { scale = 0.82; panX = 20; panY = 10; applyTransform(); });
+
+    let dragging = false;
+    let lastX = 0, lastY = 0;
+    canvas.addEventListener('pointerdown', e => {
+      if (e.target.closest('.node')) return;
+      dragging = true;
+      lastX = e.clientX;
+      lastY = e.clientY;
+      canvas.classList.add('dragging');
+      canvas.setPointerCapture(e.pointerId);
+    });
+    canvas.addEventListener('pointermove', e => {
+      if (!dragging) return;
+      panX += e.clientX - lastX;
+      panY += e.clientY - lastY;
+      lastX = e.clientX;
+      lastY = e.clientY;
+      applyTransform();
+    });
+    canvas.addEventListener('pointerup', () => { dragging = false; canvas.classList.remove('dragging'); });
+
+    buildFilters();
+    renderLanes();
+    renderNodes();
+    renderEdges();
+    applyTransform();
+  </script>
+</body>
+</html>

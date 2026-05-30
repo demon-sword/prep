@@ -1,0 +1,597 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Section 1 — Streaming &amp; Real-Time Rendering | System Design Answers</title>
+  <meta name="description" content="Interview-depth answers on streaming Markdown rendering, token throttling, SSE vs WebSockets, stop-generation, backpressure, and real-time chat UI patterns for AI frontends.">
+  <style>
+    :root {
+      --bg: #f8f9fb;
+      --surface: #ffffff;
+      --text: #1a1d26;
+      --text-muted: #5c6370;
+      --border: #e2e6ed;
+      --accent: #3d5a80;
+      --accent-soft: #eef2f7;
+      --code-bg: #f0f2f6;
+      --pre-bg: #1e2433;
+      --pre-text: #e8ecf4;
+      --nav-bg: rgba(248, 249, 251, 0.92);
+      --shadow: 0 1px 3px rgba(0, 0, 0, 0.06);
+    }
+
+    @media (prefers-color-scheme: dark) {
+      :root {
+        --bg: #12151c;
+        --surface: #1a1f2a;
+        --text: #e8ecf4;
+        --text-muted: #9aa3b2;
+        --border: #2d3548;
+        --accent: #8cb4d9;
+        --accent-soft: #232a38;
+        --code-bg: #252d3d;
+        --pre-bg: #0d1017;
+        --pre-text: #d4dae6;
+        --nav-bg: rgba(18, 21, 28, 0.94);
+        --shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
+      }
+    }
+
+    *, *::before, *::after { box-sizing: border-box; }
+
+    html {
+      scroll-behavior: smooth;
+      scroll-padding-top: 5.5rem;
+    }
+
+    body {
+      margin: 0;
+      font-family: "Segoe UI", system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
+      font-size: 1.0625rem;
+      line-height: 1.65;
+      color: var(--text);
+      background: var(--bg);
+    }
+
+    .site-nav {
+      position: sticky;
+      top: 0;
+      z-index: 100;
+      background: var(--nav-bg);
+      backdrop-filter: blur(10px);
+      -webkit-backdrop-filter: blur(10px);
+      border-bottom: 1px solid var(--border);
+      box-shadow: var(--shadow);
+    }
+
+    .site-nav-inner {
+      max-width: 900px;
+      margin: 0 auto;
+      padding: 0.75rem 1.5rem;
+    }
+
+    .site-nav-title {
+      font-size: 0.8125rem;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+      color: var(--text-muted);
+      margin: 0 0 0.5rem;
+    }
+
+    .toc {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.35rem 0.75rem;
+      margin: 0;
+      padding: 0;
+      list-style: none;
+      font-size: 0.8125rem;
+    }
+
+    .toc a {
+      color: var(--accent);
+      text-decoration: none;
+      white-space: nowrap;
+    }
+
+    .toc a:hover { text-decoration: underline; }
+
+    .page {
+      max-width: 900px;
+      margin: 0 auto;
+      padding: 2rem 1.5rem 4rem;
+    }
+
+    header.page-header {
+      margin-bottom: 2.5rem;
+      padding-bottom: 1.5rem;
+      border-bottom: 1px solid var(--border);
+    }
+
+    h1 {
+      font-size: 1.75rem;
+      font-weight: 700;
+      line-height: 1.25;
+      margin: 0 0 0.75rem;
+      letter-spacing: -0.02em;
+    }
+
+    .lead {
+      margin: 0;
+      color: var(--text-muted);
+      font-size: 1.05rem;
+    }
+
+    h2.section {
+      font-size: 1.35rem;
+      font-weight: 700;
+      margin: 2.5rem 0 1.25rem;
+      padding-top: 0.5rem;
+      color: var(--accent);
+      border-bottom: 2px solid var(--accent-soft);
+      padding-bottom: 0.35rem;
+    }
+
+    article.qa {
+      margin-bottom: 2.75rem;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 1.5rem 1.75rem;
+      box-shadow: var(--shadow);
+    }
+
+    h3.question {
+      font-size: 1.2rem;
+      font-weight: 600;
+      line-height: 1.35;
+      margin: 0 0 1rem;
+    }
+
+    article.qa p { margin: 0 0 1rem; }
+    article.qa p:last-child { margin-bottom: 0; }
+
+    strong { font-weight: 600; }
+
+    ol, ul {
+      margin: 0 0 1rem;
+      padding-left: 1.35rem;
+    }
+
+    li { margin-bottom: 0.35rem; }
+    li:last-child { margin-bottom: 0; }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin: 0 0 1rem;
+      font-size: 0.95rem;
+    }
+
+    th, td {
+      border: 1px solid var(--border);
+      padding: 0.55rem 0.75rem;
+      text-align: left;
+      vertical-align: top;
+    }
+
+    th {
+      background: var(--accent-soft);
+      font-weight: 600;
+    }
+
+    code {
+      font-family: ui-monospace, "Cascadia Code", "Source Code Pro", Menlo, Consolas, monospace;
+      font-size: 0.88em;
+      background: var(--code-bg);
+      padding: 0.15em 0.4em;
+      border-radius: 4px;
+    }
+
+    pre {
+      margin: 0 0 1rem;
+      padding: 1rem 1.15rem;
+      background: var(--pre-bg);
+      color: var(--pre-text);
+      border-radius: 8px;
+      overflow-x: auto;
+      font-size: 0.875rem;
+      line-height: 1.5;
+    }
+
+    pre code {
+      background: none;
+      padding: 0;
+      font-size: inherit;
+      color: inherit;
+    }
+
+    .mermaid-wrap {
+      margin: 0 0 1rem;
+      padding: 1rem;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      overflow-x: auto;
+    }
+
+    .mermaid { text-align: center; }
+
+    .next-section {
+      margin-top: 2rem;
+      padding-top: 1.5rem;
+      border-top: 1px solid var(--border);
+      font-style: italic;
+      color: var(--text-muted);
+    }
+
+    footer.page-footer {
+      max-width: 900px;
+      margin: 0 auto;
+      padding: 1.5rem;
+      border-top: 1px solid var(--border);
+      font-size: 0.9375rem;
+    }
+
+    footer.page-footer a {
+      color: var(--accent);
+      text-decoration: none;
+      font-weight: 500;
+    }
+
+    footer.page-footer a:hover { text-decoration: underline; }
+  </style>
+  <link rel="stylesheet" href="assets/interactive.css">
+</head>
+<body>
+
+  <nav class="site-nav" aria-label="Table of contents">
+    <div class="site-nav-inner">
+      <p class="site-nav-title">On this page</p>
+      <ol class="toc">
+        <li><a href="#core-markdown-layout-thrash">Incomplete Markdown</a></li>
+        <li><a href="#core-throttle-token-appends">Throttle tokens</a></li>
+        <li><a href="#core-stop-generation">Stop generation</a></li>
+        <li><a href="#core-sse-vs-websockets">SSE vs WebSockets</a></li>
+        <li><a href="#core-stream-drops">Stream drops</a></li>
+        <li><a href="#deep-buffer-interval">Buffer interval</a></li>
+        <li><a href="#deep-code-block-fence">Open code fence</a></li>
+        <li><a href="#deep-streaming-table">Streaming table</a></li>
+        <li><a href="#deep-typing-indicator">Typing indicator</a></li>
+        <li><a href="#deep-backpressure">Backpressure</a></li>
+      </ol>
+    </div>
+  </nav>
+
+  <main class="page">
+    <header class="page-header">
+      <h1>Section 1 — Streaming &amp; Real-Time Rendering (Answers)</h1>
+      <p class="lead">Interview-depth answers for Claude-style AI chat frontends: problem framing, approach, tradeoffs, concrete techniques, and pitfalls.</p>
+    </header>
+
+    <h2 class="section" id="core">Core</h2>
+
+    <article class="qa" id="core-markdown-layout-thrash">
+      <h3 class="question">How do you render incomplete Markdown mid-stream without layout thrash?</h3>
+      <p><strong>Problem framing:</strong> Tokens arrive as plain text, but the UI must show formatted Markdown (headings, lists, code fences, links). Re-parsing the entire message and replacing the DOM on every token causes <strong>layout thrash</strong>: reflow, scroll jumps, flickering list markers, and collapsed-then-expanded code blocks.</p>
+      <p><strong>Approach:</strong> Treat streaming render as a <strong>stable incremental pipeline</strong>, not “re-render the whole message.”</p>
+      <ol>
+        <li><strong>Parse incrementally</strong> — Maintain a lexer/parser state machine (or use a streaming-capable parser) that classifies the buffer into <em>blocks</em> (paragraph, heading, list item, fenced code, table). Only re-parse from the last <em>incomplete</em> block boundary backward, not from byte zero. Libraries like <code>marked</code> are batch-oriented; production UIs often use <strong>remark/rehype</strong> on a block cache, or a custom tokenizer tuned for partial input.</li>
+        <li><strong>Stable DOM mapping</strong> — Assign each logical block a stable <code>key</code> (block index + type). Update block <em>content</em> in place (text nodes, <code>innerHTML</code> for inline only where safe) instead of unmounting/remounting the whole message. New blocks append; completed blocks freeze.</li>
+        <li><strong>Defer expensive work</strong> — Syntax highlighting (Shiki, Prism) runs on <strong>completed</strong> code fences only. Incomplete fences render as a plain <code>&lt;pre&gt;</code> with a monospace class; swap to highlighted tree once the closing ``` arrives.</li>
+        <li><strong>Contain layout</strong> — <code>content-visibility: auto</code>, <code>min-height</code> on message shells, and <strong>scroll anchoring</strong> (<code>overflow-anchor: auto</code> on the scroll container) reduce viewport jumps when block heights change.</li>
+      </ol>
+      <div class="mermaid-wrap">
+        <pre class="mermaid">flowchart LR
+  tokens[Token buffer] --> lexer[Incremental lexer]
+  lexer --> blocks[Block list with stable keys]
+  blocks --> dom[Patch per block]
+  dom --> scroll[Scroll anchor + frozen completed blocks]</pre>
+      </div>
+      <p><strong>Tradeoffs:</strong> Full AST correctness on partial Markdown is impossible (e.g. <code>*</code> might start emphasis or a list). Heuristics + “provisional” styling are acceptable; <strong>correct on completion</strong> is the bar. <strong>Pitfall:</strong> Using <code>dangerouslySetInnerHTML</code> on the full message each tick — XSS risk and guaranteed thrash. <strong>Pitfall:</strong> Measuring height after every token for virtualization without caching block metrics.</p>
+      <div class="demo-panel" data-demo="layout-thrash">
+        <p class="demo-panel-title">Try it: naive vs incremental DOM updates</p>
+        <p class="demo-panel-desc">Naive re-render replaces all blocks each token; incremental patches only append new blocks.</p>
+        <div class="demo-controls">
+          <button type="button" class="demo-btn secondary" data-mode="naive">Naive (full replace)</button>
+          <button type="button" class="demo-btn secondary" data-mode="incremental">Incremental (stable keys)</button>
+        </div>
+        <div class="demo-visual"></div>
+        <div class="demo-metrics"><span class="demo-metric">Layout reflows: <strong data-metric="reflows">8</strong></span></div>
+      </div>
+    </article>
+
+    <article class="qa" id="core-throttle-token-appends">
+      <h3 class="question">How do you throttle token appends so the DOM doesn't repaint 50×/sec?</h3>
+      <p><strong>Problem framing:</strong> Model output can arrive at 30–100+ small chunks per second. Each <code>setState</code> / DOM write can trigger style, layout, paint, and composite — blowing the 16ms frame budget.</p>
+      <p><strong>Approach:</strong> Separate <strong>network ingestion</strong> from <strong>render commits</strong> using a micro-batching layer:</p>
+      <table>
+        <thead>
+          <tr><th>Layer</th><th>Responsibility</th></tr>
+        </thead>
+        <tbody>
+          <tr><td>Network</td><td>Append to a string buffer / ring buffer immediately (never drop tokens)</td></tr>
+          <tr><td>Scheduler</td><td>Flush buffer to React state on <code>requestAnimationFrame</code> or <code>queueMicrotask</code> batch</td></tr>
+          <tr><td>Fallback</td><td><code>setTimeout(16–32ms)</code> cap if rAF pauses (background tab)</td></tr>
+        </tbody>
+      </table>
+      <p><strong>Concrete techniques:</strong></p>
+      <ul>
+        <li><strong><code>requestAnimationFrame</code> coalescing</strong> — One state update per frame; merge all tokens since last frame into one append.</li>
+        <li><strong>React 18 <code>startTransition</code></strong> — Mark streaming text updates as transitions so input and sidebar stay responsive.</li>
+        <li><strong>Refs for hot path</strong> — Hold the live string in a ref; commit to state every N ms or every frame; display layer reads ref for sub-frame smoothness in canvas/DOM hybrid designs.</li>
+        <li><strong>CSS <code>contain: layout style</code></strong> on message bubbles to limit invalidation scope.</li>
+      </ul>
+      <pre><code>tokens --&gt; [buffer] --rAF--&gt; setState once/frame --&gt; Markdown pipeline</code></pre>
+      <p><strong>Tradeoffs:</strong> Batching adds 0–16ms visual latency — acceptable for chat; unacceptable for collaborative cursors. <strong>Pitfall:</strong> Batching only React but re-running Markdown parse on the full 50k-char message each frame — CPU bound, not paint bound. <strong>Pitfall:</strong> Using lodash <code>debounce(300ms)</code> — feels laggy; use rAF-aligned micro-batches instead.</p>
+      <div class="demo-panel" data-demo="token-throttle">
+        <p class="demo-panel-title">Try it: flush interval vs paint rate</p>
+        <p class="demo-panel-desc">Tokens arrive fast; only flush to DOM on your chosen interval.</p>
+        <div class="demo-controls">
+          <label>Flush interval: <strong data-metric="interval">16ms</strong>
+            <input type="range" min="16" max="300" value="16" step="16">
+          </label>
+          <button type="button" class="demo-btn">Start stream</button>
+        </div>
+        <div class="demo-output token-stream-box"></div>
+        <div class="demo-metrics">
+          <span class="demo-metric">Paints/sec: <strong data-metric="fps">60</strong></span>
+          <span class="demo-metric">Paint commits: <strong data-metric="paints">0</strong></span>
+        </div>
+      </div>
+    </article>
+
+    <article class="qa" id="core-stop-generation">
+      <h3 class="question">How do you implement a stop-generation button that actually stops the stream?</h3>
+      <p><strong>Problem framing:</strong> “Stop” must halt <strong>three</strong> things: token delivery, server-side inference (cost/GPU), and client-side rendering/processing. Closing the UI spinner alone is insufficient.</p>
+      <p><strong>Approach — end-to-end cancellation chain:</strong></p>
+      <div class="mermaid-wrap">
+        <pre class="mermaid">sequenceDiagram
+  participant UI
+  participant Client
+  participant API
+  participant Model
+  UI->>Client: AbortController.abort()
+  Client->>API: Close SSE / cancel fetch
+  API->>Model: Cancel inference job (if supported)
+  Client->>Client: Freeze buffer, finalize partial MD</pre>
+      </div>
+      <ol>
+        <li><strong>Client</strong> — Keep an <code>AbortController</code> per active stream; pass <code>signal</code> to <code>fetch()</code> (SSE over fetch) or call <code>eventSource.close()</code> and abort the underlying fetch. On abort, stop appending to the buffer and <strong>finalize</strong> the partial message (mark <code>status: cancelled</code>, run final Markdown pass).</li>
+        <li><strong>Transport</strong> — SSE: closing the connection signals the server (with well-implemented handlers). WebSocket: send a <code>cancel</code> / <code>stop</code> frame with <code>request_id</code> so the server can correlate.</li>
+        <li><strong>Server</strong> — Propagate cancellation to the LLM provider (<code>stream: true</code> streams often support closing the HTTP connection to stop billing). Maintain a <strong>job registry</strong> (<code>request_id → cancel fn</code>); on disconnect or explicit cancel API, call provider abort and persist partial assistant message.</li>
+        <li><strong>UI</strong> — Disable Stop after ack; show partial content with optional “Generation stopped” footer. Idempotency: ignore late tokens after abort (sequence numbers or <code>stream_closed</code> flag).</li>
+      </ol>
+      <p><strong>Tradeoffs:</strong> Some providers drain buffered tokens after close — accept partial billing. <strong>Pitfall:</strong> Only aborting client state while the server keeps generating — wasted cost and race when tokens arrive after “stopped.” <strong>Pitfall:</strong> Not persisting partial messages — user loses work on refresh.</p>
+      <div class="demo-panel" data-demo="stop-chain">
+        <p class="demo-panel-title">Try it: cancellation chain</p>
+        <p class="demo-panel-desc">Click Stop to see the end-to-end abort propagate.</p>
+        <div class="demo-controls"><button type="button" class="demo-btn">Stop generation</button></div>
+        <div class="cancel-chain">
+          <span class="cancel-step">UI</span><span class="cancel-arrow">→</span>
+          <span class="cancel-step">Client</span><span class="cancel-arrow">→</span>
+          <span class="cancel-step">API</span><span class="cancel-arrow">→</span>
+          <span class="cancel-step">Model</span>
+        </div>
+      </div>
+    </article>
+
+    <article class="qa" id="core-sse-vs-websockets">
+      <h3 class="question">What is the difference between SSE and WebSockets — when would you pick each?</h3>
+      <p><strong>SSE (Server-Sent Events)</strong> — Unidirectional <strong>server → client</strong> over HTTP. Built on <code>text/event-stream</code>, automatic browser reconnect, simple <code>fetch</code> + ReadableStream or <code>EventSource</code>. Fits <strong>LLM token streaming</strong> where the client sends one prompt (POST) and reads many events.</p>
+      <p><strong>WebSockets</strong> — Full-duplex, persistent frame channel. Fits <strong>bidirectional</strong> chat: typing indicators, collaborative editing, tool progress from client and server, multiplexed rooms, binary frames.</p>
+      <table>
+        <thead>
+          <tr><th>Criterion</th><th>SSE</th><th>WebSocket</th></tr>
+        </thead>
+        <tbody>
+          <tr><td>Direction</td><td>Server → client (client starts via HTTP)</td><td>Bidirectional</td></tr>
+          <tr><td>HTTP/2 / proxies</td><td>Works through most CDNs; standard HTTP</td><td>Some proxies timeout idle WS</td></tr>
+          <tr><td>Reconnect</td><td><code>EventSource</code> + <code>Last-Event-ID</code></td><td>Manual heartbeat + resume protocol</td></tr>
+          <tr><td>Multiplexing</td><td>One stream per connection typically</td><td>Many logical channels per socket</td></tr>
+          <tr><td>Tooling</td><td>curl, HTTP logs, standard auth headers</td><td>Custom protocol</td></tr>
+        </tbody>
+      </table>
+      <p><strong>When to pick SSE:</strong> Default for <strong>AI chat completion streams</strong> (Claude/OpenAI-style), especially with HTTP/2, standard cookies/JWT on the initial POST, and infrastructure that prefers HTTP.</p>
+      <p><strong>When to pick WebSockets:</strong> Multiplayer features, <strong>voice</strong>, frequent client→server chunks, unified connection for notifications + chat + presence, or avoiding HTTP connection limits at very high concurrency.</p>
+      <p><strong>Hybrid (common in production):</strong> POST to start generation (SSE response body) + WebSocket for session sync, or SSE for tokens and REST for control (cancel, retry).</p>
+      <p><strong>Pitfall:</strong> Using WebSockets “for performance” when 99% of traffic is server-push — adds heartbeat complexity without benefit.</p>
+      <div class="demo-panel" data-demo="protocol-picker" data-scenarios='[{"prompt":"LLM token stream after a single POST prompt — server pushes only","answer":"SSE","explain":"Unidirectional server→client fits completion streams; standard HTTP auth."},{"prompt":"Voice chat + typing indicators + tool progress both ways","answer":"WebSocket","explain":"Full-duplex, low-latency bidirectional frames."},{"prompt":"SSE for tokens + REST for cancel/retry control","answer":"Hybrid","explain":"Common production split: push on SSE, control on HTTP."}]'>
+        <p class="demo-panel-title">Quiz: pick the right transport</p>
+        <p class="demo-panel-desc" data-scenario></p>
+        <div class="protocol-cards">
+          <div class="protocol-card">SSE</div>
+          <div class="protocol-card">WebSocket</div>
+          <div class="protocol-card">Hybrid</div>
+        </div>
+        <div class="demo-controls"><button type="button" class="demo-btn secondary" data-next>Next scenario</button></div>
+        <div class="decision-result"></div>
+      </div>
+    </article>
+
+    <article class="qa" id="core-stream-drops">
+      <h3 class="question">How do you handle a stream that drops midway — reconnect, retry, or resume?</h3>
+      <p><strong>Problem framing:</strong> Mobile networks, load balancers, and idle timeouts kill long streams. The product must choose among <strong>reconnect</strong>, <strong>retry from scratch</strong>, and <strong>true resume</strong> without duplicating or corrupting the assistant message.</p>
+      <p><strong>Decision framework:</strong></p>
+      <pre><code>Drop detected
+    |
+    +-- No message id / no cursor --&gt; RETRY (new request, discard or hide partial)
+    |
+    +-- Server supports resume cursor --&gt; RESUME (same generation, offset)
+    |
+    +-- SSE with Last-Event-ID --&gt; RECONNECT (event replay if server buffers)
+    |
+    +-- Partial persisted in DB --&gt; SHOW partial + "Continue" / manual Retry</code></pre>
+      <ol>
+        <li><strong>Reconnect (SSE-native)</strong> — Client tracks <code>lastEventId</code>; on disconnect, <code>EventSource</code> reconnects with header <code>Last-Event-ID</code>. Server must <strong>buffer recent events</strong> (Redis stream, short TTL) or replay from stored partial output. Works when the <em>same</em> generation is still running server-side.</li>
+        <li><strong>Retry</strong> — New API call with same user message; server may return a <strong>new</strong> completion (non-deterministic). Use idempotency keys if billing must dedupe. UX: “Connection lost — Retry” preserves user message; assistant bubble shows partial + regen.</li>
+        <li><strong>Resume (best UX, hardest)</strong> — Protocol: <code>stream_id</code>, <code>byte_offset</code> or <code>token_index</code>. Server continues generation from checkpoint (requires provider support or server-side buffering of prompt + partial completion). Anthropic/OpenAI often don’t expose mid-stream resume — <strong>application-level</strong> resume = append “continue from: …” with partial text (hacky) or store chunks and only fetch missing suffix from your own buffer.</li>
+      </ol>
+      <p><strong>Concrete client behavior:</strong> Exponential backoff (1s, 2s, 4s, cap 30s), max attempts, then surface error with <strong>partial content retained</strong> in local state and IndexedDB. Distinguish <strong>user abort</strong> vs <strong>network drop</strong> in analytics.</p>
+      <p><strong>Pitfalls:</strong> Blind retry creating duplicate assistant messages. Reconnect without idempotency producing duplicate paragraphs. Assuming resume when the server started a new job — always correlate with <code>message_id</code> / <code>generation_id</code>.</p>
+      <div class="demo-panel" data-demo="decision-tree" data-tree='{"question":"Stream dropped — what do you have?","options":[{"label":"No message_id / cursor","result":"RETRY — new request; hide or discard partial"},{"label":"Server resume cursor (offset)","next":{"question":"Same generation still running?","options":[{"label":"Yes","result":"RESUME — continue from token_index"},{"label":"No","result":"RETRY with idempotency key"}]}},{"label":"SSE Last-Event-ID + server buffer","result":"RECONNECT — replay events from buffer"},{"label":"Partial saved in DB","result":"SHOW partial + Continue / manual Retry"}]}'>
+        <p class="demo-panel-title">Try it: drop recovery decision tree</p>
+        <div class="decision-tree"><div data-tree-root></div><div class="decision-result"></div></div>
+      </div>
+    </article>
+
+    <h2 class="section" id="deep">Deep</h2>
+
+    <article class="qa" id="deep-buffer-interval">
+      <h3 class="question">How do you buffer tokens before flushing to the DOM — what's the right interval?</h3>
+      <p><strong>Problem framing:</strong> Pure per-token rendering wastes frames; aggressive debouncing feels sluggish. The buffer sits between <strong>network arrival rate</strong> (variable) and <strong>display refresh rate</strong> (60Hz, or 120Hz).</p>
+      <p><strong>Right interval (rule of thumb):</strong></p>
+      <table>
+        <thead>
+          <tr><th>Strategy</th><th>Interval</th><th>When</th></tr>
+        </thead>
+        <tbody>
+          <tr><td>rAF-aligned</td><td>~16ms (1 frame)</td><td>Default; smooth scroll, 60Hz displays</td></tr>
+          <tr><td>2-frame batch</td><td>~32ms</td><td>Heavy Markdown/highlight per flush</td></tr>
+          <tr><td>Adaptive</td><td>16–48ms based on p95 parse time</td><td>Large messages, mobile</td></tr>
+          <tr><td>Max wait cap</td><td>50–80ms</td><td>Ensure progress visible on slow devices even if frames skip</td></tr>
+        </tbody>
+      </table>
+      <p><strong>Implementation pattern:</strong></p>
+      <pre><code class="language-javascript">// Pseudocode: dual constraint flush
+flushIf:
+  buffer.length >= 80 chars OR
+  timeSinceLastFlush >= 32ms OR
+  receivedStreamEnd
+schedule: requestAnimationFrame(flush)</code></pre>
+      <p><strong>Adaptive backpressure-aware batching:</strong> If Markdown parse + layout exceeds 8ms consistently, increase target interval to 48ms and/or parse fewer blocks per flush (see backpressure question).</p>
+      <p><strong>Tradeoffs:</strong> Character thresholds (e.g. 40 chars) smooth CJK vs Latin differently — prefer <strong>time + rAF</strong> as primary, char count as secondary to avoid stutter on slow token trickle. <strong>Pitfall:</strong> Fixed 300ms debounce — TTFT feels fine but mid-stream updates look jerky. <strong>Pitfall:</strong> Flushing on wall-clock only without rAF — tears and misalignment with scroll.</p>
+      <div class="demo-panel" data-demo="token-throttle">
+        <p class="demo-panel-title">Try it: tune flush interval</p>
+        <p class="demo-panel-desc">Compare 16ms (rAF) vs 300ms (debounce) — feel the jerkiness tradeoff.</p>
+        <div class="demo-controls">
+          <label>Interval: <strong data-metric="interval">32ms</strong>
+            <input type="range" min="16" max="300" value="32" step="16">
+          </label>
+          <button type="button" class="demo-btn">Start stream</button>
+        </div>
+        <div class="demo-output token-stream-box"></div>
+        <div class="demo-metrics"><span class="demo-metric">Effective FPS: <strong data-metric="fps">31</strong></span></div>
+      </div>
+    </article>
+
+    <article class="qa" id="deep-code-block-fence">
+      <h3 class="question">How do you handle a code block that opens with ``` but the closing fence hasn't arrived yet?</h3>
+      <p><strong>Problem framing:</strong> A premature closing fence guess wrong splits the block; treating everything as prose breaks formatting mid-stream. Code blocks are the highest-cost render (highlighting, copy button, line numbers).</p>
+      <p><strong>Approach — explicit fence state machine:</strong></p>
+      <pre><code>OUTSIDE_CODE --"```lang"--&gt; IN_CODE (provisional)
+IN_CODE --"```\n" on own line--&gt; OUTSIDE_CODE (finalize)
+IN_CODE --more tokens--&gt; IN_CODE (extend plain pre)</code></pre>
+      <ol>
+        <li><strong>Provisional fence</strong> — On opening ``` + optional language id, render a <strong>single</strong> <code>&lt;pre&gt;&lt;code class="language-xyz streaming"&gt;</code> with unhighlighted text. Do not run Shiki until closed.</li>
+        <li><strong>No false closes</strong> — Require closing fence at line start (after newline), optional whitespace, then ```. Ignore triple backticks inside strings if you do mini-parsing; for interview simplicity: line-based fence detection matches CommonMark behavior.</li>
+        <li><strong>Height stability</strong> — <code>white-space: pre-wrap</code>, monospace font, min-height from line count × line-height avoids collapse when highlight swaps in.</li>
+        <li><strong>Edge cases</strong> — Nested fences in markdown (rare): outer fence wins until closed. Model emits ````` → show as literal until grammar resolves. <strong>Streaming indicator:</strong> subtle cursor or pulsing border on open fence only.</li>
+        <li><strong>On close</strong> — One-shot highlight (Web Worker for Shiki), add copy button, swap class from <code>streaming</code> to <code>highlighted</code>.</li>
+      </ol>
+      <p><strong>Tradeoffs:</strong> Line-based detection fails on code that contains ``` in output — acceptable; show warning “code block may be incomplete” if stream ends in <code>IN_CODE</code>. <strong>Pitfall:</strong> Running highlight on every token inside the block — O(n²) re-highlight. <strong>Pitfall:</strong> Injecting HTML before escape — always escape code body, never parse as HTML.</p>
+      <div class="demo-panel" data-demo="fence-sim">
+        <p class="demo-panel-title">Try it: fence state machine</p>
+        <p class="demo-panel-desc">Type markdown or load a sample — watch OUTSIDE_CODE ↔ IN_CODE.</p>
+        <div class="demo-controls">
+          <button type="button" class="demo-btn secondary" data-sample>Load open fence</button>
+        </div>
+        <span class="fence-badge outside">OUTSIDE_CODE</span>
+        <textarea rows="4" style="width:100%;font-family:monospace;font-size:0.8125rem;margin-bottom:0.5rem;padding:0.5rem;border-radius:6px;border:1px solid var(--border);background:var(--surface);color:var(--text);">Hello world</textarea>
+        <div class="fence-display"></div>
+      </div>
+    </article>
+
+    <article class="qa" id="deep-streaming-table">
+      <h3 class="question">How do you render a streaming table where rows arrive one token at a time?</h3>
+      <p><strong>Problem framing:</strong> Markdown tables need header row, separator <code>|---|</code>, and body rows. Token-by-token arrival means partial rows, misaligned columns, and huge reflow if the whole table re-parses.</p>
+      <p><strong>Approach:</strong></p>
+      <ol>
+        <li><strong>Table sub-state machine</strong> — After detecting <code>|...|</code>, enter <code>TABLE_PENDING</code> until separator line validates headers. Before separator, render as <strong>plain preformatted</strong> text (no <code>&lt;table&gt;</code> yet) to avoid invalid table DOM.</li>
+        <li><strong>Row commit model</strong> — Append a <code>&lt;tr&gt;</code> only when a full row line arrives (ends with <code>\n</code> and starts/ends with <code>|</code>). Cells: split on <code>|</code>, trim, escape HTML. Incomplete last line: show in a <strong>staging row</strong> (<code>opacity: 0.6</code>) or keep in a <code>&lt;pre&gt;</code> below the table.</li>
+        <li><strong>Column stability</strong> — On first complete row, compute <code>columnCount</code> and <code>colgroup</code> widths (fixed % or <code>minmax</code>). Do not reshuffle columns as later rows reveal wider content — use <code>table-layout: fixed</code> and <code>text-overflow: ellipsis</code> until stream completes, then optional remeasure.</li>
+        <li><strong>Performance</strong> — For wide tables, virtualize <strong>rows</strong> inside the message (only visible <code>&lt;tr&gt;</code> in DOM). Header sticky within the message bubble.</li>
+      </ol>
+      <pre><code>| A | B |        -&gt;  preformatted strip (no table)
+| --- | --- |    -&gt;  &lt;table&gt;&lt;thead&gt;...
+| 1 | 2 |        -&gt;  &lt;tbody&gt;&lt;tr&gt;...
+| 3 | 4 | (no \n) -&gt;  staging row or pre</code></pre>
+      <p><strong>Tradeoffs:</strong> GitHub-flavored Markdown tables only; HTML tables from model need sanitization. <strong>Pitfall:</strong> Building <code>&lt;table&gt;</code> before separator — header row jumps when separator arrives. <strong>Pitfall:</strong> Re-splitting entire table body on each token — quadratic work.</p>
+      <div class="demo-panel" data-demo="table-stream">
+        <p class="demo-panel-title">Try it: row commit model</p>
+        <p class="demo-panel-desc">Lines arrive one at a time — preformatted until separator, then rows commit to &lt;table&gt;.</p>
+        <div class="demo-controls"><button type="button" class="demo-btn">Next token line</button></div>
+        <div class="table-stream-display demo-visual"></div>
+        <div class="demo-metrics"><span class="demo-metric">State: <strong data-metric="state">TABLE_PENDING</strong></span></div>
+      </div>
+    </article>
+
+    <article class="qa" id="deep-typing-indicator">
+      <h3 class="question">How do you show a "typing indicator" that transitions seamlessly into real content?</h3>
+      <p><strong>Problem framing:</strong> Users expect immediate feedback after send (TTFT). A bouncing dots loader that <strong>disappears</strong> then content <strong>pops in</strong> feels disjoint; the transition should feel like one continuous assistant “turn.”</p>
+      <p><strong>Approach — single assistant message slot:</strong></p>
+      <div class="mermaid-wrap">
+        <pre class="mermaid">stateDiagram-v2
+  [*] --> Placeholder: user sends
+  Placeholder --> Streaming: first token
+  Streaming --> Done: stream end
+  Placeholder --> Done: empty response error</pre>
+      </div>
+      <ol>
+        <li><strong>One bubble, multiple phases</strong> — Create assistant message <code>id</code> immediately with <code>status: pending</code>. Content area shows typing indicator (CSS animation, optional “Thinking…” for reasoning models). <strong>Same container</strong> receives tokens — indicator removed on first token <em>inside</em> that container, not by unmounting the whole bubble.</li>
+        <li><strong>Crossfade, not swap</strong> — <code>opacity</code> transition: indicator fades 150–200ms as first text fades in. Avoid layout shift: reserve <code>min-height: 2.5rem</code> or match indicator height to one line of body text.</li>
+        <li><strong>Reasoning / tool phases</strong> — Replace dots with “Reading files…” or tool pill strip; first content token collapses only the <strong>active</strong> sub-indicator, not the full message chrome (avatar, actions).</li>
+        <li><strong>Accessibility</strong> — <code>aria-live="polite"</code> on the message region; <code>aria-busy="true"</code> until first content; announce “Assistant is responding” once.</li>
+      </ol>
+      <p><strong>Tradeoffs:</strong> Showing indicator after TTFT &lt; 200ms can flash annoyingly — delay indicator 100–150ms unless reasoning UI always needs it. <strong>Pitfall:</strong> Separate DOM nodes for loader vs message — causes pop and scroll jump. <strong>Pitfall:</strong> Removing message shell on first token — breaks scroll anchor and message actions.</p>
+      <div class="demo-panel" data-demo="typing-bubble">
+        <p class="demo-panel-title">Try it: typing → content transition</p>
+        <p class="demo-panel-desc">Same bubble container — dots crossfade into first token.</p>
+        <div class="demo-controls"><button type="button" class="demo-btn">Simulate first token</button></div>
+        <div class="bubble-demo">
+          <div class="typing-dots"><span></span><span></span><span></span></div>
+          <div class="bubble-text">Here is the first token of the response…</div>
+        </div>
+      </div>
+    </article>
+
+    <article class="qa" id="deep-backpressure">
+      <h3 class="question">How do you handle backpressure if the client is rendering slower than tokens arrive?</h3>
+      <p><strong>Problem framing:</strong> Fast Wi-Fi + slow phone, or heavy Shiki/highlight, can make the <strong>consumer</strong> (parse + layout + paint) slower than the <strong>producer</strong> (tokens/sec). Unbounded buffers grow memory and increase lag between “true” stream position and what the user sees.</p>
+      <p><strong>Approach — multi-layer backpressure:</strong></p>
+      <pre><code>Network --&gt; [ring buffer cap] --&gt; [parse queue] --&gt; [rAF display queue] --&gt; DOM
+                |                      |
+                drop/coalesce          shed: skip highlight
+                or pause read          extend batch interval</code></pre>
+      <ol>
+        <li><strong>Bound the inbound buffer</strong> — e.g. 256KB or 30s of tokens. When full: <strong>pause TCP</strong> by not reading from <code>ReadableStream</code> (<code>reader.read()</code> not called) — natural HTTP flow control — or cancel upstream with policy.</li>
+        <li><strong>Coalesce in the buffer</strong> — Merge tokens into larger chunks before parse queue; store “skipped display frames” but keep full text in the canonical string for final message persistence (never drop data for the saved message, only for intermediate frames).</li>
+        <li><strong>Shed expensive work</strong> — Skip syntax highlight, defer KaTeX, render plain text until <code>idle</code> callback or stream end. Increase flush interval adaptively when <code>performance.now() - lastFlush &gt; budget</code>.</li>
+        <li><strong>Catch-up mode</strong> — If lag &gt; N seconds behind live buffer, jump UI to <strong>latest</strong> tail (user sees live edge) while background catches up persisted log — or show “Rendering…” with skip-to-end. Chat products usually prefer showing the <strong>tail</strong> (most recent tokens) for long delays.</li>
+        <li><strong>Measure</strong> — <code>tokens_received - tokens_rendered</code>, frame time p95, parse ms; alert if sustained gap &gt; 500ms.</li>
+      </ol>
+      <p><strong>Tradeoffs:</strong> Pausing <code>read()</code> applies TCP backpressure — good for memory; may hit server write timeouts — coordinate with keep-alive/ping. <strong>Pitfall:</strong> Dropping tokens to “keep up” without merging into canonical store — corrupted final message. <strong>Pitfall:</strong> Unbounded <code>useState</code> string copies on every chunk — GC pressure; use mutable buffer + periodic immutable snapshot for React.</p>
+      <p><strong>Libraries/patterns:</strong> <code>ReadableStream</code> default queuing; <code>TransformStream</code> for coalescing; Web Worker for Markdown/highlight so main thread backpressure is parse-bound; <code>scheduler.postTask</code> (where available) for lower-priority highlight.</p>
+      <div class="demo-panel" data-demo="backpressure">
+        <p class="demo-panel-title">Try it: render lag vs buffer fill</p>
+        <p class="demo-panel-desc">When consumer is slower than producer, buffer grows — pause read() or shed highlight work.</p>
+        <div class="demo-controls">
+          <label>Buffer fill: <input type="range" min="0" max="100" value="35"></label>
+        </div>
+        <div class="gauge-wrap"><div class="gauge-fill"></div></div>
+        <div class="demo-metrics"><span class="demo-metric">Render lag: <strong data-metric="lag">175ms</strong></span></div>
+      </div>
+    </article>
+
+    <p class="next-section"><em>Next section: 02 — Conversation State Management (when available).</em></p>
+  </main>
+
+  <footer class="page-footer">
+    <a href="index.html">← All sections</a>
+  </footer>
+
+  <script src="assets/interactive.js" defer></script>
+</body>
+</html>

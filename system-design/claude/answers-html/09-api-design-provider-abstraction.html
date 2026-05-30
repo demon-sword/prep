@@ -1,0 +1,784 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Section 9 — API Design &amp; Provider Abstraction</title>
+  <style>
+    :root {
+      --bg: #fafbfc;
+      --surface: #ffffff;
+      --text: #1a1f36;
+      --text-muted: #4f566b;
+      --border: #e3e8ee;
+      --accent: #635bff;
+      --accent-soft: #ede9fe;
+      --accent-hover: #4f46e5;
+      --code-bg: #f6f8fa;
+      --pre-bg: #1e2433;
+      --pre-text: #e8ecf4;
+      --toc-width: 280px;
+      --content-max: 52rem;
+      --radius: 8px;
+      --shadow: 0 1px 3px rgba(0, 0, 0, 0.06);
+    }
+
+    *, *::before, *::after { box-sizing: border-box; }
+
+    html {
+      scroll-behavior: smooth;
+      scroll-padding-top: 1.5rem;
+    }
+
+    body {
+      margin: 0;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+      font-size: 1rem;
+      line-height: 1.65;
+      color: var(--text);
+      background: var(--bg);
+    }
+
+    .layout {
+      display: flex;
+      min-height: 100vh;
+    }
+
+    .toc {
+      flex: 0 0 var(--toc-width);
+      position: sticky;
+      top: 0;
+      align-self: flex-start;
+      max-height: 100vh;
+      overflow-y: auto;
+      padding: 1.5rem 1rem 2rem 1.5rem;
+      background: var(--surface);
+      border-right: 1px solid var(--border);
+      font-size: 0.8125rem;
+    }
+
+    .toc-title {
+      font-weight: 600;
+      font-size: 0.6875rem;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      color: var(--text-muted);
+      margin: 0 0 0.75rem 0;
+    }
+
+    .toc ul {
+      list-style: none;
+      margin: 0;
+      padding: 0;
+    }
+
+    .toc li { margin: 0.25rem 0; }
+
+    .toc a {
+      color: var(--text-muted);
+      text-decoration: none;
+      display: block;
+      padding: 0.2rem 0;
+      line-height: 1.4;
+      border-radius: 4px;
+    }
+
+    .toc a:hover { color: var(--accent); }
+
+    .toc .toc-h2 > a { font-weight: 600; color: var(--text); }
+    .toc .toc-h3 { padding-left: 0.75rem; }
+
+    .main {
+      flex: 1;
+      min-width: 0;
+      padding: 2rem 2.5rem 4rem;
+    }
+
+    .content {
+      max-width: var(--content-max);
+      margin: 0 auto;
+    }
+
+    header.doc-header {
+      margin-bottom: 2rem;
+      padding-bottom: 1.5rem;
+      border-bottom: 1px solid var(--border);
+    }
+
+    header.doc-header h1 {
+      margin: 0 0 0.75rem 0;
+      font-size: 1.875rem;
+      font-weight: 700;
+      letter-spacing: -0.02em;
+      line-height: 1.25;
+    }
+
+    .lead {
+      margin: 0;
+      color: var(--text-muted);
+      font-size: 1.0625rem;
+    }
+
+    h2 {
+      margin: 2.5rem 0 1rem 0;
+      font-size: 1.375rem;
+      font-weight: 700;
+      color: var(--text);
+      padding-top: 0.5rem;
+    }
+
+    h2:first-of-type { margin-top: 0; }
+
+    h3 {
+      margin: 2rem 0 0.75rem 0;
+      font-size: 1.125rem;
+      font-weight: 600;
+      line-height: 1.4;
+    }
+
+    p { margin: 0 0 1rem 0; }
+
+    strong { font-weight: 600; }
+
+    hr {
+      border: none;
+      border-top: 1px solid var(--border);
+      margin: 2rem 0;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin: 1rem 0 1.25rem 0;
+      font-size: 0.9375rem;
+      background: var(--surface);
+      border-radius: var(--radius);
+      overflow: hidden;
+      box-shadow: var(--shadow);
+    }
+
+    th, td {
+      padding: 0.625rem 0.875rem;
+      text-align: left;
+      border: 1px solid var(--border);
+      vertical-align: top;
+    }
+
+    th {
+      background: #f0f4f8;
+      font-weight: 600;
+      color: var(--text);
+    }
+
+    tr:nth-child(even) td { background: #fafbfc; }
+
+    pre, code {
+      font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+      font-size: 0.875em;
+    }
+
+    code {
+      background: var(--code-bg);
+      padding: 0.15em 0.4em;
+      border-radius: 4px;
+      border: 1px solid var(--border);
+    }
+
+    pre {
+      background: var(--code-bg);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 1rem 1.25rem;
+      overflow-x: auto;
+      margin: 1rem 0 1.25rem 0;
+      line-height: 1.5;
+    }
+
+    pre code {
+      background: none;
+      border: none;
+      padding: 0;
+      font-size: 0.8125rem;
+    }
+
+    ul {
+      margin: 0 0 1rem 0;
+      padding-left: 1.5rem;
+    }
+
+    li { margin: 0.35rem 0; }
+
+    ol {
+      margin: 0 0 1rem 0;
+      padding-left: 1.5rem;
+    }
+
+    footer.doc-footer {
+      margin-top: 3rem;
+      padding-top: 1.5rem;
+      border-top: 1px solid var(--border);
+      font-size: 0.875rem;
+      color: var(--text-muted);
+    }
+
+    footer.doc-footer a {
+      color: var(--accent);
+      text-decoration: none;
+    }
+
+    footer.doc-footer a:hover {
+      color: var(--accent-hover);
+      text-decoration: underline;
+    }
+
+    .site-nav {
+      position: sticky;
+      top: 0;
+      z-index: 50;
+      background: rgba(250, 251, 252, 0.92);
+      backdrop-filter: blur(10px);
+      border-bottom: 1px solid var(--border);
+    }
+
+    .site-nav-inner {
+      max-width: var(--content-max);
+      margin: 0 auto;
+      padding: 0.5rem 2.5rem;
+    }
+
+    article.qa {
+      margin-bottom: 2rem;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 1.5rem 1.75rem;
+      box-shadow: var(--shadow);
+    }
+
+    article.qa h3.question {
+      font-size: 1.125rem;
+      font-weight: 600;
+      line-height: 1.4;
+      margin: 0 0 1rem;
+    }
+
+    article.qa p { margin: 0 0 1rem; }
+    article.qa p:last-child { margin-bottom: 0; }
+
+    @media (max-width: 900px) {
+      .layout { flex-direction: column; }
+      .toc {
+        position: relative;
+        max-height: none;
+        flex: none;
+        border-right: none;
+        border-bottom: 1px solid var(--border);
+      }
+      .main { padding: 1.5rem 1.25rem 3rem; }
+    }
+  </style>
+  <link rel="stylesheet" href="assets/interactive.css">
+</head>
+<body>
+  <nav class="site-nav" aria-label="Study tools">
+    <div class="site-nav-inner"></div>
+  </nav>
+  <div class="layout">
+    <nav class="toc" aria-label="Table of contents">
+      <p class="toc-title">Contents</p>
+      <ul>
+        <li class="toc-h2"><a href="#core">Core</a></li>
+        <li class="toc-h3"><a href="#alternating-turns">Strict alternating turns vs tool role</a></li>
+        <li class="toc-h3"><a href="#normalize-history">Normalize message history</a></li>
+        <li class="toc-h3"><a href="#provider-features">Provider-specific features</a></li>
+        <li class="toc-h3"><a href="#system-field">System field vs system message</a></li>
+        <li class="toc-h2"><a href="#deep">Deep</a></li>
+        <li class="toc-h3"><a href="#streaming-adapter">Provider-agnostic streaming</a></li>
+        <li class="toc-h3"><a href="#model-versioning">Model versioning</a></li>
+        <li class="toc-h3"><a href="#model-fallback">Automatic model fallback</a></li>
+        <li class="toc-h3"><a href="#cost-estimation">Cost estimation</a></li>
+        <li class="toc-h2"><a href="#quick-reference">Quick reference</a></li>
+      </ul>
+    </nav>
+
+    <main class="main">
+      <article class="content">
+        <header class="doc-header">
+          <h1>Section 9 — API Design &amp; Provider Abstraction</h1>
+          <p class="lead">Interview-prep answers for building Claude-style chat frontends on top of multiple LLM providers. Each question is self-contained; comparison tables appear where provider differences matter.</p>
+        </header>
+
+        <section id="core">
+          <h2>Core</h2>
+
+          <article class="qa" id="alternating-turns">
+            <h3 class="question">Why does Anthropic use strict alternating turns while OpenAI allows a <code>tool</code> role?</h3>
+            <p>Anthropic’s Messages API enforces a <strong>strict user ↔ assistant alternation</strong> in the <code>messages</code> array. Tool interaction is modeled <em>inside</em> those turns: the assistant turn contains <code>tool_use</code> content blocks, and the <strong>next</strong> turn must be <code>role: "user"</code> carrying matching <code>tool_result</code> blocks—not a third role. OpenAI’s Chat Completions API evolved a separate <strong><code>tool</code> role</strong> (and earlier <code>function</code>) so each tool output is its own message between assistant <code>tool_calls</code> and the following assistant reply.</p>
+            <p>The design difference is mostly <strong>schema philosophy and history</strong>, not capability. Anthropic optimizes for a single conversational transcript where tools are typed content blocks in an otherwise normal dialogue—easier to validate (“every <code>tool_use</code> id has a <code>tool_result</code> in the next user message”) and closer to how the model was trained to interleave reasoning and actions. OpenAI’s array-of-roles model maps cleanly to older chat templates and to clients that want to grep for <code>role === "tool"</code> without parsing nested blocks.</p>
+            <table>
+              <thead>
+                <tr>
+                  <th>Aspect</th>
+                  <th>Anthropic</th>
+                  <th>OpenAI</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td>Turn rule</td>
+                  <td>Strict <code>user</code> / <code>assistant</code> alternation</td>
+                  <td>Multiple roles in sequence (<code>system</code>, <code>user</code>, <code>assistant</code>, <code>tool</code>)</td>
+                </tr>
+                <tr>
+                  <td>Tool call location</td>
+                  <td><code>tool_use</code> blocks inside <code>assistant</code></td>
+                  <td><code>tool_calls</code> on <code>assistant</code> message</td>
+                </tr>
+                <tr>
+                  <td>Tool output location</td>
+                  <td><code>tool_result</code> blocks inside next <code>user</code></td>
+                  <td>Dedicated <code>role: "tool"</code> message per call</td>
+                </tr>
+                <tr>
+                  <td>Invalid pattern</td>
+                  <td>Two <code>user</code> turns in a row</td>
+                  <td>Often allowed: <code>assistant</code> → several <code>tool</code> → <code>assistant</code></td>
+                </tr>
+              </tbody>
+            </table>
+            <p>In a multi-provider product, your <strong>canonical message graph</strong> should not mirror either API literally. Store assistant tool calls and tool results as first-class edges (parent message → tool call → tool result), then <strong>compile</strong> to Anthropic (merge results into one user turn) or OpenAI (expand into <code>tool</code> messages) at the adapter boundary. Failing to do this is a common source of 400 errors when porting tool-using agents between providers.</p>
+            <div class="demo-panel" data-demo="protocol-picker" data-scenarios='[{"prompt":"3 tool results ready — Anthropic Messages API shape?","answer":"Anthropic","explain":"One user message with N tool_result blocks — strict user/assistant alternation preserved."},{"prompt":"Same 3 results for OpenAI Chat Completions?","answer":"OpenAI","explain":"N separate role:tool messages between assistant tool_calls and next assistant reply."},{"prompt":"Where should provider-specific compilation live?","answer":"Adapter","explain":"IR graph at persistence; compile to blocks or tool role only at the adapter boundary."}]'>
+              <p class="demo-panel-title">Quiz: tool role vs content blocks</p>
+              <p class="demo-panel-desc" data-scenario></p>
+              <div class="protocol-cards">
+                <div class="protocol-card">Anthropic</div>
+                <div class="protocol-card">OpenAI</div>
+                <div class="protocol-card">Adapter</div>
+              </div>
+              <div class="demo-controls"><button type="button" class="demo-btn secondary" data-next>Next scenario</button></div>
+              <div class="decision-result"></div>
+            </div>
+          </article>
+
+          <hr>
+
+          <article class="qa" id="normalize-history">
+            <h3 class="question">How do you normalize message history across Anthropic, OpenAI, and Gemini formats?</h3>
+            <p>Define an <strong>internal representation (IR)</strong>—provider-neutral message types and content blocks—and treat Anthropic, OpenAI, and Gemini as <strong>write adapters</strong> (IR → provider request) and <strong>read adapters</strong> (provider response/stream → IR). The UI, persistence, branching, and token accounting all speak IR only.</p>
+            <p>A practical IR for a chat product includes: <code>message_id</code>, <code>parent_id</code> (for branches), <code>role</code> (<code>system</code> | <code>user</code> | <code>assistant</code>), <code>content[]</code> where each block is <code>text</code> | <code>image</code> | <code>tool_call</code> | <code>tool_result</code> | <code>thinking</code> (optional), plus metadata (<code>created_at</code>, <code>model</code>, <code>provider</code>, <code>stop_reason</code>). Tool calls carry stable <code>call_id</code>, <code>name</code>, and <code>arguments</code> (JSON). Tool results carry the same <code>call_id</code>, payload, and <code>is_error</code>.</p>
+            <p><strong>Compilation rules</strong> differ per provider:</p>
+            <table>
+              <thead>
+                <tr>
+                  <th>IR concept</th>
+                  <th>Anthropic</th>
+                  <th>OpenAI</th>
+                  <th>Gemini (generateContent)</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td>System prompt</td>
+                  <td>Top-level <code>system</code> param (string or blocks)</td>
+                  <td><code>system</code> / <code>developer</code> message in array</td>
+                  <td><code>systemInstruction</code> field</td>
+                </tr>
+                <tr>
+                  <td>User text + images</td>
+                  <td><code>user</code> content blocks</td>
+                  <td><code>user</code> with string or <code>content[]</code></td>
+                  <td><code>user</code> role, <code>parts[]</code></td>
+                </tr>
+                <tr>
+                  <td>Assistant text</td>
+                  <td><code>assistant</code> blocks</td>
+                  <td><code>assistant</code> message</td>
+                  <td><code>model</code> role</td>
+                </tr>
+                <tr>
+                  <td>Tool call</td>
+                  <td><code>tool_use</code> in assistant</td>
+                  <td><code>tool_calls</code> on assistant</td>
+                  <td><code>functionCall</code> in model parts</td>
+                </tr>
+                <tr>
+                  <td>Tool result</td>
+                  <td><code>tool_result</code> in <strong>next</strong> <code>user</code></td>
+                  <td><code>role: "tool"</code> messages</td>
+                  <td><code>functionResponse</code> in user parts</td>
+                </tr>
+                <tr>
+                  <td>Multi-tool turn</td>
+                  <td>One <code>user</code> with N results</td>
+                  <td>N <code>tool</code> messages</td>
+                  <td>Batch into one user turn</td>
+                </tr>
+              </tbody>
+            </table>
+            <p>Normalization also handles <strong>ordering and orphans</strong>: merge consecutive user messages where a provider forbids gaps; split one IR user message into Anthropic’s “tool results only” user turn; coalesce OpenAI’s multiple <code>tool</code> rows back into IR. Run validation before every outbound call: unmatched <code>call_id</code>, assistant tail without user follow-up for pending tools, and image blocks without supported MIME types.</p>
+            <p>Persist IR in the database; cache compiled provider payloads only ephemerally (they change when SDKs or prompt formats change). Version the IR schema (<code>ir_version: 2</code>) so migrations can rewrite history when you add features like extended thinking or cached system blocks.</p>
+            <div class="demo-panel" data-demo="decision-tree" data-tree='{"question":"IR tool_result blocks — compile to which provider shape?","options":[{"label":"Anthropic outbound request","result":"Merge into next user message as tool_result blocks — one user turn for N results"},{"label":"OpenAI outbound request","result":"Expand to N role:tool messages with matching tool_call_id"},{"label":"Gemini generateContent","result":"Batch functionResponse parts into one user turn"},{"label":"Store as OpenAI tool rows in DB","result":"WRONG — persist IR only; compile at adapter boundary"}]}'>
+              <p class="demo-panel-title">Try it: IR → provider compilation tree</p>
+              <div class="decision-tree"><div data-tree-root></div><div class="decision-result"></div></div>
+            </div>
+          </article>
+
+          <hr>
+
+          <article class="qa" id="provider-features">
+            <h3 class="question">How do you handle provider-specific features (e.g. Anthropic extended thinking) without breaking abstraction?</h3>
+            <p>Use a <strong>capability matrix + optional extensions</strong> pattern instead of leaking provider types through your public API. The abstraction exposes portable concepts (<code>sendMessage</code>, <code>stream</code>, <code>tools</code>, <code>maxOutputTokens</code>); provider-only behavior rides in <strong>typed optional fields</strong> that default to no-ops on other providers.</p>
+            <p>For extended thinking: in IR, add an optional <code>thinking</code> block on assistant messages (redacted or summarizable for UI). The Anthropic adapter maps it to <code>thinking</code> / <code>redacted_thinking</code> parameters and stream events; the OpenAI adapter might map to nothing, or to a vendor-specific reasoning model flag if you support one; Gemini might use a thinking budget field when available. The <strong>UI layer</strong> checks <code>capabilities.extendedThinking</code> to show a “reasoning” expander—not <code>if (provider === 'anthropic')</code>.</p>
+            <pre><code>Client request
+    → CapabilityResolver (per org / per model alias)
+    → IR + ExtensionBag { thinking?: { enabled, budget } }
+    → ProviderAdapter.compile()
+    → Provider SDK</code></pre>
+            <p>Keep extensions <strong>explicit and serializable</strong> in stored messages so replay and audit work. When exporting a conversation to a provider that lacks a feature, <strong>strip or summarize</strong> unsupported blocks (e.g. collapse thinking to “[reasoning omitted]”) rather than failing the whole request. Document degradation in product copy when users pick a portable model vs a provider-enhanced model.</p>
+            <p>Avoid <code>#ifdef</code> sprawl in business logic: one <code>ProviderPort</code> interface per provider implementation, feature detection at <strong>model registration</strong> time (<code>ModelDescriptor.capabilities</code>), and integration tests that assert the same user story (tool loop, streaming stop, image attach) across all adapters. Provider-specific prompts (XML tool formats vs JSON schema) belong in the adapter’s <strong>prompt compiler</strong>, not in React components.</p>
+            <div class="demo-panel" data-demo="decision-tree" data-tree='{"question":"User enables extended thinking — where does logic live?","options":[{"label":"if (provider === anthropic) in React","result":"AVOID — leaks provider into UI; use capabilities.extendedThinking flag"},{"label":"ExtensionBag on IR + Anthropic adapter maps stream events","result":"CORRECT — optional thinking block in IR; adapter compiles parameters"},{"label":"Skip feature on non-Anthropic models","next":{"question":"Replay old thread on portable model?","options":[{"label":"Strip/summarize unsupported blocks","result":"CORRECT — collapse thinking to [reasoning omitted] rather than fail"},{"label":"Reject entire conversation","result":"WRONG — degrade gracefully per capability matrix"}]}}]}'>
+              <p class="demo-panel-title">Try it: capability matrix decision tree</p>
+              <div class="decision-tree"><div data-tree-root></div><div class="decision-result"></div></div>
+            </div>
+          </article>
+
+          <hr>
+
+          <article class="qa" id="system-field">
+            <h3 class="question">What is the difference between <code>system</code> as a top-level field (Anthropic) vs a system message in the array (OpenAI)?</h3>
+            <p><strong>Anthropic</strong> treats <code>system</code> as a <strong>separate request field</strong>, not part of the alternating <code>messages</code> list. It can be a string or an array of content blocks (including cache breakpoints for prompt caching). The messages array is only <code>user</code> and <code>assistant</code> turns. <strong>OpenAI</strong> typically embeds instructions as the first message(s) with <code>role: "system"</code> or <code>"developer"</code> inside the same array you send on every turn.</p>
+            <table>
+              <thead>
+                <tr>
+                  <th></th>
+                  <th>Anthropic</th>
+                  <th>OpenAI</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td>Placement</td>
+                  <td><code>system: "..."</code> sibling to <code>messages</code></td>
+                  <td><code>messages[0]</code> with <code>role: "system"</code></td>
+                </tr>
+                <tr>
+                  <td>Editable per turn</td>
+                  <td>Replace <code>system</code> param each request</td>
+                  <td>Mutate or prepend system message</td>
+                </tr>
+                <tr>
+                  <td>Alternation rules</td>
+                  <td>Does not consume a turn slot</td>
+                  <td>Occupies array position; affects some fine-tunes</td>
+                </tr>
+                <tr>
+                  <td>Caching</td>
+                  <td><code>cache_control</code> on system blocks</td>
+                  <td>Prompt caching on prefix (model-dependent)</td>
+                </tr>
+                <tr>
+                  <td>Multi-segment system</td>
+                  <td>Multiple blocks in <code>system[]</code></td>
+                  <td>Multiple system messages (usually merged)</td>
+                </tr>
+              </tbody>
+            </table>
+            <p>Product implications: if your app lets users edit “project instructions,” store <strong>one system document in IR</strong> and compile it per provider—do not store two divergent truths. For <strong>token counting</strong>, Anthropic often bills system separately from messages; OpenAI counts system messages as input tokens in the array—your cost estimator must include system in both cases but via different code paths.</p>
+            <p>When re-sending history, OpenAI may <strong>re-include</strong> system on every call unless you use APIs that support storing instructions server-side; Anthropic re-attaches the same <code>system</code> field while <code>messages</code> grow. For branching conversations, pin the <strong>system snapshot</strong> at branch creation so regenerating an old branch does not pick up today’s global system prompt by accident.</p>
+            <div class="demo-panel" data-demo="protocol-picker" data-scenarios='[{"prompt":"Anthropic request — where does project instructions go?","answer":"Anthropic","explain":"Top-level system param sibling to messages[] — does not consume a turn slot."},{"prompt":"OpenAI Chat Completions — same instructions?","answer":"OpenAI","explain":"messages[0] with role system or developer inside the array."},{"prompt":"Multi-provider app stores project instructions — single source?","answer":"IR document","explain":"One system document in IR; compile to field vs message per adapter."}]'>
+              <p class="demo-panel-title">Quiz: system prompt placement</p>
+              <p class="demo-panel-desc" data-scenario></p>
+              <div class="protocol-cards">
+                <div class="protocol-card">Anthropic</div>
+                <div class="protocol-card">OpenAI</div>
+                <div class="protocol-card">IR document</div>
+              </div>
+              <div class="demo-controls"><button type="button" class="demo-btn secondary" data-next>Next scenario</button></div>
+              <div class="decision-result"></div>
+            </div>
+          </article>
+        </section>
+
+        <section id="deep">
+          <h2>Deep</h2>
+
+          <article class="qa" id="streaming-adapter">
+            <h3 class="question">How do you build a provider-agnostic streaming adapter — same interface for SSE and WebSocket backends?</h3>
+            <p>Expose one <strong>async iterable (or Observable) of normalized stream events</strong> to the frontend; hide wire format behind <code>StreamTransport</code> + <code>StreamDecoder</code> per provider.</p>
+            <p><strong>Normalized event types</strong> (stable contract):</p>
+            <table>
+              <thead>
+                <tr>
+                  <th>Event</th>
+                  <th>Payload</th>
+                  <th>UI use</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td><code>message_start</code></td>
+                  <td><code>message_id</code>, <code>model</code></td>
+                  <td>Placeholder bubble</td>
+                </tr>
+                <tr>
+                  <td><code>content_delta</code></td>
+                  <td><code>block_index</code>, <code>text</code></td>
+                  <td>Append tokens</td>
+                </tr>
+                <tr>
+                  <td><code>tool_call_delta</code></td>
+                  <td><code>call_id</code>, <code>name</code>, <code>arguments_fragment</code></td>
+                  <td>Build tool pill</td>
+                </tr>
+                <tr>
+                  <td><code>thinking_delta</code></td>
+                  <td><code>text</code> (if capability)</td>
+                  <td>Reasoning panel</td>
+                </tr>
+                <tr>
+                  <td><code>content_block_stop</code></td>
+                  <td><code>block_index</code>, <code>type</code></td>
+                  <td>Finalize block</td>
+                </tr>
+                <tr>
+                  <td><code>message_delta</code></td>
+                  <td><code>usage_partial</code></td>
+                  <td>Token meter</td>
+                </tr>
+                <tr>
+                  <td><code>message_stop</code></td>
+                  <td><code>stop_reason</code>, <code>usage</code></td>
+                  <td>Enable send, save</td>
+                </tr>
+                <tr>
+                  <td><code>error</code></td>
+                  <td><code>code</code>, <code>retryable</code></td>
+                  <td>Toast / retry</td>
+                </tr>
+              </tbody>
+            </table>
+            <p><strong>SSE path:</strong> browser <code>EventSource</code> or <code>fetch</code> + <code>ReadableStream</code> parser; decoders handle <code>data: {...}\n\n</code>, Anthropic’s <code>event: content_block_delta</code>, and OpenAI’s <code>choices[0].delta</code>. <strong>WebSocket path:</strong> same decoders after framing (JSON lines, or binary envelope with <code>type</code>). The adapter reads bytes → frames → provider events → <strong>normalize</strong> → enqueue on a shared async queue with backpressure (<code>highWaterMark</code>); if the UI is slow, drop/coalesce <code>content_delta</code> to 60fps batches.</p>
+            <pre><code>Provider wire (SSE | WebSocket)
+    → Transport (connect, headers, auth, heartbeat)
+    → FrameParser
+    → ProviderEventDecoder
+    → NormalizedStreamEvent*
+    → Client chat reducer</code></pre>
+            <p>Implement <strong>one cancellation contract</strong>: <code>AbortSignal</code> aborts fetch, closes WebSocket, and sends provider-specific cancel if supported. Reconnection policy lives in transport (idempotent <code>message_start</code> or resume token if the provider offers it—not assumed portable). Integration tests feed <strong>fixture byte streams</strong> per provider and assert identical normalized event sequences for the same golden completion.</p>
+            <div class="demo-panel" data-demo="stop-chain">
+              <p class="demo-panel-title">Try it: wire → normalized event pipeline</p>
+              <p class="demo-panel-desc">Click to trace bytes through Transport → Decoder → NormalizedStreamEvent → client reducer.</p>
+              <div class="demo-controls"><button type="button" class="demo-btn">Trace one delta</button></div>
+              <div class="cancel-chain">
+                <span class="cancel-step">Transport</span><span class="cancel-arrow">→</span>
+                <span class="cancel-step">FrameParser</span><span class="cancel-arrow">→</span>
+                <span class="cancel-step">Decoder</span><span class="cancel-arrow">→</span>
+                <span class="cancel-step">NormalizedEvent</span>
+              </div>
+            </div>
+          </article>
+
+          <hr>
+
+          <article class="qa" id="model-versioning">
+            <h3 class="question">How do you handle model versioning — what happens when <code>claude-sonnet-4</code> is deprecated mid-product?</h3>
+            <p>Never expose raw provider model IDs as your only product identifier. Introduce <strong>model aliases</strong> (<code>smart</code>, <code>fast</code>, <code>reasoning</code>) mapped through configuration to <code>provider + model_id + min/max tokens + capabilities</code>. Store the <strong>resolved <code>model_id</code> on each message</strong> at write time for reproducibility, billing, and support.</p>
+            <p>When <code>claude-sonnet-4</code> is announced deprecated: (1) add the replacement ID to the alias map with a <strong>cutover date</strong>; (2) run shadow traffic or A/B on new conversations only; (3) keep serving old threads with the pinned ID until the hard sunset, or offer “continue on legacy” vs “upgrade thread” (upgrade may change behavior—disclose in UI); (4) update <strong>token pricing tables</strong> and capability flags in the same config deploy.</p>
+            <table>
+              <thead>
+                <tr>
+                  <th>Layer</th>
+                  <th>Responsibility</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td>Product alias</td>
+                  <td>What user selects in UI</td>
+                </tr>
+                <tr>
+                  <td>Config service</td>
+                  <td><code>alias → [{ provider, model_id, weight, until }]</code></td>
+                </tr>
+                <tr>
+                  <td>Conversation metadata</td>
+                  <td><code>pinned_model</code> per thread or per branch</td>
+                </tr>
+                <tr>
+                  <td>Message metadata</td>
+                  <td><code>model_id</code> actually used for that completion</td>
+                </tr>
+                <tr>
+                  <td>Deprecation job</td>
+                  <td>Warn, block new threads, migrate defaults</td>
+                </tr>
+              </tbody>
+            </table>
+            <p>Breaking changes (context window size, tool schema, vision limits) require <strong>capability checks</strong> before send—not just string replacement. Feature flags can route % of traffic to the new model. Maintain a <strong>compatibility matrix</strong> in docs and in code so support knows “Team plan alias <code>smart</code> after 2026-06-01 = claude-sonnet-4-5.” Automated alerts when provider APIs return <code>model_not_found</code> trigger paging and automatic alias failover only if the substitute is marked equivalent.</p>
+            <div class="demo-panel" data-demo="decision-tree" data-tree='{"question":"claude-sonnet-4 deprecated — user opens old thread","options":[{"label":"Thread pinned to sonnet-4 at write time","result":"Serve with pinned model_id until hard sunset — disclose legacy in UI"},{"label":"New conversations after cutover date","result":"Alias map routes smart → sonnet-4-5; shadow/A/B before full cutover"},{"label":"User clicks Upgrade thread","result":"New branch may change behavior — pin new model_id on messages at upgrade"},{"label":"Replace string in all stored requests only","result":"WRONG — capability matrix + per-message pin required"}]}'>
+              <p class="demo-panel-title">Try it: deprecation cutover tree</p>
+              <div class="decision-tree"><div data-tree-root></div><div class="decision-result"></div></div>
+            </div>
+          </article>
+
+          <hr>
+
+          <article class="qa" id="model-fallback">
+            <h3 class="question">How do you implement automatic model fallback if the primary model returns a 529 overloaded error?</h3>
+            <p>Treat <strong>529 / 503 / explicit <code>overloaded</code></strong> as <strong>transient provider capacity errors</strong>, distinct from 429 rate limits (your quota) and 400 validation failures. A small <strong>routing policy engine</strong> in the API gateway or inference BFF executes:</p>
+            <ol>
+              <li><strong>Retry primary</strong> with full jitter exponential backoff (e.g. 250ms → 2s, max 2–3 attempts) if the request is idempotent or you have not yet streamed bytes to the client.</li>
+              <li>On exhaustion, <strong>fallback chain</strong> from config: same provider different region/model → cross-provider equivalent alias (only if capabilities match: tools, vision, context length).</li>
+              <li><strong>Circuit breaker</strong> per <code>(provider, model_id)</code>; when open, skip straight to fallback for N minutes.</li>
+              <li><strong>Stream-aware behavior</strong>: if failure happens before <code>message_start</code>, retry/fallback is invisible; if mid-stream, surface “interrupted—retry?” and do not silently stitch two models in one assistant message without marking metadata.</li>
+            </ol>
+            <table>
+              <thead>
+                <tr>
+                  <th>Error class</th>
+                  <th>Typical action</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td>529 overloaded</td>
+                  <td>Backoff → fallback model</td>
+                </tr>
+                <tr>
+                  <td>429 rate limit</td>
+                  <td>Queue, slower retry, show “busy”</td>
+                </tr>
+                <tr>
+                  <td>401 / 403</td>
+                  <td>No fallback; fix credentials</td>
+                </tr>
+                <tr>
+                  <td>400 invalid_request</td>
+                  <td>No fallback; fix adapter bug</td>
+                </tr>
+                <tr>
+                  <td>Timeout</td>
+                  <td>Retry once, then fallback</td>
+                </tr>
+              </tbody>
+            </table>
+            <p>Log <code>primary_model</code>, <code>fallback_model</code>, <code>latency</code>, <code>attempt</code> for cost and quality review. <strong>Sticky quality</strong>: some products prefer failing visibly over silently switching to a weaker model—make fallback configurable per tier. Guardrails: fallback model must support the same <strong>tool definitions</strong> and max output; truncate context if the fallback window is smaller (explicit truncation policy, never silent chop of the latest user message). Charge accounting uses the model that actually served the request.</p>
+            <div class="demo-panel" data-demo="decision-tree" data-tree='{"question":"Primary returns 529 overloaded — next step?","options":[{"label":"No bytes streamed yet","result":"Retry primary with jitter backoff (2–3 attempts) then fallback chain"},{"label":"Mid-stream after message_start","result":"Surface interrupted — do not silently stitch two models in one assistant bubble"},{"label":"429 rate limit (your quota)","result":"Queue/slow retry — NOT same as 529 fallback"},{"label":"400 invalid_request","result":"No fallback — fix adapter bug; validation failure"}]}'>
+              <p class="demo-panel-title">Try it: error class → routing policy</p>
+              <div class="decision-tree"><div data-tree-root></div><div class="decision-result"></div></div>
+            </div>
+          </article>
+
+          <hr>
+
+          <article class="qa" id="cost-estimation">
+            <h3 class="question">How do you estimate cost before sending a request — token counting per provider?</h3>
+            <p>Pre-send estimation drives <strong>input budget warnings</strong>, org spend caps, and “~$0.02 this message” UI. Split <strong>input tokens</strong> (history + system + tools + attachments) and <strong>expected output tokens</strong> (user-configured <code>max_tokens</code> or historical p90 for similar prompts).</p>
+            <table>
+              <thead>
+                <tr>
+                  <th>Provider</th>
+                  <th>Input counting approach</th>
+                  <th>Caveats</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td>Anthropic</td>
+                  <td><code>messages.count_tokens</code> API or official tokenizer</td>
+                  <td>Images billed separately; cache read/write tokens</td>
+                </tr>
+                <tr>
+                  <td>OpenAI</td>
+                  <td><code>tiktoken</code> for text; API <code>usage</code> for ground truth</td>
+                  <td><code>o*</code> / reasoning models differ; tools add schema tokens</td>
+                </tr>
+                <tr>
+                  <td>Gemini</td>
+                  <td><code>countTokens</code> API</td>
+                  <td>Multimodal parts need per-modality rules</td>
+                </tr>
+              </tbody>
+            </table>
+            <p><strong>Pipeline:</strong> (1) serialize IR to the <strong>same compiled shape</strong> the adapter will send (compilation affects tokens); (2) run provider counter or local tokenizer; (3) add tool-definition overhead (JSON schema size is often underestimated); (4) add image tokens from resolution tiers per provider docs; (5) multiply by <strong>price table</strong> keyed by <code>model_id</code> including cached-input discounts.</p>
+            <p>Output estimate is inherently uncertain—use <code>min(max_tokens, user_slider)</code> for upper bound and show a range (“0.01–0.08”) or single number with disclaimer. <strong>Do not block send</strong> on exact equality with provider billing; block only on hard org limits (<code>projected_input + max_output &gt; remaining_quota</code>).</p>
+            <p>Cache Anthropic/OpenAI counts for unchanged prefixes (hash of system + messages up to last assistant) to keep the input box snappy. Re-count on every keystroke is expensive—debounce 300ms and diff against previous hash. After the real completion, reconcile with <strong><code>usage</code> from the response</strong> and store actuals for analytics; tune heuristics when estimate/error ratio drifts. For multi-provider products, centralize <strong>PricingService</strong> (model_id → $/1M input/output, cache rates) so finance can update prices without shipping a mobile app release.</p>
+            <div class="demo-panel" data-demo="token-throttle">
+              <p class="demo-panel-title">Try it: debounced token pre-count</p>
+              <p class="demo-panel-desc">Keystrokes arrive fast; flush countTokens API calls on your chosen debounce interval.</p>
+              <div class="demo-controls">
+                <label>Debounce: <strong data-metric="interval">300ms</strong>
+                  <input type="range" min="50" max="500" value="300" step="50">
+                </label>
+                <button type="button" class="demo-btn">Simulate typing</button>
+              </div>
+              <div class="demo-output token-stream-box"></div>
+              <div class="demo-metrics">
+                <span class="demo-metric">API calls/sec: <strong data-metric="fps">3</strong></span>
+                <span class="demo-metric">Count requests: <strong data-metric="paints">0</strong></span>
+              </div>
+            </div>
+          </article>
+        </section>
+
+        <section id="quick-reference">
+          <h2>Quick reference — adapter layer checklist</h2>
+          <table>
+            <thead>
+              <tr>
+                <th>Concern</th>
+                <th>Pattern</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td>Message shape</td>
+                <td>Internal IR + compile per provider</td>
+              </tr>
+              <tr>
+                <td>Tools</td>
+                <td>Graph of call → result; compile to blocks or <code>tool</code> role</td>
+              </tr>
+              <tr>
+                <td>System prompt</td>
+                <td>IR <code>system</code> document; map to field vs message</td>
+              </tr>
+              <tr>
+                <td>Streaming</td>
+                <td>Normalized events; SSE and WS share decoder output</td>
+              </tr>
+              <tr>
+                <td>Models</td>
+                <td>Product aliases + per-message <code>model_id</code> pin</td>
+              </tr>
+              <tr>
+                <td>Outages</td>
+                <td>529 backoff + circuit breaker + capability-matched fallback</td>
+              </tr>
+              <tr>
+                <td>Cost</td>
+                <td>Pre-count compiled payload; post-hoc <code>usage</code> reconciliation</td>
+              </tr>
+            </tbody>
+          </table>
+        </section>
+
+        <footer class="doc-footer">
+          <a href="index.html">← All sections</a>
+        </footer>
+      </article>
+    </main>
+  </div>
+  <script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+  <script>
+    mermaid.initialize({
+      startOnLoad: false,
+      theme: 'neutral',
+      securityLevel: 'loose',
+      flowchart: { useMaxWidth: true, htmlLabels: true },
+      sequence: { useMaxWidth: true }
+    });
+  </script>
+  <script src="assets/interactive.js" defer></script>
+</body>
+</html>

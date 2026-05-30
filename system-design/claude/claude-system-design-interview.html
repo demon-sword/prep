@@ -1,0 +1,746 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Claude Frontend System Design — Interview Template</title>
+  <meta name="description" content="Full Claude-style AI chat frontend system design in interview format: Requirements → Architecture → Data Model → API/BFF → Deep Dive.">
+  <style>
+    :root {
+      --bg: #f4f2ef;
+      --surface: #fff;
+      --surface2: #faf8f5;
+      --text: #1a1d26;
+      --muted: #5c6370;
+      --border: #e2e6ed;
+      --accent: #b85c28;
+      --accent-soft: rgba(184, 92, 40, 0.1);
+      --req: #2e86ab;
+      --arch: #6a994e;
+      --data: #bc4749;
+      --api: #7b5ea7;
+      --deep: #495057;
+      --shadow: 0 2px 12px rgba(0,0,0,.06);
+      --nav-h: 3.25rem;
+    }
+    @media (prefers-color-scheme: dark) {
+      :root {
+        --bg: #0f1219;
+        --surface: #171c28;
+        --surface2: #1e2536;
+        --text: #e8ecf4;
+        --muted: #8b95a8;
+        --border: #2d3548;
+        --accent: #c97840;
+        --accent-soft: rgba(201, 120, 64, 0.15);
+        --shadow: 0 4px 20px rgba(0,0,0,.3);
+      }
+    }
+    *, *::before, *::after { box-sizing: border-box; }
+    html { scroll-behavior: smooth; scroll-padding-top: calc(var(--nav-h) + 1rem); }
+    body {
+      margin: 0;
+      font-family: "Segoe UI", system-ui, -apple-system, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      line-height: 1.6;
+    }
+    .top-nav {
+      position: sticky;
+      top: 0;
+      z-index: 100;
+      height: var(--nav-h);
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      padding: 0 1rem;
+      background: rgba(var(--surface-rgb, 255,255,255), .92);
+      backdrop-filter: blur(10px);
+      border-bottom: 1px solid var(--border);
+      overflow-x: auto;
+    }
+    @media (prefers-color-scheme: dark) {
+      .top-nav { background: rgba(23, 28, 40, .94); }
+    }
+    .top-nav a {
+      font-size: 0.8125rem;
+      white-space: nowrap;
+      padding: 0.35rem 0.65rem;
+      border-radius: 999px;
+      text-decoration: none;
+      color: var(--muted);
+      border: 1px solid transparent;
+    }
+    .top-nav a:hover { color: var(--text); border-color: var(--border); }
+    .top-nav a.active { background: var(--accent-soft); color: var(--accent); border-color: var(--accent); font-weight: 600; }
+    .nav-title { font-weight: 700; font-size: 0.875rem; margin-right: 0.5rem; white-space: nowrap; }
+    .nav-links { margin-left: auto; display: flex; gap: 0.5rem; font-size: 0.8125rem; }
+    .nav-links a { color: var(--accent); text-decoration: none; white-space: nowrap; }
+    .wrap { max-width: 920px; margin: 0 auto; padding: 2rem 1.25rem 4rem; }
+    .hero { margin-bottom: 2rem; }
+    .hero h1 { font-size: 1.75rem; margin: 0 0 0.5rem; letter-spacing: -0.02em; }
+    .hero p { color: var(--muted); margin: 0; max-width: 640px; }
+    .timer-bar {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.5rem;
+      margin: 1.25rem 0 0;
+    }
+    .timer-chip {
+      font-size: 0.75rem;
+      padding: 0.3rem 0.65rem;
+      border-radius: 6px;
+      border: 1px solid var(--border);
+      background: var(--surface);
+    }
+    .timer-chip strong { color: var(--accent); }
+
+    .section-block {
+      margin-bottom: 2.5rem;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      box-shadow: var(--shadow);
+      overflow: hidden;
+    }
+    .section-head {
+      display: flex;
+      align-items: flex-start;
+      gap: 1rem;
+      padding: 1.25rem 1.5rem;
+      border-bottom: 1px solid var(--border);
+      cursor: pointer;
+      user-select: none;
+    }
+    .section-head:hover { background: var(--surface2); }
+    .section-num {
+      flex-shrink: 0;
+      width: 2.5rem;
+      height: 2.5rem;
+      border-radius: 8px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-weight: 800;
+      font-size: 0.875rem;
+      color: #fff;
+    }
+    .section-num.req { background: var(--req); }
+    .section-num.arch { background: var(--arch); }
+    .section-num.data { background: var(--data); }
+    .section-num.api { background: var(--api); }
+    .section-num.deep { background: var(--deep); }
+    .section-head h2 { margin: 0; font-size: 1.2rem; }
+    .section-meta { font-size: 0.8125rem; color: var(--muted); margin-top: 0.15rem; }
+    .chevron { margin-left: auto; color: var(--muted); transition: transform 0.2s; }
+    .section-block.collapsed .chevron { transform: rotate(-90deg); }
+    .section-block.collapsed .section-body { display: none; }
+    .section-body { padding: 1.25rem 1.5rem 1.5rem; }
+
+    h3 {
+      font-size: 0.9375rem;
+      margin: 1.25rem 0 0.5rem;
+      color: var(--accent);
+    }
+    h3:first-child { margin-top: 0; }
+    p, li { font-size: 0.9375rem; }
+    ul { padding-left: 1.25rem; }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 0.875rem;
+      margin: 0.75rem 0;
+    }
+    th, td {
+      border: 1px solid var(--border);
+      padding: 0.55rem 0.75rem;
+      text-align: left;
+      vertical-align: top;
+    }
+    th { background: var(--surface2); font-weight: 600; }
+    .callout {
+      padding: 0.85rem 1rem;
+      border-left: 3px solid var(--accent);
+      background: var(--accent-soft);
+      border-radius: 0 8px 8px 0;
+      font-size: 0.875rem;
+      margin: 1rem 0;
+    }
+    .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; }
+    @media (max-width: 700px) { .grid-2 { grid-template-columns: 1fr; } }
+
+    .card {
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 1rem;
+      background: var(--surface2);
+    }
+    .card h4 { margin: 0 0 0.35rem; font-size: 0.875rem; }
+    .card p { margin: 0; font-size: 0.8125rem; color: var(--muted); }
+
+    .entity {
+      font-family: ui-monospace, Menlo, Consolas, monospace;
+      font-size: 0.8125rem;
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 1rem;
+      margin: 0.75rem 0;
+      white-space: pre-wrap;
+      line-height: 1.5;
+    }
+    .entity .kw { color: var(--accent); font-weight: 600; }
+
+    .component-tree {
+      font-family: ui-monospace, Menlo, Consolas, monospace;
+      font-size: 0.8125rem;
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 1rem 1.25rem;
+      line-height: 1.55;
+    }
+    .component-tree .hl { color: var(--accent); font-weight: 600; }
+
+    .state-ladder {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.5rem;
+      margin: 0.75rem 0;
+    }
+    .state-step {
+      flex: 1;
+      min-width: 120px;
+      padding: 0.65rem;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      text-align: center;
+      font-size: 0.8125rem;
+    }
+    .state-step strong { display: block; font-size: 0.75rem; color: var(--accent); margin-bottom: 0.25rem; }
+
+    .deep-tabs {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.35rem;
+      margin-bottom: 1rem;
+    }
+    .deep-tab {
+      font: inherit;
+      font-size: 0.8125rem;
+      padding: 0.4rem 0.75rem;
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      background: var(--surface2);
+      color: var(--muted);
+      cursor: pointer;
+    }
+    .deep-tab.active { background: var(--accent); border-color: var(--accent); color: #fff; font-weight: 600; }
+    .deep-panel { display: none; }
+    .deep-panel.active { display: block; }
+
+    .mermaid-wrap {
+      margin: 1rem 0;
+      padding: 1rem;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      overflow-x: auto;
+    }
+    .mermaid-wrap pre.mermaid:not([data-mermaid-rendered]) {
+      background: transparent;
+      color: var(--muted);
+      font-size: 0.75rem;
+      margin: 0;
+    }
+
+    .checklist { list-style: none; padding: 0; margin: 0; }
+    .checklist li {
+      display: flex;
+      align-items: flex-start;
+      gap: 0.5rem;
+      padding: 0.4rem 0;
+      border-bottom: 1px dashed var(--border);
+      font-size: 0.875rem;
+    }
+    .checklist input { margin-top: 0.25rem; accent-color: var(--accent); }
+    .section-links { display: flex; flex-wrap: wrap; gap: 0.35rem; margin-top: 1rem; }
+    .section-links a {
+      font-size: 0.75rem;
+      padding: 0.25rem 0.5rem;
+      border-radius: 4px;
+      background: var(--accent-soft);
+      color: var(--accent);
+      text-decoration: none;
+    }
+    footer {
+      text-align: center;
+      font-size: 0.8125rem;
+      color: var(--muted);
+      padding: 2rem 0;
+    }
+    footer a { color: var(--accent); }
+  </style>
+</head>
+<body>
+  <nav class="top-nav" id="topNav">
+    <span class="nav-title">Claude SD — Template</span>
+    <a href="#requirements" data-section="requirements">① Requirements</a>
+    <a href="#architecture" data-section="architecture">② Architecture</a>
+    <a href="#data-model" data-section="data-model">③ Data Model</a>
+    <a href="#api-design" data-section="api-design">④ API / BFF</a>
+    <a href="#deep-dive" data-section="deep-dive">⑤ Deep Dive</a>
+    <div class="nav-links">
+      <a href="claude-frontend-architecture.html">Architecture map</a>
+      <a href="answers-html/index.html">All answers</a>
+    </div>
+  </nav>
+
+  <div class="wrap">
+    <header class="hero">
+      <h1>Design a Claude-Style AI Chat Frontend</h1>
+      <p>Complete system design answer in interview format (~45–60 min). Use this as your master script; drill into section pages for question-level depth.</p>
+      <div class="timer-bar">
+        <span class="timer-chip"><strong>5–10m</strong> Requirements</span>
+        <span class="timer-chip"><strong>10–15m</strong> Architecture</span>
+        <span class="timer-chip"><strong>5m</strong> Data Model</span>
+        <span class="timer-chip"><strong>10m</strong> API / BFF</span>
+        <span class="timer-chip"><strong>10m</strong> Deep Dive</span>
+      </div>
+    </header>
+
+    <!-- ① REQUIREMENTS -->
+    <article class="section-block" id="requirements" data-section="requirements">
+      <div class="section-head">
+        <div class="section-num req">①</div>
+        <div>
+          <h2>Requirements</h2>
+          <div class="section-meta">5–10 min · Clarify with interviewer · Scope before designing</div>
+        </div>
+        <span class="chevron">▼</span>
+      </div>
+      <div class="section-body">
+        <div class="callout"><strong>Opening line:</strong> “Before I draw boxes, let me confirm functional scope, non-functional targets, and what we’re explicitly not building in v1.”</div>
+
+        <h3>Functional Requirements (Business)</h3>
+        <table>
+          <thead><tr><th>Area</th><th>Must have (v1)</th><th>Nice to have</th></tr></thead>
+          <tbody>
+            <tr><td>Chat</td><td>Multi-turn conversation, streaming assistant replies, stop generation, markdown + code blocks</td><td>Branch switcher, edit-any-message, voice input</td></tr>
+            <tr><td>History</td><td>Sidebar conversation list, open/switch threads, persist across refresh</td><td>Search 10k+ convos, share public link</td></tr>
+            <tr><td>Tools</td><td>Tool call pills (loading/success/error), confirm for destructive MCP actions</td><td>Multi-step agent chains, activity audit drawer</td></tr>
+            <tr><td>Artifacts</td><td>— (scope out unless asked)</td><td>Sandboxed HTML/React preview, version timeline</td></tr>
+            <tr><td>Input</td><td>Auto-grow composer, file/image attach, slash commands</td><td>PDF extract, token estimate footer</td></tr>
+          </tbody>
+        </table>
+
+        <h3>Non-Functional Requirements (Technical)</h3>
+        <div class="grid-2">
+          <div class="card">
+            <h4>Latency</h4>
+            <p>TTFT &lt; 500ms perceived; optimistic send &lt; 50ms; stream visible within 1 frame batch (~16ms)</p>
+          </div>
+          <div class="card">
+            <h4>Scale</h4>
+            <p>500+ messages virtualized; 10k sidebar rows; concurrent tabs same conversation</p>
+          </div>
+          <div class="card">
+            <h4>Reliability</h4>
+            <p>Partial stream preserved on disconnect; offline queue; idempotent confirms</p>
+          </div>
+          <div class="card">
+            <h4>Security</h4>
+            <p>JWT + org scoping; upload sanitization; MCP egress allowlist; sandbox artifacts</p>
+          </div>
+        </div>
+
+        <h3>Metrics · Constraints · Assumptions</h3>
+        <ul>
+          <li><strong>Metrics:</strong> TTFT, tokens/sec render rate, stream recovery success %, tool confirm dedup rate</li>
+          <li><strong>Constraints:</strong> Context window cap (~200k tokens); mobile Safari SSE limits; no raw MCP tokens in browser</li>
+          <li><strong>Assumptions:</strong> BFF owns provider keys; single-region v1; authenticated users; Anthropic-primary with adapter layer</li>
+        </ul>
+
+        <h3>Scoping questions to ask</h3>
+        <ul class="checklist" data-store="req">
+          <li><label><input type="checkbox"> Multi-user / org tenancy or personal-only?</label></li>
+          <li><label><input type="checkbox"> Tool use / MCP in scope?</label></li>
+          <li><label><input type="checkbox"> Artifacts / code preview required?</label></li>
+          <li><label><input type="checkbox"> Offline support needed?</label></li>
+          <li><label><input type="checkbox"> Multi-tab sync same conversation?</label></li>
+        </ul>
+        <div class="section-links">
+          <a href="answers-html/10-killer-questions.html">§10 Killer scenarios</a>
+        </div>
+      </div>
+    </article>
+
+    <!-- ② ARCHITECTURE -->
+    <article class="section-block" id="architecture" data-section="architecture">
+      <div class="section-head">
+        <div class="section-num arch">②</div>
+        <div>
+          <h2>Architecture</h2>
+          <div class="section-meta">10–15 min · Framework · Component tree · State management</div>
+        </div>
+        <span class="chevron">▼</span>
+      </div>
+      <div class="section-body">
+        <h3>Framework + High-Level Architecture</h3>
+        <p><strong>Stack:</strong> React 18 + TypeScript · Zustand or Redux for conversation store · React Query for server cache · Vite build · SSE via fetch + ReadableStream (fallback EventSource)</p>
+
+        <div class="mermaid-wrap">
+          <pre class="mermaid">flowchart TB
+  subgraph UI["UI Layer"]
+    SB[Sidebar]
+    ML[Virtualized Message List]
+    CP[Composer]
+    TP[Tool Pills]
+  end
+  subgraph Client["Client State"]
+    CS[Conversation Store]
+    SP[Streaming Pipeline]
+    BA[Branch Assembler]
+    OL[Optimistic Layer]
+  end
+  subgraph Transport["Transport"]
+    REST[REST control]
+    SSE[SSE tokens]
+  end
+  subgraph BFF["BFF / API"]
+    GW[Gateway]
+    CV[Conversation Svc]
+    ST[Stream Gateway]
+    OR[Agent Orchestrator]
+  end
+  subgraph Data["Persistence"]
+    PG[(Postgres graph)]
+    RD[(Redis)]
+    IDB[(IndexedDB)]
+  end
+  CP --> OL --> CS
+  ML --> SP
+  CS --> BA
+  OL --> REST
+  SP --> SSE
+  REST --> GW --> CV --> PG
+  SSE --> ST --> OR
+  CS --> IDB
+  ST --> RD</pre>
+        </div>
+
+        <h3>Component / Module Tree</h3>
+        <div class="mermaid-wrap">
+          <pre class="mermaid">flowchart TB
+  AppShell["AppShell"]
+
+  AppShell --> Sidebar
+  AppShell --> ChatView
+  AppShell --> ArtifactPanel
+  AppShell --> GlobalProviders
+
+  subgraph Sidebar["Sidebar"]
+    direction TB
+    CLV["ConversationListVirtualized"]
+    SB["SearchBar"]
+    OS["OrgSwitcher"]
+  end
+
+  subgraph ChatView["ChatView"]
+    direction TB
+    MLV["MessageListVirtualized"]
+    COMP["Composer"]
+    SSB["StreamStatusBar"]
+    MLV --> UMB["UserMessageBubble"]
+    MLV --> AMB["AssistantMessageBubble"]
+    MLV --> SAC["ScrollAnchorController"]
+    AMB --> SM["StreamingMarkdown"]
+    AMB --> TPG["ToolPillGroup"]
+    AMB --> TI["TypingIndicator"]
+    TPG --> CC["ConfirmCard"]
+    TPG --> ED["EgressDisclosure"]
+    COMP --> TAG["TextareaAutoGrow"]
+    COMP --> AS["AttachmentStrip"]
+    COMP --> SLM["SlashMenu"]
+    COMP --> TF["TokenFooter"]
+  end
+
+  subgraph ArtifactPanel["ArtifactPanel (optional)"]
+    direction TB
+    EDITOR["Code Editor"]
+    SBOX["SandboxIframe"]
+  end
+
+  subgraph GlobalProviders["GlobalProviders"]
+    direction TB
+    AUTH["Auth"]
+    QC["QueryClient"]
+    TH["Theme"]
+    BC["BroadcastChannel"]
+  end</pre>
+        </div>
+
+        <h3>State Management — Where State Lives</h3>
+        <div class="state-ladder">
+          <div class="state-step"><strong>Ephemeral (JS)</strong>Token buffer, rAF flush queue, parse cache, optimistic temp IDs</div>
+          <div class="state-step"><strong>Memory</strong>Active conversation graph view, height cache, sidebar prefetch (~20 threads)</div>
+          <div class="state-step"><strong>Disk (IDB)</strong>Message pages, offline outbox, upload resume, partial stream on drop</div>
+          <div class="state-step"><strong>localStorage</strong>Composer drafts, UI prefs, study progress</div>
+          <div class="state-step"><strong>Server (SoT)</strong>Message tree, active_leaf, generation checkpoints, tool ledger</div>
+        </div>
+        <div class="callout"><strong>Rule:</strong> Server owns committed history + model context. Client owns interaction latency (draft, stream buffer, scroll). Never treat React <code>messages[]</code> as source of truth — it's a <em>view</em> over the graph.</div>
+
+        <div class="section-links">
+          <a href="answers-html/02-conversation-state-management.html">§02 State</a>
+          <a href="answers-html/01-streaming-real-time-rendering.html">§01 Streaming</a>
+          <a href="answers-html/05-performance-scalability.html">§05 Performance</a>
+          <a href="claude-frontend-architecture.html">Interactive map</a>
+        </div>
+      </div>
+    </article>
+
+    <!-- ③ DATA MODEL -->
+    <article class="section-block" id="data-model" data-section="data-model">
+      <div class="section-head">
+        <div class="section-num data">③</div>
+        <div>
+          <h2>Data Model</h2>
+          <div class="section-meta">~5 min · Entities · Relationships · IR blocks</div>
+        </div>
+        <span class="chevron">▼</span>
+      </div>
+      <div class="section-body">
+        <p>Store as a <strong>message graph</strong>, not a flat array. Persist <strong>IR</strong> (Internal Representation) — provider-neutral content blocks — compile to Anthropic/OpenAI only at the adapter boundary.</p>
+
+        <div class="entity"><span class="kw">Conversation</span> {
+  id, org_id?, owner_user_id,
+  title, active_leaf_id,
+  conversation_revision,   <span style="color:var(--muted)">// optimistic concurrency</span>
+  created_at, updated_at
+}
+
+<span class="kw">MessageNode</span> {
+  id, conversation_id, parent_id?,   <span style="color:var(--muted)">// tree edge</span>
+  role: system | user | assistant,
+  content: ContentBlock[],             <span style="color:var(--muted)">// IR</span>
+  status: final | streaming | superseded | cancelled,
+  model_id?, branch_label?,
+  created_at
+}
+
+<span class="kw">ContentBlock</span> = TextBlock | ImageBlock | ToolCallBlock | ToolResultBlock | ThinkingBlock
+
+<span class="kw">ToolExecution</span> {
+  tool_use_id, conversation_id, idempotency_key,
+  status: pending | awaiting_approval | running | completed | failed,
+  approved_by?, audit_hash
+}
+
+<span class="kw">Generation</span> {
+  id, message_id, stream_cursor, last_event_id,
+  status: running | interrupted | complete
+}</div>
+
+        <h3>Key relationships</h3>
+        <table>
+          <thead><tr><th>Operation</th><th>Graph behavior</th></tr></thead>
+          <tbody>
+            <tr><td>Send message</td><td>New user node; child of current active leaf</td></tr>
+            <tr><td>Stream reply</td><td>New assistant node; status streaming → final</td></tr>
+            <tr><td>Edit message N</td><td><strong>Sibling fork</strong> under parent(N), not in-place overwrite</td></tr>
+            <tr><td>Retry assistant</td><td>New assistant sibling under same user parent</td></tr>
+            <tr><td>Tool result</td><td>Blocks appended to next user turn (Anthropic shape in IR)</td></tr>
+          </tbody>
+        </table>
+
+        <div class="section-links">
+          <a href="answers-html/02-conversation-state-management.html">§02 Branching</a>
+          <a href="answers-html/09-api-design-provider-abstraction.html">§09 IR</a>
+        </div>
+      </div>
+    </article>
+
+    <!-- ④ API DESIGN -->
+    <article class="section-block" id="api-design" data-section="api-design">
+      <div class="section-head">
+        <div class="section-num api">④</div>
+        <div>
+          <h2>API Design / BFF</h2>
+          <div class="section-meta">~10 min · Protocols · Endpoints · Real-time · Edge</div>
+        </div>
+        <span class="chevron">▼</span>
+      </div>
+      <div class="section-body">
+        <h3>Protocol choice</h3>
+        <table>
+          <thead><tr><th>Pattern</th><th>Use in Claude chat</th><th>Why</th></tr></thead>
+          <tbody>
+            <tr><td><strong>SSE</strong></td><td>LLM token stream (default)</td><td>Server→client push; HTTP auth; Last-Event-ID reconnect; AbortController cancel</td></tr>
+            <tr><td><strong>REST</strong></td><td>Send, edit, cancel, history pages, tool execute, uploads</td><td>Idempotency-Key; standard caching; clear error taxonomy</td></tr>
+            <tr><td><strong>WebSocket</strong></td><td>Optional: multi-tab sync, presence, async job push</td><td>Full-duplex when client→server churn is high</td></tr>
+            <tr><td>Long polling</td><td>Avoid for tokens</td><td>Higher latency than SSE for streaming text</td></tr>
+            <tr><td>gRPC</td><td>Internal service-to-service</td><td>Not browser-facing; BFF translates to REST/SSE</td></tr>
+          </tbody>
+        </table>
+
+        <h3>Core endpoints (BFF)</h3>
+        <table>
+          <thead><tr><th>Method</th><th>Endpoint</th><th>Purpose</th></tr></thead>
+          <tbody>
+            <tr><td>POST</td><td><code>/conversations/:id/messages</code></td><td>Send user turn → returns stream_id / opens SSE</td></tr>
+            <tr><td>POST</td><td><code>/conversations/:id/messages/:mid/edit</code></td><td>Fork branch + start regen</td></tr>
+            <tr><td>POST</td><td><code>/generations/:id/cancel</code></td><td>Stop inference + finalize partial</td></tr>
+            <tr><td>GET</td><td><code>/generations/:id/stream?after=cursor</code></td><td>Resume interrupted stream</td></tr>
+            <tr><td>GET</td><td><code>/conversations/:id/messages?before=&limit=</code></td><td>Lazy-load history (cursor pagination)</td></tr>
+            <tr><td>POST</td><td><code>/conversations/:id/tools/execute</code></td><td>HITL confirm; Idempotency-Key header</td></tr>
+            <tr><td>POST</td><td><code>/uploads/presign</code></td><td>Multipart attach → quarantine → extract</td></tr>
+            <tr><td>GET</td><td><code>/conversations?cursor=&q=</code></td><td>Sidebar list + search</td></tr>
+          </tbody>
+        </table>
+
+        <h3>Streaming adapter (normalized events)</h3>
+        <p>Provider wire format → <code>StreamDecoder</code> → normalized events consumed by one client reducer:</p>
+        <p><code>message_start · content_delta · tool_call_delta · thinking_delta · content_block_stop · message_stop · error</code></p>
+
+        <h3>Network lifecycle notes</h3>
+        <ul>
+          <li><strong>Cancel chain:</strong> UI AbortController → close SSE → BFF cancels provider job → client finalizes partial MD</li>
+          <li><strong>Drop recovery:</strong> Keep partial UI → retry with Idempotency-Key OR resume with generation cursor</li>
+          <li><strong>Backoff:</strong> Exponential 1s→2s→4s (cap 30s); honor Retry-After on 429</li>
+          <li><strong>Edge:</strong> CDN for static assets; API at origin; optional edge auth refresh — not for SSE body</li>
+        </ul>
+
+        <div class="section-links">
+          <a href="answers-html/01-streaming-real-time-rendering.html">§01 SSE</a>
+          <a href="answers-html/07-offline-resilience-error-handling.html">§07 Resilience</a>
+          <a href="answers-html/09-api-design-provider-abstraction.html">§09 Adapters</a>
+        </div>
+      </div>
+    </article>
+
+    <!-- ⑤ DEEP DIVE -->
+    <article class="section-block" id="deep-dive" data-section="deep-dive">
+      <div class="section-head">
+        <div class="section-num deep">⑤</div>
+        <div>
+          <h2>Deep Dive</h2>
+          <div class="section-meta">~10 min · Pick 1–2 areas the interviewer cares about</div>
+        </div>
+        <span class="chevron">▼</span>
+      </div>
+      <div class="section-body">
+        <p>Say: <em>“I'll go deep on Performance and Security — happy to switch if you prefer observability or testing.”</em></p>
+        <div class="deep-tabs" id="deepTabs">
+          <button type="button" class="deep-tab active" data-panel="perf">Performance</button>
+          <button type="button" class="deep-tab" data-panel="sec">Security</button>
+          <button type="button" class="deep-tab" data-panel="obs">Observability</button>
+          <button type="button" class="deep-tab" data-panel="test">Testing</button>
+          <button type="button" class="deep-tab" data-panel="a11y">A11y + i18n</button>
+        </div>
+
+        <div class="deep-panel active" id="panel-perf">
+          <ul>
+            <li><strong>Virtualization:</strong> react-window/virtuoso; dynamic height cache; pin streaming row outside virtualizer or as last item</li>
+            <li><strong>Streaming render:</strong> rAF batch + incremental markdown blocks; defer Shiki until fence closes</li>
+            <li><strong>Backpressure:</strong> pause ReadableStream read(); coalesce tokens; shed highlight under load</li>
+            <li><strong>TTFT:</strong> optimistic bubble immediately; measure provider TTFB vs client paint separately</li>
+            <li><strong>Sidebar 10k:</strong> metadata-only rows, cursor pagination, FTS index, IDB cache</li>
+          </ul>
+        </div>
+        <div class="deep-panel" id="panel-sec">
+          <ul>
+            <li><strong>Auth:</strong> JWT claims → ctx; Postgres RLS belt; org_id never from client body alone</li>
+            <li><strong>XSS:</strong> Never dangerouslySetInnerHTML on full stream; escape code blocks; sanitize artifact sandbox</li>
+            <li><strong>MCP trust:</strong> Egress allowlist; data minimization; audit log with input/output hashes</li>
+            <li><strong>Uploads:</strong> Quarantine bucket; content firewall; never inject uploads into system role</li>
+            <li><strong>Artifacts:</strong> iframe sandbox allow-scripts only; strict CSP; postMessage origin check</li>
+            <li><strong>Idempotency:</strong> (user_id, key) unique — double confirm in 200ms → one booking</li>
+          </ul>
+        </div>
+        <div class="deep-panel" id="panel-obs">
+          <ul>
+            <li>Client: tokens_received − tokens_rendered, frame p95, parse ms, stream recovery rate</li>
+            <li>Server: TTFT, generation duration, tool latency, 429/529 rates, checkpoint lag</li>
+            <li>Trace: request_id / generation_id across UI → BFF → provider</li>
+            <li>Product analytics: branch edits, tool confirms, stream interrupts (not user abort)</li>
+          </ul>
+        </div>
+        <div class="deep-panel" id="panel-test">
+          <ul>
+            <li>Unit: branch assembler, IR compile, markdown block parser, idempotency key derivation</li>
+            <li>Integration: SSE reducer with fixture event streams; tool confirm dedup</li>
+            <li>E2E: send → stream → stop; edit mid-thread → new branch; offline outbox drain</li>
+            <li>Load: virtualizer with 500 synthetic messages; stream at 100 chunks/sec</li>
+          </ul>
+        </div>
+        <div class="deep-panel" id="panel-a11y">
+          <ul>
+            <li><code>aria-live="polite"</code> on message region; <code>aria-busy</code> until first token</li>
+            <li>Stop button keyboard accessible; focus trap in confirm modal</li>
+            <li>Reduced motion: disable typing dot bounce</li>
+            <li>i18n: RTL composer; locale-aware dates in sidebar; CJK token estimate caveat</li>
+          </ul>
+        </div>
+
+        <h3>Interview close (30 sec)</h3>
+        <div class="callout">Three patterns I'd repeat: <strong>(1)</strong> server graph is source of truth with client optimism, <strong>(2)</strong> idempotency keys + stream cursors for duplicate actions and duplicate bytes, <strong>(3)</strong> bounded failure domains — sandbox kill, stream checkpoint, auth pause — never freeze the whole app.</div>
+
+        <div class="section-links">
+          <a href="answers-html/10-killer-questions.html">§10 Killer Qs</a>
+          <a href="answers-html/06-auth-security-multitenancy.html">§06 Auth</a>
+          <a href="answers-html/04-artifacts-sandboxed-rendering.html">§04 Artifacts</a>
+        </div>
+      </div>
+    </article>
+
+    <footer>
+      <a href="answers-html/index.html">Section answers</a> ·
+      <a href="claude-frontend-architecture.html">Architecture map</a> ·
+      <a href="Claude-design-doc.md">Question bank</a>
+    </footer>
+  </div>
+
+  <script type="module">
+    import mermaid from 'https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.esm.min.mjs';
+    const dark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+    mermaid.initialize({ startOnLoad: false, theme: dark ? 'dark' : 'neutral', securityLevel: 'loose', flowchart: { useMaxWidth: true } });
+
+    document.querySelectorAll('.section-block .section-head').forEach(head => {
+      head.addEventListener('click', () => head.parentElement.classList.toggle('collapsed'));
+    });
+
+    document.querySelectorAll('#deepTabs .deep-tab').forEach(tab => {
+      tab.addEventListener('click', () => {
+        document.querySelectorAll('#deepTabs .deep-tab').forEach(t => t.classList.remove('active'));
+        document.querySelectorAll('.deep-panel').forEach(p => p.classList.remove('active'));
+        tab.classList.add('active');
+        document.getElementById('panel-' + tab.dataset.panel).classList.add('active');
+      });
+    });
+
+    const navLinks = document.querySelectorAll('#topNav a[data-section]');
+    const sections = document.querySelectorAll('[data-section]');
+    const observer = new IntersectionObserver(entries => {
+      entries.forEach(entry => {
+        if (entry.isIntersecting) {
+          navLinks.forEach(a => a.classList.toggle('active', a.dataset.section === entry.target.dataset.section));
+        }
+      });
+    }, { rootMargin: '-40% 0px -50% 0px' });
+    sections.forEach(s => observer.observe(s));
+
+    document.querySelectorAll('ul.checklist[data-store]').forEach(list => {
+      const key = 'sd-interview-' + list.dataset.store;
+      list.querySelectorAll('input').forEach((cb, i) => {
+        const saved = JSON.parse(localStorage.getItem(key) || '[]');
+        cb.checked = saved.includes(i);
+        cb.addEventListener('change', () => {
+          const checked = [...list.querySelectorAll('input')].map((c, j) => c.checked ? j : null).filter(x => x !== null);
+          localStorage.setItem(key, JSON.stringify(checked));
+        });
+      });
+    });
+
+    await mermaid.run({ querySelector: '.mermaid' });
+  </script>
+</body>
+</html>

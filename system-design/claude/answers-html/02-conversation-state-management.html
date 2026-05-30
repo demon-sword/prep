@@ -1,0 +1,698 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Section 2 — Conversation State Management</title>
+  <meta name="description" content="Interview-prep answers for Claude-style AI chat frontends: where state lives, edits, branching, multi-tab sync, context limits, and persistence.">
+  <style>
+    :root {
+      --bg: #f8f9fb;
+      --surface: #ffffff;
+      --text: #1a1d26;
+      --text-muted: #5c6370;
+      --border: #e2e6ed;
+      --accent: #3d5a80;
+      --accent-soft: #eef2f7;
+      --code-bg: #f0f2f6;
+      --pre-bg: #1e2433;
+      --pre-text: #e8ecf4;
+      --nav-bg: rgba(248, 249, 251, 0.92);
+      --shadow: 0 1px 3px rgba(0, 0, 0, 0.06);
+    }
+
+    @media (prefers-color-scheme: dark) {
+      :root {
+        --bg: #12151c;
+        --surface: #1a1f2a;
+        --text: #e8ecf4;
+        --text-muted: #9aa3b2;
+        --border: #2d3548;
+        --accent: #8cb4d9;
+        --accent-soft: #232a38;
+        --code-bg: #252d3d;
+        --pre-bg: #0d1017;
+        --pre-text: #d4dae6;
+        --nav-bg: rgba(18, 21, 28, 0.94);
+        --shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
+      }
+    }
+
+    *, *::before, *::after { box-sizing: border-box; }
+
+    html {
+      scroll-behavior: smooth;
+      scroll-padding-top: 5.5rem;
+    }
+
+    body {
+      margin: 0;
+      font-family: "Segoe UI", system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
+      font-size: 1.0625rem;
+      line-height: 1.65;
+      color: var(--text);
+      background: var(--bg);
+    }
+
+    .site-nav {
+      position: sticky;
+      top: 0;
+      z-index: 100;
+      background: var(--nav-bg);
+      backdrop-filter: blur(10px);
+      -webkit-backdrop-filter: blur(10px);
+      border-bottom: 1px solid var(--border);
+      box-shadow: var(--shadow);
+    }
+
+    .site-nav-inner {
+      max-width: 900px;
+      margin: 0 auto;
+      padding: 0.75rem 1.5rem;
+    }
+
+    .site-nav-title {
+      font-size: 0.8125rem;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+      color: var(--text-muted);
+      margin: 0 0 0.5rem;
+    }
+
+    .toc {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.35rem 0.75rem;
+      margin: 0;
+      padding: 0;
+      list-style: none;
+      font-size: 0.8125rem;
+    }
+
+    .toc a {
+      color: var(--accent);
+      text-decoration: none;
+      white-space: nowrap;
+    }
+
+    .toc a:hover { text-decoration: underline; }
+
+    .page {
+      max-width: 900px;
+      margin: 0 auto;
+      padding: 2rem 1.5rem 4rem;
+    }
+
+    header.page-header {
+      margin-bottom: 2.5rem;
+      padding-bottom: 1.5rem;
+      border-bottom: 1px solid var(--border);
+    }
+
+    h1 {
+      font-size: 1.75rem;
+      font-weight: 700;
+      line-height: 1.25;
+      margin: 0 0 0.75rem;
+      letter-spacing: -0.02em;
+    }
+
+    .lead {
+      margin: 0;
+      color: var(--text-muted);
+      font-size: 1.05rem;
+    }
+
+    h2.section {
+      font-size: 1.35rem;
+      font-weight: 700;
+      margin: 2.5rem 0 1.25rem;
+      padding-top: 0.5rem;
+      color: var(--accent);
+      border-bottom: 2px solid var(--accent-soft);
+      padding-bottom: 0.35rem;
+    }
+
+    article.qa {
+      margin-bottom: 2.75rem;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 1.5rem 1.75rem;
+      box-shadow: var(--shadow);
+    }
+
+    h3.question {
+      font-size: 1.2rem;
+      font-weight: 600;
+      line-height: 1.35;
+      margin: 0 0 1rem;
+    }
+
+    article.qa p { margin: 0 0 1rem; }
+    article.qa p:last-child { margin-bottom: 0; }
+
+    strong { font-weight: 600; }
+
+    ol, ul {
+      margin: 0 0 1rem;
+      padding-left: 1.35rem;
+    }
+
+    li { margin-bottom: 0.35rem; }
+    li:last-child { margin-bottom: 0; }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin: 0 0 1rem;
+      font-size: 0.95rem;
+    }
+
+    th, td {
+      border: 1px solid var(--border);
+      padding: 0.55rem 0.75rem;
+      text-align: left;
+      vertical-align: top;
+    }
+
+    th {
+      background: var(--accent-soft);
+      font-weight: 600;
+    }
+
+    code {
+      font-family: ui-monospace, "Cascadia Code", "Source Code Pro", Menlo, Consolas, monospace;
+      font-size: 0.88em;
+      background: var(--code-bg);
+      padding: 0.15em 0.4em;
+      border-radius: 4px;
+    }
+
+    pre {
+      margin: 0 0 1rem;
+      padding: 1rem 1.15rem;
+      background: var(--pre-bg);
+      color: var(--pre-text);
+      border-radius: 8px;
+      overflow-x: auto;
+      font-size: 0.875rem;
+      line-height: 1.5;
+    }
+
+    pre.ascii {
+      font-family: ui-monospace, "Cascadia Code", "Source Code Pro", Menlo, Consolas, monospace;
+    }
+
+    pre code {
+      background: none;
+      padding: 0;
+      font-size: inherit;
+      color: inherit;
+    }
+
+    .mermaid-wrap {
+      margin: 0 0 1rem;
+      padding: 1rem;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      overflow-x: auto;
+    }
+
+    .mermaid { text-align: center; }
+
+    .mermaid-wrap pre.mermaid:not([data-mermaid-rendered]) {
+      background: transparent;
+      color: var(--text-muted);
+      min-height: 0;
+    }
+
+    .ref-table-wrap {
+      margin-top: 2rem;
+      padding: 1.5rem 1.75rem;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      box-shadow: var(--shadow);
+    }
+
+    .ref-table-wrap h2 {
+      margin: 0 0 1rem;
+      font-size: 1.2rem;
+    }
+
+    footer.page-footer {
+      max-width: 900px;
+      margin: 0 auto;
+      padding: 1.5rem;
+      border-top: 1px solid var(--border);
+      font-size: 0.9375rem;
+    }
+
+    footer.page-footer a {
+      color: var(--accent);
+      text-decoration: none;
+      font-weight: 500;
+    }
+
+    footer.page-footer a:hover { text-decoration: underline; }
+  </style>
+  <link rel="stylesheet" href="assets/interactive.css">
+</head>
+<body>
+
+  <nav class="site-nav" aria-label="Table of contents">
+    <div class="site-nav-inner">
+      <p class="site-nav-title">On this page</p>
+      <ol class="toc">
+        <li><a href="#where-does-conversation-state-live">State location</a></li>
+        <li><a href="#editing-previous-message">Edit &amp; regenerate</a></li>
+        <li><a href="#branching-conversations">Branching</a></li>
+        <li><a href="#sync-across-tabs">Multi-tab sync</a></li>
+        <li><a href="#context-window-strategy">Context limit</a></li>
+        <li><a href="#tree-vs-linear-array">Tree vs array</a></li>
+        <li><a href="#reassemble-messages-array">Reassemble array</a></li>
+        <li><a href="#optimistic-ui-rollback">Optimistic rollback</a></li>
+        <li><a href="#undo-sent-message">Undo send</a></li>
+        <li><a href="#persist-draft-messages">Draft persistence</a></li>
+      </ol>
+    </div>
+  </nav>
+
+  <main class="page">
+    <header class="page-header">
+      <h1>Section 2 — Conversation State Management</h1>
+      <p class="lead">Interview-prep answers for Claude-style AI chat frontends: where state lives, edits, branching, multi-tab sync, context limits, and persistence.</p>
+    </header>
+
+    <h2 class="section" id="core">Core</h2>
+
+    <article class="qa" id="where-does-conversation-state-live">
+      <h3 class="question">Where does conversation state live — client, server, or both?</h3>
+      <p><strong>Problem framing:</strong> Conversation state is not one blob—it splits into <em>authoritative history</em> (what the model actually saw), <em>presentation state</em> (which branch is visible, scroll, drafts), and <em>ephemeral runtime</em> (in-flight stream, optimistic placeholders).</p>
+      <p><strong>Approach:</strong> Use a <strong>split authority model</strong>. The server owns durable conversation records: message IDs, parent pointers for branches, content, attachments metadata, and the canonical path sent to the API. The client owns UI-local state: active branch pointer, composer draft, scroll position, partial stream buffer, and optimistic rows before ACK. On load, the client hydrates from the server and reconciles; during chat, the client updates optimistically and patches from server events (SSE/WebSocket or polling).</p>
+      <p><strong>Tradeoffs:</strong> Client-only storage (localStorage) is fast offline but breaks multi-device and cannot enforce auth or billing. Server-only with no local cache feels laggy and loses drafts on refresh. Both is the production default: server is source of truth for replay and model calls; client is source of truth for <em>interaction latency</em> until sync completes.</p>
+      <p><strong>Data structures:</strong> Server stores messages as nodes (<code>id</code>, <code>parentId</code>, <code>role</code>, <code>content</code>, <code>createdAt</code>, <code>status</code>). Client keeps <code>messagesById: Map</code>, <code>activeLeafId</code>, and a derived <code>visiblePath: Message[]</code> from root → active leaf. <strong>Pitfall:</strong> treating the React messages array as authoritative—it must be a <em>view</em> over the graph, not the store.</p>
+      <div class="mermaid-wrap">
+        <pre class="mermaid">flowchart LR
+  subgraph Client
+    UI[UI view path]
+    Draft[Composer draft]
+    Stream[Stream buffer]
+  end
+  subgraph Server
+    DB[(Message graph)]
+    API[Chat API context builder]
+  end
+  UI &lt;--&gt;|hydrate + patch| DB
+  UI --&gt;|submit turn| API
+  API --&gt;|reads path to leaf| DB</pre>
+      </div>
+      <div class="demo-panel" data-demo="decision-tree" data-tree='{"question":"What kind of state is this?","options":[{"label":"Durable message graph + model context path","result":"Server (authoritative) — hydrate client on load"},{"label":"Active branch pointer, scroll, composer draft","result":"Client (presentation) — sync via patches, not model context"},{"label":"In-flight stream buffer + optimistic placeholders","result":"Client (ephemeral) — discard or reconcile on ACK"},{"label":"Need offline + multi-device + billing enforcement","next":{"question":"Can you rely on client-only storage?","options":[{"label":"No — must enforce server-side","result":"Both — server owns graph; client owns latency-sensitive UI state"},{"label":"Yes — prototype only","result":"Client-only OK for demos; migrate before branching/edits"}]}}]}'>
+        <p class="demo-panel-title">Try it: split authority decision tree</p>
+        <p class="demo-panel-desc">Classify each state slice — server truth, client view, or both.</p>
+        <div class="decision-tree"><div data-tree-root></div><div class="decision-result"></div></div>
+      </div>
+    </article>
+
+    <article class="qa" id="editing-previous-message">
+      <h3 class="question">How do you handle editing a previous message and regenerating from that point?</h3>
+      <p><strong>Problem framing:</strong> Editing message <em>k</em> is not an in-place update—it forks history. The model must receive messages <code>[0..k-1, k', ...]</code> where <code>k'</code> is the edited user turn; everything after the old <code>k</code> on that branch becomes stale or archived.</p>
+      <p><strong>Approach:</strong> (1) User edits message <code>k</code> → create a <strong>new message node</strong> <code>k'</code> with <code>parentId = parent(k)</code> (sibling of original <code>k</code>), or replace-in-place only if <code>k</code> had no children yet. (2) Set <code>activeLeaf</code> to <code>k'</code>. (3) Truncate the <em>API context</em> to the path from root through <code>k'</code>—do not send descendants of the old <code>k</code>. (4) Call generate with that path; stream assistant reply as child of <code>k'</code>. UI shows the new path; old branch remains reachable via branch switcher.</p>
+      <p><strong>Tradeoffs:</strong> In-place edit is simpler when the edited message is the leaf; mid-thread edit always implies branching. Regenerating assistant-only (without user edit) reuses the same user parent and adds a new assistant sibling—same machinery, different trigger.</p>
+      <p><strong>Pitfalls:</strong> Reusing the old message ID for edited content breaks caching and audit trails. Sending the full flat array including orphaned siblings poisons the model. Always build context via <code>getPathToLeaf(activeLeafId)</code>.</p>
+      <pre class="ascii">Before edit:          After edit at k:
+  u1                    u1
+   └ a1                  ├ a1 (old branch)
+      └ u2                └ u2' (edited)
+         └ a2                 └ a2' (regenerated)</pre>
+      <div class="demo-panel" data-demo="decision-tree" data-tree='{"question":"User edits message k — does k have children?","options":[{"label":"No — k is the leaf","result":"In-place replace OR sibling fork — simpler path; set activeLeaf to k&apos;"},{"label":"Yes — descendants exist on this branch","next":{"question":"What must the API context include?","options":[{"label":"Path root → k&apos; only (exclude old descendants)","result":"Fork: new node k&apos; as sibling; regenerate assistant from k&apos;"},{"label":"Full flat messages[] including old branch","result":"WRONG — poisons model context; always getPathToLeaf(activeLeafId)"}]}}]}'>
+        <p class="demo-panel-title">Try it: edit-at-k decision tree</p>
+        <p class="demo-panel-desc">Mid-thread edits fork history — walk the fork vs in-place choice.</p>
+        <div class="decision-tree"><div data-tree-root></div><div class="decision-result"></div></div>
+      </div>
+    </article>
+
+    <article class="qa" id="branching-conversations">
+      <h3 class="question">How do you implement branching conversations (retry gives a different response path)?</h3>
+      <p><strong>Problem framing:</strong> &quot;Retry&quot; on an assistant message means: same parent user turn, <strong>new assistant sibling</strong>—not overwriting the failed or unsatisfactory reply.</p>
+      <p><strong>Approach:</strong> Model branches as a <strong>tree of message nodes</strong>. Retry on assistant <code>a</code> with parent <code>u</code>: <code>POST</code> with <code>parentMessageId: u.id</code>, optionally <code>regenerateFrom: a.id</code> for analytics. Server creates <code>a'</code> as another child of <code>u</code>. Client increments branch index (<code>2 of 3</code>) and sets active leaf to <code>a'</code>. Navigation UI walks siblings at the same depth. Deleting a branch is soft-delete (<code>archivedAt</code>) so undo and compliance retain history.</p>
+      <p><strong>Tradeoffs:</strong> Tree storage costs more than a linear log but matches product semantics. Linear array with &quot;version&quot; fields on one row works for assistant-only retries but breaks when the user edits mid-thread (multiple divergent subtrees). Prefer explicit <code>parentId</code> edges.</p>
+      <p><strong>Sync:</strong> Branch selection is client presentation state until persisted (<code>userPreference.activeBranch per parent</code> optional). Server must store all siblings; client picks which sibling chain to display.</p>
+      <p><strong>Pitfall:</strong> Overwriting <code>a</code> in the DB loses the prior answer users may want to compare; always sibling, never silent replace unless the message never finished (<code>status: streaming</code> aborted).</p>
+      <div class="demo-panel" data-demo="decision-tree" data-tree='{"question":"User clicks Retry on assistant message a","options":[{"label":"a.status === streaming (aborted mid-stream)","result":"Replace in-flight partial — no finished sibling to preserve yet"},{"label":"a.status === sent (finished reply)","result":"Create sibling a&apos; under same parent u — show branch index 2 of N"},{"label":"User edited mid-thread earlier","next":{"question":"Can a linear array with version fields handle this?","options":[{"label":"Multiple divergent subtrees","result":"Use explicit parentId tree — linear version fields break"},{"label":"Assistant-only retries only","result":"Linear may work short-term; migrate to tree early"}]}}]}'>
+        <p class="demo-panel-title">Try it: retry branching decision tree</p>
+        <p class="demo-panel-desc">Retry creates siblings, not silent overwrites — except aborted streams.</p>
+        <div class="decision-tree"><div data-tree-root></div><div class="decision-result"></div></div>
+      </div>
+    </article>
+
+    <article class="qa" id="sync-across-tabs">
+      <h3 class="question">How do you sync conversation state across two open tabs on the same conversation?</h3>
+      <p><strong>Problem framing:</strong> Two tabs are two replicas of one conversation; without coordination they double-send, diverge on branch choice, or show stale streams.</p>
+      <p><strong>Approach — layers:</strong></p>
+      <ol>
+        <li><strong>Authoritative server events:</strong> After any mutation, server broadcasts (SSE fan-out, WebSocket room <code>conversation:{id}</code>, or short polling). Payload: patched nodes or version vector <code>{ conversationRevision, messagePatches[] }</code>.</li>
+        <li><strong>Cross-tab local sync:</strong> <code>BroadcastChannel('conv:{id}')</code> or <code>storage</code> event for lightweight signals (active branch changed, draft updated, stream started) when both tabs are same origin.</li>
+        <li><strong>Leader election for sends:</strong> Only one tab should own an in-flight generation, or use server-side lock (<code>generationId</code>, 409 if busy). Tab B sees &quot;Generating in another tab&quot; if A holds the lock.</li>
+      </ol>
+      <p><strong>Tradeoffs:</strong> Server revision wins on content. Last-writer-wins is acceptable for <code>activeLeafId</code> and draft with timestamp. Never merge two concurrent user sends—queue or reject second with UX prompt.</p>
+      <div class="mermaid-wrap">
+        <pre class="mermaid">sequenceDiagram
+  participant TabA
+  participant TabB
+  participant Server
+  TabA-&gt;&gt;Server: send message
+  Server--&gt;&gt;TabA: stream + patch
+  Server-->>TabB: push patch
+  TabB-&gt;&gt;TabB: merge graph, update UI
+  TabB-&gt;&gt;TabA: BroadcastChannel leaf changed</pre>
+      </div>
+      <p><strong>Pitfall:</strong> Syncing only the linear <code>messages[]</code> array without <code>parentId</code> cannot reconstruct branches after concurrent retries in two tabs.</p>
+      <div class="demo-panel" data-demo="protocol-picker" data-scenarios='[{"prompt":"Server must push message graph patches to all connected clients after mutation","answer":"SSE","explain":"Unidirectional server→client fan-out fits patch broadcasts; standard HTTP infra."},{"prompt":"Unified room for chat + presence + bidirectional tool progress in one connection","answer":"WebSocket","explain":"Full-duplex room conversation:{id} for live multi-feature sync."},{"prompt":"SSE for authoritative patches + BroadcastChannel for same-origin leaf/draft signals","answer":"Hybrid","explain":"Production split: server truth via SSE; lightweight cross-tab via BroadcastChannel."}]'>
+        <p class="demo-panel-title">Quiz: pick the sync layer</p>
+        <p class="demo-panel-desc" data-scenario></p>
+        <div class="protocol-cards">
+          <div class="protocol-card">SSE</div>
+          <div class="protocol-card">WebSocket</div>
+          <div class="protocol-card">Hybrid</div>
+        </div>
+        <div class="demo-controls"><button type="button" class="demo-btn secondary" data-next>Next scenario</button></div>
+        <div class="decision-result"></div>
+      </div>
+    </article>
+
+    <article class="qa" id="context-window-strategy">
+      <h3 class="question">What is your strategy when the context window fills up — truncate, summarize, or paginate?</h3>
+      <p><strong>Problem framing:</strong> The limit is on <strong>tokens in the model request</strong>, not on UI list length. Users still scroll full history; the API gets a compressed <em>working set</em>.</p>
+      <p><strong>Approach — tiered strategy (combine in practice):</strong></p>
+      <table>
+        <thead>
+          <tr>
+            <th>Strategy</th>
+            <th>Use when</th>
+            <th>Pros</th>
+            <th>Cons</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><strong>Truncate (sliding window)</strong></td>
+            <td>Long thread, recent turns matter most</td>
+            <td>Deterministic, cheap</td>
+            <td>Loses early facts</td>
+          </tr>
+          <tr>
+            <td><strong>Summarize</strong></td>
+            <td>Need retention of old facts</td>
+            <td>Keeps semantic memory</td>
+            <td>Cost, drift, latency</td>
+          </tr>
+          <tr>
+            <td><strong>Paginate (UI only)</strong></td>
+            <td>Display 10k messages</td>
+            <td>Great UX</td>
+            <td>Does not shrink API context alone</td>
+          </tr>
+        </tbody>
+      </table>
+      <p><strong>Production pattern:</strong> Keep full graph in DB for UI. At request time, <code>buildContext(activePath, budget)</code>:</p>
+      <ol>
+        <li>Always include system prompt + recent <em>N</em> turns on the active path (newest first until budget).</li>
+        <li>If over budget, inject a <strong>rolling summary</strong> node (hidden <code>role: system</code> or vendor-specific summary block) generated async when thread crosses threshold.</li>
+        <li>Optionally retrieve relevant older turns via RAG over message embeddings (not true pagination into the model, but selective recall).</li>
+      </ol>
+      <p><strong>Tradeoffs:</strong> Summaries can hallucinate thread facts—version summaries per branch, re-summarize on major fork. Hard truncate is safer for compliance-heavy chats. Never silently drop the current user message.</p>
+      <p><strong>Pitfall:</strong> Summarizing across branches mixes incompatible histories—summarize <strong>per path to active leaf</strong> only.</p>
+      <div class="demo-panel" data-demo="decision-tree" data-tree='{"question":"Active path exceeds token budget — what matters most?","options":[{"label":"Recent turns matter; early facts disposable","result":"Truncate sliding window — keep system + last N turns on active path"},{"label":"Must retain old facts semantically","result":"Summarize — inject rolling summary node per active path only"},{"label":"UI shows 10k messages but API still over budget","next":{"question":"Does UI pagination alone fix the API?","options":[{"label":"No — display ≠ model context","result":"Combine UI pagination + truncate/summary/RAG for buildContext()"},{"label":"Yes","result":"WRONG — paginate UI only; still need context compression for API"}]}}]}'>
+        <p class="demo-panel-title">Try it: context budget decision tree</p>
+        <p class="demo-panel-desc">Truncate, summarize, or paginate — know which fixes the API vs UI only.</p>
+        <div class="decision-tree"><div data-tree-root></div><div class="decision-result"></div></div>
+      </div>
+    </article>
+
+    <h2 class="section" id="deep">Deep</h2>
+
+    <article class="qa" id="tree-vs-linear-array">
+      <h3 class="question">How do you model a branched conversation as a data structure — tree vs linear array?</h3>
+      <p><strong>Problem framing:</strong> The API expects a linear <code>messages[]</code>, but the product is a DAG (usually a tree). The model is the mapping between them.</p>
+      <p><strong>Approach — tree (recommended):</strong></p>
+      <pre><code class="language-ts">type MessageNode = {
+  id: string;
+  parentId: string | null;
+  role: 'user' | 'assistant' | 'system' | 'tool';
+  content: ContentBlock[];
+  children: string[];        // or derive via index parentId -&gt; ids
+  status: 'draft' | 'sent' | 'streaming' | 'error';
+  siblingIndex?: number;     // optional cache
+};
+
+type Conversation = {
+  id: string;
+  rootId: string | null;
+  activeLeafId: string;
+  nodes: Record&lt;string, MessageNode&gt;;
+};</code></pre>
+      <p><strong>Linear array:</strong> Fine for prototype (<code>messages: Message[]</code>) until branch/retry/edit. Workarounds (<code>branchId</code>, <code>replacesMessageId</code>) accrete into a implicit tree—migrate early.</p>
+      <p><strong>Deriving API payload:</strong></p>
+      <pre><code class="language-ts">function pathToLeaf(nodes: Record&lt;string, MessageNode&gt;, leafId: string): MessageNode[] {
+  const path: MessageNode[] = [];
+  let cur: string | null = leafId;
+  while (cur) {
+    path.push(nodes[cur]);
+    cur = nodes[cur].parentId;
+  }
+  return path.reverse();
+}</code></pre>
+      <p><strong>Tradeoffs:</strong> Tree enables O(path) context build and O(1) branch switch. Array + copy-on-write fork is O(n) per edit. DB: adjacency list (<code>parent_id</code>) or closure table for analytics queries (&quot;all descendants of u2&quot;).</p>
+      <div class="mermaid-wrap">
+        <pre class="mermaid">graph TD
+  root((root)) --&gt; u1[u1]
+  u1 --&gt; a1[a1]
+  u1 --&gt; a1b[a1 retry]
+  a1 --&gt; u2[u2]
+  u2 --&gt; a2[a2]
+  u2 --&gt; u2e[u2 edited]
+  u2e --&gt; a2b[a2 new]</pre>
+      </div>
+      <p><strong>Pitfall:</strong> Cycles from bad <code>parentId</code> break traversal—validate on write.</p>
+      <div class="demo-panel" data-demo="decision-tree" data-tree='{"question":"Does the product need edit/retry branching?","options":[{"label":"Yes — edits, retries, or mid-thread forks","result":"Tree with parentId — derive linear messages[] via pathToLeaf(activeLeafId)"},{"label":"No — strictly linear chat, no forks ever","result":"Linear array OK for prototype — migrate before adding retry/edit"},{"label":"Assistant-only retries, no user edits mid-thread","next":{"question":"Will user edits mid-thread be added later?","options":[{"label":"Likely yes","result":"Start with tree now — linear version fields break on edit forks"},{"label":"Never","result":"Linear + version on assistant rows may suffice short-term"}]}}]}'>
+        <p class="demo-panel-title">Try it: tree vs linear array</p>
+        <p class="demo-panel-desc">The API wants linear; the product is a tree — pick the store model.</p>
+        <div class="decision-tree"><div data-tree-root></div><div class="decision-result"></div></div>
+      </div>
+    </article>
+
+    <article class="qa" id="reassemble-messages-array">
+      <h3 class="question">How do you reassemble the messages array after a mid-conversation edit?</h3>
+      <p><strong>Problem framing:</strong> &quot;Reassemble&quot; means: (a) UI list for render, (b) API array for the next request—same path, different projections.</p>
+      <p><strong>Approach — algorithm:</strong></p>
+      <ol>
+        <li>User submits edit at node <code>k</code> → create <code>k'</code> with <code>parentId = k.parentId</code> (or <code>parent(k)</code> in tree terms).</li>
+        <li>Set <code>activeLeafId = k'</code>.</li>
+        <li><code>visibleMessages = pathToLeaf(nodes, activeLeafId)</code> — excludes old siblings below the fork point from the <em>new</em> path until new children exist.</li>
+        <li>Append streaming placeholder child <code>a_pending</code> under <code>k'</code>.</li>
+        <li>On stream complete, replace placeholder with final assistant node.</li>
+      </ol>
+      <p><strong>For the API:</strong> Map <code>visibleMessages</code> to provider format; strip UI-only fields (<code>siblingIndex</code>, <code>isActiveBranch</code>). Attachments and tool blocks must stay ordered per turn.</p>
+      <p><strong>Edge cases:</strong> Edit on assistant message is usually disallowed (edit user, regenerate assistant). Edit while streaming: cancel in-flight generation, mark partial node <code>aborted</code>, fork from last stable user node.</p>
+      <p><strong>Pitfall:</strong> Filtering <code>messages.filter(m =&gt; !m.archived)</code> on a flat list without walking <code>parentId</code> leaves holes or wrong order—always path reconstruction from leaf.</p>
+      <pre class="ascii">Reassemble path (active leaf = a2'):
+  root → u1 → a1 → u2' → a2'
+  (u2 and old a2 not on path)</pre>
+      <div class="demo-panel" data-demo="layout-thrash">
+        <p class="demo-panel-title">Try it: flat filter vs pathToLeaf</p>
+        <p class="demo-panel-desc">Naive filter on a flat array thrashes order; pathToLeaf walks parentId incrementally.</p>
+        <div class="demo-controls">
+          <button type="button" class="demo-btn secondary" data-mode="naive">Naive (flat filter)</button>
+          <button type="button" class="demo-btn secondary" data-mode="incremental">pathToLeaf (from leaf)</button>
+        </div>
+        <div class="demo-visual"></div>
+        <div class="demo-metrics"><span class="demo-metric">Path steps: <strong data-metric="reflows">8</strong></span></div>
+      </div>
+    </article>
+
+    <article class="qa" id="optimistic-ui-rollback">
+      <h3 class="question">How do you handle optimistic UI rollback if a regenerated message fails?</h3>
+      <p><strong>Problem framing:</strong> Optimistic UI shows the new branch before the server confirms. Failure modes: network error, 4xx validation, 5xx, stream abort, moderation block.</p>
+      <p><strong>Approach — state machine per optimistic node:</strong></p>
+      <pre><code class="language-ts">type OptimisticState =
+  | { phase: 'pending'; tempId: string }
+  | { phase: 'confirmed'; serverId: string }
+  | { phase: 'failed'; error: Error; rollbackSnapshot: Snapshot };</code></pre>
+      <p><strong>Flow:</strong></p>
+      <ol>
+        <li>On edit/regenerate: snapshot <code>{ activeLeafId, visiblePath ids }</code>, apply optimistic graph (temp IDs, <code>status: streaming</code>).</li>
+        <li>On success: remap <code>tempId → serverId</code>, clear snapshot.</li>
+        <li>On failure: <strong>rollback</strong> — restore <code>activeLeafId</code> and node map from snapshot; remove temp subtree; toast with retry. If partial stream arrived, keep partial in an &quot;failed attempt&quot; sibling (status <code>error</code>) instead of rollback-only—user may want to see what failed.</li>
+      </ol>
+      <p><strong>Tradeoffs:</strong> Full graph rollback vs leaving a failed leaf. Product choice: Claude-like often keeps failed sibling with error badge; strict rollback feels safer for inconsistent API state.</p>
+      <p><strong>Idempotency:</strong> Client sends <code>clientRequestId</code> so retry does not duplicate nodes server-side.</p>
+      <p><strong>Pitfall:</strong> Remapping IDs breaks React keys mid-animation—key on stable <code>clientRequestId</code> until server ID arrives.</p>
+      <div class="demo-panel" data-demo="stop-chain">
+        <p class="demo-panel-title">Try it: optimistic failure rollback chain</p>
+        <p class="demo-panel-desc">On failure, propagate rollback from UI through snapshot restore.</p>
+        <div class="demo-controls"><button type="button" class="demo-btn">Simulate failure + rollback</button></div>
+        <div class="cancel-chain">
+          <span class="cancel-step">UI</span><span class="cancel-arrow">→</span>
+          <span class="cancel-step">Snapshot</span><span class="cancel-arrow">→</span>
+          <span class="cancel-step">Rollback</span><span class="cancel-arrow">→</span>
+          <span class="cancel-step">Restore</span>
+        </div>
+      </div>
+    </article>
+
+    <article class="qa" id="undo-sent-message">
+      <h3 class="question">How do you implement &quot;undo&quot; for a sent message?</h3>
+      <p><strong>Problem framing:</strong> &quot;Undo&quot; in chat is not a general time machine—it is <strong>recoverable removal or return to prior branch</strong>, bounded by policy (e.g. 30s, or until next message).</p>
+      <p><strong>Approach — patterns:</strong></p>
+      <ol>
+        <li><strong>Branch-based undo (preferred):</strong> &quot;Undo send&quot; = revert <code>activeLeafId</code> to the parent before the message (message stays in graph, <code>archived</code> or hidden). No API call if next turn has not been generated. If assistant already replied, undo = switch active path back to previous leaf (user sees prior branch). Aligns with tree model.</li>
+        <li><strong>Soft delete:</strong> Set <code>deletedAt</code> on node; rebuild path skipping deleted nodes for future API calls; UI collapses with &quot;Message removed.&quot;</li>
+        <li><strong>True retract (hard):</strong> DELETE on server + purge from context—needed for compliance (PII sent by mistake). Requires admin/mod pipeline if assistant already ingested content in logs.</li>
+      </ol>
+      <p><strong>Client UX:</strong> Toast &quot;Undo&quot; with timer; store <code>lastMutation: { type, prevLeafId, nodeId }</code> in memory (not long-term DB). Second action clears undo stack.</p>
+      <p><strong>Server:</strong> Optional <code>undoWindow</code> rejects delete if child exists and policy forbids; else cascade archive children.</p>
+      <p><strong>Tradeoffs:</strong> Undo after model used content in a later turn cannot un-inform the model—must edit/regenerate from corrected path, not magic erase.</p>
+      <p><strong>Pitfall:</strong> Implementing undo as <code>pop()</code> on a linear array corrupts branch history—always pointer move or archive on the graph.</p>
+      <div class="demo-panel" data-demo="decision-tree" data-tree='{"question":"User clicks Undo on a sent message","options":[{"label":"Within undo window; no assistant reply yet","result":"Branch undo — move activeLeafId to parent; archive/hide node in graph"},{"label":"Assistant already replied on this path","result":"Switch active path to prior leaf — user sees previous branch, not array pop()"},{"label":"PII sent by mistake — compliance retract required","result":"Hard delete on server + purge from future context — may need mod pipeline"},{"label":"Implement as messages.pop() on linear array","result":"WRONG — corrupts branch history; use pointer move or archive on graph"}]}'>
+        <p class="demo-panel-title">Try it: undo pattern decision tree</p>
+        <p class="demo-panel-desc">Branch pointer move, soft delete, or hard retract — never linear pop().</p>
+        <div class="decision-tree"><div data-tree-root></div><div class="decision-result"></div></div>
+      </div>
+    </article>
+
+    <article class="qa" id="persist-draft-messages">
+      <h3 class="question">How do you persist draft messages across page refreshes?</h3>
+      <p><strong>Problem framing:</strong> Drafts are <strong>uncommitted user input</strong>—must not enter model context or branch graph until send.</p>
+      <p><strong>Approach — layered persistence:</strong></p>
+      <table>
+        <thead>
+          <tr>
+            <th>Layer</th>
+            <th>Scope</th>
+            <th>Mechanism</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><strong>In-memory</strong></td>
+            <td>Current session</td>
+            <td>React state / Zustand</td>
+          </tr>
+          <tr>
+            <td><strong>localStorage / IndexedDB</strong></td>
+            <td>Per-device, survives refresh</td>
+            <td><code>drafts:v1:{conversationId}</code> → <code>{ text, attachments meta, updatedAt }</code></td>
+          </tr>
+          <tr>
+            <td><strong>Server draft (optional)</strong></td>
+            <td>Cross-device</td>
+            <td>Autosave API debounced 1–2s; <code>status: draft</code> row or separate <code>Draft</code> table</td>
+          </tr>
+        </tbody>
+      </table>
+      <p><strong>Implementation details:</strong></p>
+      <ul>
+        <li>Debounce writes 300–500ms; <code>beforeunload</code> flush.</li>
+        <li>On mount: load draft after conversation hydrate; if server has newer <code>draftUpdatedAt</code>, prefer server.</li>
+        <li><strong>Do not</strong> create a <code>MessageNode</code> in the branch tree for drafts—keeps <code>pathToLeaf</code> clean.</li>
+        <li>Attachments: store refs (uploadId) not File blobs in localStorage; rehydrate from upload session.</li>
+        <li>Clear draft on successful send (same <code>clientRequestId</code> ack).</li>
+      </ul>
+      <p><strong>Privacy:</strong> localStorage for logged-in sensitive chats—offer opt-out or encrypt at rest (limited) for enterprise.</p>
+      <p><strong>Multi-tab:</strong> <code>BroadcastChannel</code> syncs draft text; last-write-wins on <code>updatedAt</code> prevents oscillation.</p>
+      <p><strong>Pitfall:</strong> Putting draft in the messages array and accidentally including it in <code>buildContext()</code> pollutes the model—strict separation of <code>composerState</code> vs <code>committedNodes</code>.</p>
+      <pre class="ascii">┌─────────────────┐     send      ┌──────────────────┐
+│ Composer draft  │ ──────────────► │ Message graph    │
+│ (local/server)  │               │ (server truth)   │
+└─────────────────┘               └──────────────────┘
+        │ refresh OK                     │ API context
+        ▼                                  ▼
+   localStorage                      pathToLeaf only</pre>
+      <div class="demo-panel" data-demo="token-throttle">
+        <p class="demo-panel-title">Try it: debounced draft persistence</p>
+        <p class="demo-panel-desc">Keystrokes arrive fast; flush to localStorage on your chosen debounce interval.</p>
+        <div class="demo-controls">
+          <label>Debounce interval: <strong data-metric="interval">300ms</strong>
+            <input type="range" min="16" max="300" value="300" step="16">
+          </label>
+          <button type="button" class="demo-btn">Start typing</button>
+        </div>
+        <div class="demo-output token-stream-box"></div>
+        <div class="demo-metrics">
+          <span class="demo-metric">Writes/sec: <strong data-metric="fps">3</strong></span>
+          <span class="demo-metric">Storage commits: <strong data-metric="paints">0</strong></span>
+        </div>
+      </div>
+    </article>
+
+    <div class="ref-table-wrap" id="quick-reference">
+      <h2>Quick reference (interview close)</h2>
+      <table>
+        <thead>
+          <tr>
+            <th>Topic</th>
+            <th>One-liner</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>State location</td>
+            <td>Server owns graph; client owns view + draft + stream</td>
+          </tr>
+          <tr>
+            <td>Edit / regenerate</td>
+            <td>Fork at edit point; new path to leaf; never poison context with old branch</td>
+          </tr>
+          <tr>
+            <td>Branching</td>
+            <td>Sibling nodes under same parent; UI shows branch index</td>
+          </tr>
+          <tr>
+            <td>Multi-tab</td>
+            <td>Server push + BroadcastChannel; single-flight generation lock</td>
+          </tr>
+          <tr>
+            <td>Context limit</td>
+            <td>Full history in DB; API gets window + summary/RAG on active path only</td>
+          </tr>
+          <tr>
+            <td>Data model</td>
+            <td>Tree with <code>parentId</code>; linear array is a derived view</td>
+          </tr>
+          <tr>
+            <td>Optimistic failure</td>
+            <td>Snapshot rollback + idempotent <code>clientRequestId</code></td>
+          </tr>
+          <tr>
+            <td>Undo</td>
+            <td>Move active leaf or archive; not array pop</td>
+          </tr>
+          <tr>
+            <td>Drafts</td>
+            <td>Outside graph; localStorage + optional debounced server autosave</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </main>
+
+  <footer class="page-footer">
+    <a href="index.html">← All sections</a>
+  </footer>
+
+  <script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+  <script>
+    mermaid.initialize({
+      startOnLoad: false,
+      theme: 'neutral',
+      securityLevel: 'loose',
+      flowchart: { useMaxWidth: true, htmlLabels: true }
+    });
+  </script>
+  <script src="assets/interactive.js" defer></script>
+</body>
+</html>
