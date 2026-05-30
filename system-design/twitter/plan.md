@@ -14,9 +14,9 @@ created: 2026-05-30
 - [x] answers/04-real-time-updates-notifications.md — section 04: Real-Time Updates & Notifications
 - [x] answers/05-search-explore-direct-messages.md — section 05: Search, Explore & Direct Messages
 - [x] answers/06-media-upload-playback-accessibility.md — section 06: Media Upload, Playback & Accessibility
+- [x] answers/07-spaces-communities-live-surfaces.md — section 07: Spaces, Communities & Live Surfaces
 
 ## Next
-- [ ] answers/07-spaces-communities-live-surfaces.md — section 07: Spaces, Communities & Live Surfaces
 - [ ] answers/08-client-state-api-layer-caching.md — section 08: Client State, API Layer & Caching
 - [ ] answers/09-auth-security-performance-delivery.md — section 09: Auth, Security, Performance & Delivery
 - [ ] answers/10-observability-testing-i18n-moderation-ui.md — section 10: Observability, Testing, i18n & Moderation UI
