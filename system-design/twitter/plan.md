@@ -9,9 +9,9 @@ created: 2026-05-30
 - [x] design-doc — write twitter-design-doc.md
 - [x] gen-plan — sections parsed from design doc
 - [x] answers/01-timeline-home-feed.md — section 01: Timeline & Home Feed
+- [x] answers/02-compose-posts-social-actions.md — section 02: Compose, Posts & Social Actions
 
 ## Next
-- [ ] answers/02-compose-posts-social-actions.md — section 02: Compose, Posts & Social Actions
 - [ ] answers/03-profiles-identity-graph-ui.md — section 03: Profiles, Identity & Graph UI
 - [ ] answers/04-real-time-updates-notifications.md — section 04: Real-Time Updates & Notifications
 - [ ] answers/05-search-explore-direct-messages.md — section 05: Search, Explore & Direct Messages
