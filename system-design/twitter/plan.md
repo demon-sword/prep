@@ -10,9 +10,9 @@ created: 2026-05-30
 - [x] gen-plan — sections parsed from design doc
 - [x] answers/01-timeline-home-feed.md — section 01: Timeline & Home Feed
 - [x] answers/02-compose-posts-social-actions.md — section 02: Compose, Posts & Social Actions
+- [x] answers/03-profiles-identity-graph-ui.md — section 03: Profiles, Identity & Graph UI
 
 ## Next
-- [ ] answers/03-profiles-identity-graph-ui.md — section 03: Profiles, Identity & Graph UI
 - [ ] answers/04-real-time-updates-notifications.md — section 04: Real-Time Updates & Notifications
 - [ ] answers/05-search-explore-direct-messages.md — section 05: Search, Explore & Direct Messages
 - [ ] answers/06-media-upload-playback-accessibility.md — section 06: Media Upload, Playback & Accessibility
