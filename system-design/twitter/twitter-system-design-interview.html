@@ -1,0 +1,780 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Twitter/X Frontend System Design — Interview Template</title>
+  <meta name="description" content="Full Twitter/X web frontend system design in interview format: Requirements → Architecture → Data Model → API/BFF → Deep Dive.">
+  <style>
+    :root {
+      --bg: #ffffff;
+      --surface: #f7f9f9;
+      --surface2: #eff3f4;
+      --text: #0f1419;
+      --muted: #536471;
+      --border: #eff3f4;
+      --accent: #1a8cd8;
+      --accent-soft: rgba(26, 140, 216, 0.12);
+      --req: #1d9bf0;
+      --arch: #00ba7c;
+      --data: #f91880;
+      --api: #7856ff;
+      --deep: #536471;
+      --shadow: 0 4px 20px rgba(0,0,0,.08);
+      --nav-h: 3.25rem;
+    }
+    @media (prefers-color-scheme: dark) {
+      :root {
+        --bg: #0f1419;
+        --surface: #16181c;
+        --surface2: #1e2732;
+        --text: #e7e9ea;
+        --muted: #71767b;
+        --border: #2f3336;
+        --accent: #1d9bf0;
+        --accent-soft: rgba(29, 155, 240, 0.15);
+        --shadow: 0 8px 32px rgba(0,0,0,.35);
+      }
+    }
+    *, *::before, *::after { box-sizing: border-box; }
+    html { scroll-behavior: smooth; scroll-padding-top: calc(var(--nav-h) + 1rem); }
+    body {
+      margin: 0;
+      font-family: "Segoe UI", system-ui, -apple-system, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      line-height: 1.6;
+    }
+    .top-nav {
+      position: sticky;
+      top: 0;
+      z-index: 100;
+      height: var(--nav-h);
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      padding: 0 1rem;
+      background: rgba(247, 249, 249, .92);
+      backdrop-filter: blur(10px);
+      border-bottom: 1px solid var(--border);
+      overflow-x: auto;
+    }
+    @media (prefers-color-scheme: dark) {
+      .top-nav { background: rgba(22, 24, 28, .94); }
+    }
+    .top-nav a {
+      font-size: 0.8125rem;
+      white-space: nowrap;
+      padding: 0.35rem 0.65rem;
+      border-radius: 999px;
+      text-decoration: none;
+      color: var(--muted);
+      border: 1px solid transparent;
+    }
+    .top-nav a:hover { color: var(--text); border-color: var(--border); }
+    .top-nav a.active { background: var(--accent-soft); color: var(--accent); border-color: var(--accent); font-weight: 600; }
+    .nav-title { font-weight: 700; font-size: 0.875rem; margin-right: 0.5rem; white-space: nowrap; }
+    .nav-links { margin-left: auto; display: flex; gap: 0.5rem; font-size: 0.8125rem; }
+    .nav-links a { color: var(--accent); text-decoration: none; white-space: nowrap; }
+    .wrap { max-width: 920px; margin: 0 auto; padding: 2rem 1.25rem 4rem; }
+    .hero { margin-bottom: 2rem; }
+    .hero h1 { font-size: 1.75rem; margin: 0 0 0.5rem; letter-spacing: -0.02em; }
+    .hero p { color: var(--muted); margin: 0; max-width: 640px; }
+    .timer-bar {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.5rem;
+      margin: 1.25rem 0 0;
+    }
+    .timer-chip {
+      font-size: 0.75rem;
+      padding: 0.3rem 0.65rem;
+      border-radius: 6px;
+      border: 1px solid var(--border);
+      background: var(--surface);
+    }
+    .timer-chip strong { color: var(--accent); }
+
+    .section-block {
+      margin-bottom: 2.5rem;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      box-shadow: var(--shadow);
+      overflow: hidden;
+    }
+    .section-head {
+      display: flex;
+      align-items: flex-start;
+      gap: 1rem;
+      padding: 1.25rem 1.5rem;
+      border-bottom: 1px solid var(--border);
+      cursor: pointer;
+      user-select: none;
+    }
+    .section-head:hover { background: var(--surface2); }
+    .section-num {
+      flex-shrink: 0;
+      width: 2.5rem;
+      height: 2.5rem;
+      border-radius: 8px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-weight: 800;
+      font-size: 0.875rem;
+      color: #fff;
+    }
+    .section-num.req { background: var(--req); }
+    .section-num.arch { background: var(--arch); }
+    .section-num.data { background: var(--data); }
+    .section-num.api { background: var(--api); }
+    .section-num.deep { background: var(--deep); }
+    .section-head h2 { margin: 0; font-size: 1.2rem; }
+    .section-meta { font-size: 0.8125rem; color: var(--muted); margin-top: 0.15rem; }
+    .chevron { margin-left: auto; color: var(--muted); transition: transform 0.2s; }
+    .section-block.collapsed .chevron { transform: rotate(-90deg); }
+    .section-block.collapsed .section-body { display: none; }
+    .section-body { padding: 1.25rem 1.5rem 1.5rem; }
+
+    h3 {
+      font-size: 0.9375rem;
+      margin: 1.25rem 0 0.5rem;
+      color: var(--accent);
+    }
+    h3:first-child { margin-top: 0; }
+    p, li { font-size: 0.9375rem; }
+    ul { padding-left: 1.25rem; }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 0.875rem;
+      margin: 0.75rem 0;
+    }
+    th, td {
+      border: 1px solid var(--border);
+      padding: 0.55rem 0.75rem;
+      text-align: left;
+      vertical-align: top;
+    }
+    th { background: var(--surface2); font-weight: 600; }
+    .callout {
+      padding: 0.85rem 1rem;
+      border-left: 3px solid var(--accent);
+      background: var(--accent-soft);
+      border-radius: 0 8px 8px 0;
+      font-size: 0.875rem;
+      margin: 1rem 0;
+    }
+    .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; }
+    @media (max-width: 700px) { .grid-2 { grid-template-columns: 1fr; } }
+
+    .card {
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 1rem;
+      background: var(--surface2);
+    }
+    .card h4 { margin: 0 0 0.35rem; font-size: 0.875rem; }
+    .card p { margin: 0; font-size: 0.8125rem; color: var(--muted); }
+
+    .entity {
+      font-family: ui-monospace, Menlo, Consolas, monospace;
+      font-size: 0.8125rem;
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 1rem;
+      margin: 0.75rem 0;
+      white-space: pre-wrap;
+      line-height: 1.5;
+    }
+    .entity .kw { color: var(--accent); font-weight: 600; }
+
+    .state-ladder {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.5rem;
+      margin: 0.75rem 0;
+    }
+    .state-step {
+      flex: 1;
+      min-width: 120px;
+      padding: 0.65rem;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      text-align: center;
+      font-size: 0.8125rem;
+    }
+    .state-step strong { display: block; font-size: 0.75rem; color: var(--accent); margin-bottom: 0.25rem; }
+
+    .deep-tabs {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.35rem;
+      margin-bottom: 1rem;
+    }
+    .deep-tab {
+      font: inherit;
+      font-size: 0.8125rem;
+      padding: 0.4rem 0.75rem;
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      background: var(--surface2);
+      color: var(--muted);
+      cursor: pointer;
+    }
+    .deep-tab.active { background: var(--accent); border-color: var(--accent); color: #fff; font-weight: 600; }
+    .deep-panel { display: none; }
+    .deep-panel.active { display: block; }
+
+    .mermaid-wrap {
+      margin: 1rem 0;
+      padding: 1rem;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      overflow-x: auto;
+    }
+    .mermaid-wrap pre.mermaid:not([data-mermaid-rendered]) {
+      background: transparent;
+      color: var(--muted);
+      font-size: 0.75rem;
+      margin: 0;
+    }
+
+    .checklist { list-style: none; padding: 0; margin: 0; }
+    .checklist li {
+      display: flex;
+      align-items: flex-start;
+      gap: 0.5rem;
+      padding: 0.4rem 0;
+      border-bottom: 1px dashed var(--border);
+      font-size: 0.875rem;
+    }
+    .checklist input { margin-top: 0.25rem; accent-color: var(--accent); }
+    .section-links { display: flex; flex-wrap: wrap; gap: 0.35rem; margin-top: 1rem; }
+    .section-links a {
+      font-size: 0.75rem;
+      padding: 0.25rem 0.5rem;
+      border-radius: 4px;
+      background: var(--accent-soft);
+      color: var(--accent);
+      text-decoration: none;
+    }
+    footer {
+      text-align: center;
+      font-size: 0.8125rem;
+      color: var(--muted);
+      padding: 2rem 0;
+    }
+    footer a { color: var(--accent); }
+  </style>
+</head>
+<body>
+  <nav class="top-nav" id="topNav">
+    <span class="nav-title">X SD — Template</span>
+    <a href="#requirements" data-section="requirements">① Requirements</a>
+    <a href="#architecture" data-section="architecture">② Architecture</a>
+    <a href="#data-model" data-section="data-model">③ Data Model</a>
+    <a href="#api-design" data-section="api-design">④ API / BFF</a>
+    <a href="#deep-dive" data-section="deep-dive">⑤ Deep Dive</a>
+    <div class="nav-links">
+      <a href="twitter-frontend-architecture.html">Architecture map</a>
+      <a href="answers-html/index.html">All answers</a>
+    </div>
+  </nav>
+
+  <div class="wrap">
+    <header class="hero">
+      <h1>Design Twitter/X Web Frontend</h1>
+      <p>Complete system design answer in interview format (~45–60 min). Use this as your master script; drill into section pages for question-level depth on timeline, compose, realtime, media, and client state.</p>
+      <div class="timer-bar">
+        <span class="timer-chip"><strong>5–10m</strong> Requirements</span>
+        <span class="timer-chip"><strong>10–15m</strong> Architecture</span>
+        <span class="timer-chip"><strong>5m</strong> Data Model</span>
+        <span class="timer-chip"><strong>10m</strong> API / BFF</span>
+        <span class="timer-chip"><strong>10m</strong> Deep Dive</span>
+      </div>
+    </header>
+
+    <!-- ① REQUIREMENTS -->
+    <article class="section-block" id="requirements" data-section="requirements">
+      <div class="section-head">
+        <div class="section-num req">①</div>
+        <div>
+          <h2>Requirements</h2>
+          <div class="section-meta">5–10 min · Clarify with interviewer · Scope before designing</div>
+        </div>
+        <span class="chevron">▼</span>
+      </div>
+      <div class="section-body">
+        <div class="callout"><strong>Opening line:</strong> “Before I draw boxes, let me confirm functional scope, non-functional targets, and what we’re explicitly not building in v1 — e.g. full Spaces audio stack vs read-only discovery.”</div>
+
+        <h3>Functional Requirements (Business)</h3>
+        <table>
+          <thead><tr><th>Area</th><th>Must have (v1)</th><th>Nice to have</th></tr></thead>
+          <tbody>
+            <tr><td>Timeline</td><td>Following + For You feeds, cursor pagination, infinite scroll, “N new posts” banner, like/repost/reply inline</td><td>Bi-directional “jump to latest”, fan-out lag warnings, ads/promoted slots</td></tr>
+            <tr><td>Compose</td><td>Post, reply, quote, repost; mentions/hashtags; media attach; optimistic publish with <code>client_tweet_id</code></td><td>Polls, scheduled posts, community posts, offline outbox</td></tr>
+            <tr><td>Profiles</td><td>Header, tabs (posts/replies/media/likes), follower counts, deep-link <code>/status/:id</code></td><td>Multi-account switch, subscription badges, protected-account gating</td></tr>
+            <tr><td>Realtime</td><td>Lightweight freshness (new tweets banner), notification tab + unread badge, live count updates</td><td>Full WebSocket home push, cross-device read sync</td></tr>
+            <tr><td>Search / DM</td><td>Typeahead search, Explore/trends, DM inbox + thread history</td><td>Encrypted DM UX, degraded offline search index</td></tr>
+            <tr><td>Media</td><td>Image/video in timeline, chunked upload in composer, alt text</td><td>HLS, lightbox, data-saver autoplay policy</td></tr>
+            <tr><td>Spaces</td><td>— (scope out unless asked)</td><td>Live listener UI, request-to-speak, community moderation queues</td></tr>
+          </tbody>
+        </table>
+
+        <h3>Non-Functional Requirements (Technical)</h3>
+        <div class="grid-2">
+          <div class="card">
+            <h4>Latency</h4>
+            <p>Home LCP &lt; 2.5s on 4G; optimistic post paint &lt; 50ms; timeline scroll 60fps with variable-height virtualization</p>
+          </div>
+          <div class="card">
+            <h4>Scale</h4>
+            <p>Millions DAU; infinite feeds; same tweet in 5+ surfaces — normalized entity store, not duplicate blobs per tab</p>
+          </div>
+          <div class="card">
+            <h4>Reliability</h4>
+            <p>WS/SSE reconnect with dedup; idempotent publish; partial timeline on fan-out-on-read cold start</p>
+          </div>
+          <div class="card">
+            <h4>Security</h4>
+            <p>OAuth 2.0 PKCE; httpOnly session + <code>ct0</code> CSRF; XSS-safe tweet rendering; block/mute enforced at render</p>
+          </div>
+        </div>
+
+        <h3>Metrics · Constraints · Assumptions</h3>
+        <ul>
+          <li><strong>Metrics:</strong> LCP/INP, scroll jank rate, stream reconnect success %, duplicate-tweet rate after realtime+pagination, publish retry success</li>
+          <li><strong>Constraints:</strong> Rate limits (429 + Retry-After); hybrid fan-out (push vs pull for high-follower authors); mobile autoplay policies</li>
+          <li><strong>Assumptions:</strong> Authenticated primary UX; BFF aggregates bootstrap; REST v2 + upload.twitter.com for media; web-first (responsive)</li>
+        </ul>
+
+        <h3>Scoping questions to ask</h3>
+        <ul class="checklist" data-store="req">
+          <li><label><input type="checkbox"> Web only or native apps in scope?</label></li>
+          <li><label><input type="checkbox"> For You ranking — client displays server order only?</label></li>
+          <li><label><input type="checkbox"> DMs end-to-end encrypted or standard?</label></li>
+          <li><label><input type="checkbox"> Spaces / Communities required in v1?</label></li>
+          <li><label><input type="checkbox"> Multi-account on one browser profile?</label></li>
+          <li><label><input type="checkbox"> Offline compose / read-only degraded mode?</label></li>
+        </ul>
+        <div class="section-links">
+          <a href="answers-html/01-timeline-home-feed.html">§01 Timeline</a>
+          <a href="answers-html/02-compose-posts-social-actions.html">§02 Compose</a>
+        </div>
+      </div>
+    </article>
+
+    <!-- ② ARCHITECTURE -->
+    <article class="section-block" id="architecture" data-section="architecture">
+      <div class="section-head">
+        <div class="section-num arch">②</div>
+        <div>
+          <h2>Architecture</h2>
+          <div class="section-meta">10–15 min · Framework · Component tree · State management</div>
+        </div>
+        <span class="chevron">▼</span>
+      </div>
+      <div class="section-body">
+        <h3>Framework + High-Level Architecture</h3>
+        <p><strong>Stack:</strong> React 18 + TypeScript · React Query (infinite timelines, SWR profiles) · normalized entity store (<code>tweetsById</code>, <code>usersById</code>) · Zustand for ephemeral UI (scroll anchors, compose sheet, feed mode) · Vite/webpack code-splitting · WebSocket or SSE for realtime + REST control plane</p>
+
+        <div class="mermaid-wrap">
+          <pre class="mermaid">flowchart TB
+  subgraph UI["UI Layer"]
+    HF[HomeFeed Following / For You]
+    CP[ComposeShell]
+    PR[ProfileView]
+    NT[Notifications]
+    DM[DMInbox]
+    SR[SearchExplore]
+  end
+  subgraph Client["Client State"]
+    EU[Entity Store tweetsById usersById]
+    RQ[React Query page caches]
+    ZS[Zustand UI slice]
+    OL[Optimistic Layer]
+    RT[Realtime Dedup Buffer]
+  end
+  subgraph Transport["Transport"]
+    REST[REST v2 + GraphQL reads]
+    WS[WebSocket / SSE]
+    POLL[Light polling fallback]
+  end
+  subgraph BFF["BFF / API Gateway"]
+    GW[Gateway + auth]
+    TL[Timeline Service]
+    TW[Tweet / Social Service]
+    UP[Upload Service]
+    NT2[Notification Service]
+  end
+  subgraph Data["Persistence"]
+    CH[(Timeline stores / CH)]
+    PG[(Postgres metadata)]
+    CDN[(Media CDN)]
+    IDB[(IndexedDB drafts)]
+  end
+  HF --> RQ --> EU
+  CP --> OL --> EU
+  HF --> RT --> WS
+  OL --> REST
+  RQ --> REST
+  REST --> GW --> TL --> CH
+  REST --> GW --> TW --> PG
+  CP --> UP --> CDN
+  WS --> GW
+  CP --> IDB
+  ZS --> HF</pre>
+        </div>
+
+        <h3>Component / Module Tree</h3>
+        <div class="mermaid-wrap">
+          <pre class="mermaid">flowchart TB
+  AppShell["AppShell"]
+
+  AppShell --> PrimaryNav
+  AppShell --> MainOutlet
+  AppShell --> ComposeDock
+  AppShell --> GlobalProviders
+
+  subgraph PrimaryNav["PrimaryNav"]
+    HomeLink
+    ExploreLink
+    NotifLink
+    DMLink
+    ProfileLink
+  end
+
+  subgraph MainOutlet["MainOutlet"]
+    HomeFeed["HomeFeed"]
+    ProfileView["ProfileView"]
+    TweetDetail["TweetDetail"]
+    SearchExplore["SearchExplore"]
+    DMThread["DMThread"]
+    NotifTab["NotificationsTab"]
+  end
+
+  subgraph HomeFeed["HomeFeed"]
+    FeedTabs["FeedTabs following | for_you"]
+    NPB["NewPostsBanner"]
+    TLV["TimelineListVirtualized"]
+    TLV --> TweetRow
+    TweetRow --> TweetText
+    TweetRow --> MediaGrid
+    TweetRow --> ActionBar
+    TweetRow --> QuoteEmbed
+  end
+
+  subgraph ComposeDock["ComposeDock"]
+    ComposerShell
+    ComposerShell --> TextAreaGrow
+    ComposerShell --> MediaAttachRow
+    ComposerShell --> MentionTypeahead
+    ComposerShell --> UploadProgress
+  end
+
+  subgraph ProfileView["ProfileView"]
+    ProfileHeader
+    ProfileTabs
+    ProfileTabs --> TabTweets
+    ProfileTabs --> TabReplies
+    ProfileTabs --> TabMedia
+  end
+
+  subgraph GlobalProviders["GlobalProviders"]
+    AuthProvider
+    QueryClient
+    EntityStoreProvider
+    RealtimeProvider
+    ThemeA11y
+  end</pre>
+        </div>
+
+        <h3>State Management — Where State Lives</h3>
+        <div class="state-ladder">
+          <div class="state-step"><strong>Ephemeral (JS)</strong>Scroll anchor, feed tab, compose open, hover card, expanded tweet, new-posts count</div>
+          <div class="state-step"><strong>Memory</strong>Normalized entities, React Query infinite pages (ids only), height cache for virtualizer</div>
+          <div class="state-step"><strong>IndexedDB</strong>Compose drafts, upload session (media_id + segment ack), failed publish outbox</div>
+          <div class="state-step"><strong>localStorage</strong>UI prefs, study checklist — not auth tokens on web</div>
+          <div class="state-step"><strong>Server (SoT)</strong>Timelines, tweet graph, counts, notification read state, DM history</div>
+        </div>
+        <div class="callout"><strong>Rule:</strong> React Query holds <em>ordered ID lists + cursors</em> per surface; entity store holds tweet/user bodies. Never duplicate full tweet objects inside each infinite page — patch once on like/repost and all surfaces update.</div>
+
+        <div class="section-links">
+          <a href="answers-html/01-timeline-home-feed.html">§01 Timeline</a>
+          <a href="answers-html/08-client-state-api-layer-caching.html">§08 Client state</a>
+          <a href="answers-html/09-auth-security-performance-delivery.html">§09 Perf delivery</a>
+          <a href="twitter-frontend-architecture.html">Interactive map</a>
+        </div>
+      </div>
+    </article>
+
+    <!-- ③ DATA MODEL -->
+    <article class="section-block" id="data-model" data-section="data-model">
+      <div class="section-head">
+        <div class="section-num data">③</div>
+        <div>
+          <h2>Data Model</h2>
+          <div class="section-meta">~5 min · Entities · Relationships · Normalized graph</div>
+        </div>
+        <span class="chevron">▼</span>
+      </div>
+      <div class="section-body">
+        <p>Store tweets and users <strong>by id</strong>; timelines are <strong>ordered id lists</strong> with opaque cursors. Parse tweet text into entities (mentions, URLs, cashtags) once at ingest.</p>
+
+        <div class="entity"><span class="kw">Tweet</span> {
+  id,                          <span style="color:var(--muted)">// id_str in API</span>
+  text, displayTextRange?,
+  authorId, createdAt,
+  conversationId, inReplyToTweetId?,
+  quotedTweetId?, repostOfTweetId?,
+  mediaIds[], pollId?,
+  likeCount, replyCount, repostCount, bookmarkCount,
+  lang, possiblySensitive,
+  _meta: { version, pending?, clientTweetId? }
+}
+
+<span class="kw">User</span> {
+  id, handle, displayName, avatarUrl, bannerUrl,
+  verifiedType?, isProtected, relationshipToViewer: following | blocked | muted
+}
+
+<span class="kw">Media</span> {
+  id, type: photo | video | gif,
+  url, previewUrl, aspectRatio, altText?,
+  variants[], processingState?
+}
+
+<span class="kw">TimelinePage</span> {
+  ids: string[],
+  cursorTop, cursorBottom,    <span style="color:var(--muted)">// opaque</span>
+  rankingVersion?,             <span style="color:var(--muted)">// For You only</span>
+  fetchedAt
+}
+
+<span class="kw">Notification</span> {
+  id, type: mention | repost | follow | like ...,
+  actorIds[], targetTweetId?, read, createdAt
+}
+
+<span class="kw">Conversation</span> {
+  id, participantIds[], lastMessagePreview,
+  lastMessageAt, unreadCount, isRequestFolder
+}</div>
+
+        <h3>Key relationships</h3>
+        <table>
+          <thead><tr><th>Operation</th><th>Client behavior</th></tr></thead>
+          <tbody>
+            <tr><td>Timeline fetch</td><td>Merge <code>TimelinePage.ids</code> into query cache; hydrate rows from <code>tweetsById</code></td></tr>
+            <tr><td>Optimistic post</td><td>Insert <code>pending:uuid</code> entity + prepend id to active timeline; swap id on 201</td></tr>
+            <tr><td>Like / repost</td><td>Patch single <code>tweetsById[id]</code>; monotonic count merge rules</td></tr>
+            <tr><td>Realtime event</td><td>Dedup by tweet id; prepend or update counts — never duplicate row</td></tr>
+            <tr><td>Account switch</td><td>Purge viewer-scoped queries + entity store partition per <code>rest_id</code></td></tr>
+          </tbody>
+        </table>
+
+        <div class="section-links">
+          <a href="answers-html/03-profiles-identity-graph-ui.html">§03 Profiles</a>
+          <a href="answers-html/08-client-state-api-layer-caching.html">§08 Normalization</a>
+        </div>
+      </div>
+    </article>
+
+    <!-- ④ API DESIGN -->
+    <article class="section-block" id="api-design" data-section="api-design">
+      <div class="section-head">
+        <div class="section-num api">④</div>
+        <div>
+          <h2>API Design / BFF</h2>
+          <div class="section-meta">~10 min · Protocols · Endpoints · Real-time · Network lifecycle</div>
+        </div>
+        <span class="chevron">▼</span>
+      </div>
+      <div class="section-body">
+        <h3>Protocol choice</h3>
+        <table>
+          <thead><tr><th>Pattern</th><th>Use on X web</th><th>Why</th></tr></thead>
+          <tbody>
+            <tr><td><strong>REST v2</strong></td><td>Timelines, publish, social actions, profiles, search</td><td>Cursor pagination, expansions (<code>author_id</code>, <code>attachments.media_keys</code>), standard 429 handling</td></tr>
+            <tr><td><strong>WebSocket</strong></td><td>High-frequency events: live counts, optional home freshness</td><td>Full-duplex; requires reconnect + dedup against REST pages</td></tr>
+            <tr><td><strong>SSE</strong></td><td>Notification stream, lighter push fan-out</td><td>HTTP-friendly; one-way server→client</td></tr>
+            <tr><td><strong>Polling</strong></td><td>For You rank refresh, fallback when WS down</td><td>Exponential backoff; <code>since_id</code> head cursor</td></tr>
+            <tr><td>Upload API</td><td><code>upload.twitter.com</code> INIT/APPEND/FINALIZE</td><td>Separate from tweet CRUD; large binary segments</td></tr>
+          </tbody>
+        </table>
+
+        <h3>Core endpoints (BFF / public API shape)</h3>
+        <table>
+          <thead><tr><th>Method</th><th>Endpoint</th><th>Purpose</th></tr></thead>
+          <tbody>
+            <tr><td>GET</td><td><code>/2/timeline/following?cursor=</code></td><td>Reverse-chron home from graph</td></tr>
+            <tr><td>GET</td><td><code>/2/timeline/for_you?cursor=&ranking_version=</code></td><td>Ranked feed + injection slots</td></tr>
+            <tr><td>POST</td><td><code>/2/tweets</code></td><td>Create tweet; header <code>client_tweet_id</code> for idempotency</td></tr>
+            <tr><td>POST</td><td><code>/2/users/:id/retweets</code> · DELETE</td><td>Repost / undo repost</td></tr>
+            <tr><td>POST</td><td><code>/2/users/:id/likes</code> · DELETE</td><td>Like / unlike</td></tr>
+            <tr><td>GET</td><td><code>/2/users/:id/tweets?cursor=</code></td><td>Profile tab pagination</td></tr>
+            <tr><td>GET</td><td><code>/2/notifications?cursor=</code></td><td>Grouped notification pages</td></tr>
+            <tr><td>GET</td><td><code>/2/dm_conversations/:id/messages?cursor=</code></td><td>DM history</td></tr>
+            <tr><td>GET</td><td><code>/2/tweets/search/recent?q=</code></td><td>Search / typeahead backing</td></tr>
+            <tr><td>POST</td><td><code>media/upload?command=INIT|APPEND|FINALIZE|STATUS</code></td><td>Chunked media before attach to tweet</td></tr>
+            <tr><td>GET</td><td><code>/2/home/bootstrap</code> (BFF)</td><td>Coalesce first paint: viewer, counts, timeline head</td></tr>
+          </tbody>
+        </table>
+
+        <h3>Network lifecycle notes</h3>
+        <ul>
+          <li><strong>Reconnect:</strong> WS exponential backoff 1s→2s→4s (cap 30s); on reconnect, fetch head cursor via REST and <strong>dedup</strong> ids already in React Query pages</li>
+          <li><strong>Idempotency:</strong> <code>client_tweet_id</code> (UUID) on POST CreateTweet — safe retry after 401 refresh or flaky network; swap <code>pending:*</code> → real <code>id_str</code></li>
+          <li><strong>Rate limits:</strong> Honor <code>Retry-After</code> on 429; disable optimistic buttons; show account-level vs app-level messaging</li>
+          <li><strong>Pagination race:</strong> If realtime prepends while <code>fetchNextPage</code> in flight, merge with id-set dedup — never double-render same tweet</li>
+          <li><strong>Auth retry:</strong> Single-flight token refresh on 401; queue API calls; drafts stay in IndexedDB during re-login</li>
+        </ul>
+
+        <div class="section-links">
+          <a href="answers-html/04-real-time-updates-notifications.html">§04 Realtime</a>
+          <a href="answers-html/05-search-explore-direct-messages.html">§05 Search DM</a>
+          <a href="answers-html/06-media-upload-playback-accessibility.html">§06 Media</a>
+          <a href="answers-html/08-client-state-api-layer-caching.html">§08 BFF batching</a>
+        </div>
+      </div>
+    </article>
+
+    <!-- ⑤ DEEP DIVE -->
+    <article class="section-block" id="deep-dive" data-section="deep-dive">
+      <div class="section-head">
+        <div class="section-num deep">⑤</div>
+        <div>
+          <h2>Deep Dive</h2>
+          <div class="section-meta">~10 min · Pick 1–2 areas the interviewer cares about</div>
+        </div>
+        <span class="chevron">▼</span>
+      </div>
+      <div class="section-body">
+        <p>Say: <em>“I'll go deep on Performance and Real-time — happy to switch to Security, Media, or Testing/Observability.”</em></p>
+        <div class="deep-tabs" id="deepTabs">
+          <button type="button" class="deep-tab active" data-panel="perf">Performance</button>
+          <button type="button" class="deep-tab" data-panel="rt">Real-time</button>
+          <button type="button" class="deep-tab" data-panel="sec">Security</button>
+          <button type="button" class="deep-tab" data-panel="media">Media</button>
+          <button type="button" class="deep-tab" data-panel="test">Testing / Obs</button>
+        </div>
+
+        <div class="deep-panel active" id="panel-perf">
+          <ul>
+            <li><strong>Virtualization:</strong> react-virtuoso / react-window with dynamic height cache; aspect-ratio boxes on media to prevent CLS; measure tweet row once, reuse height until content changes</li>
+            <li><strong>LCP:</strong> Bootstrap BFF coalesces viewer + first timeline page; priority image on above-fold avatar; route-level code split (home vs DM vs settings)</li>
+            <li><strong>Prefetch:</strong> When within 3 viewports of bottom, prefetch next cursor page; idle prefetch profile metadata on hover card</li>
+            <li><strong>Render:</strong> Selectors from normalized store — row re-renders only when <code>tweetsById[id]</code> version bumps; batch count updates via rAF</li>
+            <li><strong>CDN:</strong> Responsive <code>srcset</code> + blurhash/LQIP; separate metrics endpoint with short TTL so counts stay fresh without busting tweet body cache</li>
+          </ul>
+        </div>
+        <div class="deep-panel" id="panel-rt">
+          <ul>
+            <li><strong>Transport:</strong> Following may use WS/SSE for <code>tweet_create</code> events; For You often polls rank head — don’t refetch entire feed on every event</li>
+            <li><strong>New posts banner:</strong> Buffer incoming ids + increment counter; tap prepends above viewport or replaces only if user at scrollTop ≈ 0</li>
+            <li><strong>Dedup:</strong> Maintain <code>Set&lt;tweetId&gt;</code> per feed mode; ignore WS events already in last REST page; handle out-of-order delete-before-create</li>
+            <li><strong>Scroll stability:</strong> Freeze displayed window during read — don’t reshuffle ranked items above anchor tweet without user action</li>
+            <li><strong>Counts:</strong> Batch like/repost counter patches; avoid re-mounting virtualized list on every socket tick</li>
+          </ul>
+        </div>
+        <div class="deep-panel" id="panel-sec">
+          <ul>
+            <li><strong>OAuth PKCE:</strong> Web login with <code>code_challenge</code>; refresh token single-flight; proactive refresh at 80% TTL</li>
+            <li><strong>Session:</strong> httpOnly cookies for session; access token in memory — not localStorage</li>
+            <li><strong>CSRF:</strong> <code>ct0</code> cookie + header on mutating requests; SameSite=Lax</li>
+            <li><strong>XSS:</strong> Never <code>dangerouslySetInnerHTML</code> on tweet text — parse entities to React nodes; sanitize link hrefs</li>
+            <li><strong>Graph safety:</strong> Block/mute filters at selector — don’t render then hide; protected accounts gate tabs server-side</li>
+            <li><strong>CSP:</strong> Strict script-src; ads/analytics via nonce or isolated iframe where required</li>
+          </ul>
+        </div>
+        <div class="deep-panel" id="panel-media">
+          <ul>
+            <li><strong>Upload FSM:</strong> INIT → APPEND (4–5MB segments) → FINALIZE → STATUS poll until <code>succeeded</code></li>
+            <li><strong>Retry:</strong> Re-send failed <code>segment_index</code> only; persist <code>media_id</code> + acked segments in draft IDB</li>
+            <li><strong>Composer:</strong> Early upload on file pick; cap concurrent uploads; block Post until FINALIZE+processing ready for video</li>
+            <li><strong>Playback:</strong> Muted autoplay intersection observer; data-saver disables prefetch; alt text required flow for a11y</li>
+          </ul>
+        </div>
+        <div class="deep-panel" id="panel-test">
+          <ul>
+            <li><strong>Unit:</strong> Cursor merge, dedup reducer, optimistic id swap, entity count monotonic merge, mention offset parser</li>
+            <li><strong>Integration:</strong> React Query infinite cache + WS fixture stream; 401 → refresh → retry once</li>
+            <li><strong>E2E:</strong> Post optimistic → appear in Following; tab switch preserves scroll; new posts banner prepend</li>
+            <li><strong>Observability:</strong> RUM LCP/INP; trace <code>x-transaction-id</code>; client metrics: duplicate rate, reconnect latency, virtualizer overflow</li>
+            <li><strong>Load:</strong> 500 heterogeneous tweet heights in virtualizer; WS 100 events/sec count batching</li>
+          </ul>
+        </div>
+
+        <h3>Interview close (30 sec)</h3>
+        <div class="callout">Three patterns I'd repeat: <strong>(1)</strong> normalized entities + surface-scoped id lists (Following/For You never share one cache key), <strong>(2)</strong> <code>client_tweet_id</code> + realtime/REST dedup so retries and sockets don't duplicate tweets, <strong>(3)</strong> bounded failure domains — auth refresh without wiping IDB drafts, per-segment upload retry, read-only degraded mode when API is down.</div>
+
+        <div class="section-links">
+          <a href="answers-html/01-timeline-home-feed.html">§01 Timeline</a>
+          <a href="answers-html/02-compose-posts-social-actions.html">§02 Compose</a>
+          <a href="answers-html/03-profiles-identity-graph-ui.html">§03 Profiles</a>
+          <a href="answers-html/04-real-time-updates-notifications.html">§04 Realtime</a>
+          <a href="answers-html/05-search-explore-direct-messages.html">§05 Search DM</a>
+          <a href="answers-html/06-media-upload-playback-accessibility.html">§06 Media</a>
+          <a href="answers-html/07-spaces-communities-live-surfaces.html">§07 Spaces</a>
+          <a href="answers-html/08-client-state-api-layer-caching.html">§08 Client state</a>
+          <a href="answers-html/09-auth-security-performance-delivery.html">§09 Auth perf</a>
+          <a href="answers-html/10-observability-testing-i18n-moderation-ui.html">§10 Obs a11y</a>
+        </div>
+      </div>
+    </article>
+
+    <footer>
+      <a href="answers-html/index.html">Section answers</a> ·
+      <a href="twitter-frontend-architecture.html">Architecture map</a> ·
+      <a href="twitter-design-doc.md">Question bank</a>
+    </footer>
+  </div>
+
+  <script type="module">
+    import mermaid from 'https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.esm.min.mjs';
+    const dark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+    mermaid.initialize({ startOnLoad: false, theme: dark ? 'dark' : 'neutral', securityLevel: 'loose', flowchart: { useMaxWidth: true } });
+
+    document.querySelectorAll('.section-block .section-head').forEach(head => {
+      head.addEventListener('click', () => head.parentElement.classList.toggle('collapsed'));
+    });
+
+    document.querySelectorAll('#deepTabs .deep-tab').forEach(tab => {
+      tab.addEventListener('click', () => {
+        document.querySelectorAll('#deepTabs .deep-tab').forEach(t => t.classList.remove('active'));
+        document.querySelectorAll('.deep-panel').forEach(p => p.classList.remove('active'));
+        tab.classList.add('active');
+        document.getElementById('panel-' + tab.dataset.panel).classList.add('active');
+      });
+    });
+
+    const navLinks = document.querySelectorAll('#topNav a[data-section]');
+    const sections = document.querySelectorAll('[data-section]');
+    const observer = new IntersectionObserver(entries => {
+      entries.forEach(entry => {
+        if (entry.isIntersecting) {
+          navLinks.forEach(a => a.classList.toggle('active', a.dataset.section === entry.target.dataset.section));
+        }
+      });
+    }, { rootMargin: '-40% 0px -50% 0px' });
+    sections.forEach(s => observer.observe(s));
+
+    document.querySelectorAll('ul.checklist[data-store]').forEach(list => {
+      const key = 'x-sd-interview-' + list.dataset.store;
+      list.querySelectorAll('input').forEach((cb, i) => {
+        const saved = JSON.parse(localStorage.getItem(key) || '[]');
+        cb.checked = saved.includes(i);
+        cb.addEventListener('change', () => {
+          const checked = [...list.querySelectorAll('input')].map((c, j) => c.checked ? j : null).filter(x => x !== null);
+          localStorage.setItem(key, JSON.stringify(checked));
+        });
+      });
+    });
+
+    await mermaid.run({ querySelector: '.mermaid' });
+  </script>
+</body>
+</html>
