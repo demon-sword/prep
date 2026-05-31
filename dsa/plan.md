@@ -11,12 +11,12 @@ created: 2026-05-31
 ## Done
 - [x] 0 scaffold — category queue created
 - [x] patterns/02-two-pointers.md — pattern doc: Two Pointers (5 problems)
+- [x] problems/010-valid-palindrome.md — #10 Valid Palindrome (Easy)
 
 ## Categories completed
 - 01-arrays-hashing (switched on 2026-05-31)
 
 ## Next
-- [ ] problems/010-valid-palindrome.md — #10 Valid Palindrome (Easy)
 - [ ] problems/011-two-sum-ii.md — #11 Two Sum II (Medium)
 - [ ] problems/012-3sum.md — #12 3Sum (Medium)
 - [ ] problems/013-container-with-most-water.md — #13 Container With Most Water (Medium)

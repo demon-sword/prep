@@ -273,3 +273,4 @@ Link notes here as you create them (`problems/NNN-slug.md`).
 | Valid Sudoku | [007-valid-sudoku.md](./problems/007-valid-sudoku.md) |
 | Encode and Decode Strings | [008-encode-and-decode-strings.md](./problems/008-encode-and-decode-strings.md) |
 | Longest Consecutive Sequence | [009-longest-consecutive-sequence.md](./problems/009-longest-consecutive-sequence.md) |
+| Valid Palindrome | [010-valid-palindrome.md](./problems/010-valid-palindrome.md) |
