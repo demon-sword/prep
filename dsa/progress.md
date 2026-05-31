@@ -268,3 +268,4 @@ Link notes here as you create them (`problems/NNN-slug.md`).
 | Valid Anagram | [002-valid-anagram.md](./problems/002-valid-anagram.md) |
 | Two Sum | [003-two-sum.md](./problems/003-two-sum.md) |
 | Group Anagrams | [004-group-anagrams.md](./problems/004-group-anagrams.md) |
+| Top K Frequent Elements | [005-top-k-frequent-elements.md](./problems/005-top-k-frequent-elements.md) |
