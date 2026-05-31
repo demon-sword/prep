@@ -17,12 +17,12 @@ created: 2026-05-31
 - [x] problems/004-group-anagrams.md — #4 Group Anagrams (Medium)
 - [x] problems/005-top-k-frequent-elements.md — #5 Top K Frequent Elements (Medium)
 - [x] problems/006-product-of-array-except-self.md — #6 Product of Array Except Self (Medium)
+- [x] problems/007-valid-sudoku.md — #7 Valid Sudoku (Medium)
 
 ## Categories completed
 _none yet_
 
 ## Next
-- [ ] problems/007-valid-sudoku.md — #7 Valid Sudoku (Medium)
 - [ ] problems/008-encode-and-decode-strings.md — #8 Encode and Decode Strings (Medium)
 - [ ] problems/009-longest-consecutive-sequence.md — #9 Longest Consecutive Sequence (Medium)
 - [ ] validate — run: bash ralph-dsa/validate.sh 01-arrays-hashing

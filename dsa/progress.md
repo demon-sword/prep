@@ -270,3 +270,4 @@ Link notes here as you create them (`problems/NNN-slug.md`).
 | Group Anagrams | [004-group-anagrams.md](./problems/004-group-anagrams.md) |
 | Top K Frequent Elements | [005-top-k-frequent-elements.md](./problems/005-top-k-frequent-elements.md) |
 | Product of Array Except Self | [006-product-of-array-except-self.md](./problems/006-product-of-array-except-self.md) |
+| Valid Sudoku | [007-valid-sudoku.md](./problems/007-valid-sudoku.md) |
