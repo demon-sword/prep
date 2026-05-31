@@ -234,7 +234,7 @@ flowchart TD
 
 | # | Problem | Difficulty | Sub-pattern | Status |
 |---|---------|------------|-------------|--------|
-| 15 | Best Time to Buy and Sell Stock | Easy | One-pass running extremum | todo |
+| 15 | Best Time to Buy and Sell Stock | Easy | One-pass running extremum | generated |
 | 16 | Longest Substring Without Repeating Characters | Medium | Variable — longest valid | todo |
 | 17 | Longest Repeating Character Replacement | Medium | Variable — longest valid + freq | todo |
 | 18 | Permutation in String | Medium | Fixed window + freq match | todo |
