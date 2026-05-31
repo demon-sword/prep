@@ -14,6 +14,7 @@ created: 2026-05-31
 - [x] problems/021-valid-parentheses.md — #21 Valid Parentheses (Easy)
 - [x] problems/022-min-stack.md — #22 Min Stack (Medium)
 - [x] problems/023-evaluate-reverse-polish-notation.md — #23 Evaluate Reverse Polish Notation (Medium)
+- [x] problems/024-generate-parentheses.md — #24 Generate Parentheses (Medium)
 
 ## Categories completed
 - 01-arrays-hashing (switched on 2026-05-31)
@@ -21,7 +22,6 @@ created: 2026-05-31
 - 03-sliding-window (switched on 2026-05-31)
 
 ## Next
-- [ ] problems/024-generate-parentheses.md — #24 Generate Parentheses (Medium)
 - [ ] problems/025-daily-temperatures.md — #25 Daily Temperatures (Medium)
 - [ ] problems/026-car-fleet.md — #26 Car Fleet (Medium)
 - [ ] problems/027-largest-rectangle-in-histogram.md — #27 Largest Rectangle in Histogram (Hard)
