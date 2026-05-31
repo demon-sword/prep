@@ -296,3 +296,4 @@ Link notes here as you create them (`problems/NNN-slug.md`).
 | Koko Eating Bananas | [030-koko-eating-bananas.md](./problems/030-koko-eating-bananas.md) |
 | Find Minimum in Rotated Sorted Array | [031-find-minimum-in-rotated-sorted-array.md](./problems/031-find-minimum-in-rotated-sorted-array.md) |
 | Search in Rotated Sorted Array | [032-search-in-rotated-sorted-array.md](./problems/032-search-in-rotated-sorted-array.md) |
+| Time Based Key-Value Store | [033-time-based-key-value-store.md](./problems/033-time-based-key-value-store.md) |

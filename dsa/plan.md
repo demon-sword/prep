@@ -16,6 +16,7 @@ created: 2026-05-31
 - [x] problems/030-koko-eating-bananas.md — #30 Koko Eating Bananas (Medium)
 - [x] problems/031-find-minimum-in-rotated-sorted-array.md — #31 Find Minimum in Rotated Sorted Array (Medium)
 - [x] problems/032-search-in-rotated-sorted-array.md — #32 Search in Rotated Sorted Array (Medium)
+- [x] problems/033-time-based-key-value-store.md — #33 Time Based Key-Value Store (Medium)
 
 ## Categories completed
 - 01-arrays-hashing (switched on 2026-05-31)
@@ -24,6 +25,5 @@ created: 2026-05-31
 - 04-stack (switched on 2026-05-31)
 
 ## Next
-- [ ] problems/033-time-based-key-value-store.md — #33 Time Based Key-Value Store (Medium)
 - [ ] problems/034-median-of-two-sorted-arrays.md — #34 Median of Two Sorted Arrays (Hard)
 - [ ] validate — run: bash ralph-dsa/validate.sh 05-binary-search
