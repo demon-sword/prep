@@ -284,3 +284,4 @@ Link notes here as you create them (`problems/NNN-slug.md`).
 | Permutation in String | [018-permutation-in-string.md](./problems/018-permutation-in-string.md) |
 | Minimum Window Substring | [019-minimum-window-substring.md](./problems/019-minimum-window-substring.md) |
 | Sliding Window Maximum | [020-sliding-window-maximum.md](./problems/020-sliding-window-maximum.md) |
+| Valid Parentheses | [021-valid-parentheses.md](./problems/021-valid-parentheses.md) |
