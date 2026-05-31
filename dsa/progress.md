@@ -288,3 +288,4 @@ Link notes here as you create them (`problems/NNN-slug.md`).
 | Min Stack | [022-min-stack.md](./problems/022-min-stack.md) |
 | Evaluate Reverse Polish Notation | [023-evaluate-reverse-polish-notation.md](./problems/023-evaluate-reverse-polish-notation.md) |
 | Generate Parentheses | [024-generate-parentheses.md](./problems/024-generate-parentheses.md) |
+| Daily Temperatures | [025-daily-temperatures.md](./problems/025-daily-temperatures.md) |
