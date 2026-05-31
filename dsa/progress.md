@@ -290,3 +290,4 @@ Link notes here as you create them (`problems/NNN-slug.md`).
 | Generate Parentheses | [024-generate-parentheses.md](./problems/024-generate-parentheses.md) |
 | Daily Temperatures | [025-daily-temperatures.md](./problems/025-daily-temperatures.md) |
 | Car Fleet | [026-car-fleet.md](./problems/026-car-fleet.md) |
+| Largest Rectangle in Histogram | [027-largest-rectangle-in-histogram.md](./problems/027-largest-rectangle-in-histogram.md) |

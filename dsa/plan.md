@@ -17,6 +17,7 @@ created: 2026-05-31
 - [x] problems/024-generate-parentheses.md — #24 Generate Parentheses (Medium)
 - [x] problems/025-daily-temperatures.md — #25 Daily Temperatures (Medium)
 - [x] problems/026-car-fleet.md — #26 Car Fleet (Medium)
+- [x] problems/027-largest-rectangle-in-histogram.md — #27 Largest Rectangle in Histogram (Hard)
 
 ## Categories completed
 - 01-arrays-hashing (switched on 2026-05-31)
@@ -24,5 +25,4 @@ created: 2026-05-31
 - 03-sliding-window (switched on 2026-05-31)
 
 ## Next
-- [ ] problems/027-largest-rectangle-in-histogram.md — #27 Largest Rectangle in Histogram (Hard)
 - [ ] validate — run: bash ralph-dsa/validate.sh 04-stack
