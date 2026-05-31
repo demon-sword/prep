@@ -275,3 +275,4 @@ Link notes here as you create them (`problems/NNN-slug.md`).
 | Longest Consecutive Sequence | [009-longest-consecutive-sequence.md](./problems/009-longest-consecutive-sequence.md) |
 | Valid Palindrome | [010-valid-palindrome.md](./problems/010-valid-palindrome.md) |
 | Two Sum II | [011-two-sum-ii.md](./problems/011-two-sum-ii.md) |
+| 3Sum | [012-3sum.md](./problems/012-3sum.md) |
