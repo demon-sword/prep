@@ -14,12 +14,12 @@ created: 2026-05-31
 - [x] problems/001-contains-duplicate.md — #1 Contains Duplicate (Easy)
 - [x] problems/002-valid-anagram.md — #2 Valid Anagram (Easy)
 - [x] problems/003-two-sum.md — #3 Two Sum (Easy)
+- [x] problems/004-group-anagrams.md — #4 Group Anagrams (Medium)
 
 ## Categories completed
 _none yet_
 
 ## Next
-- [ ] problems/004-group-anagrams.md — #4 Group Anagrams (Medium)
 - [ ] problems/005-top-k-frequent-elements.md — #5 Top K Frequent Elements (Medium)
 - [ ] problems/006-product-of-array-except-self.md — #6 Product of Array Except Self (Medium)
 - [ ] problems/007-valid-sudoku.md — #7 Valid Sudoku (Medium)

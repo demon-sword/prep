@@ -267,3 +267,4 @@ Link notes here as you create them (`problems/NNN-slug.md`).
 | Contains Duplicate | [001-contains-duplicate.md](./problems/001-contains-duplicate.md) |
 | Valid Anagram | [002-valid-anagram.md](./problems/002-valid-anagram.md) |
 | Two Sum | [003-two-sum.md](./problems/003-two-sum.md) |
+| Group Anagrams | [004-group-anagrams.md](./problems/004-group-anagrams.md) |
