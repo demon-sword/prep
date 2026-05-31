@@ -11,6 +11,7 @@ created: 2026-05-31
 ## Done
 - [x] 0 scaffold — category queue created
 - [x] patterns/05-binary-search.md — pattern doc: Binary Search (7 problems)
+- [x] problems/028-binary-search.md — #28 Binary Search (Easy)
 
 ## Categories completed
 - 01-arrays-hashing (switched on 2026-05-31)
@@ -19,7 +20,6 @@ created: 2026-05-31
 - 04-stack (switched on 2026-05-31)
 
 ## Next
-- [ ] problems/028-binary-search.md — #28 Binary Search (Easy)
 - [ ] problems/029-search-a-2d-matrix.md — #29 Search a 2D Matrix (Medium)
 - [ ] problems/030-koko-eating-bananas.md — #30 Koko Eating Bananas (Medium)
 - [ ] problems/031-find-minimum-in-rotated-sorted-array.md — #31 Find Minimum in Rotated Sorted Array (Medium)
