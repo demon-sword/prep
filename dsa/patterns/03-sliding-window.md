@@ -237,7 +237,7 @@ flowchart TD
 | 15 | Best Time to Buy and Sell Stock | Easy | One-pass running extremum | generated |
 | 16 | Longest Substring Without Repeating Characters | Medium | Variable — longest valid | generated |
 | 17 | Longest Repeating Character Replacement | Medium | Variable — longest valid + freq | generated |
-| 18 | Permutation in String | Medium | Fixed window + freq match | todo |
+| 18 | Permutation in String | Medium | Fixed window + freq match | generated |
 | 19 | Minimum Window Substring | Hard | Variable — shortest valid | todo |
 | 20 | Sliding Window Maximum | Hard | Fixed window + monotonic deque | todo |
 

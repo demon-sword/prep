@@ -281,3 +281,4 @@ Link notes here as you create them (`problems/NNN-slug.md`).
 | Best Time to Buy and Sell Stock | [015-best-time-to-buy-and-sell-stock.md](./problems/015-best-time-to-buy-and-sell-stock.md) |
 | Longest Substring Without Repeating Characters | [016-longest-substring-without-repeating-characters.md](./problems/016-longest-substring-without-repeating-characters.md) |
 | Longest Repeating Character Replacement | [017-longest-repeating-character-replacement.md](./problems/017-longest-repeating-character-replacement.md) |
+| Permutation in String | [018-permutation-in-string.md](./problems/018-permutation-in-string.md) |
