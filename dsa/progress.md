@@ -277,3 +277,4 @@ Link notes here as you create them (`problems/NNN-slug.md`).
 | Two Sum II | [011-two-sum-ii.md](./problems/011-two-sum-ii.md) |
 | 3Sum | [012-3sum.md](./problems/012-3sum.md) |
 | Container With Most Water | [013-container-with-most-water.md](./problems/013-container-with-most-water.md) |
+| Trapping Rain Water | [014-trapping-rain-water.md](./problems/014-trapping-rain-water.md) |

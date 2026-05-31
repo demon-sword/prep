@@ -15,10 +15,10 @@ created: 2026-05-31
 - [x] problems/011-two-sum-ii.md — #11 Two Sum II (Medium)
 - [x] problems/012-3sum.md — #12 3Sum (Medium)
 - [x] problems/013-container-with-most-water.md — #13 Container With Most Water (Medium)
+- [x] problems/014-trapping-rain-water.md — #14 Trapping Rain Water (Hard)
 
 ## Categories completed
 - 01-arrays-hashing (switched on 2026-05-31)
 
 ## Next
-- [ ] problems/014-trapping-rain-water.md — #14 Trapping Rain Water (Hard)
 - [ ] validate — run: bash ralph-dsa/validate.sh 02-two-pointers
