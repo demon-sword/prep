@@ -1,24 +1,26 @@
 # Plan: NeetCode 150
 
 ## Meta
-current_category: 02-two-pointers
-category_name: Two Pointers
-category_num: 2
-problem_range: 10–14
-task_count: 7
+current_category: 03-sliding-window
+category_name: Sliding Window
+category_num: 3
+problem_range: 15–20
+task_count: 8
 created: 2026-05-31
 
 ## Done
 - [x] 0 scaffold — category queue created
-- [x] patterns/02-two-pointers.md — pattern doc: Two Pointers (5 problems)
-- [x] problems/010-valid-palindrome.md — #10 Valid Palindrome (Easy)
-- [x] problems/011-two-sum-ii.md — #11 Two Sum II (Medium)
-- [x] problems/012-3sum.md — #12 3Sum (Medium)
-- [x] problems/013-container-with-most-water.md — #13 Container With Most Water (Medium)
-- [x] problems/014-trapping-rain-water.md — #14 Trapping Rain Water (Hard)
+- [x] patterns/03-sliding-window.md — pattern doc: Sliding Window (6 problems)
 
 ## Categories completed
 - 01-arrays-hashing (switched on 2026-05-31)
+- 02-two-pointers (switched on 2026-05-31)
 
 ## Next
-- [ ] validate — run: bash ralph-dsa/validate.sh 02-two-pointers
+- [ ] problems/015-best-time-to-buy-and-sell-stock.md — #15 Best Time to Buy and Sell Stock (Easy)
+- [ ] problems/016-longest-substring-without-repeating-characters.md — #16 Longest Substring Without Repeating Characters (Medium)
+- [ ] problems/017-longest-repeating-character-replacement.md — #17 Longest Repeating Character Replacement (Medium)
+- [ ] problems/018-permutation-in-string.md — #18 Permutation in String (Medium)
+- [ ] problems/019-minimum-window-substring.md — #19 Minimum Window Substring (Hard)
+- [ ] problems/020-sliding-window-maximum.md — #20 Sliding Window Maximum (Hard)
+- [ ] validate — run: bash ralph-dsa/validate.sh 03-sliding-window
