@@ -269,3 +269,4 @@ Link notes here as you create them (`problems/NNN-slug.md`).
 | Two Sum | [003-two-sum.md](./problems/003-two-sum.md) |
 | Group Anagrams | [004-group-anagrams.md](./problems/004-group-anagrams.md) |
 | Top K Frequent Elements | [005-top-k-frequent-elements.md](./problems/005-top-k-frequent-elements.md) |
+| Product of Array Except Self | [006-product-of-array-except-self.md](./problems/006-product-of-array-except-self.md) |
