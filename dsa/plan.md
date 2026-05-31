@@ -16,11 +16,11 @@ created: 2026-05-31
 - [x] problems/017-longest-repeating-character-replacement.md — #17 Longest Repeating Character Replacement (Medium)
 - [x] problems/018-permutation-in-string.md — #18 Permutation in String (Medium)
 - [x] problems/019-minimum-window-substring.md — #19 Minimum Window Substring (Hard)
+- [x] problems/020-sliding-window-maximum.md — #20 Sliding Window Maximum (Hard)
 
 ## Categories completed
 - 01-arrays-hashing (switched on 2026-05-31)
 - 02-two-pointers (switched on 2026-05-31)
 
 ## Next
-- [ ] problems/020-sliding-window-maximum.md — #20 Sliding Window Maximum (Hard)
 - [ ] validate — run: bash ralph-dsa/validate.sh 03-sliding-window
