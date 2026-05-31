@@ -12,12 +12,12 @@ created: 2026-05-31
 - [x] 0 scaffold — category queue created
 - [x] patterns/01-arrays-hashing.md — pattern doc: Arrays & Hashing (9 problems)
 - [x] problems/001-contains-duplicate.md — #1 Contains Duplicate (Easy)
+- [x] problems/002-valid-anagram.md — #2 Valid Anagram (Easy)
 
 ## Categories completed
 _none yet_
 
 ## Next
-- [ ] problems/002-valid-anagram.md — #2 Valid Anagram (Easy)
 - [ ] problems/003-two-sum.md — #3 Two Sum (Easy)
 - [ ] problems/004-group-anagrams.md — #4 Group Anagrams (Medium)
 - [ ] problems/005-top-k-frequent-elements.md — #5 Top K Frequent Elements (Medium)

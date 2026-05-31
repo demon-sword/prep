@@ -265,3 +265,4 @@ Link notes here as you create them (`problems/NNN-slug.md`).
 | Problem | Note |
 |---------|------|
 | Contains Duplicate | [001-contains-duplicate.md](./problems/001-contains-duplicate.md) |
+| Valid Anagram | [002-valid-anagram.md](./problems/002-valid-anagram.md) |
