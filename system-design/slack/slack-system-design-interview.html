@@ -1,0 +1,520 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Slack Frontend System Design — Interview Template</title>
+  <meta name="description" content="Full Slack-style team messaging frontend system design in interview format: Requirements → Architecture → Data Model → API/BFF → Deep Dive.">
+  <style>
+    :root {
+      --bg: #f8f8f8; --surface: #fff; --surface2: #f4f0f4; --text: #1d1c1d; --muted: #616061;
+      --border: #e8e8e8; --accent: #611f69; --accent-soft: rgba(97,31,105,.1);
+      --req: #1264a3; --arch: #2eb67d; --data: #e01e5a; --api: #611f69; --deep: #454447;
+      --shadow: 0 2px 12px rgba(0,0,0,.06); --nav-h: 3.25rem;
+    }
+    @media (prefers-color-scheme: dark) {
+      :root {
+        --bg: #1a1d21; --surface: #222529; --surface2: #2c2d30; --text: #d1d2d3; --muted: #ababad;
+        --border: #3d3d3d; --accent: #9b59b6; --accent-soft: rgba(155,89,182,.15);
+        --shadow: 0 4px 20px rgba(0,0,0,.3);
+      }
+    }
+    *,*::before,*::after{box-sizing:border-box}
+    html{scroll-behavior:smooth;scroll-padding-top:calc(var(--nav-h) + 1rem)}
+    body{margin:0;font-family:"Lato","Segoe UI",system-ui,sans-serif;background:var(--bg);color:var(--text);line-height:1.6}
+    .top-nav{position:sticky;top:0;z-index:100;height:var(--nav-h);display:flex;align-items:center;gap:.5rem;padding:0 1rem;background:rgba(255,255,255,.92);backdrop-filter:blur(10px);border-bottom:1px solid var(--border);overflow-x:auto}
+    @media (prefers-color-scheme:dark){.top-nav{background:rgba(34,37,41,.94)}}
+    .top-nav a{font-size:.8125rem;white-space:nowrap;padding:.35rem .65rem;border-radius:999px;text-decoration:none;color:var(--muted);border:1px solid transparent}
+    .top-nav a:hover{color:var(--text);border-color:var(--border)}
+    .top-nav a.active{background:var(--accent-soft);color:var(--accent);border-color:var(--accent);font-weight:600}
+    .nav-title{font-weight:700;font-size:.875rem;margin-right:.5rem;white-space:nowrap}
+    .nav-links{margin-left:auto;display:flex;gap:.5rem;font-size:.8125rem}
+    .nav-links a{color:var(--accent);text-decoration:none;white-space:nowrap}
+    .wrap{max-width:920px;margin:0 auto;padding:2rem 1.25rem 4rem}
+    .hero{margin-bottom:2rem}
+    .hero h1{font-size:1.75rem;margin:0 0 .5rem;letter-spacing:-.02em}
+    .hero p{color:var(--muted);margin:0;max-width:640px}
+    .timer-bar{display:flex;flex-wrap:wrap;gap:.5rem;margin:1.25rem 0 0}
+    .timer-chip{font-size:.75rem;padding:.3rem .65rem;border-radius:6px;border:1px solid var(--border);background:var(--surface)}
+    .timer-chip strong{color:var(--accent)}
+    .section-block{margin-bottom:2.5rem;background:var(--surface);border:1px solid var(--border);border-radius:12px;box-shadow:var(--shadow);overflow:hidden}
+    .section-head{display:flex;align-items:flex-start;gap:1rem;padding:1.25rem 1.5rem;border-bottom:1px solid var(--border);cursor:pointer;user-select:none}
+    .section-head:hover{background:var(--surface2)}
+    .section-num{flex-shrink:0;width:2.5rem;height:2.5rem;border-radius:8px;display:flex;align-items:center;justify-content:center;font-weight:800;font-size:.875rem;color:#fff}
+    .section-num.req{background:var(--req)}.section-num.arch{background:var(--arch)}.section-num.data{background:var(--data)}.section-num.api{background:var(--api)}.section-num.deep{background:var(--deep)}
+    .section-head h2{margin:0;font-size:1.2rem}
+    .section-meta{font-size:.8125rem;color:var(--muted);margin-top:.15rem}
+    .chevron{margin-left:auto;color:var(--muted);transition:transform .2s}
+    .section-block.collapsed .chevron{transform:rotate(-90deg)}
+    .section-block.collapsed .section-body{display:none}
+    .section-body{padding:1.25rem 1.5rem 1.5rem}
+    h3{font-size:.9375rem;margin:1.25rem 0 .5rem;color:var(--accent)}
+    h3:first-child{margin-top:0}
+    p,li{font-size:.9375rem}ul{padding-left:1.25rem}
+    table{width:100%;border-collapse:collapse;font-size:.875rem;margin:.75rem 0}
+    th,td{border:1px solid var(--border);padding:.55rem .75rem;text-align:left;vertical-align:top}
+    th{background:var(--surface2);font-weight:600}
+    .callout{padding:.85rem 1rem;border-left:3px solid var(--accent);background:var(--accent-soft);border-radius:0 8px 8px 0;font-size:.875rem;margin:1rem 0}
+    .grid-2{display:grid;grid-template-columns:1fr 1fr;gap:1rem}
+    @media(max-width:700px){.grid-2{grid-template-columns:1fr}}
+    .card{border:1px solid var(--border);border-radius:8px;padding:1rem;background:var(--surface2)}
+    .card h4{margin:0 0 .35rem;font-size:.875rem}.card p{margin:0;font-size:.8125rem;color:var(--muted)}
+    .entity{font-family:ui-monospace,Menlo,Consolas,monospace;font-size:.8125rem;background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:1rem;margin:.75rem 0;white-space:pre-wrap;line-height:1.5}
+    .entity .kw{color:var(--accent);font-weight:600}
+    .state-ladder{display:flex;flex-wrap:wrap;gap:.5rem;margin:.75rem 0}
+    .state-step{flex:1;min-width:120px;padding:.65rem;border:1px solid var(--border);border-radius:8px;text-align:center;font-size:.8125rem}
+    .state-step strong{display:block;font-size:.75rem;color:var(--accent);margin-bottom:.25rem}
+    .deep-tabs{display:flex;flex-wrap:wrap;gap:.35rem;margin-bottom:1rem}
+    .deep-tab{font:inherit;font-size:.8125rem;padding:.4rem .75rem;border:1px solid var(--border);border-radius:6px;background:var(--surface2);color:var(--muted);cursor:pointer}
+    .deep-tab.active{background:var(--accent);border-color:var(--accent);color:#fff;font-weight:600}
+    .deep-panel{display:none}.deep-panel.active{display:block}
+    .mermaid-wrap{margin:1rem 0;padding:1rem;border:1px solid var(--border);border-radius:8px;overflow-x:auto}
+    .mermaid-wrap pre.mermaid:not([data-mermaid-rendered]){background:transparent;color:var(--muted);font-size:.75rem;margin:0}
+    .checklist{list-style:none;padding:0;margin:0}
+    .checklist li{display:flex;align-items:flex-start;gap:.5rem;padding:.4rem 0;border-bottom:1px dashed var(--border);font-size:.875rem}
+    .checklist input{margin-top:.25rem;accent-color:var(--accent)}
+    .section-links{display:flex;flex-wrap:wrap;gap:.35rem;margin-top:1rem}
+    .section-links a{font-size:.75rem;padding:.25rem .5rem;border-radius:4px;background:var(--accent-soft);color:var(--accent);text-decoration:none}
+    footer{text-align:center;font-size:.8125rem;color:var(--muted);padding:2rem 0}footer a{color:var(--accent)}
+  </style>
+</head>
+<body>
+  <nav class="top-nav" id="topNav">
+    <span class="nav-title">Slack SD — Template</span>
+    <a href="#requirements" data-section="requirements">① Requirements</a>
+    <a href="#architecture" data-section="architecture">② Architecture</a>
+    <a href="#data-model" data-section="data-model">③ Data Model</a>
+    <a href="#api-design" data-section="api-design">④ API / BFF</a>
+    <a href="#deep-dive" data-section="deep-dive">⑤ Deep Dive</a>
+    <div class="nav-links">
+      <a href="slack-frontend-architecture.html">Architecture map</a>
+      <a href="answers-html/index.html">All answers</a>
+    </div>
+  </nav>
+  <div class="wrap">
+    <header class="hero">
+      <h1>Design Slack's Team Messaging Frontend</h1>
+      <p>Complete system design answer in interview format (~45–60 min). Real-time channels, threads, unread state, and workspace multitenancy — use this as your master script; drill into section pages for question-level depth.</p>
+      <div class="timer-bar">
+        <span class="timer-chip"><strong>5–10m</strong> Requirements</span>
+        <span class="timer-chip"><strong>10–15m</strong> Architecture</span>
+        <span class="timer-chip"><strong>5m</strong> Data Model</span>
+        <span class="timer-chip"><strong>10m</strong> API / BFF</span>
+        <span class="timer-chip"><strong>10m</strong> Deep Dive</span>
+      </div>
+    </header>
+
+    <article class="section-block" id="requirements" data-section="requirements">
+      <div class="section-head"><div class="section-num req">①</div><div><h2>Requirements</h2><div class="section-meta">5–10 min · Clarify with interviewer · Scope before designing</div></div><span class="chevron">▼</span></div>
+      <div class="section-body">
+        <div class="callout"><strong>Opening line:</strong> "Before I draw boxes, let me confirm functional scope, non-functional targets, and what we're explicitly not building in v1 — e.g. huddles, canvas, or workflow builder."</div>
+        <h3>Functional Requirements (Business)</h3>
+        <table>
+          <thead><tr><th>Area</th><th>Must have (v1)</th><th>Nice to have</th></tr></thead>
+          <tbody>
+            <tr><td>Realtime messaging</td><td>Channels + DMs, sub-second delivery via WebSocket, optimistic send with <code>client_msg_id</code>, edit/delete propagation</td><td>Scheduled send, message reminders</td></tr>
+            <tr><td>Threads</td><td>Reply in thread flexpane, thread reply counts on parent, "Also send to channel" broadcast</td><td>Thread-specific notification prefs, follow thread</td></tr>
+            <tr><td>Composer</td><td>@mention autocomplete, emoji shortcodes, mrkdwn rendering, per-channel drafts, file attach + upload progress</td><td>Block Kit bot messages, link unfurl cards</td></tr>
+            <tr><td>Sidebar & navigation</td><td>Channel/DM list, unread badges (regular vs @mention bold), workspace switcher, Cmd+K quick switcher</td><td>Custom sections, starred channels</td></tr>
+            <tr><td>Presence & typing</td><td>Online/away/DND dots, debounced "Alice is typing…" in active channel</td><td>Custom status with expiry, calendar sync</td></tr>
+            <tr><td>Search</td><td>— (scope out unless asked)</td><td>Full-text search with filters (<code>from:</code>, <code>in:</code>, <code>has:</code>), jump-to-message</td></tr>
+            <tr><td>Notifications</td><td>Per-channel mute/mentions-only, mark-read on focus, desktop push when tab unfocused</td><td>DND schedule, mobile push grouping</td></tr>
+          </tbody>
+        </table>
+        <h3>Non-Functional Requirements (Technical)</h3>
+        <div class="grid-2">
+          <div class="card"><h4>Latency</h4><p>Optimistic send paint &lt; 50ms; socket event → UI update &lt; 200ms p95; channel switch with warm cache &lt; 300ms</p></div>
+          <div class="card"><h4>Scale</h4><p>100k+ messages per channel (virtualized); 500+ channels/DMs in sidebar; 200-member channel typing aggregation</p></div>
+          <div class="card"><h4>Reliability</h4><p>WebSocket reconnect with event replay; offline outbox with same <code>client_msg_id</code>; dedup socket + REST paths</p></div>
+          <div class="card"><h4>Security</h4><p>Workspace-scoped state isolation; OAuth token refresh; XSS-safe mrkdwn; no cross-workspace data leaks</p></div>
+        </div>
+        <h3>Metrics · Constraints · Assumptions</h3>
+        <ul>
+          <li><strong>Metrics:</strong> socket reconnect success %, message dedup collision rate, unread badge accuracy, time-to-first-message after channel open</li>
+          <li><strong>Constraints:</strong> Slack <code>ts</code> is string <code>seconds.microseconds</code>; one WebSocket per active workspace; LB idle timeout ~60–120s</li>
+          <li><strong>Assumptions:</strong> BFF wraps Slack Web API + Events API; authenticated workspace members; single-region v1; Enterprise Grid out of scope unless asked</li>
+        </ul>
+        <h3>Scope — In vs Out</h3>
+        <table>
+          <thead><tr><th>In scope (v1)</th><th>Out of scope (defer)</th></tr></thead>
+          <tbody>
+            <tr><td>Web client SPA, channels/threads/DMs, realtime feed, composer, unread badges, workspace switch</td><td>Huddles/video, Slack Connect shared channels, Canvas, Workflow Builder, full search index, mobile native apps</td></tr>
+          </tbody>
+        </table>
+        <h3>Scoping questions to ask</h3>
+        <ul class="checklist" data-store="req">
+          <li><label><input type="checkbox"> Multi-workspace / Enterprise Grid in scope?</label></li>
+          <li><label><input type="checkbox"> Threads required or flat channel feed only?</label></li>
+          <li><label><input type="checkbox"> Offline send queue needed?</label></li>
+          <li><label><input type="checkbox"> Search in scope or defer?</label></li>
+          <li><label><input type="checkbox"> Bot / Block Kit messages required?</label></li>
+          <li><label><input type="checkbox"> Desktop push notifications?</label></li>
+        </ul>
+        <div class="section-links"><a href="answers-html/08-the-killer-questions.html">§08 Killer scenarios</a></div>
+      </div>
+    </article>
+
+    <article class="section-block" id="architecture" data-section="architecture">
+      <div class="section-head"><div class="section-num arch">②</div><div><h2>Architecture</h2><div class="section-meta">10–15 min · Framework · Component tree · State management</div></div><span class="chevron">▼</span></div>
+      <div class="section-body">
+        <h3>Framework + High-Level Architecture</h3>
+        <p><strong>Stack:</strong> React 18 + TypeScript · Redux Toolkit or Zustand with workspace-scoped slices · React Query for REST cache · Vite build · WebSocket to Events API gateway · SharedWorker or BroadcastChannel for single-socket multi-tab</p>
+        <div class="mermaid-wrap"><pre class="mermaid">flowchart TB
+  subgraph UI["UI Layer"]
+    WSBar[WorkspaceSwitcher]
+    SB[ChannelSidebar]
+    ML[Virtualized Message List]
+    FP[Thread Flexpane]
+    CP[Composer]
+    QK[QuickSwitcher]
+  end
+  subgraph Client["Client State per workspace"]
+    ER[Event Router]
+    MS[Normalized Message Store]
+    TL[Timeline Indexes]
+    UR[Unread Engine]
+    OL[Optimistic Layer]
+    PR[Presence Typing]
+  end
+  subgraph Transport["Transport"]
+    WSS[WebSocket Events API]
+    REST[REST Web API]
+  end
+  subgraph BFF["BFF Gateway"]
+    GW[API Gateway]
+    AUTH[Auth Token Refresh]
+    RT[Realtime Fan-out]
+    MSG[Message Service]
+  end
+  subgraph Data["Persistence"]
+    PG[(Postgres)]
+    RD[(Redis presence)]
+    IDB[(IndexedDB cache)]
+  end
+  CP --> OL --> MS
+  ML --> TL --> MS
+  FP --> TL
+  ER --> MS
+  ER --> UR
+  ER --> PR
+  OL --> REST
+  ER --> WSS
+  WSS --> RT
+  REST --> GW --> MSG --> PG
+  MS --> IDB
+  RT --> RD</pre></div>
+        <h3>Component / Module Tree</h3>
+        <div class="mermaid-wrap"><pre class="mermaid">flowchart TB
+  AppShell["AppShell"]
+  AppShell --> WorkspaceChrome
+  AppShell --> MainLayout
+  AppShell --> GlobalProviders
+  subgraph WorkspaceChrome["WorkspaceChrome"]
+    WSS["WorkspaceSwitcher"]
+    CB["ConnectionBanner"]
+    QK["QuickSwitcher Cmd+K"]
+  end
+  subgraph MainLayout["MainLayout"]
+    Sidebar["Sidebar"]
+    ChatArea["ChatArea"]
+    Sidebar --> CLV["ChannelListVirtualized"]
+    Sidebar --> UBB["UnreadBadgeGroup"]
+    ChatArea --> CH["ChannelHeader"]
+    ChatArea --> MLV["MessageListVirtualized"]
+    ChatArea --> FP["ThreadFlexpane"]
+    ChatArea --> COMP["Composer"]
+    MLV --> MR["MessageRow"]
+    MR --> MRB["MrkdwnRenderer"]
+    MR --> TRB["ThreadReplyBadge"]
+    MR --> RX["ReactionBar"]
+    FP --> TRL["ThreadReplyList"]
+    COMP --> MAC["MentionAutocomplete"]
+    COMP --> EAC["EmojiAutocomplete"]
+    COMP --> FS["FileUploadStrip"]
+    COMP --> DS["DraftStore per channel"]
+  end
+  subgraph GlobalProviders["GlobalProviders"]
+    AUTH["AuthProvider"]
+    WS["WebSocketManager"]
+    BC["BroadcastChannel"]
+    QC["QueryClient"]
+  end</pre></div>
+        <h3>State Management — Where State Lives</h3>
+        <div class="state-ladder">
+          <div class="state-step"><strong>Ephemeral (JS)</strong>Typing debounce timers, scroll pinned-to-bottom flag, optimistic temp IDs, event coalesce buffers</div>
+          <div class="state-step"><strong>Memory</strong>Active workspace slice: messagesById, timelines, unread, drafts, presence</div>
+          <div class="state-step"><strong>Disk (IDB)</strong>Message pages, channel metadata, offline outbox, cold workspace slices</div>
+          <div class="state-step"><strong>localStorage</strong>Last-open channel per workspace, UI prefs, composer draft backup</div>
+          <div class="state-step"><strong>Server (SoT)</strong>Committed messages, last_read_ts, channel membership, notification prefs</div>
+        </div>
+        <div class="callout"><strong>Rule:</strong> Server owns committed history and read cursors. Client owns interaction latency. Never duplicate message objects — one <code>messagesById</code> entry, multiple timeline index lists.</div>
+        <div class="section-links">
+          <a href="answers-html/01-realtime-messaging-websocket.html">§01 WebSocket</a>
+          <a href="answers-html/02-channels-threads-message-organization.html">§02 Channels & Threads</a>
+          <a href="answers-html/07-auth-workspaces-offline-performance.html">§07 Workspaces</a>
+          <a href="slack-frontend-architecture.html">Interactive map</a>
+        </div>
+      </div>
+    </article>
+
+    <article class="section-block" id="data-model" data-section="data-model">
+      <div class="section-head"><div class="section-num data">③</div><div><h2>Data Model</h2><div class="section-meta">~5 min · Entities · Relationships · Invariants</div></div><span class="chevron">▼</span></div>
+      <div class="section-body">
+        <p>Store messages in a <strong>normalized map</strong> keyed by <code>ts</code>, with separate <strong>timeline indexes</strong> per conversation surface. All tenant data namespaced under <code>workspaceId</code>.</p>
+        <div class="entity"><span class="kw">Workspace</span> {
+  id: teamId,
+  name, domain, icon_url,
+  token, token_expires_at,
+  plan: free | pro | enterprise
+}
+
+<span class="kw">User</span> {
+  id: userId,
+  workspace_id,
+  name, display_name, avatar_url,
+  presence: active | away | dnd,
+  status_text?, status_emoji?, status_expiration?,
+  is_bot, is_restricted
+}
+
+<span class="kw">Channel</span> extends <span class="kw">Conversation</span> {
+  id: channelId,
+  workspace_id,
+  name, is_private, is_im, is_mpim,
+  topic, purpose, num_members,
+  last_read_ts, latest_ts,
+  unread_count_display?,
+  notification_prefs: all | mentions | mute
+}
+
+<span class="kw">Message</span> {
+  ts,
+  channel: ConversationId,
+  user: userId,
+  text, blocks?, attachments?,
+  thread_ts?,
+  reply_count?, latest_reply?,
+  client_msg_id?,
+  reactions: Record&lt;emoji, userIds[]&gt;,
+  edited?, deleted?
+}
+
+<span class="kw">ChannelTimeline</span> {
+  conversationId,
+  topLevelTs: string[],
+  threadsByParentTs: Map&lt;parentTs, { replyTs[], hasMoreOlder }&gt;,
+  historyCursor: { oldestLoaded, newestLoaded, hasMoreOlder }
+}</div>
+        <h3>Key relationships & invariants</h3>
+        <table>
+          <thead><tr><th>Operation</th><th>Store behavior</th></tr></thead>
+          <tbody>
+            <tr><td>Send message</td><td>Optimistic entry in messagesById + append to topLevelTs; dedup on socket ACK via client_msg_id or ts</td></tr>
+            <tr><td>Thread reply</td><td>Single message object; indexed in threadsByParentTs, not in topLevelTs; bump parent reply_count</td></tr>
+            <tr><td>Also send to channel</td><td>Separate top-level message or flagged broadcast copy in channel feed</td></tr>
+            <tr><td>Mark read</td><td>Advance last_read_ts on Channel; clear unread badge; sync via conversations.mark</td></tr>
+            <tr><td>Workspace switch</td><td>Activate workspaces[teamId] slice; no shared global maps for tenant data</td></tr>
+          </tbody>
+        </table>
+        <div class="section-links">
+          <a href="answers-html/02-channels-threads-message-organization.html">§02 Normalized store</a>
+          <a href="answers-html/06-notifications-unread-state.html">§06 Unread cursors</a>
+        </div>
+      </div>
+    </article>
+
+    <article class="section-block" id="api-design" data-section="api-design">
+      <div class="section-head"><div class="section-num api">④</div><div><h2>API Design / BFF</h2><div class="section-meta">~10 min · Protocols · Endpoints · Real-time · Reconnect</div></div><span class="chevron">▼</span></div>
+      <div class="section-body">
+        <h3>Protocol choice</h3>
+        <table>
+          <thead><tr><th>Pattern</th><th>Use in Slack client</th><th>Why</th></tr></thead>
+          <tbody>
+            <tr><td><strong>WebSocket</strong></td><td>Events API — messages, reactions, edits, presence, typing, channel_marked</td><td>Full-duplex; sub-second fan-out; one socket multiplexes workspace realtime traffic</td></tr>
+            <tr><td><strong>REST</strong></td><td>Send, history pagination, mark read, upload, search, auth refresh</td><td>Idempotent writes; cursor pagination; standard error taxonomy</td></tr>
+            <tr><td>SSE</td><td>Not primary</td><td>WebSocket already established</td></tr>
+            <tr><td>Long polling</td><td>Fallback only</td><td>When WebSocket blocked by corporate proxy</td></tr>
+          </tbody>
+        </table>
+        <h3>WebSocket Events API — key event types</h3>
+        <table>
+          <thead><tr><th>Event</th><th>Client action</th></tr></thead>
+          <tbody>
+            <tr><td><code>hello</code></td><td>Store connection id, heartbeat interval; re-subscribe channels</td></tr>
+            <tr><td><code>message</code></td><td>Dedup → append to timeline; update unread; scroll logic if pinned-to-bottom</td></tr>
+            <tr><td><code>message_changed</code></td><td>Patch messagesById[ts]; re-render mrkdwn in all open views</td></tr>
+            <tr><td><code>message_deleted</code></td><td>Tombstone or remove from index; preserve thread if parent has replies</td></tr>
+            <tr><td><code>reaction_added / removed</code></td><td>Coalesce bursts; patch reaction map on message</td></tr>
+            <tr><td><code>user_typing</code></td><td>Debounce; aggregate "Alice, Bob + 3 others"</td></tr>
+            <tr><td><code>presence_change</code></td><td>Update User.presence in member list</td></tr>
+            <tr><td><code>channel_marked</code></td><td>Sync last_read_ts from another device/tab</td></tr>
+          </tbody>
+        </table>
+        <h3>Core REST endpoints (BFF / Web API)</h3>
+        <table>
+          <thead><tr><th>Method</th><th>Endpoint</th><th>Purpose</th></tr></thead>
+          <tbody>
+            <tr><td>POST</td><td><code>chat.postMessage</code></td><td>Send message; include client_msg_id for optimistic dedup</td></tr>
+            <tr><td>GET</td><td><code>conversations.history</code></td><td>Lazy-load older messages (cursor, limit=100)</td></tr>
+            <tr><td>GET</td><td><code>conversations.replies</code></td><td>Load thread replies for flexpane</td></tr>
+            <tr><td>POST</td><td><code>conversations.mark</code></td><td>Mark channel read up to ts</td></tr>
+            <tr><td>GET</td><td><code>conversations.list</code></td><td>Sidebar channel/DM list + unread metadata</td></tr>
+            <tr><td>POST</td><td><code>chat.update</code> / <code>chat.delete</code></td><td>Edit or delete message</td></tr>
+            <tr><td>POST</td><td><code>files.upload</code> / presign</td><td>Attachment upload with progress</td></tr>
+            <tr><td>GET</td><td><code>search.messages</code></td><td>Full-text search (if in scope)</td></tr>
+            <tr><td>POST</td><td><code>auth.test</code> / token refresh</td><td>Validate session; rotate before expiry</td></tr>
+          </tbody>
+        </table>
+        <h3>WebSocket reconnect lifecycle</h3>
+        <div class="mermaid-wrap"><pre class="mermaid">sequenceDiagram
+  participant Client
+  participant Gateway
+  participant REST
+  Note over Client: socket stale or drop detected
+  Client->>Client: pause outbound sends queue in outbox
+  Client->>Client: show Reconnecting banner
+  loop Exponential backoff 1s to 4s cap 30s
+    Client->>Gateway: WSS reconnect plus auth
+    Gateway-->>Client: hello plus last_event_id
+  end
+  alt missed events available
+    Gateway-->>Client: replay events since last_event_id
+  else gap too large
+    Client->>REST: conversations.history catch-up
+  end
+  Client->>Client: dedup socket plus REST drain outbox
+  Client->>Client: reconcile unread badges vs server
+  Client->>Client: hide banner resume typing presence</pre></div>
+        <h3>Network lifecycle notes</h3>
+        <ul>
+          <li><strong>Optimistic send:</strong> Render bubble immediately with client_msg_id → POST → on ACK replace temp id with server ts; on failure show retry</li>
+          <li><strong>Dedup:</strong> Index by ts and client_msg_id; socket event matching pending optimistic → merge, don't duplicate</li>
+          <li><strong>Ordering:</strong> Sort by ts (lexicographic string compare); buffer out-of-order events briefly</li>
+          <li><strong>Offline:</strong> Queue sends in IndexedDB outbox; replay with same client_msg_id on reconnect</li>
+          <li><strong>Multi-tab:</strong> SharedWorker owns one socket; BroadcastChannel syncs events to other tabs</li>
+        </ul>
+        <div class="section-links">
+          <a href="answers-html/01-realtime-messaging-websocket.html">§01 Reconnect</a>
+          <a href="answers-html/04-message-composer-rich-formatting.html">§04 Composer API</a>
+          <a href="answers-html/07-auth-workspaces-offline-performance.html">§07 Offline queue</a>
+        </div>
+      </div>
+    </article>
+
+    <article class="section-block" id="deep-dive" data-section="deep-dive">
+      <div class="section-head"><div class="section-num deep">⑤</div><div><h2>Deep Dive</h2><div class="section-meta">~10 min · Pick 1–2 areas the interviewer cares about</div></div><span class="chevron">▼</span></div>
+      <div class="section-body">
+        <p>Say: <em>"I'll go deep on Performance and the WebSocket reconnect path — happy to switch to Security, observability, or testing if you prefer."</em></p>
+        <div class="deep-tabs" id="deepTabs">
+          <button type="button" class="deep-tab active" data-panel="perf">Performance</button>
+          <button type="button" class="deep-tab" data-panel="sec">Security</button>
+          <button type="button" class="deep-tab" data-panel="obs">Observability</button>
+          <button type="button" class="deep-tab" data-panel="test">Testing</button>
+          <button type="button" class="deep-tab" data-panel="a11y">A11y</button>
+        </div>
+        <div class="deep-panel active" id="panel-perf">
+          <ul>
+            <li><strong>Virtualization:</strong> react-virtuoso or react-window for message list + sidebar; dynamic height cache per message row</li>
+            <li><strong>Scroll anchoring:</strong> Pinned-to-bottom flag; "N new messages" pill when scrolled up; overflow-anchor or manual scrollHeight delta compensation</li>
+            <li><strong>Lazy history:</strong> Fetch 50–100 messages on channel open; conversations.history with cursor on scroll-up</li>
+            <li><strong>Event coalescing:</strong> Batch reaction events in 100ms window; aggregate typing indicators; throttle presence during incidents</li>
+            <li><strong>Workspace switch:</strong> LRU cache hot slices; prefetch on quick-switcher hover; IndexedDB cold hydrate; target &lt; 300ms warm</li>
+            <li><strong>Bundle:</strong> Code-split emoji packs, Block Kit renderers; lazy-load per-workspace assets</li>
+          </ul>
+        </div>
+        <div class="deep-panel" id="panel-sec">
+          <ul>
+            <li><strong>Tenant isolation:</strong> All state keyed under workspaces[teamId]; never read channelId without workspace prefix</li>
+            <li><strong>Auth:</strong> OAuth xoxc/xoxp tokens; refresh before expiry; SSO/SAML redirect for Enterprise</li>
+            <li><strong>XSS:</strong> Parse mrkdwn to safe AST; never dangerouslySetInnerHTML on raw user text; sanitize link URLs</li>
+            <li><strong>Token storage:</strong> HttpOnly cookies preferred over localStorage; never log tokens</li>
+            <li><strong>File uploads:</strong> Presigned URLs; virus scan on server; sanitize link unfurl HTML</li>
+            <li><strong>Idempotency:</strong> client_msg_id prevents double-send on reconnect; server dedupes within TTL window</li>
+          </ul>
+        </div>
+        <div class="deep-panel" id="panel-obs">
+          <ul>
+            <li>Client: socket connect latency, reconnect success %, event processing lag, dedup collision rate, virtualizer frame p95</li>
+            <li>Client: unread badge drift — local count vs server unread_count_display after reconnect</li>
+            <li>Server: WebSocket connection count, event fan-out latency, history API p95, mark-read sync lag</li>
+            <li>Trace: client_msg_id / ts across optimistic UI → REST → socket ACK</li>
+            <li>Product: channel switch time, scroll-to-message success, offline outbox drain rate</li>
+          </ul>
+        </div>
+        <div class="deep-panel" id="panel-test">
+          <ul>
+            <li>Unit: timeline index mutations, dedup by client_msg_id, unread computation from last_read_ts, mrkdwn parser</li>
+            <li>Unit: event router reducer — message, message_changed out-of-order, reaction coalescing</li>
+            <li>Integration: mock WebSocket with fixture event streams; optimistic send → ACK merge; reconnect replay</li>
+            <li>E2E: send while scrolled up (pill appears); thread reply updates parent badge; workspace switch preserves drafts</li>
+            <li>E2E: offline send → reconnect → outbox drain with no duplicates</li>
+            <li>Load: virtualizer with 10k synthetic messages; 100 events/sec socket burst</li>
+          </ul>
+        </div>
+        <div class="deep-panel" id="panel-a11y">
+          <ul>
+            <li><code>aria-live="polite"</code> on message region for new messages when focused; avoid announcing every reaction</li>
+            <li>Keyboard: Cmd+K quick switcher with arrow nav + Enter; focus trap in modals; Cmd+Enter send</li>
+            <li>Unread badges: don't rely on color alone — bold text + count for @mentions</li>
+            <li>Virtualized list: preserve focus when new messages arrive; announce "N new messages" pill</li>
+            <li>Reduced motion: disable typing indicator bounce; respect prefers-reduced-motion</li>
+            <li>High contrast: ensure presence dots and mention highlights meet WCAG AA</li>
+          </ul>
+        </div>
+        <h3>Interview close (30 sec)</h3>
+        <div class="callout">Three patterns I'd repeat: <strong>(1)</strong> normalized message store with separate timeline indexes — one object, many views, <strong>(2)</strong> client_msg_id + server ts for optimistic sends and reconnect dedup, <strong>(3)</strong> workspace-scoped state partitions keyed by teamId so cross-tenant leaks are structurally impossible.</div>
+        <div class="section-links">
+          <a href="answers-html/08-the-killer-questions.html">§08 Killer Qs</a>
+          <a href="answers-html/07-auth-workspaces-offline-performance.html">§07 Auth & Perf</a>
+          <a href="answers-html/03-presence-typing-live-indicators.html">§03 Presence</a>
+          <a href="answers-html/06-notifications-unread-state.html">§06 Unread</a>
+        </div>
+      </div>
+    </article>
+
+    <footer>
+      <a href="answers-html/index.html">Section answers</a> ·
+      <a href="slack-frontend-architecture.html">Architecture map</a> ·
+      <a href="slack-design-doc.md">Question bank</a>
+    </footer>
+  </div>
+  <script type="module">
+    import mermaid from 'https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.esm.min.mjs';
+    const dark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+    mermaid.initialize({ startOnLoad: false, theme: dark ? 'dark' : 'neutral', securityLevel: 'loose', flowchart: { useMaxWidth: true } });
+    document.querySelectorAll('.section-block .section-head').forEach(head => {
+      head.addEventListener('click', () => head.parentElement.classList.toggle('collapsed'));
+    });
+    document.querySelectorAll('#deepTabs .deep-tab').forEach(tab => {
+      tab.addEventListener('click', () => {
+        document.querySelectorAll('#deepTabs .deep-tab').forEach(t => t.classList.remove('active'));
+        document.querySelectorAll('.deep-panel').forEach(p => p.classList.remove('active'));
+        tab.classList.add('active');
+        document.getElementById('panel-' + tab.dataset.panel).classList.add('active');
+      });
+    });
+    const navLinks = document.querySelectorAll('#topNav a[data-section]');
+    const sections = document.querySelectorAll('[data-section]');
+    const observer = new IntersectionObserver(entries => {
+      entries.forEach(entry => {
+        if (entry.isIntersecting) {
+          navLinks.forEach(a => a.classList.toggle('active', a.dataset.section === entry.target.dataset.section));
+        }
+      });
+    }, { rootMargin: '-40% 0px -50% 0px' });
+    sections.forEach(s => observer.observe(s));
+    document.querySelectorAll('ul.checklist[data-store]').forEach(list => {
+      const key = 'slack-sd-interview-' + list.dataset.store;
+      list.querySelectorAll('input').forEach((cb, i) => {
+        const saved = JSON.parse(localStorage.getItem(key) || '[]');
+        cb.checked = saved.includes(i);
+        cb.addEventListener('change', () => {
+          const checked = [...list.querySelectorAll('input')].map((c, j) => c.checked ? j : null).filter(x => x !== null);
+          localStorage.setItem(key, JSON.stringify(checked));
+        });
+      });
+    });
+    await mermaid.run({ querySelector: '.mermaid' });
+  </script>
+</body>
+</html>

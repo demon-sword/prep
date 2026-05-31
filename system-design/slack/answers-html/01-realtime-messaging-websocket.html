@@ -1,0 +1,555 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Section 1 — Realtime Messaging &amp; WebSocket (Answers) | System Design Answers</title>
+  <meta name="description" content="Interview-depth answers for Slack frontend system design.">
+  <style>
+    :root {
+      --bg: #f8f9fb; --surface: #ffffff; --text: #1a1d26; --text-muted: #5c6370;
+      --border: #e2e6ed; --accent: #3d5a80; --accent-soft: #eef2f7;
+      --code-bg: #f0f2f6; --pre-bg: #1e2433; --pre-text: #e8ecf4;
+      --nav-bg: rgba(248, 249, 251, 0.92); --shadow: 0 1px 3px rgba(0, 0, 0, 0.06);
+    }
+    @media (prefers-color-scheme: dark) {
+      :root {
+        --bg: #12151c; --surface: #1a1f2a; --text: #e8ecf4; --text-muted: #9aa3b2;
+        --border: #2d3548; --accent: #8cb4d9; --accent-soft: #232a38;
+        --code-bg: #252d3d; --pre-bg: #0d1017; --pre-text: #d4dae6;
+        --nav-bg: rgba(18, 21, 28, 0.94); --shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
+      }
+    }
+    *, *::before, *::after { box-sizing: border-box; }
+    html { scroll-behavior: smooth; scroll-padding-top: 5.5rem; }
+    body { margin: 0; font-family: "Segoe UI", system-ui, sans-serif; font-size: 1.0625rem;
+      line-height: 1.65; color: var(--text); background: var(--bg); }
+    .site-nav { position: sticky; top: 0; z-index: 100; background: var(--nav-bg);
+      backdrop-filter: blur(10px); border-bottom: 1px solid var(--border); box-shadow: var(--shadow); }
+    .site-nav-inner { max-width: 900px; margin: 0 auto; padding: 0.75rem 1.5rem; }
+    .site-nav-title { font-size: 0.8125rem; font-weight: 600; text-transform: uppercase;
+      letter-spacing: 0.04em; color: var(--text-muted); margin: 0 0 0.5rem; }
+    .toc { display: flex; flex-wrap: wrap; gap: 0.35rem 0.75rem; margin: 0; padding: 0;
+      list-style: none; font-size: 0.8125rem; }
+    .toc a { color: var(--accent); text-decoration: none; white-space: nowrap; }
+    .toc a:hover { text-decoration: underline; }
+    .page { max-width: 900px; margin: 0 auto; padding: 2rem 1.5rem 4rem; }
+    header.page-header { margin-bottom: 2.5rem; padding-bottom: 1.5rem; border-bottom: 1px solid var(--border); }
+    h1 { font-size: 1.75rem; font-weight: 700; margin: 0 0 0.75rem; }
+    .lead { margin: 0; color: var(--text-muted); font-size: 1.05rem; }
+    h2.section { font-size: 1.35rem; font-weight: 700; margin: 2.5rem 0 1.25rem;
+      color: var(--accent); border-bottom: 2px solid var(--accent-soft); padding-bottom: 0.35rem; }
+    article.qa { margin-bottom: 2.75rem; background: var(--surface); border: 1px solid var(--border);
+      border-radius: 10px; padding: 1.5rem 1.75rem; box-shadow: var(--shadow); }
+    h3.question { font-size: 1.2rem; font-weight: 600; margin: 0 0 1rem; }
+    article.qa p { margin: 0 0 1rem; }
+    ol, ul { margin: 0 0 1rem; padding-left: 1.35rem; }
+    table { width: 100%; border-collapse: collapse; margin: 0 0 1rem; font-size: 0.95rem; }
+    th, td { border: 1px solid var(--border); padding: 0.55rem 0.75rem; text-align: left; }
+    th { background: var(--accent-soft); font-weight: 600; }
+    code { font-family: ui-monospace, Menlo, Consolas, monospace; font-size: 0.88em;
+      background: var(--code-bg); padding: 0.15em 0.4em; border-radius: 4px; }
+    pre { margin: 0 0 1rem; padding: 1rem; background: var(--pre-bg); color: var(--pre-text);
+      border-radius: 8px; overflow-x: auto; font-size: 0.875rem; }
+    pre code { background: none; padding: 0; color: inherit; }
+    .mermaid-wrap { margin: 0 0 1rem; padding: 1rem; background: var(--surface);
+      border: 1px solid var(--border); border-radius: 8px; overflow-x: auto; }
+    footer.page-footer { max-width: 900px; margin: 0 auto; padding: 1.5rem;
+      border-top: 1px solid var(--border); font-size: 0.9375rem; }
+    footer.page-footer a { color: var(--accent); text-decoration: none; font-weight: 500; }
+  </style>
+  <link rel="stylesheet" href="assets/interactive.css">
+</head>
+<body>
+  <nav class="site-nav" aria-label="Table of contents">
+    <div class="site-nav-inner">
+      <p class="site-nav-title">On this page</p>
+      <ol class="toc"><li><a href="#how-does-the-slack-client-establish-and-maintain-a-websocket-connection-to-the-events-api">How does the Slack client establish </a></li><li><a href="#what-happens-when-a-new-message-arrives-over-the-socket-while-the-user-is-scrolled-up-reading-history">What happens when a new message arri</a></li><li><a href="#how-do-you-deduplicate-messages-that-arrive-via-websocket-and-also-appear-in-a-rest-history-fetch">How do you deduplicate messages that</a></li><li><a href="#what-is-a-client-msg-id-and-why-does-slack-use-it-for-optimistic-sends">What is a `client_msg_id` and why do</a></li><li><a href="#how-do-you-handle-websocket-disconnect-reconnect-replay-missed-events-or-full-resync">How do you handle WebSocket disconne</a></li><li><a href="#how-do-you-order-messages-when-two-users-send-at-the-same-millisecond-in-a-busy-channel">How do you order messages when two u</a></li><li><a href="#how-do-you-implement-exponential-backoff-on-websocket-reconnect-without-flooding-the-server-after-a-fleet-wide-outage">How do you implement exponential bac</a></li><li><a href="#how-do-you-handle-a-message-changed-event-that-arrives-before-the-original-message-event-due-to-out-of-order-delivery">How do you handle a `message_changed</a></li><li><a href="#what-is-your-strategy-when-the-socket-reconnects-after-5-minutes-offline-incremental-sync-vs-full-channel-refetch">What is your strategy when the socke</a></li><li><a href="#how-do-you-batch-or-throttle-high-frequency-socket-events-eg-50-reactions-in-a-thread-during-a-live-event">How do you batch or throttle high-fr</a></li><li><a href="#how-do-you-surface-connection-state-to-the-user-reconnecting-some-messages-may-be-delayed-without-being-alarming">How do you surface connection state </a></li><li><a href="#how-do-you-handle-enterprise-grid-where-a-user-has-sockets-open-to-multiple-workspace-shards-simultaneously">How do you handle Enterprise Grid wh</a></li></ol>
+    </div>
+  </nav>
+  <main class="page">
+    <header class="page-header">
+      <h1>Section 1 — Realtime Messaging &amp; WebSocket (Answers)</h1>
+      <p class="lead">Interview-depth answers for Slack frontend system design.</p>
+    </header>
+    <h1 id="section-1-realtime-messaging-websocket-answers">Section 1 — Realtime Messaging &amp; WebSocket (Answers)</h1>
+<p>Interview-depth answers for Slack&#x27;s client realtime layer: problem framing, approach, tradeoffs, concrete techniques, and pitfalls. Covers the Events API WebSocket lifecycle, optimistic sends via <code>client_msg_id</code>, deduplication against REST history, reconnect/resync, and Enterprise Grid multi-shard sockets.</p>
+<hr>
+<h2 class="section" id="core">Core</h2>
+<article class="qa" id="how-does-the-slack-client-establish-and-maintain-a-websocket-connection-to-the-events-api">
+<h3 class="question">How does the Slack client establish and maintain a WebSocket connection to the Events API?</h3>
+<p><strong>Problem framing:</strong> Slack&#x27;s UX depends on sub-second delivery of messages, reactions, edits, and presence — polling REST endpoints cannot scale or feel responsive. The client needs a <strong>persistent, authenticated, bidirectional</strong> channel that survives tab backgrounding, network flaps, and token refresh without dropping user-visible state.</p>
+<p><strong>Approach:</strong> The Slack desktop/web client opens a WebSocket to Slack&#x27;s <strong>gateway</strong> (the transport behind the Events API for first-party clients). The lifecycle is explicit and stateful:</p>
+<div class="mermaid-wrap"><pre class="mermaid">sequenceDiagram
+  participant Client
+  participant Auth
+  participant Gateway
+  participant Events
+  Client->>Auth: OAuth token (xoxc/xoxp or session cookie)
+  Client->>Gateway: WSS connect + auth payload
+  Gateway-->>Client: hello + connection id
+  Client->>Gateway: subscribe (channels, DMs, presence)
+  Gateway-->>Client: event stream (message, reaction_added, …)
+  loop Keepalive
+    Client->>Gateway: ping / ack
+    Gateway-->>Client: pong / next events
+  end</pre></div>
+<ol><li><strong>Bootstrap</strong> — After login, the client holds a workspace-scoped token. It requests a WebSocket URL (or uses a well-known gateway endpoint) and connects with credentials in the first frame or via cookie on the upgrade handshake.</li></ol>
+<ol><li><strong>Handshake &amp; subscription</strong> — Server sends a <code>hello</code> (or equivalent) with connection metadata: shard id, team id, recommended heartbeat interval. Client registers interest in entities it cares about — open channels, DMs, thread subscriptions, presence — so the gateway can filter fan-out.</li></ol>
+<ol><li><strong>Event dispatch</strong> — Incoming frames are typed Events API payloads: <code>{ type: &quot;message&quot;, channel: &quot;C123&quot;, ts: &quot;…&quot;, … }</code>. A central <strong>event router</strong> in the client normalizes these into Redux/Zustand actions: append message, patch reaction, update badge.</li></ol>
+<ol><li><strong>Keepalive</strong> — Client sends periodic pings; if no pong within N seconds, mark socket <strong>stale</strong> and begin reconnect. Background tabs may use longer intervals but must not let middleboxes idle-timeout the connection (typical LB timeout: 60–120s).</li></ol>
+<ol><li><strong>Token refresh</strong> — Before token expiry, refresh via REST without tearing down the socket if the protocol supports in-band re-auth; otherwise, coordinate: pause outbound sends, refresh, reconnect with new token, resume subscriptions.</li></ol>
+<ol><li><strong>Single writer per workspace</strong> — One WebSocket per active workspace tab (or shared worker) avoids duplicate event streams. Cross-tab sync uses <code>BroadcastChannel</code> or <code>SharedWorker</code> so only one tab owns the socket.</li></ol>
+<table>
+<thead><tr>
+<th>Concern</th>
+<th>Client responsibility</th>
+</tr></thead><tbody>
+<tr>
+<td>Auth</td>
+<td>Attach token; refresh before expiry</td>
+</tr>
+<tr>
+<td>Subscription</td>
+<td>Re-send channel/DM list after reconnect</td>
+</tr>
+<tr>
+<td>Ordering</td>
+<td>Buffer + sort by <code>ts</code> within channel</td>
+</tr>
+<tr>
+<td>Backpressure</td>
+<td>Coalesce high-frequency events (see Deep)</td>
+</tr>
+</tbody></table>
+<p><strong>Tradeoffs:</strong> One socket multiplexes all realtime traffic — simpler than per-channel WS, but the client event loop must be fast or a hot channel blocks presence updates. <strong>Pitfall:</strong> Opening a socket per channel — explodes connection count and breaks Slack&#x27;s fan-out model. <strong>Pitfall:</strong> Ignoring server heartbeat hints and getting silently dropped by a load balancer.</p>
+<hr>
+</article>
+<article class="qa" id="what-happens-when-a-new-message-arrives-over-the-socket-while-the-user-is-scrolled-up-reading-history">
+<h3 class="question">What happens when a new message arrives over the socket while the user is scrolled up reading history?</h3>
+<p><strong>Problem framing:</strong> The user is reading older messages (not at the live edge). Blindly appending new messages and auto-scrolling would <strong>yank them away</strong> from what they&#x27;re reading. But the messages must still land in client state for unread badges, thread counts, and instant scroll-to-bottom when they choose.</p>
+<p><strong>Approach:</strong> Separate <strong>data ingestion</strong> from <strong>scroll behavior</strong> using a &quot;pinned to bottom&quot; flag:</p>
+<pre><code>New socket event (message)
+    |
+    +-- User at bottom (scrollTop + viewport &gt;= threshold)
+    |       --&gt; append to list, auto-scroll, mark visible
+    |
+    +-- User scrolled up (reading history)
+            --&gt; append to list (virtualized, off-screen)
+            --&gt; show &quot;N new messages&quot; pill / jump bar
+            --&gt; increment unread for channel (if not focused)
+            --&gt; do NOT change scrollTop</code></pre>
+<ol><li><strong>Scroll anchoring</strong> — With virtualization, insert new rows *below* the viewport without changing scroll position. Use <code>overflow-anchor: auto</code> or manual anchor: record <code>scrollHeight</code> delta and compensate if layout shifts.</li></ol>
+<ol><li><strong>&quot;New messages&quot; affordance</strong> — A floating pill at the bottom: &quot;↓ 3 new messages&quot; (optionally preview sender). Click scrolls to live edge and clears the counter.</li></ol>
+<ol><li><strong>State still updates</strong> — Sidebar badge, channel bold, @mention highlight, and thread reply counts update immediately even when the message list doesn&#x27;t scroll.</li></ol>
+<ol><li><strong>Focus vs scroll</strong> — If the window is focused and user is scrolled up, some teams still suppress auto-scroll but <strong>do</strong> play a subtle sound or highlight the tab for @mentions per notification prefs.</li></ol>
+<ol><li><strong>Thread pane independence</strong> — A new reply in an open thread while the user reads the thread history follows the same pinned-to-bottom logic inside the thread pane, independent of the main channel feed.</li></ol>
+<div class="mermaid-wrap"><pre class="mermaid">stateDiagram-v2
+  [*] --> AtBottom: user at live edge
+  AtBottom --> ScrolledUp: user scrolls up
+  ScrolledUp --> AtBottom: click pill / scroll down
+  ScrolledUp --> ScrolledUp: new msg arrives (pill++)
+  AtBottom --> AtBottom: new msg arrives (auto-scroll)</pre></div>
+<p><strong>Tradeoffs:</strong> Always appending to the in-memory list grows memory for users who stay scrolled up in a firehose channel — cap with &quot;live buffer + lazy history&quot; (keep last N at bottom hot, fetch older on scroll). <strong>Pitfall:</strong> Calling <code>scrollIntoView</code> on every socket event. <strong>Pitfall:</strong> Not updating unread state when suppressing scroll — user misses that they have new traffic.</p>
+<hr>
+</article>
+<article class="qa" id="how-do-you-deduplicate-messages-that-arrive-via-websocket-and-also-appear-in-a-rest-history-fetch">
+<h3 class="question">How do you deduplicate messages that arrive via WebSocket and also appear in a REST history fetch?</h3>
+<p><strong>Problem framing:</strong> The same message can enter client state through <strong>multiple paths</strong>: realtime <code>message</code> event, <code>conversations.history</code> / <code>chat.postMessage</code> response, pagination when scrolling up, and reconnect catch-up. Without dedup, users see double bubbles; optimistic sends make this worse.</p>
+<p><strong>Approach:</strong> Use a <strong>canonical message key</strong> and a merge layer in the store:</p>
+<table>
+<thead><tr>
+<th>Key</th>
+<th>Use case</th>
+</tr></thead><tbody>
+<tr>
+<td><code>(channel_id, ts)</code></td>
+<td>Server-authoritative identity; <code>ts</code> is unique per channel</td>
+</tr>
+<tr>
+<td><code>client_msg_id</code></td>
+<td>Maps optimistic row → confirmed row before <code>ts</code> is known</td>
+</tr>
+</tbody></table>
+<p><strong>Merge algorithm:</strong></p>
+<pre><code>onMessage(candidate):
+  if candidate.client_msg_id:
+    existing = store.findByClientMsgId(candidate.client_msg_id)
+    if existing:
+      PATCH existing with server ts, user, reactions — return
+  if store.has(candidate.channel, candidate.ts):
+    return  // duplicate socket + history
+  store.insert(candidate)</code></pre>
+<ol><li><strong>REST history load</strong> — <code>conversations.history</code> returns messages with <code>ts</code>. Insert into a normalized map keyed by <code>channelId → Map&lt;ts, Message&gt;</code>.</li></ol>
+<ol><li><strong>Socket event</strong> — Same <code>ts</code>? Skip insert; optionally merge fields if the socket payload is richer (e.g. latest <code>edited</code> state).</li></ol>
+<ol><li><strong>Optimistic send</strong> — Client inserts a provisional row with <code>client_msg_id</code>, <code>pending: true</code>, temporary local <code>ts</code> (or no <code>ts</code>). When REST response or socket echo arrives with matching <code>client_msg_id</code>, <strong>replace in place</strong> — same list slot, no flicker.</li></ol>
+<ol><li><strong>Ordering</strong> — After dedup, sort by <code>ts</code> (string comparison works for Slack&#x27;s <code>seconds.microseconds</code> format).</li></ol>
+<ol><li><strong>Edge: message_changed</strong> — Keyed still by original <code>ts</code> (<code>message_changed</code> references <code>message.ts</code>). Upsert into the same slot.</li></ol>
+<p><strong>Tradeoffs:</strong> Normalized store (by <code>ts</code>) vs array per channel — normalized dedup is O(1); array requires index map. <strong>Pitfall:</strong> Deduping only by text content or timestamp to the second — collisions in busy channels. <strong>Pitfall:</strong> Replacing optimistic row by deleting + inserting — causes virtualization key churn and scroll jump; patch in place.</p>
+<hr>
+</article>
+<article class="qa" id="what-is-a-client-msg-id-and-why-does-slack-use-it-for-optimistic-sends">
+<h3 class="question">What is a <code>client_msg_id</code> and why does Slack use it for optimistic sends?</h3>
+<p><strong>Problem framing:</strong> On send, waiting 200–800ms for REST round-trip before showing the message feels broken. Optimistic UI inserts immediately, but the server will later assign a real <code>ts</code> and may broadcast the same message back on the WebSocket — the client needs a <strong>stable correlation id</strong> across REST, socket, and offline replay.</p>
+<p><strong>Approach:</strong> <code>client_msg_id</code> is a <strong>client-generated UUID</strong> (or high-entropy string) attached to <code>chat.postMessage</code>:</p>
+<pre><code>{
+  &quot;channel&quot;: &quot;C123&quot;,
+  &quot;text&quot;: &quot;Deploying now&quot;,
+  &quot;client_msg_id&quot;: &quot;a1b2c3d4-e5f6-7890-abcd-ef1234567890&quot;
+}</code></pre>
+<p><strong>Why Slack uses it:</strong></p>
+<ol><li><strong>Optimistic row identity</strong> — UI inserts <code>{ client_msg_id, text, user: me, pending: true }</code> instantly. Composer clears. Scroll pins to bottom if applicable.</li></ol>
+<ol><li><strong>Idempotent send</strong> — On retry ( flaky network, 503 ), client resends the <strong>same</strong> <code>client_msg_id</code>. Server dedupes — user doesn&#x27;t get duplicate messages in the channel.</li></ol>
+<ol><li><strong>Reconciliation</strong> — REST 200 and socket <code>message</code> event both carry <code>client_msg_id</code>. Client finds the pending row and promotes it: <code>{ ...serverFields, pending: false, ts: &quot;1710000000.000100&quot; }</code>.</li></ol>
+<ol><li><strong>Offline queue</strong> — Messages queued while offline retain their original <code>client_msg_id</code>. On reconnect, replay in order; server or client rejects duplicates.</li></ol>
+<div class="mermaid-wrap"><pre class="mermaid">sequenceDiagram
+  participant UI
+  participant Store
+  participant API
+  participant Socket
+  UI->>Store: insert optimistic (client_msg_id)
+  UI->>API: chat.postMessage(client_msg_id)
+  Socket-->>Store: message event (same client_msg_id)
+  API-->>Store: 200 + ts
+  Store->>Store: merge once, pending=false</pre></div>
+<p><strong>Tradeoffs:</strong> UUID per send — negligible size; server must index recent <code>client_msg_id</code> per team for dedup window (e.g. 24h). <strong>Pitfall:</strong> Generating a new id on retry — creates duplicates. <strong>Pitfall:</strong> No optimistic row — user sees nothing until socket echo, then a pop-in; bad on slow networks.</p>
+<hr>
+</article>
+<article class="qa" id="how-do-you-handle-websocket-disconnect-reconnect-replay-missed-events-or-full-resync">
+<h3 class="question">How do you handle WebSocket disconnect — reconnect, replay missed events, or full resync?</h3>
+<p><strong>Problem framing:</strong> Disconnects are normal (sleep, tunnel, deploy). The client must restore <strong>consistency</strong> — no permanent holes, no duplicate floods — without blocking the UI. The strategy depends on <strong>gap duration</strong> and what cursor the server exposes.</p>
+<p><strong>Approach — tiered recovery:</strong></p>
+<pre><code>Disconnect detected
+    |
+    +-- Reconnect immediately (backoff) --&gt; new WebSocket
+    |
+    +-- On hello:
+          |
+          +-- Gap &lt; ~60s + last_event_id supported
+          |       --&gt; REPLAY missed events from cursor
+          |
+          +-- Gap medium (1–5 min)
+          |       --&gt; INCREMENTAL: conversations.history?latest=N per open channel
+          |           + merge by ts/client_msg_id
+          |
+          +-- Gap long / cursor expired / auth rotated
+                  --&gt; FULL RESYNC: refetch channel list, unreads, open channel history</code></pre>
+<ol><li><strong>Reconnect</strong> — Exponential backoff with jitter (see Deep). On success, resubscribe to channels/presence.</li></ol>
+<ol><li><strong>Replay</strong> — If the gateway accepts <code>last_event_id</code> or <code>last_ts</code> on reconnect, server replays buffered events. Client feeds them through the same dedup router.</li></ol>
+<ol><li><strong>Incremental sync</strong> — For each <strong>open</strong> channel/DM, call REST with <code>oldest=&lt;lastKnownTs&gt;</code> or fetch latest 50 messages. Cheaper than full workspace resync.</li></ol>
+<ol><li><strong>Full resync</strong> — Refetch sidebar, badge counts, and visible conversations. Used after long offline or repeated reconnect failure.</li></ol>
+<ol><li><strong>User-visible state</strong> — Show &quot;Reconnecting…&quot; (see Deep for tone). Queue outbound messages locally; flush with same <code>client_msg_id</code> after reconnect.</li></ol>
+<ol><li><strong>Parallel paths</strong> — While reconnecting, REST still works for explicit user actions (open channel → history fetch). Socket is optimization; REST is backstop.</li></ol>
+<table>
+<thead><tr>
+<th>Gap</th>
+<th>Strategy</th>
+<th>API cost</th>
+</tr></thead><tbody>
+<tr>
+<td>&amp;lt; 1 min</td>
+<td>Replay buffer / slight overlap fetch</td>
+<td>Low</td>
+</tr>
+<tr>
+<td>1–10 min</td>
+<td>Incremental history per open channel</td>
+<td>Medium</td>
+</tr>
+<tr>
+<td>&amp;gt; 10 min</td>
+<td>Full resync + unread reconciliation</td>
+<td>High</td>
+</tr>
+</tbody></table>
+<p><strong>Tradeoffs:</strong> Aggressive replay reduces REST load but requires server-side buffers. <strong>Pitfall:</strong> Refetching entire 100k-message channel on every blip. <strong>Pitfall:</strong> Applying replay events before merging history — momentary duplicates until dedup runs; always route through one ingress.</p>
+<hr>
+</article>
+<article class="qa" id="how-do-you-order-messages-when-two-users-send-at-the-same-millisecond-in-a-busy-channel">
+<h3 class="question">How do you order messages when two users send at the same millisecond in a busy channel?</h3>
+<p><strong>Problem framing:</strong> Wall-clock time alone doesn&#x27;t define a total order across distributed clients. Two messages can share the same second-level timestamp; users still expect a <strong>stable, deterministic</strong> order in the UI.</p>
+<p><strong>Approach:</strong> Slack assigns each message a <strong><code>ts</code> string</strong> with microsecond precision: <code>&quot;1710000000.123456&quot;</code>. The server generates this at ingest — it is the <strong>authoritative total order</strong> within a channel.</p>
+<ol><li><strong>Primary sort: <code>ts</code></strong> — Lexicographic sort on the string matches chronological order (fixed-width microseconds). Client message list sorts by <code>ts</code> ascending.</li></ol>
+<ol><li><strong>Same microsecond (rare)</strong> — Server guarantees uniqueness by bumping microseconds or using an internal sequence. Clients never collide on <code>ts</code> for two distinct messages in one channel.</li></ol>
+<ol><li><strong>Optimistic messages</strong> — Pending local sends lack server <code>ts</code>. Use a temporary key: <code>{ sortKey: &quot;pending:&lt;localMonotonicCounter&gt;&quot;, client_msg_id }</code>. On ACK, replace with server <code>ts</code> and re-sort once — usually no visible jump if the user was last sender.</li></ol>
+<ol><li><strong>Cross-source merge</strong> — History fetch and socket events merge into one sorted structure (sorted array with binary insert, or heap). Always compare by server <code>ts</code> after dedup.</li></ol>
+<ol><li><strong>Thread replies</strong> — Same rule within thread; parent message <code>ts</code> is unrelated — thread uses <code>thread_ts</code> linkage.</li></ol>
+<pre><code>Channel order (authoritative):
+  msg_A  ts=1710000000.123400
+  msg_B  ts=1710000000.123401   ← same ms wall clock, distinct ts
+  msg_C  ts=1710000000.123402</code></pre>
+<p><strong>Tradeoffs:</strong> Trusting client clock for ordering would drift — always server <code>ts</code>. <strong>Pitfall:</strong> Sorting by parsed Date in JS — timezone/locale issues; string compare on Slack <code>ts</code> is safer. <strong>Pitfall:</strong> Re-sorting entire list on every event in a 10k channel — insert in O(log n) or append + rare sort for live edge only.</p>
+<hr>
+</article>
+<h2 class="section" id="deep">Deep</h2>
+<article class="qa" id="how-do-you-implement-exponential-backoff-on-websocket-reconnect-without-flooding-the-server-after-a-fleet-wide-outage">
+<h3 class="question">How do you implement exponential backoff on WebSocket reconnect without flooding the server after a fleet-wide outage?</h3>
+<p><strong>Problem framing:</strong> When Slack&#x27;s gateway blips, <strong>every client reconnects at once</strong> — a thundering herd that can prevent recovery. Naive fixed-delay retry or tight loops amplify the outage.</p>
+<p><strong>Approach:</strong> <strong>Exponential backoff with full jitter</strong>, capped, plus <strong>client-side coordination</strong>:</p>
+<pre><code>// Pseudocode: AWS-style full jitter
+base = 1000  // ms
+cap = 30000
+attempt = min(attempt + 1, 10)
+ceil = min(cap, base * 2 ** attempt)
+delay = random(0, ceil)</code></pre>
+<ol><li><strong>Backoff schedule</strong> — Attempt 0: 0–1s, attempt 1: 0–2s, … cap at 30s. Reset attempt counter after <strong>stable connection</strong> held for e.g. 60s.</li></ol>
+<ol><li><strong>Full jitter</strong> — Randomize in <code>[0, ceil]</code> not <code>[ceil/2, ceil]</code> — spreads reconnects across time (Google/AWS recommendation).</li></ol>
+<ol><li><strong>Add jitter per workspace tab</strong> — If multiple tabs, elect one reconnect owner via <code>BroadcastChannel</code>; others wait for &quot;socket ready&quot; event.</li></ol>
+<ol><li><strong>Respect <code>Retry-After</code></strong> — If HTTP upgrade or auth returns 503 with <code>Retry-After</code>, use <code>max(backoff, retryAfter)</code>.</li></ol>
+<ol><li><strong>Circuit breaker (client)</strong> — After N failed attempts in 5 min, enter <strong>degraded mode</strong>: longer cap (60s), banner &quot;Connection trouble,&quot; rely on REST polling for open channel only — reduces load while letting user work.</li></ol>
+<ol><li><strong>Don&#x27;t backoff heartbeats separately</strong> — Once connected, failed ping triggers <strong>single</strong> reconnect path, not parallel retry loops.</li></ol>
+<div class="mermaid-wrap"><pre class="mermaid">flowchart TD
+  DC[Disconnect] --> B[Backoff + jitter]
+  B --> TRY[WS connect]
+  TRY -->|success| STABLE[Reset attempt after 60s stable]
+  TRY -->|fail| B
+  B -->|max attempts| DEG[Degraded REST mode]</pre></div>
+<p><strong>Tradeoffs:</strong> Max cap trades recovery speed for server protection — 30s is reasonable; all-hands may feel long without degraded REST. <strong>Pitfall:</strong> Identical backoff in every client (no jitter) — synchronized retries. <strong>Pitfall:</strong> Zero delay first retry for &quot;snappy UX&quot; — fine once; catastrophic at fleet scale unless server sends randomized <code>reconnect_after</code> in close frame.</p>
+<hr>
+</article>
+<article class="qa" id="how-do-you-handle-a-message-changed-event-that-arrives-before-the-original-message-event-due-to-out-of-order-delivery">
+<h3 class="question">How do you handle a <code>message_changed</code> event that arrives before the original <code>message</code> event due to out-of-order delivery?</h3>
+<p><strong>Problem framing:</strong> WebSocket delivery is <strong>mostly ordered</strong> but not guaranteed across reconnect overlap, shard failover, or parallel REST + socket paths. An edit (<code>message_changed</code>) referencing <code>message.ts</code> can arrive before the base <code>message</code> event — naive handlers drop the edit or crash on missing rows.</p>
+<p><strong>Approach:</strong> <strong>Event staging buffer</strong> keyed by <code>(channel, ts)</code>:</p>
+<pre><code>on message_changed(channel, ts, new_content):
+  if store.has(channel, ts):
+    applyEdit(channel, ts, new_content)
+  else:
+    pendingEdits[channel, ts] = new_content   // stash
+
+on message(channel, ts, ...):
+  if pendingEdits[channel, ts]:
+    merge edit into message before insert
+    delete pendingEdits[channel, ts]
+  store.insert(message)</code></pre>
+<ol><li><strong>Upsert semantics</strong> — <code>message_changed</code> carries the full updated message object and <code>previous_message</code> metadata. Apply as patch to existing row or stash.</li></ol>
+<ol><li><strong>TTL on pending edits</strong> — Expire stashed edits after 30–60s; follow up with REST <code>conversations.history</code> fetch for that <code>ts</code> if still missing.</li></ol>
+<ol><li><strong>Same for deletes</strong> — <code>message_deleted</code> before <code>message</code>: mark <code>pendingDelete[channel, ts]</code>; when message arrives, insert as already-deleted tombstone or skip render.</li></ol>
+<ol><li><strong>Reactions</strong> — <code>reaction_added</code> before message: queue on <code>(channel, item.ts)</code> similarly.</li></ol>
+<ol><li><strong>Version field</strong> — If event includes <code>event_ts</code> or revision, apply <strong>newest wins</strong> when merging out-of-order updates.</li></ol>
+<table>
+<thead><tr>
+<th>Event order</th>
+<th>Handler behavior</th>
+</tr></thead><tbody>
+<tr>
+<td>message → message_changed</td>
+<td>Normal patch</td>
+</tr>
+<tr>
+<td>message_changed → message</td>
+<td>Stash edit, merge on insert</td>
+</tr>
+<tr>
+<td>message_deleted → message</td>
+<td>Tombstone or skip render</td>
+</tr>
+<tr>
+<td>duplicate message_changed</td>
+<td>Last event_ts wins</td>
+</tr>
+</tbody></table>
+<p><strong>Tradeoffs:</strong> Pending buffers add memory — bounded per channel, evict LRU. <strong>Pitfall:</strong> Dropping orphaned <code>message_changed</code> silently — user never sees edit until manual refresh. <strong>Pitfall:</strong> Applying edit to wrong row when <code>ts</code> reused — Slack doesn&#x27;t reuse <code>ts</code>; still validate <code>channel</code> match.</p>
+<hr>
+</article>
+<article class="qa" id="what-is-your-strategy-when-the-socket-reconnects-after-5-minutes-offline-incremental-sync-vs-full-channel-refetch">
+<h3 class="question">What is your strategy when the socket reconnects after 5 minutes offline — incremental sync vs full channel refetch?</h3>
+<p><strong>Problem framing:</strong> Five minutes is long enough to miss hundreds of events across many channels, but short enough that a <strong>full workspace reload</strong> wastes bandwidth and blocks UI. The client must catch up <strong>correctly</strong> for open views and <strong>badge/unread accuracy</strong> everywhere else.</p>
+<p><strong>Approach:</strong> <strong>Hybrid incremental with selective full refetch:</strong></p>
+<pre><code>Reconnect after ~5 min offline
+    |
+    +-- Workspace metadata: client.counts / users.conversations
+    |       --&gt; refresh sidebar badges, muted state, new channels
+    |
+    +-- Open channel (user is viewing):
+    |       --&gt; conversations.history(limit=100, latest) + dedup merge
+    |       --&gt; OR history?oldest=lastSeenTs for gap fill only
+    |
+    +-- Open thread pane:
+    |       --&gt; conversations.replies(thread_ts, limit=50)
+    |
+    +-- Background channels (not open):
+    |       --&gt; badge counts only from client.counts — no full history
+    |
+    +-- Missed socket-only signals (presence, typing):
+            --&gt; drop; fresh state on next event or REST presence fetch</code></pre>
+<ol><li><strong>Cursor per channel</strong> — Track <code>latestKnownTs[channel]</code> from last socket event or history page. On reconnect, fetch <code>oldest=latestKnownTs</code> overlap window (include 5–10 messages <strong>before</strong> cursor for dedup safety).</li></ol>
+<ol><li><strong>Don&#x27;t refetch closed channels&#x27; history</strong> — Unread badges come from <code>client.counts</code> or <code>users.conversations</code> — O(channels) lightweight call.</li></ol>
+<ol><li><strong>Offline outbound queue</strong> — Replay queued sends with original <code>client_msg_id</code> <strong>before</strong> merging history so user&#x27;s messages slot correctly.</li></ol>
+<ol><li><strong>Active channel UX</strong> — If gap is large and user stares at stale feed, show subtle &quot;Updating…&quot; then swap in merged messages; preserve scroll if scrolled up with pill.</li></ol>
+<ol><li><strong>When to full refetch open channel</strong> — If <code>latestKnownTs</code> is null (first open), or gap &amp;gt; retention overlap, or incremental returns <code>has_more</code> with inconsistent cursor — fall back to full latest-100 load.</li></ol>
+<table>
+<thead><tr>
+<th>Surface</th>
+<th>5-min offline strategy</th>
+</tr></thead><tbody>
+<tr>
+<td>Sidebar badges</td>
+<td><code>client.counts</code> refresh</td>
+</tr>
+<tr>
+<td>Active channel</td>
+<td>Gap fill or latest 100</td>
+</tr>
+<tr>
+<td>Background DMs</td>
+<td>Counts only until opened</td>
+</tr>
+<tr>
+<td>Threads</td>
+<td><code>conversations.replies</code> for open thread</td>
+</tr>
+</tbody></table>
+<p><strong>Tradeoffs:</strong> Incremental requires reliable per-channel cursors — corrupt cursor → brief hole until user scrolls. <strong>Pitfall:</strong> Full refetch of every joined channel — thousands of API calls on reconnect. <strong>Pitfall:</strong> Ignoring <code>client.counts</code> — badges wrong until each channel opened.</p>
+<hr>
+</article>
+<article class="qa" id="how-do-you-batch-or-throttle-high-frequency-socket-events-eg-50-reactions-in-a-thread-during-a-live-event">
+<h3 class="question">How do you batch or throttle high-frequency socket events (e.g. 50 reactions in a thread during a live event)?</h3>
+<p><strong>Problem framing:</strong> During an all-hands or incident, reaction storms and rapid thread replies can deliver <strong>dozens of events per second</strong>. Handling each with a full React render recalculates virtualization, reaction pills, and badges — freezing the UI.</p>
+<p><strong>Approach:</strong> <strong>Micro-batch on the event ingress</strong> before the store commit:</p>
+<pre><code>Socket raw events
+    --&gt; [per-type queue]
+    --&gt; rAF / 50ms flush
+    --&gt; coalesced store dispatch
+    --&gt; single React commit per frame</code></pre>
+<ol><li><strong>Coalesce by target</strong> — Multiple <code>reaction_added</code> on same <code>(channel, ts, name)</code> → keep one. Count rapid duplicates for analytics only.</li></ol>
+<ol><li><strong>Batch reaction UI</strong> — Update reaction bar once per frame: <code>{ &quot;+1 👍&quot;, &quot;+3 🎉&quot; }</code> animated aggregate optional.</li></ol>
+<ol><li><strong>Priority lane</strong> — <code>message</code> with @mention bypasses batch for immediate badge; <code>reaction_added</code> and <code>user_typing</code> batch freely.</li></ol>
+<ol><li><strong>Cap work per flush</strong> — Process max 100 events per frame; defer remainder to next rAF to avoid long tasks (&amp;gt;50ms).</li></ol>
+<ol><li><strong>Virtualized list</strong> — Only visible rows + overscan re-render; off-screen message reaction updates patch store without DOM touch.</li></ol>
+<ol><li><strong>Thread sidebar</strong> — Separate batcher for thread pane so main channel batching isn&#x27;t blocked.</li></ol>
+<table>
+<thead><tr>
+<th>Event type</th>
+<th>Batch window</th>
+<th>Coalesce key</th>
+</tr></thead><tbody>
+<tr>
+<td>reaction_added</td>
+<td>1 frame</td>
+<td>channel + ts + reaction</td>
+</tr>
+<tr>
+<td>user_typing</td>
+<td>300ms debounce</td>
+<td>channel + user</td>
+</tr>
+<tr>
+<td>message</td>
+<td>immediate if @me; else 1 frame</td>
+<td>channel + ts</td>
+</tr>
+<tr>
+<td>presence_change</td>
+<td>500ms</td>
+<td>user_id</td>
+</tr>
+</tbody></table>
+<p><strong>Tradeoffs:</strong> 16–50ms delay on reactions — acceptable vs jank. <strong>Pitfall:</strong> Batching without coalescence — still 50 dispatches for 50 reactions. <strong>Pitfall:</strong> Dropping events to &quot;keep up&quot; — never drop; coalesce or defer, don&#x27;t lose data.</p>
+<hr>
+</article>
+<article class="qa" id="how-do-you-surface-connection-state-to-the-user-reconnecting-some-messages-may-be-delayed-without-being-alarming">
+<h3 class="question">How do you surface connection state to the user — &quot;Reconnecting…&quot;, &quot;Some messages may be delayed&quot; — without being alarming?</h3>
+<p><strong>Problem framing:</strong> Connection issues are frequent and usually brief. A modal or red error erodes trust; <strong>silence</strong> during a long outage makes users think Slack is broken. The UI needs a <strong>calm, progressive</strong> disclosure ladder.</p>
+<p><strong>Approach:</strong> <strong>Tiered, non-blocking status chrome:</strong></p>
+<pre><code>State ladder (user-visible)
+  Connected     → (nothing, or subtle green dot in debug only)
+  Reconnecting  → thin banner: &quot;Reconnecting…&quot; + spinner, ~3s threshold
+  Delayed       → &quot;Some messages may be delayed&quot; after 10–15s
+  Offline       → &quot;You&#x27;re offline — messages send when connected&quot; + queue icon
+  Failed        → &quot;Having trouble connecting&quot; + [Retry] after circuit breaker</code></pre>
+<ol><li><strong>Delay before showing</strong> — Don&#x27;t flash &quot;Reconnecting&quot; on sub-second blips. Show banner only after disconnect &amp;gt; 2–3s.</li></ol>
+<ol><li><strong>Placement</strong> — Thin top banner below workspace bar (Slack-style), not modal. Composer stays usable; queued sends show clock icon.</li></ol>
+<ol><li><strong>Copy tone</strong> — Neutral, factual. Avoid &quot;Error&quot; red for transient states; amber/gray for delayed, red only for persistent failure.</li></ol>
+<ol><li><strong>Functionality hints</strong> — &quot;You can still browse cached messages&quot; when local store has history; REST read works in degraded mode.</li></ol>
+<ol><li><strong>Clear on recovery</strong> — Banner fades on stable connect; optional 2s &quot;Connected&quot; toast if outage was &amp;gt;30s.</li></ol>
+<ol><li><strong>Accessibility</strong> — <code>aria-live=&quot;polite&quot;</code> for banner; don&#x27;t steal focus.</li></ol>
+<table>
+<thead><tr>
+<th>Duration</th>
+<th>UI</th>
+<th>Send behavior</th>
+</tr></thead><tbody>
+<tr>
+<td>&amp;lt; 3s</td>
+<td>None</td>
+<td>Queue briefly or send via REST</td>
+</tr>
+<tr>
+<td>3–30s</td>
+<td>&quot;Reconnecting…&quot;</td>
+<td>Offline queue</td>
+</tr>
+<tr>
+<td>&amp;gt; 30s</td>
+<td>&quot;Messages may be delayed&quot;</td>
+<td>Queue + manual retry link</td>
+</tr>
+<tr>
+<td>REST up, WS down</td>
+<td>&quot;Live updates paused&quot;</td>
+<td>Read via REST; send via REST</td>
+</tr>
+</tbody></table>
+<p><strong>Tradeoffs:</strong> Hiding status too long confuses power users during incidents — optional connection detail in settings/help. <strong>Pitfall:</strong> Blocking composer on disconnect — user can&#x27;t draft. <strong>Pitfall:</strong> Full-screen offline page — overkill for 5s flap.</p>
+<hr>
+</article>
+<article class="qa" id="how-do-you-handle-enterprise-grid-where-a-user-has-sockets-open-to-multiple-workspace-shards-simultaneously">
+<h3 class="question">How do you handle Enterprise Grid where a user has sockets open to multiple workspace shards simultaneously?</h3>
+<p><strong>Problem framing:</strong> Enterprise Grid users belong to <strong>multiple workspaces</strong> (orgs) that may live on <strong>different gateway shards</strong>. Each workspace has its own auth token, event stream, and channel namespace — but the <strong>UI is unified</strong> in one client with one sidebar and quick switcher.</p>
+<p><strong>Approach:</strong> <strong>One WebSocket per active workspace</strong>, lazy lifecycle, unified event bus:</p>
+<div class="mermaid-wrap"><pre class="mermaid">flowchart TB
+  subgraph UI [Unified Slack Client]
+    Router[Global event router]
+    SB[Sidebar / badges]
+    View[Active conversation view]
+  end
+  WS1[WS — workspace A shard 1]
+  WS2[WS — workspace B shard 2]
+  WS3[WS — workspace C shard 1]
+  WS1 --> Router
+  WS2 --> Router
+  WS3 --> Router
+  Router --> SB
+  Router --> View</pre></div>
+<ol><li><strong>Connection policy</strong> — <strong>Eager:</strong> socket for current workspace + recently switched (1–2). <strong>Lazy:</strong> connect on workspace switch or unread push. <strong>Idle disconnect:</strong> close socket for workspaces inactive &amp;gt;15 min to save resources.</li></ol>
+<ol><li><strong>Namespace isolation</strong> — Every event tagged with <code>team_id</code> / <code>enterprise_id</code>. Store is partitioned: <code>state.workspaces[teamId].channels</code>. Router never applies workspace A event to workspace B.</li></ol>
+<ol><li><strong>Aggregate badges</strong> — Sidebar sums unread across connected workspaces; per-workspace badge from each shard&#x27;s <code>client.counts</code> or streamed events.</li></ol>
+<ol><li><strong>SharedWorker option</strong> — Desktop app may hold all WS in a native or SharedWorker layer; UI subscribes per team.</li></ol>
+<ol><li><strong>Reconnect independence</strong> — Workspace A outage doesn&#x27;t block B&#x27;s socket. Banner scoped: &quot;Reconnecting to Acme Corp…&quot; only when <strong>active</strong> workspace is affected.</li></ol>
+<ol><li><strong>Cross-workspace features</strong> — Slack Connect shared channels belong to one hosting workspace&#x27;s shard; events arrive on <strong>that</strong> workspace&#x27;s socket even if user is viewing another org — router queues badge update without switching context.</li></ol>
+<ol><li><strong>Token refresh</strong> — Per-workspace OAuth refresh; one expired token doesn&#x27;t tear down other sockets.</li></ol>
+<table>
+<thead><tr>
+<th>Strategy</th>
+<th>Pros</th>
+<th>Cons</th>
+</tr></thead><tbody>
+<tr>
+<td>1 WS per workspace</td>
+<td>Clean isolation, matches sharding</td>
+<td>Multiple connections (30 workspaces → heavy)</td>
+</tr>
+<tr>
+<td>Multiplex on one WS</td>
+<td>Single connection</td>
+<td>Requires server support; Grid doesn&#x27;t unify</td>
+</tr>
+<tr>
+<td>Lazy connect</td>
+<td>Low idle cost</td>
+<td>Switch latency on first open</td>
+</tr>
+</tbody></table>
+<p><strong>Tradeoffs:</strong> 30-workspace power users stress client — cap eager sockets at 3–5, lazy for rest, refresh counts via batched REST on focus. <strong>Pitfall:</strong> Global singleton store without <code>team_id</code> — cross-workspace message leak (critical security bug). <strong>Pitfall:</strong> One reconnect backoff shared across workspaces — independent backoff per team.</p>
+<hr>
+<p>*Next section: [02 — Channels, Threads &amp; Message Organization](./02-channels-threads-message-organization.md) (when available).*</p>
+</article>
+  </main>
+  <footer class="page-footer">
+    <a href="index.html">← All sections</a> ·
+    <a href="../slack-frontend-architecture.html">Architecture map</a>
+  </footer>
+  <script src="assets/interactive.js" defer></script>
+</body>
+</html>

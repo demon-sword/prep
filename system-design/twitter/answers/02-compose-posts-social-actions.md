@@ -464,4 +464,4 @@ Event tweet.edited(id)
 
 ---
 
-*Next section: [03 — Profiles, Identity & Graph UI](./03-profiles-identity-graph-ui.md) (when available).*
+*Next section: [03 — Profiles, Identity & Graph UI](./03-profiles-identity-graph-ui.md)*

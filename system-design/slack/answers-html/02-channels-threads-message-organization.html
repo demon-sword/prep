@@ -1,0 +1,495 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Section 2 — Channels, Threads &amp; Message Organization (Answers) | System Design Answers</title>
+  <meta name="description" content="Interview-depth answers for Slack frontend system design.">
+  <style>
+    :root {
+      --bg: #f8f9fb; --surface: #ffffff; --text: #1a1d26; --text-muted: #5c6370;
+      --border: #e2e6ed; --accent: #3d5a80; --accent-soft: #eef2f7;
+      --code-bg: #f0f2f6; --pre-bg: #1e2433; --pre-text: #e8ecf4;
+      --nav-bg: rgba(248, 249, 251, 0.92); --shadow: 0 1px 3px rgba(0, 0, 0, 0.06);
+    }
+    @media (prefers-color-scheme: dark) {
+      :root {
+        --bg: #12151c; --surface: #1a1f2a; --text: #e8ecf4; --text-muted: #9aa3b2;
+        --border: #2d3548; --accent: #8cb4d9; --accent-soft: #232a38;
+        --code-bg: #252d3d; --pre-bg: #0d1017; --pre-text: #d4dae6;
+        --nav-bg: rgba(18, 21, 28, 0.94); --shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
+      }
+    }
+    *, *::before, *::after { box-sizing: border-box; }
+    html { scroll-behavior: smooth; scroll-padding-top: 5.5rem; }
+    body { margin: 0; font-family: "Segoe UI", system-ui, sans-serif; font-size: 1.0625rem;
+      line-height: 1.65; color: var(--text); background: var(--bg); }
+    .site-nav { position: sticky; top: 0; z-index: 100; background: var(--nav-bg);
+      backdrop-filter: blur(10px); border-bottom: 1px solid var(--border); box-shadow: var(--shadow); }
+    .site-nav-inner { max-width: 900px; margin: 0 auto; padding: 0.75rem 1.5rem; }
+    .site-nav-title { font-size: 0.8125rem; font-weight: 600; text-transform: uppercase;
+      letter-spacing: 0.04em; color: var(--text-muted); margin: 0 0 0.5rem; }
+    .toc { display: flex; flex-wrap: wrap; gap: 0.35rem 0.75rem; margin: 0; padding: 0;
+      list-style: none; font-size: 0.8125rem; }
+    .toc a { color: var(--accent); text-decoration: none; white-space: nowrap; }
+    .toc a:hover { text-decoration: underline; }
+    .page { max-width: 900px; margin: 0 auto; padding: 2rem 1.5rem 4rem; }
+    header.page-header { margin-bottom: 2.5rem; padding-bottom: 1.5rem; border-bottom: 1px solid var(--border); }
+    h1 { font-size: 1.75rem; font-weight: 700; margin: 0 0 0.75rem; }
+    .lead { margin: 0; color: var(--text-muted); font-size: 1.05rem; }
+    h2.section { font-size: 1.35rem; font-weight: 700; margin: 2.5rem 0 1.25rem;
+      color: var(--accent); border-bottom: 2px solid var(--accent-soft); padding-bottom: 0.35rem; }
+    article.qa { margin-bottom: 2.75rem; background: var(--surface); border: 1px solid var(--border);
+      border-radius: 10px; padding: 1.5rem 1.75rem; box-shadow: var(--shadow); }
+    h3.question { font-size: 1.2rem; font-weight: 600; margin: 0 0 1rem; }
+    article.qa p { margin: 0 0 1rem; }
+    ol, ul { margin: 0 0 1rem; padding-left: 1.35rem; }
+    table { width: 100%; border-collapse: collapse; margin: 0 0 1rem; font-size: 0.95rem; }
+    th, td { border: 1px solid var(--border); padding: 0.55rem 0.75rem; text-align: left; }
+    th { background: var(--accent-soft); font-weight: 600; }
+    code { font-family: ui-monospace, Menlo, Consolas, monospace; font-size: 0.88em;
+      background: var(--code-bg); padding: 0.15em 0.4em; border-radius: 4px; }
+    pre { margin: 0 0 1rem; padding: 1rem; background: var(--pre-bg); color: var(--pre-text);
+      border-radius: 8px; overflow-x: auto; font-size: 0.875rem; }
+    pre code { background: none; padding: 0; color: inherit; }
+    .mermaid-wrap { margin: 0 0 1rem; padding: 1rem; background: var(--surface);
+      border: 1px solid var(--border); border-radius: 8px; overflow-x: auto; }
+    footer.page-footer { max-width: 900px; margin: 0 auto; padding: 1.5rem;
+      border-top: 1px solid var(--border); font-size: 0.9375rem; }
+    footer.page-footer a { color: var(--accent); text-decoration: none; font-weight: 500; }
+  </style>
+  <link rel="stylesheet" href="assets/interactive.css">
+</head>
+<body>
+  <nav class="site-nav" aria-label="Table of contents">
+    <div class="site-nav-inner">
+      <p class="site-nav-title">On this page</p>
+      <ol class="toc"><li><a href="#how-do-you-model-the-relationship-between-a-channel-its-messages-and-thread-replies-in-client-state">How do you model the relationship be</a></li><li><a href="#what-changes-in-the-ui-when-a-user-clicks-reply-in-thread-vs-sending-a-message-in-the-main-channel-feed">What changes in the UI when a user c</a></li><li><a href="#how-do-you-implement-also-send-to-channel-when-posting-a-thread-reply">How do you implement &quot;Also send to #</a></li><li><a href="#how-do-you-show-an-unread-thread-indicator-on-a-parent-message-without-opening-the-thread-pane">How do you show an unread thread ind</a></li><li><a href="#how-do-you-handle-switching-between-general-a-dm-and-an-open-thread-pane-what-state-persists">How do you handle switching between </a></li><li><a href="#how-do-you-lazy-load-older-messages-when-the-user-scrolls-up-in-a-channel-with-100k-messages">How do you lazy-load older messages </a></li><li><a href="#how-do-you-implement-the-thread-sidebar-flex-pane-without-re-fetching-the-entire-channel-on-every-open">How do you implement the thread side</a></li><li><a href="#how-do-you-keep-thread-reply-counts-and-new-replies-badges-in-sync-with-the-main-channel-list">How do you keep thread reply counts </a></li><li><a href="#how-do-you-handle-a-message-deleted-event-for-a-message-that-has-40-thread-replies-what-stays-visible">How do you handle a `message_deleted</a></li><li><a href="#how-do-you-implement-slack-connect-shared-channels-where-members-from-two-workspaces-see-the-same-channel">How do you implement Slack Connect s</a></li><li><a href="#how-do-you-virtualize-a-channel-message-list-where-messages-have-wildly-different-heights-embeds-images-code-blocks">How do you virtualize a channel mess</a></li><li><a href="#how-do-you-implement-scroll-anchoring-when-new-messages-arrive-at-the-bottom-while-the-user-is-reading-history-above">How do you implement scroll anchorin</a></li></ol>
+    </div>
+  </nav>
+  <main class="page">
+    <header class="page-header">
+      <h1>Section 2 — Channels, Threads &amp; Message Organization (Answers)</h1>
+      <p class="lead">Interview-depth answers for Slack frontend system design.</p>
+    </header>
+    <h1 id="section-2-channels-threads-message-organization-answers">Section 2 — Channels, Threads &amp; Message Organization (Answers)</h1>
+<p>Interview-depth answers for Slack&#x27;s client: channels vs threads vs DMs as distinct UI surfaces, flexpane, lazy history, virtualization, and scroll anchoring.</p>
+<hr>
+<h2 class="section" id="core">Core</h2>
+<article class="qa" id="how-do-you-model-the-relationship-between-a-channel-its-messages-and-thread-replies-in-client-state">
+<h3 class="question">How do you model the relationship between a channel, its messages, and thread replies in client state?</h3>
+<p><strong>Problem framing:</strong> Slack is not a flat message list. A <strong>channel</strong> is a conversation container; <strong>top-level messages</strong> live in the channel timeline; <strong>thread replies</strong> are messages whose <code>thread_ts</code> points at a parent. The same logical message can appear in two views (parent row in channel + reply in flexpane). Client state must avoid duplication bugs, support partial hydration, and keep thread metadata on parents without loading every reply.</p>
+<p><strong>Approach:</strong> Use a <strong>normalized store</strong> with three layers:</p>
+<table>
+<thead><tr>
+<th>Layer</th>
+<th>Responsibility</th>
+</tr></thead><tbody>
+<tr>
+<td><strong>Conversation registry</strong></td>
+<td><code>channelsById</code>, <code>dmsById</code> — metadata, membership, last-read, notification prefs</td>
+</tr>
+<tr>
+<td><strong>Message store</strong></td>
+<td><code>messagesById: Map&lt;ts, Message&gt;</code> — single canonical object per message</td>
+</tr>
+<tr>
+<td><strong>Timeline indexes</strong></td>
+<td>Per-conversation ordered lists of <code>ts</code> values, split by surface</td>
+</tr>
+</tbody></table>
+<pre><code>type ConversationId = string; // C123, D456
+
+type Message = {
+  ts: string;              // unique key within channel
+  channel: ConversationId;
+  user: string;
+  text: string;
+  thread_ts?: string;      // parent ts if this is a reply
+  reply_count?: number;    // on parent only
+  latest_reply?: string;   // ts of newest reply
+  reply_users_count?: number;
+  subscribed?: boolean;    // user follows thread
+  // blocks, attachments, reactions...
+};
+
+type ChannelTimeline = {
+  conversationId: ConversationId;
+  topLevelTs: string[];           // ordered, channel feed only (no thread replies inline)
+  threadsByParentTs: Map&lt;string, {
+    replyTs: string[];            // ordered replies for flexpane
+    loadedRange: { oldest: string; newest: string } | null;
+    hasMoreOlder: boolean;
+  }&gt;;
+  historyCursor: {
+    oldestLoadedTs: string | null;
+    newestLoadedTs: string | null;
+    hasMoreOlder: boolean;
+    hasMoreNewer: boolean;
+  };
+};</code></pre>
+<p><strong>Key rules:</strong></p>
+<ol><li><strong>Thread replies never appear in <code>topLevelTs</code></strong> — they render only in the flexpane (except &quot;Also send to channel&quot; broadcast copies, which are separate top-level messages or flagged variants).</li><li><strong>Parent message holds thread summary</strong> — <code>reply_count</code>, <code>latest_reply</code>, <code>reply_users</code> updated via socket events without loading replies.</li><li><strong>Derive views, don&#x27;t duplicate</strong> — Channel feed selector: <code>topLevelTs.map(ts =&gt; messagesById.get(ts))</code>. Thread view: <code>threadsByParentTs.get(parentTs).replyTs.map(...)</code>.</li><li><strong>Workspace scoping</strong> — All maps keyed under <code>workspaceId</code> to prevent cross-workspace leaks.</li></ol>
+<div class="mermaid-wrap"><pre class="mermaid">flowchart TB
+  subgraph Store
+    M[messagesById]
+    T[topLevelTs per channel]
+    TH[threadsByParentTs]
+  end
+  subgraph Views
+    CF[Channel feed virtual list]
+    FP[Flexpane thread list]
+  end
+  T --> CF
+  M --> CF
+  TH --> FP
+  M --> FP
+  M -.->|reply_count on parent| CF</pre></div>
+<p><strong>Tradeoffs:</strong> Normalized store adds indirection but prevents &quot;parent in channel shows stale reply count&quot; bugs. Alternative — embed replies inline in channel array — matches server payloads but breaks virtualization (channel feed would include 40-reply threads). <strong>Pitfall:</strong> Storing two copies of the same reply object in channel and thread arrays; always one <code>messagesById</code> entry, two index lists.</p>
+<hr>
+</article>
+<article class="qa" id="what-changes-in-the-ui-when-a-user-clicks-reply-in-thread-vs-sending-a-message-in-the-main-channel-feed">
+<h3 class="question">What changes in the UI when a user clicks &quot;Reply in thread&quot; vs sending a message in the main channel feed?</h3>
+<p><strong>Problem framing:</strong> These are two distinct <strong>composition targets</strong> with different visibility, notification semantics, and layout. Confusing them is a common product bug (reply lands in channel, or channel message opens flexpane unnecessarily).</p>
+<p><strong>Approach — state machine for active surface:</strong></p>
+<pre><code>type ActiveSurface =
+  | { type: &#x27;channel&#x27;; conversationId: string }
+  | { type: &#x27;thread&#x27;; conversationId: string; parentTs: string };</code></pre>
+<p><strong>&quot;Reply in thread&quot; click:</strong></p>
+<ol><li>Set <code>activeSurface = { type: &#x27;thread&#x27;, conversationId, parentTs }</code>.</li><li><strong>Open flexpane</strong> (right sidebar) — ~400px pane; channel feed remains visible but narrowed.</li><li><strong>Composer context</strong> switches: placeholder &quot;Reply…&quot;, <code>thread_ts</code> attached to outbound payload, mentions scoped to thread participants + channel.</li><li><strong>Flexpane loads</strong> thread history (cached or <code>conversations.replies</code> API) — virtualized list anchored at bottom or first unread reply.</li><li><strong>Focus</strong> moves to flexpane composer; keyboard shortcut context changes (<code>Esc</code> closes flexpane, not channel).</li><li>Channel feed <strong>does not scroll</strong>; parent message may get highlight ring. No new row in main timeline until send (unless &quot;Also send to channel&quot;).</li></ol>
+<p><strong>Send in main channel feed:</strong></p>
+<ol><li><code>activeSurface = { type: &#x27;channel&#x27;, conversationId }</code>.</li><li>Flexpane may stay open showing a *different* thread or close — product choice; Slack keeps flexpane open if already open.</li><li>Outbound message has <strong>no <code>thread_ts</code></strong> — appears as new row at bottom of <code>topLevelTs</code>.</li><li><strong>Unread / badge</strong> logic uses channel last-read, not thread subscription.</li><li><strong>@channel / @here</strong> allowed (usually blocked or warned in thread replies).</li></ol>
+<pre><code>Channel feed                    Flexpane (after &quot;Reply in thread&quot;)
+┌─────────────────────┐        ┌──────────────────┐
+│ Parent msg  [3 replies]│ ──► │ Parent (collapsed)│
+│ Other msg           │        │  └ reply 1        │
+│ Composer: #general  │        │  └ reply 2        │
+└─────────────────────┘        │ Composer: Reply…  │
+                               └──────────────────┘</code></pre>
+<p><strong>Tradeoffs:</strong> Inline thread expansion (Discord-style) vs Slack flexpane — flexpane keeps channel context and avoids feed height explosion. <strong>Pitfall:</strong> Reusing channel composer state without clearing <code>thread_ts</code> — next channel message accidentally becomes a thread reply.</p>
+<hr>
+</article>
+<article class="qa" id="how-do-you-implement-also-send-to-channel-when-posting-a-thread-reply">
+<h3 class="question">How do you implement &quot;Also send to #channel&quot; when posting a thread reply?</h3>
+<p><strong>Problem framing:</strong> Thread replies are normally <strong>channel-invisible</strong> (only summary on parent). &quot;Also send to #channel&quot; (<code>reply_broadcast</code> in Slack API) duplicates visibility: reply appears in flexpane *and* as a top-level row in the channel feed. Client must show both without double-counting unread or rendering two different message objects.</p>
+<p><strong>Approach:</strong></p>
+<ol><li><strong>Outbound API:</strong> POST message with <code>thread_ts: parentTs</code> <strong>and</strong> <code>reply_broadcast: true</code>.</li><li><strong>Server response / socket event:</strong> One message object with <code>thread_ts</code> set <strong>and</strong> <code>subtype: thread_broadcast</code> (or equivalent flag). Same <code>ts</code> everywhere — critical for dedup.</li><li><strong>Client index updates:</strong></li></ol>
+<ul><li>Append <code>ts</code> to <code>threadsByParentTs[parentTs].replyTs</code> (flexpane).</li><li><strong>Also</strong> insert <code>ts</code> into <code>topLevelTs</code> at the correct chronological position (usually near parent or at broadcast position per server ordering rules).</li></ul>
+<ol><li><strong>UI rendering:</strong> Channel feed row shows broadcast replies with distinct styling — &quot;also sent to the channel&quot; label, link to thread. Flexpane shows normal reply bubble.</li><li><strong>Unread:</strong> Broadcast typically counts toward <strong>channel</strong> unread (it&#x27;s in the feed). Thread-only replies count toward <strong>thread</strong> badge on parent only.</li></ol>
+<div class="mermaid-wrap"><pre class="mermaid">sequenceDiagram
+  participant User
+  participant Client
+  participant API
+  User->>Client: Send reply + "Also send to channel"
+  Client->>API: thread_ts + reply_broadcast
+  API-->>Client: message (single ts)
+  Client->>Client: index in thread + topLevelTs
+  Client->>Client: render in flexpane + channel feed</pre></div>
+<p><strong>Tradeoffs:</strong> Single <code>ts</code> with dual indexing vs two messages — Slack uses <strong>one message, dual surfacing</strong>; never create a synthetic clone with a new <code>ts</code>. <strong>Pitfall:</strong> Incrementing <code>reply_count</code> twice or showing two unread indicators for one send. <strong>Pitfall:</strong> Virtualized channel list not inserting broadcast at correct scroll position — use same ordered insert as socket handler for normal messages.</p>
+<hr>
+</article>
+<article class="qa" id="how-do-you-show-an-unread-thread-indicator-on-a-parent-message-without-opening-the-thread-pane">
+<h3 class="question">How do you show an unread thread indicator on a parent message without opening the thread pane?</h3>
+<p><strong>Problem framing:</strong> Users scan the channel feed for &quot;something happened in a thread I care about.&quot; The indicator must reflect <strong>thread-level unread</strong> distinct from channel unread, without fetching all replies.</p>
+<p><strong>Approach — denormalized thread unread on parent row:</strong></p>
+<p><strong>Server/client tracked fields (on parent or sidecar map):</strong></p>
+<pre><code>type ThreadUnreadState = {
+  parentTs: string;
+  unreadReplyCount: number;       // or boolean hasUnread
+  lastReadReplyTs: string | null; // per-user, per-thread
+  latestReplyTs: string;
+  subscribed: boolean;            // &quot;following&quot; thread
+};</code></pre>
+<p><strong>Population sources:</strong></p>
+<ol><li><strong>Socket <code>message</code> event</strong> with <code>thread_ts</code> → bump parent&#x27;s <code>reply_count</code>, set <code>latest_reply</code>, if user subscribed or @mentioned in reply → mark thread unread.</li><li><strong><code>conversations.mark</code> API</strong> with <code>ts: parentTs</code> when user opens thread → clear thread unread for that parent.</li><li><strong>Local overlay</strong> — compare <code>latest_reply</code> to persisted <code>lastReadReplyTs</code> from IndexedDB / server <code>stars</code> or read markers.</li></ol>
+<p><strong>UI on parent row (channel feed, no flexpane open):</strong></p>
+<ul><li><strong>Reply pill:</strong> <code>&quot;3 replies&quot;</code> → <code>&quot;3 replies · 2 new&quot;</code> or bold count badge.</li><li><strong>Visual:</strong> Unread dot on reply avatars strip, accent color on &quot;View thread&quot; CTA.</li><li><strong>Do not</strong> fetch reply bodies — only metadata on parent message object from channel history API.</li></ul>
+<pre><code>┌────────────────────────────────────────────┐
+│ Alice: We should ship Friday               │
+│ [💬 5 replies · 2 new]  [avatar][avatar]   │  ← unread from metadata only
+└────────────────────────────────────────────┘</code></pre>
+<p><strong>Tradeoffs:</strong> Per-thread read cursors multiply state (<code>#channels × #active threads</code>) — persist lazily (only threads user opened or subscribed to). <strong>Pitfall:</strong> Using channel <code>last_read</code> to infer thread unread — user can read channel but not thread. <strong>Pitfall:</strong> Clearing thread unread when parent scrolls into view without opening thread — wrong; require explicit thread visit or &quot;mark all read&quot; in channel.</p>
+<hr>
+</article>
+<article class="qa" id="how-do-you-handle-switching-between-general-a-dm-and-an-open-thread-pane-what-state-persists">
+<h3 class="question">How do you handle switching between #general, a DM, and an open thread pane — what state persists?</h3>
+<p><strong>Problem framing:</strong> Slack&#x27;s layout is <strong>multi-pane</strong>: sidebar + main conversation + optional flexpane. Switching conversations must feel instant (restore scroll, drafts, flexpane) without leaking state across channels.</p>
+<p><strong>Approach — per-conversation UI snapshot + global chrome state:</strong></p>
+<pre><code>type ConversationUIState = {
+  conversationId: string;
+  scrollAnchor: { ts: string; offsetPx: number } | &#x27;bottom&#x27;;
+  historyLoaded: ChannelTimeline[&#x27;historyCursor&#x27;];
+  draft: ComposerDraft;                    // per-channel draft (see Section 4)
+  flexpane: {
+    open: boolean;
+    parentTs: string | null;
+    threadScrollAnchor: { ts: string; offsetPx: number } | &#x27;bottom&#x27;;
+  };
+  lastVisitedAt: number;
+};
+
+type GlobalNavState = {
+  activeConversationId: string;
+  sidebarScrollTop: number;
+  workspaceId: string;
+};</code></pre>
+<p><strong>Switch <code>#general</code> → DM:</strong></p>
+<ol><li><strong>Persist</strong> <code>#general</code>&#x27;s <code>ConversationUIState</code> to in-memory LRU (cap ~20 conversations) + optional IndexedDB for scroll/draft.</li><li><strong>Swap</strong> active conversation — hydrate DM from cache or fetch <code>conversations.history</code> tail.</li><li><strong>Flexpane policy:</strong> Close on DM switch (DMs have threads too — if DM thread was open, persist separately under that DM id). Slack closes flexpane when changing channels unless &quot;pop out thread&quot; window.</li><li><strong>Composer</strong> loads DM-specific draft; channel draft saved separately.</li><li><strong>Unread</strong> — mark-as-read rules deferred until DM focused + visible (Section 6).</li></ol>
+<p><strong>Switch channel → open thread (same channel):</strong></p>
+<ol><li>Flexpane opens; <strong>channel scroll preserved</strong> — do not reset <code>scrollAnchor</code>.</li><li><code>activeSurface</code> becomes thread; channel feed remains mounted (hidden width shrink, not unmount) to avoid re-fetch and scroll loss.</li></ol>
+<p><strong>Switch thread → different channel with flexpane open:</strong></p>
+<ol><li>Save thread flexpane state under old <code>conversationId</code>.</li><li>New channel loads with flexpane closed by default; restore if user returns within session.</li></ol>
+<div class="mermaid-wrap"><pre class="mermaid">flowchart LR
+  A[#general state] -->|switch| Cache[(LRU UI cache)]
+  Cache -->|hydrate| B[DM state]
+  FP[Flexpane thread state] -->|scoped by| Conv[conversationId]</pre></div>
+<p><strong>Tradeoffs:</strong> Keeping channel DOM mounted vs destroy-on-switch — mounted preserves scroll/virtualizer cache at memory cost. Unmount + restore scroll via <code>scrollAnchor</code> ts is cheaper RAM, trickier with variable-height virtualization. <strong>Pitfall:</strong> Global composer single instance without per-conversation draft map — user loses draft on switch. <strong>Pitfall:</strong> Thread flexpane tied to global <code>parentTs</code> without scoping to channel — open wrong thread after switch.</p>
+<hr>
+</article>
+<article class="qa" id="how-do-you-lazy-load-older-messages-when-the-user-scrolls-up-in-a-channel-with-100k-messages">
+<h3 class="question">How do you lazy-load older messages when the user scrolls up in a channel with 100k messages?</h3>
+<p><strong>Problem framing:</strong> You cannot load 100k messages into DOM or memory. History must <strong>paginate backward</strong> on scroll intent, integrate with realtime inserts at the bottom, and work with virtualization.</p>
+<p><strong>Approach — cursor-based backward pagination + virtual list:</strong></p>
+<ol><li><strong>Initial load:</strong> <code>conversations.history</code> with <code>limit=50</code> (newest). Populate <code>topLevelTs</code> descending → reverse for display. Set <code>historyCursor.oldestLoadedTs</code>.</li></ol>
+<ol><li><strong>Scroll trigger:</strong> Virtualizer fires <code>onReachTop</code> when first visible index &lt; threshold (e.g. within 10 rows of top). Guard with <code>isFetchingOlder</code> lock.</li></ol>
+<ol><li><strong>Fetch:</strong> <code>conversations.history</code> with <code>latest=&lt;oldestLoadedTs&gt;</code> (exclusive) + <code>limit=50</code>. Prepend to <code>topLevelTs</code>; update cursor. <strong>Deduplicate</strong> by <code>ts</code> against socket-delivered messages during fetch.</li></ol>
+<ol><li><strong>Virtualization:</strong> Only ~30–40 rows mounted. <strong>Measure heights</strong> dynamically; cache <code>ts → height</code> in LRU. Prepend causes scroll jump — use <strong>scroll anchoring</strong> (below): preserve anchor message ts + pixel offset before prepend, restore after layout.</li></ol>
+<ol><li><strong>Memory cap:</strong> Evict messages above viewport + buffer from <code>messagesById</code> if not referenced by loaded windows in other open threads; keep <code>topLevelTs</code> skeleton ts list or re-fetch on scroll-back (Slack leans keep ts index, lazy body fetch via <code>conversations.history</code> batches).</li></ol>
+<ol><li><strong>Jump optimizations:</strong> &quot;Jump to date&quot; or search result bypasses sequential scroll — direct <code>oldest</code>/<code>latest</code> ts query (Section 5).</li></ol>
+<pre><code>[ newest ... newest-50 loaded ... scroll up ... fetch 51-100 ... ]
+     ▲                                    │
+     └── realtime appends here            └── prepend + anchor restore</code></pre>
+<p><strong>Tradeoffs:</strong> <code>limit=50</code> vs 200 — larger pages reduce API calls but worsen prepend jank. <strong>Pitfall:</strong> Fetching without excluding thread replies in API — Slack API returns only top-level in channel history by default; verify <code>inclusive</code> flags. <strong>Pitfall:</strong> Concurrent socket events during prepend — merge sorted by <code>ts</code>, stable sort tie-break on <code>client_msg_id</code>.</p>
+<hr>
+</article>
+<h2 class="section" id="deep">Deep</h2>
+<article class="qa" id="how-do-you-implement-the-thread-sidebar-flex-pane-without-re-fetching-the-entire-channel-on-every-open">
+<h3 class="question">How do you implement the thread sidebar (flex pane) without re-fetching the entire channel on every open?</h3>
+<p><strong>Problem framing:</strong> Opening a thread 10 times in an hour must not re-download channel history. Flexpane needs <strong>reply-only data</strong> plus a <strong>parent header</strong>, ideally from cache with incremental sync.</p>
+<p><strong>Approach — thread-scoped cache keyed by <code>(channelId, parentTs)</code>:</strong></p>
+<ol><li><strong>First open:</strong></li></ol>
+<ul><li>Parent message already in <code>messagesById</code> from channel feed (required).</li><li>If <code>threadsByParentTs[parentTs]</code> empty → <code>conversations.replies</code> with <code>ts=parentTs</code>, <code>limit=50</code> (newest or around target unread).</li><li>Store <code>replyTs[]</code>, set <code>loadedRange</code>.</li></ul>
+<ol><li><strong>Subsequent opens:</strong> Render immediately from cache. Background stale check: if <code>latest_reply</code> on parent &gt; cached newest, fetch only <strong>gap</strong> — <code>conversations.replies</code> with <code>oldest=&lt;cachedNewest&gt;</code> or latest since cursor.</li></ol>
+<ol><li><strong>Socket while flexpane closed:</strong> Replies still arrive via WebSocket — append to <code>threadsByParentTs[parentTs].replyTs</code> and <code>messagesById</code> even when flexpane unmounted. Opening flexpane is pure UI.</li></ol>
+<ol><li><strong>Do not</strong> call <code>conversations.history</code> on flexpane open. Channel timeline unchanged.</li></ol>
+<ol><li><strong>Flexpane virtual list</strong> independent scroll container — separate from channel virtualizer instance.</li></ol>
+<div class="mermaid-wrap"><pre class="mermaid">sequenceDiagram
+  participant User
+  participant Flexpane
+  participant Cache
+  participant API
+  User->>Flexpane: Open thread
+  Flexpane->>Cache: get (channel, parentTs)
+  alt cache hit
+    Cache-->>Flexpane: replyTs + messages
+  else cache miss
+    Flexpane->>API: conversations.replies
+    API-->>Flexpane: replies only
+    Flexpane->>Cache: store
+  end
+  Note over Flexpane: Socket updates cache live</pre></div>
+<p><strong>Tradeoffs:</strong> Pre-fetching replies on hover over &quot;N replies&quot; — faster open, wasted bandwidth on accidental hovers; debounce 200ms. <strong>Pitfall:</strong> Invalidating entire thread cache on any channel history refresh — scope invalidation to <code>(parentTs)</code> only. <strong>Pitfall:</strong> Separate React Query key without <code>parentTs</code> — thread conflation.</p>
+<hr>
+</article>
+<article class="qa" id="how-do-you-keep-thread-reply-counts-and-new-replies-badges-in-sync-with-the-main-channel-list">
+<h3 class="question">How do you keep thread reply counts and &quot;new replies&quot; badges in sync with the main channel list?</h3>
+<p><strong>Problem framing:</strong> Parent rows in the channel feed show <strong>stale pills</strong> if reply metadata updates only when flexpane is open. Socket traffic for thread replies must update <strong>parent summary fields</strong> on the main timeline in real time.</p>
+<p><strong>Approach — unified socket handler pipeline:</strong></p>
+<ol><li><strong>Inbound <code>message</code> with <code>thread_ts</code> set:</strong></li></ol>
+<ul><li>Upsert full message in <code>messagesById</code>.</li><li>Append <code>ts</code> to <code>threadsByParentTs[thread_ts].replyTs</code> (dedupe).</li><li><strong>Patch parent</strong> (lookup <code>messagesById[thread_ts]</code>):</li></ul>
+<pre><code>     parent.reply_count = (parent.reply_count ?? 0) + 1;
+     parent.latest_reply = message.ts;
+     parent.reply_users_count = updateUniqueReplyUsers(parent, message.user);</code></pre>
+<ul><li>Re-render <strong>only parent row</strong> in channel virtualizer (row-level subscription or immutable parent object swap).</li></ul>
+<ol><li><strong>&quot;New replies&quot; badge:</strong> Maintain <code>threadUnreadByParentTs</code> map — increment if:</li></ol>
+<ul><li>User is subscribed to thread, OR</li><li>User was @mentioned in reply, OR</li><li>User is parent author (optional product rule)</li><li>AND flexpane not open on this <code>parentTs</code>, AND <code>message.ts &gt; lastReadReplyTs</code>.</li></ul>
+<ol><li><strong>Decrement/clear:</strong> Opening flexpane + scroll to latest → <code>conversations.mark</code> with <code>ts=parentTs</code> → zero badge, update <code>lastReadReplyTs</code>.</li></ol>
+<ol><li><strong>Delete/edit reply:</strong> <code>message_changed</code> / <code>message_deleted</code> → adjust <code>reply_count</code>, recompute <code>latest_reply</code> from tail of <code>replyTs</code> or refetch parent metadata if inconsistent.</li></ol>
+<ol><li><strong>Batch updates:</strong> High-traffic thread — coalesce parent patches in rAF (50 replies/sec during incident → one parent row update per frame with latest count).</li></ol>
+<pre><code>Socket: thread reply ──► messagesById[reply]
+                      ──► threadsByParentTs[parent].replyTs
+                      ──► PATCH parent.reply_count (channel feed row)
+                      ──► threadUnreadByParentTs++ (if rules match)</code></pre>
+<p><strong>Tradeoffs:</strong> Server-trust vs client-derived <code>reply_count</code> — prefer server fields on parent in history API, reconcile client increment with periodic validation. <strong>Pitfall:</strong> Virtualized list not re-rendering parent because row key is index-based — key rows by <code>ts</code>. <strong>Pitfall:</strong> Badge cleared when channel marked read but thread unread remains — separate cursors.</p>
+<hr>
+</article>
+<article class="qa" id="how-do-you-handle-a-message-deleted-event-for-a-message-that-has-40-thread-replies-what-stays-visible">
+<h3 class="question">How do you handle a <code>message_deleted</code> event for a message that has 40 thread replies — what stays visible?</h3>
+<p><strong>Problem framing:</strong> Deleting a <strong>parent</strong> is not the same as deleting a <strong>reply</strong>. Slack preserves thread integrity for compliance and context — UI must reflect tombstone rules without orphaning 40 replies in a broken flexpane.</p>
+<p><strong>Approach — deletion tiers (match Slack behavior):</strong></p>
+<table>
+<thead><tr>
+<th>Deleted message</th>
+<th>Channel feed</th>
+<th>Flexpane / thread</th>
+</tr></thead><tbody>
+<tr>
+<td><strong>Thread reply</strong></td>
+<td>If <code>thread_broadcast</code>: remove or tombstone channel copy</td>
+<td>Remove reply row; decrement parent <code>reply_count</code></td>
+</tr>
+<tr>
+<td><strong>Parent with replies</strong></td>
+<td>Parent becomes <strong>tombstone</strong> (&quot;This message was deleted&quot;)</td>
+<td><strong>Thread remains open</strong> — replies still visible</td>
+</tr>
+<tr>
+<td><strong>Parent with no replies</strong></td>
+<td>Row removed entirely</td>
+<td>N/A</td>
+</tr>
+</tbody></table>
+<p><strong>Client handler for <code>message_deleted</code> (parent with 40 replies):</strong></p>
+<ol><li>Replace parent content in <code>messagesById[parentTs]</code> — <code>text: &#x27;&#x27;</code>, <code>hidden: true</code> or <code>subtype: &#x27;tombstone&#x27;</code>, strip attachments/blocks per policy.</li><li><strong>Keep</strong> <code>reply_count</code>, <code>thread_ts</code> index, and all <code>threadsByParentTs[parentTs].replyTs</code> entries — <strong>do not</strong> delete reply messages.</li><li>Channel feed row renders compact tombstone with reply pill still clickable: &quot;This message was deleted · 40 replies&quot;.</li><li>Flexpane shows tombstone header + full reply history below.</li><li><strong>Composer:</strong> Usually disable &quot;reply&quot; on deleted parent for non-admins; existing thread read-only or admin-only per retention policy.</li></ol>
+<p><strong>Reply deleted inside open thread:</strong> Remove from <code>replyTs</code>, update parent count, if deleted reply was <code>latest_reply</code> walk backward for new latest.</p>
+<p><strong>Tradeoffs:</strong> Hard delete from local store vs tombstone — tombstone preserves scroll anchors and thread navigation keys (<code>parentTs</code> stable). <strong>Pitfall:</strong> Removing parent from <code>topLevelTs</code> — breaks thread open via parent reference. <strong>Pitfall:</strong> Hiding entire thread on parent delete — wrong for Slack; replies are first-class audit trail.</p>
+<hr>
+</article>
+<article class="qa" id="how-do-you-implement-slack-connect-shared-channels-where-members-from-two-workspaces-see-the-same-channel">
+<h3 class="question">How do you implement Slack Connect shared channels where members from two workspaces see the same channel?</h3>
+<p><strong>Problem framing:</strong> A <strong>shared channel</strong> spans two (or more) Enterprise Grid workspaces. Same <code>channel_id</code>, same message stream, but <strong>different users, emoji, permissions, retention, and auth boundaries</strong> per org. Client must render a unified timeline without leaking org-private metadata.</p>
+<p><strong>Approach — shared channel as overlay on normal channel model:</strong></p>
+<ol><li><strong>Identification:</strong> Channel object includes <code>is_shared</code>, <code>connected_team_ids</code>, <code>conversation_host_id</code>. Sidebar shows shared icon; member list groups by org.</li></ol>
+<ol><li><strong>Single message store</strong> — messages are not duplicated per org. <code>user</code> field resolves via <strong>cross-workspace user profile cache</strong> keyed by <code>user_id</code> + <code>team_id</code>.</li></ol>
+<ol><li><strong>Author rendering:</strong> Display name + org badge (&quot;Acme Corp&quot; vs &quot;Partner Inc&quot;) when <code>user.team_id !== currentWorkspace.team_id</code>. Avatar from shared profile API.</li></ol>
+<ol><li><strong>Permissions UI:</strong> Guest from Org A may not see Org B custom emoji — fallback <code>:emoji:</code> shortcode. File previews gated by <strong>both</strong> orgs&#x27; sharing policies; show blocked placeholder if foreign file not authorized.</li></ol>
+<ol><li><strong>Realtime:</strong> Same WebSocket channel subscription; events identical. Presence may be cross-org limited — show &quot;External&quot; instead of full presence dot if policy restricts.</li></ol>
+<ol><li><strong>Search / history:</strong> Scoped to viewer&#x27;s retention — Org A 90-day vs Org B 1-year → same message hidden for A after 90 days while B still sees it (policy-aware filter on client render + server pagination stops at retention boundary).</li></ol>
+<ol><li><strong>Workspace switcher:</strong> Shared channel appears in each workspace&#x27;s sidebar with same id — state keyed by <code>(workspaceId, channelId)</code> even though channel id matches.</li></ol>
+<div class="mermaid-wrap"><pre class="mermaid">flowchart TB
+  subgraph OrgA
+    CA[Client A]
+  end
+  subgraph OrgB
+    CB[Client B]
+  end
+  subgraph Shared
+    CH[Channel C123]
+    MS[messagesById]
+  end
+  CA --> CH
+  CB --> CH
+  CH --> MS
+  CA -->|retention filter A| UI_A[Timeline view]
+  CB -->|retention filter B| UI_B[Timeline view]</pre></div>
+<p><strong>Tradeoffs:</strong> Unified store vs per-org replicas — unified matches server; filter at render for retention. <strong>Pitfall:</strong> Assuming <code>user_id</code> is globally unique without <code>team_id</code> — collisions across orgs. <strong>Pitfall:</strong> @mention autocomplete showing users from wrong org without <code>is_external</code> guard.</p>
+<hr>
+</article>
+<article class="qa" id="how-do-you-virtualize-a-channel-message-list-where-messages-have-wildly-different-heights-embeds-images-code-blocks">
+<h3 class="question">How do you virtualize a channel message list where messages have wildly different heights (embeds, images, code blocks)?</h3>
+<p><strong>Problem framing:</strong> Fixed-row virtualization fails when one message is 40px and another is 800px (unfurled link + image). Wrong height estimates cause scroll drift, blank gaps, and broken lazy-load triggers.</p>
+<p><strong>Approach — dynamic-height virtualizer with measure cache:</strong></p>
+<ol><li><strong>Library pattern:</strong> <code>@tanstack/react-virtual</code>, <code>react-virtuoso</code>, or custom — <strong>variable size list</strong> with <code>estimateSize(ts)</code> + <code>measureElement</code> callback.</li></ol>
+<ol><li><strong>Height cache:</strong></li></ol>
+<pre><code>   type HeightEntry = { height: number; measuredAt: number; contentHash: string };
+   heightCache: Map&lt;string, HeightEntry&gt;; // key = message ts</code></pre>
+<p>On render, ref callback measures <code>getBoundingClientRect().height</code> after layout. Store by <code>ts</code>.</p>
+<ol><li><strong>Estimation heuristic</strong> before measure:</li></ol>
+<ul><li>Plain text: <code>lineCount * lineHeight + padding</code></li><li>Code block: <code>min(lines, 20) * lineHeight</code> (collapsed &quot;show more&quot;)</li><li>Image attachment: aspect-ratio placeholder from metadata <code>thumb_w/h</code> if available, else 200px</li><li>Unfurl loading: skeleton fixed 120px → remeasure on load (<code>ResizeObserver</code>)</li></ul>
+<ol><li><strong>ResizeObserver</strong> on each row — image load, emoji skin tone, edit expansion triggers remeasure → virtualizer <code>resizeItem(index)</code>.</li></ol>
+<ol><li><strong>Overscan:</strong> 5–10 rows above/below viewport to smooth fast scroll.</li></ol>
+<ol><li><strong>Scroll-to-message</strong> (search, deep link): Binary search on cumulative offsets if heights known; else iterative scroll + measure until target <code>ts</code> visible.</li></ol>
+<ol><li><strong>Thread / flexpane:</strong> Separate virtualizer instance — same cache keyed globally by <code>ts</code> (reuse measured heights when same message rendered in thread broadcast row).</li></ol>
+<pre><code>┌ viewport ────────────────┐
+│  [row ts=100] measured 48│
+│  [row ts=101] measured 320│  ← image unfurled
+│  [row ts=102] estimated 60│  ← not yet measured
+└──────────────────────────┘
+        overscan buffer</code></pre>
+<p><strong>Tradeoffs:</strong> Aggressive estimation vs measure-first — estimation enables smooth fast fling; wrong estimates cause scroll &quot;settling.&quot; Virtuoso&#x27;s <code>defaultItemHeight</code> + <code>increaseViewportBy</code> is a good default. <strong>Pitfall:</strong> Keying rows by array index — on prepend, remeasure storm; key by <code>ts</code>. <strong>Pitfall:</strong> Not remeasuring on font size / zoom change — listen to <code>resize</code> on container.</p>
+<hr>
+</article>
+<article class="qa" id="how-do-you-implement-scroll-anchoring-when-new-messages-arrive-at-the-bottom-while-the-user-is-reading-history-above">
+<h3 class="question">How do you implement scroll anchoring when new messages arrive at the bottom while the user is reading history above?</h3>
+<p><strong>Problem framing:</strong> User scrolled up reviewing yesterday&#x27;s incident thread. New messages arrive at bottom via WebSocket. Without anchoring, the viewport <strong>jumps</strong> — disorienting and causing mis-clicks. Slack shows a &quot;New messages&quot; pill instead of auto-scrolling when user is not at bottom.</p>
+<p><strong>Approach — dual-mode scroll policy:</strong></p>
+<pre><code>type ScrollMode = &#x27;pinned_bottom&#x27; | &#x27;history&#x27;;
+
+function onNewMessage(msg: Message) {
+  appendToTimeline(msg);
+  if (scrollMode === &#x27;pinned_bottom&#x27;) {
+    scrollToBottom({ behavior: &#x27;smooth&#x27; });
+  } else {
+    // DO NOT change scrollTop
+    showNewMessagesPill({ count: ++pendingNewCount, latestTs: msg.ts });
+    // Optional: increment unread badge
+  }
+}</code></pre>
+<p><strong>Scroll anchoring mechanics (CSS + manual):</strong></p>
+<ol><li><strong>CSS <code>overflow-anchor: auto</code></strong> (default on modern browsers) on scroll container — browser pins content above viewport when height changes below fold. Enable on message list wrapper; disable on inner animated elements that confuse anchor (<code>overflow-anchor: none</code> on spinners).</li></ol>
+<ol><li><strong>Manual anchor on prepend (history load):</strong> Before DOM update, record <code>anchorTs</code> = first visible message + <code>offsetPx</code> from viewport top. After prepend + layout, <code>scrollToMessage(anchorTs, offsetPx)</code>.</li></ol>
+<ol><li><strong>Manual anchor on height change above viewport:</strong> When image above fold loads and grows, without anchor user content jumps down — <code>ResizeObserver</code> on rows above scrollTop triggers scroll compensation: <code>scrollTop += (newHeight - oldHeight)</code> if row is above viewport midpoint.</li></ol>
+<ol><li><strong>&quot;New messages&quot; pill click:</strong> Set <code>scrollMode = &#x27;pinned_bottom&#x27;</code>, scroll to latest, clear pill, mark read per policy.</li></ol>
+<ol><li><strong>Threshold detection:</strong> <code>isAtBottom = scrollHeight - scrollTop - clientHeight &lt; 80px</code> — within 80px counts as bottom (sticky pin).</li></ol>
+<div class="mermaid-wrap"><pre class="mermaid">stateDiagram-v2
+  [*] --> PinnedBottom: user at bottom
+  PinnedBottom --> History: user scrolls up
+  History --> PinnedBottom: click pill / scroll to bottom
+  PinnedBottom --> PinnedBottom: new msg auto-scroll
+  History --> History: new msg pill only</pre></div>
+<p><strong>Tradeoffs:</strong> CSS anchor alone vs explicit — combine both; CSS fails on some prepend patterns. Smooth scroll on auto-pin annoys power users — instant scroll if already within 10px of bottom. <strong>Pitfall:</strong> Appending to virtualizer without notifying size change — list doesn&#x27;t grow, pill wrong. <strong>Pitfall:</strong> Auto-scroll when user selected text in history — guard pin mode: if text selection active, never jump.</p>
+<hr>
+</article>
+<h2 class="section" id="quick-reference-interview-close">Quick reference (interview close)</h2>
+<table>
+<thead><tr>
+<th>Topic</th>
+<th>One-liner</th>
+</tr></thead><tbody>
+<tr>
+<td>State model</td>
+<td>Normalized <code>messagesById</code> + <code>topLevelTs</code> + <code>threadsByParentTs</code>; one object, multiple indexes</td>
+</tr>
+<tr>
+<td>Reply in thread</td>
+<td>Flexpane opens; composer gets <code>thread_ts</code>; channel feed unchanged</td>
+</tr>
+<tr>
+<td>Also send to channel</td>
+<td>Single <code>ts</code>, dual index with <code>reply_broadcast</code>; styled row in feed + reply in thread</td>
+</tr>
+<tr>
+<td>Thread unread</td>
+<td>Parent metadata + per-thread read cursor; no reply fetch required</td>
+</tr>
+<tr>
+<td>Conversation switch</td>
+<td>LRU per-conversation scroll, draft, flexpane; scoped by <code>conversationId</code></td>
+</tr>
+<tr>
+<td>Lazy history</td>
+<td>Backward <code>conversations.history</code> cursors + virtual prepend + scroll anchor</td>
+</tr>
+<tr>
+<td>Flexpane cache</td>
+<td><code>conversations.replies</code> keyed by <code>(channel, parentTs)</code>; socket fills while closed</td>
+</tr>
+<tr>
+<td>Reply count sync</td>
+<td>Socket handler patches parent row; row keyed by <code>ts</code></td>
+</tr>
+<tr>
+<td>Parent delete</td>
+<td>Tombstone in feed; thread replies remain in flexpane</td>
+</tr>
+<tr>
+<td>Slack Connect</td>
+<td>Shared channel id; cross-org profiles; retention filter at render</td>
+</tr>
+<tr>
+<td>Variable height</td>
+<td>Dynamic virtualizer + measure cache + ResizeObserver on unfurls</td>
+</tr>
+<tr>
+<td>Scroll anchoring</td>
+<td><code>pinned_bottom</code> vs <code>history</code> mode; CSS anchor + manual compensate on prepend/load</td>
+</tr>
+</tbody></table>
+  </main>
+  <footer class="page-footer">
+    <a href="index.html">← All sections</a> ·
+    <a href="../slack-frontend-architecture.html">Architecture map</a>
+  </footer>
+  <script src="assets/interactive.js" defer></script>
+</body>
+</html>

@@ -1,0 +1,734 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Section 8 — Client State, API Layer &amp; Caching (Answers) | System Design Answers</title>
+  <meta name="description" content="Interview-depth answers for Twitter frontend system design.">
+  <style>
+    :root {
+      --bg: #f8f9fb; --surface: #ffffff; --text: #1a1d26; --text-muted: #5c6370;
+      --border: #e2e6ed; --accent: #3d5a80; --accent-soft: #eef2f7;
+      --code-bg: #f0f2f6; --pre-bg: #1e2433; --pre-text: #e8ecf4;
+      --nav-bg: rgba(248, 249, 251, 0.92); --shadow: 0 1px 3px rgba(0, 0, 0, 0.06);
+    }
+    @media (prefers-color-scheme: dark) {
+      :root {
+        --bg: #12151c; --surface: #1a1f2a; --text: #e8ecf4; --text-muted: #9aa3b2;
+        --border: #2d3548; --accent: #8cb4d9; --accent-soft: #232a38;
+        --code-bg: #252d3d; --pre-bg: #0d1017; --pre-text: #d4dae6;
+        --nav-bg: rgba(18, 21, 28, 0.94); --shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
+      }
+    }
+    *, *::before, *::after { box-sizing: border-box; }
+    html { scroll-behavior: smooth; scroll-padding-top: 5.5rem; }
+    body { margin: 0; font-family: "Segoe UI", system-ui, sans-serif; font-size: 1.0625rem;
+      line-height: 1.65; color: var(--text); background: var(--bg); }
+    .site-nav { position: sticky; top: 0; z-index: 100; background: var(--nav-bg);
+      backdrop-filter: blur(10px); border-bottom: 1px solid var(--border); box-shadow: var(--shadow); }
+    .site-nav-inner { max-width: 900px; margin: 0 auto; padding: 0.75rem 1.5rem; }
+    .site-nav-title { font-size: 0.8125rem; font-weight: 600; text-transform: uppercase;
+      letter-spacing: 0.04em; color: var(--text-muted); margin: 0 0 0.5rem; }
+    .toc { display: flex; flex-wrap: wrap; gap: 0.35rem 0.75rem; margin: 0; padding: 0;
+      list-style: none; font-size: 0.8125rem; }
+    .toc a { color: var(--accent); text-decoration: none; white-space: nowrap; }
+    .toc a:hover { text-decoration: underline; }
+    .page { max-width: 900px; margin: 0 auto; padding: 2rem 1.5rem 4rem; }
+    header.page-header { margin-bottom: 2.5rem; padding-bottom: 1.5rem; border-bottom: 1px solid var(--border); }
+    h1 { font-size: 1.75rem; font-weight: 700; margin: 0 0 0.75rem; }
+    .lead { margin: 0; color: var(--text-muted); font-size: 1.05rem; }
+    h2.section { font-size: 1.35rem; font-weight: 700; margin: 2.5rem 0 1.25rem;
+      color: var(--accent); border-bottom: 2px solid var(--accent-soft); padding-bottom: 0.35rem; }
+    article.qa { margin-bottom: 2.75rem; background: var(--surface); border: 1px solid var(--border);
+      border-radius: 10px; padding: 1.5rem 1.75rem; box-shadow: var(--shadow); }
+    h3.question { font-size: 1.2rem; font-weight: 600; margin: 0 0 1rem; }
+    article.qa p { margin: 0 0 1rem; }
+    ol, ul { margin: 0 0 1rem; padding-left: 1.35rem; }
+    table { width: 100%; border-collapse: collapse; margin: 0 0 1rem; font-size: 0.95rem; }
+    th, td { border: 1px solid var(--border); padding: 0.55rem 0.75rem; text-align: left; }
+    th { background: var(--accent-soft); font-weight: 600; }
+    code { font-family: ui-monospace, Menlo, Consolas, monospace; font-size: 0.88em;
+      background: var(--code-bg); padding: 0.15em 0.4em; border-radius: 4px; }
+    pre { margin: 0 0 1rem; padding: 1rem; background: var(--pre-bg); color: var(--pre-text);
+      border-radius: 8px; overflow-x: auto; font-size: 0.875rem; }
+    pre code { background: none; padding: 0; color: inherit; }
+    .mermaid-wrap { margin: 0 0 1rem; padding: 1rem; background: var(--surface);
+      border: 1px solid var(--border); border-radius: 8px; overflow-x: auto; }
+    footer.page-footer { max-width: 900px; margin: 0 auto; padding: 1.5rem;
+      border-top: 1px solid var(--border); font-size: 0.9375rem; }
+    footer.page-footer a { color: var(--accent); text-decoration: none; font-weight: 500; }
+  </style>
+  <link rel="stylesheet" href="assets/interactive.css">
+</head>
+<body>
+  <nav class="site-nav" aria-label="Table of contents">
+    <div class="site-nav-inner">
+      <p class="site-nav-title">On this page</p>
+      <ol class="toc"><li><a href="#what-belongs-in-ephemeral-ui-state-vs-react-queryswr-cache-vs-normalized-entity-store-tweet-by-id">What belongs in ephemeral UI state v</a></li><li><a href="#how-do-you-key-timeline-queries-feedmode-cursor-viewerid-for-correct-invalidation-on-account-switch">How do you key timeline queries (`fe</a></li><li><a href="#how-do-you-implement-stale-while-revalidate-for-profiles-and-static-config-with-revalidateonfocus-tradeoffs">How do you implement stale-while-rev</a></li><li><a href="#when-would-a-bff-aggregate-timeline-suggested-users-ads-in-one-round-trip-vs-many-parallel-rest-calls">When would a BFF aggregate timeline </a></li><li><a href="#how-do-you-batch-or-coalesce-api-requests-on-first-paint-without-violating-rate-limits">How do you batch or coalesce API req</a></li><li><a href="#how-do-you-show-rate-limit-ux-countdown-queue-or-downgrade-for-post-like-and-search-actions">How do you show rate-limit UX — coun</a></li><li><a href="#how-do-you-defend-graphql-on-a-read-heavy-feed-vs-rest-field-expansion-cdn-edge-caching">How do you defend GraphQL on a read-</a></li><li><a href="#how-do-you-implement-cursor-stable-cache-merges-when-the-server-returns-overlapping-tweet-ids-across-pages">How do you implement cursor-stable c</a></li><li><a href="#how-do-you-use-service-worker-or-http-cache-for-emoji-fonts-static-bundles-and-read-only-tweet-json-at-the-edge">How do you use service worker or HTT</a></li><li><a href="#how-do-you-invalidate-following-graph-changed-across-home-lists-and-dms-without-global-queryclientclear">How do you invalidate &quot;following gra</a></li><li><a href="#how-do-you-handle-partial-graphql-errors-render-timeline-with-missing-attachment-hydration-vs-fail-the-whole-page">How do you handle partial GraphQL er</a></li><li><a href="#how-do-you-design-etagif-none-match-for-tweet-detail-while-keeping-engagement-counts-fresh">How do you design ETag/`If-None-Matc</a></li></ol>
+    </div>
+  </nav>
+  <main class="page">
+    <header class="page-header">
+      <h1>Section 8 — Client State, API Layer &amp; Caching (Answers)</h1>
+      <p class="lead">Interview-depth answers for Twitter frontend system design.</p>
+    </header>
+    <h1 id="section-8-client-state-api-layer-caching-answers">Section 8 — Client State, API Layer &amp; Caching (Answers)</h1>
+<p>Interview-depth answers for Twitter/X client architecture: separating ephemeral UI from server cache and normalized entities, query key design for multi-account timelines, stale-while-revalidate profiles and config, BFF aggregation vs parallel REST, first-paint request coalescing, rate-limit UX, GraphQL vs REST at read scale, cursor-stable infinite cache merges, service worker and HTTP edge caching, surgical graph invalidation, partial GraphQL error handling, and ETag strategies for tweet detail with fresh engagement counts.</p>
+<hr>
+<h2 class="section" id="core">Core</h2>
+<article class="qa" id="what-belongs-in-ephemeral-ui-state-vs-react-queryswr-cache-vs-normalized-entity-store-tweet-by-id">
+<h3 class="question">What belongs in ephemeral UI state vs React Query/SWR cache vs normalized entity store (tweet by id)?</h3>
+<p><strong>Problem framing:</strong> At X-scale, the same tweet appears in home, profile, search, notifications, and DMs. Stuffing everything into one React state tree causes over-render and stale duplicates; stuffing everything into React Query page blobs prevents cross-surface like-count updates. Interviewers want a <strong>three-layer model</strong> with clear ownership and merge rules.</p>
+<p><strong>Approach:</strong> Partition by <strong>lifetime and fan-out</strong>:</p>
+<table>
+<thead><tr>
+<th>Layer</th>
+<th>Owns</th>
+<th>Examples</th>
+<th>Lifetime</th>
+</tr></thead><tbody>
+<tr>
+<td><strong>Ephemeral UI</strong></td>
+<td>View-local, discardable</td>
+<td>Scroll offset, open compose sheet, hover card anchor, <code>expanded</code> on long tweet, active tab, modal stack, drag state</td>
+<td>Session / route</td>
+</tr>
+<tr>
+<td><strong>Server cache (React Query / SWR)</strong></td>
+<td>Ordered lists, pagination, fetch metadata</td>
+<td>Timeline pages, profile tab cursors, search results, <code>isFetching</code>, <code>dataUpdatedAt</code>, stale flags</td>
+<td>Until invalidated or GC</td>
+</tr>
+<tr>
+<td><strong>Normalized entity store</strong></td>
+<td>Identity-keyed records</td>
+<td><code>tweetsById</code>, <code>usersById</code>, <code>mediaById</code>, conversation headers</td>
+<td>Until entity deleted or account switch purge</td>
+</tr>
+</tbody></table>
+<div class="mermaid-wrap"><pre class="mermaid">flowchart TB
+  UI[Ephemeral UI state] --> Selectors
+  RQ[React Query infinite queries] --> Selectors
+  NS[Normalized entities tweetsById] --> Selectors
+  Selectors --> Row[TweetRow component]
+  RQ -->|ordered ids only| Row
+  NS -->|hydrate fields| Row</pre></div>
+<ol><li><strong>Ephemeral UI</strong> — Zustand slice or component <code>useState</code> for chrome that never round-trips:</li></ol>
+<pre><code>   type FeedUiState = {
+     feedMode: &#x27;following&#x27; | &#x27;for_you&#x27;;
+     scrollAnchor: { tweetId: string; offsetPx: number } | null;
+     newPostsBannerCount: number;
+     composeOpen: boolean;
+     replyTargetTweetId: string | null;
+   };</code></pre>
+<p>Do <strong>not</strong> put scroll position in React Query — it is not server data.</p>
+<ol><li><strong>React Query / SWR</strong> — Holds <strong>references</strong>, not full tweet graphs:</li></ol>
+<pre><code>   type TimelinePage = {
+     ids: string[];
+     cursorBottom: string | null;
+     cursorTop: string | null;
+     fetchedAt: number;
+   };
+   // queryKey: [&#x27;timeline&#x27;, viewerId, feedMode]
+   // data: InfiniteData&lt;TimelinePage&gt;</code></pre>
+<p>Pages store <code>ids[]</code> only; hydration reads <code>tweetsById[id]</code>.</p>
+<ol><li><strong>Normalized entity store</strong> — Single source for tweet body, author ref, media, counts:</li></ol>
+<pre><code>   type TweetEntity = {
+     id: string;
+     text: string;
+     authorId: string;
+     createdAt: string;
+     likeCount: number;
+     replyCount: number;
+     repostCount: number;
+     mediaIds: string[];
+     _meta: { version: number; pending?: boolean };
+   };
+
+   function upsertTweet(store: EntityStore, tweet: TweetEntity) {
+     const prev = store.tweetsById[tweet.id];
+     store.tweetsById[tweet.id] = prev
+       ? mergeTweet(prev, tweet) // monotonic counts, newer wins on text
+       : tweet;
+   }</code></pre>
+<p>Like/reply mutations patch <strong>one</strong> <code>tweetsById</code> entry; all surfaces re-render via selectors.</p>
+<ol><li><strong>Write path</strong> — Optimistic compose inserts <code>pending:*</code> into entity store + prepends id to active timeline query; on success, reconcile id swap (<code>pending:uuid</code> → real <code>id_str</code>).</li></ol>
+<ol><li><strong>Relay alignment</strong> — GraphQL normalized cache is the entity store; React Query can be dropped if Relay handles connections — same split: connection edges vs record store.</li></ol>
+<ol><li><strong>What never goes where</strong> —</li></ol>
+<p>| Data | Wrong home | Right home |</p>
+<p>|------|------------|------------|</p>
+<p>| Like count | Ephemeral UI | Entity store |</p>
+<p>| Page 3 cursor | Entity store | React Query page |</p>
+<p>| Virtualizer range | React Query | Ephemeral UI |</p>
+<p>| User avatar URL | Duplicated per page blob | Entity store <code>usersById</code> |</p>
+<p><strong>Tradeoffs:</strong> Three layers add plumbing (<code>selectTweet(id)</code> hooks) vs one giant cache. Normalized store requires merge discipline — stale page arrays pointing at deleted tweets need tombstones. <strong>Pitfall:</strong> Full tweet objects inside every infinite page — 5× memory when same viral tweet appears in home + profile + search. <strong>Pitfall:</strong> Putting <code>feedMode</code> in entity store — mode is UI/query scope, not tweet property.</p>
+<hr>
+</article>
+<article class="qa" id="how-do-you-key-timeline-queries-feedmode-cursor-viewerid-for-correct-invalidation-on-account-switch">
+<h3 class="question">How do you key timeline queries (<code>feedMode</code>, <code>cursor</code>, <code>viewerId</code>) for correct invalidation on account switch?</h3>
+<p><strong>Problem framing:</strong> Power users switch among 2–5 accounts. A cache key missing <code>viewerId</code> shows Account B&#x27;s home while Account A&#x27;s auth cookie still lingers in a worker — catastrophic. Keys that embed <code>cursor</code> in the root key break pagination; keys that ignore <code>feedMode</code> bleed Following into For You.</p>
+<p><strong>Approach:</strong> <strong>Hierarchical query keys</strong> with <code>viewerId</code> and <code>feedMode</code> at the root; cursors live inside page params, never in the static key prefix. On account switch, <strong>scoped purge</strong> not global clear.</p>
+<pre><code>// Query key factory
+export const timelineKeys = {
+  all: (viewerId: string) =&gt; [&#x27;timeline&#x27;, viewerId] as const,
+  feed: (viewerId: string, feedMode: FeedMode) =&gt;
+    [...timelineKeys.all(viewerId), feedMode] as const,
+  // cursor is pageParam, NOT key segment
+};
+
+// React Query infinite query
+useInfiniteQuery({
+  queryKey: timelineKeys.feed(viewerId, feedMode),
+  queryFn: ({ pageParam }) =&gt;
+    fetchTimeline({ viewerId, feedMode, cursor: pageParam }),
+  initialPageParam: null as string | null,
+  getNextPageParam: (lastPage) =&gt; lastPage.cursorBottom,
+});</code></pre>
+<ol><li><strong>Key segments and purpose</strong> —</li></ol>
+<p>| Segment | Required | Invalidation trigger |</p>
+<p>|---------|----------|----------------------|</p>
+<p>| <code>&#x27;timeline&#x27;</code> | namespace | never alone |</p>
+<p>| <code>viewerId</code> (<code>rest_id</code>) | yes | account switch → remove subtree |</p>
+<p>| <code>feedMode</code> | yes | tab switch → separate cache |</p>
+<p>| <code>cursor</code> | <strong>pageParam only</strong> | append pages, not new query |</p>
+<ol><li><strong>Account switch handler</strong> —</li></ol>
+<pre><code>   async function switchAccount(nextViewerId: string) {
+     const prevViewerId = getActiveViewerId();
+     await flushPendingMutations(prevViewerId);
+     queryClient.removeQueries({ queryKey: timelineKeys.all(prevViewerId) });
+     queryClient.removeQueries({ queryKey: [&#x27;notifications&#x27;, prevViewerId] });
+     queryClient.removeQueries({ queryKey: [&#x27;dm&#x27;, prevViewerId] });
+     // Shared entities: drop or partition by viewerId tag
+     entityStore.purgePartition(prevViewerId);
+     setActiveViewerId(nextViewerId);
+     reconnectWebSocket(nextViewerId);
+   }</code></pre>
+<ol><li><strong>Do not key on screen name</strong> — <code>viewerId</code> is stable; <code>@handle</code> changes break cache on rename.</li></ol>
+<ol><li><strong>Prefetch isolation</strong> — Hover prefetch must pass current <code>viewerId</code>: <code>prefetchInfiniteQuery({ queryKey: timelineKeys.feed(viewerId, &#x27;following&#x27;), ... })</code>.</li></ol>
+<ol><li><strong>Multi-tab</strong> — <code>BroadcastChannel(&#x27;account&#x27;)</code> syncs active viewer; each tab&#x27;s query cache uses same key factory so Account A tab cannot read Account B keys if viewerId in key.</li></ol>
+<ol><li><strong>Stale closure guard</strong> — <code>queryFn</code> reads <code>viewerId</code> from closure captured at fetch time; include <code>viewerId</code> in request header (<code>X-Act-As-User</code>) and reject mismatch responses.</li></ol>
+<div class="mermaid-wrap"><pre class="mermaid">flowchart LR
+  Switch[Account switch] --> Remove[removeQueries timeline viewerA]
+  Remove --> WS[Reconnect WS viewerB]
+  WS --> Fetch[prefetch timeline viewerB following]</pre></div>
+<p><strong>Tradeoffs:</strong> Partitioning entity store by viewer doubles memory for shared public tweets — acceptable vs privacy bug; optional global read-only cache for public tweets with viewer-specific overlays (like state). <strong>Pitfall:</strong> <code>queryClient.clear()</code> on switch — nukes static config cache; use scoped remove. <strong>Pitfall:</strong> Cursor in query key → every page is orphan cache entry.</p>
+<hr>
+</article>
+<article class="qa" id="how-do-you-implement-stale-while-revalidate-for-profiles-and-static-config-with-revalidateonfocus-tradeoffs">
+<h3 class="question">How do you implement stale-while-revalidate for profiles and static config with <code>revalidateOnFocus</code> tradeoffs?</h3>
+<p><strong>Problem framing:</strong> Profiles and feature flags are read constantly but change infrequently; users expect <strong>instant paint</strong> from cache on back-navigation. Pure <code>cacheTime: 0</code> hammers GraphQL at millions of QPS; pure <code>staleTime: Infinity</code> shows wrong follower counts after viral moments. <code>revalidateOnFocus</code> refreshes on every tab focus — good for DMs, noisy for profile headers.</p>
+<p><strong>Approach:</strong> <strong>Tiered SWR policy</strong> by resource volatility; show cached data immediately, background refetch with subtle UI reconciliation.</p>
+<pre><code>const cachePolicy = {
+  staticConfig: {
+    staleTime: 30 * 60_000,      // 30 min
+    gcTime: 24 * 60 * 60_000,
+    refetchOnWindowFocus: false,
+    refetchOnReconnect: true,
+  },
+  userProfile: {
+    staleTime: 60_000,           // 1 min
+    gcTime: 10 * 60_000,
+    refetchOnWindowFocus: &#x27;always&#x27;, // but debounced — see below
+  },
+  profileTimeline: {
+    staleTime: 30_000,
+    refetchOnWindowFocus: false, // WS + pull-to-refresh instead
+  },
+} as const;</code></pre>
+<ol><li><strong>Stale-while-revalidate flow</strong> —</li></ol>
+<pre><code>   function useProfile(userId: string) {
+     return useQuery({
+       queryKey: [&#x27;user&#x27;, viewerId, userId],
+       queryFn: () =&gt; fetchUser(userId),
+       ...cachePolicy.userProfile,
+       placeholderData: (prev) =&gt; prev, // SWR: show stale while fetching
+     });
+   }</code></pre>
+<p>On mount: render cached <code>User</code> immediately; if <code>isStale</code>, fire background <code>refetch()</code>; patch normalized store on arrival.</p>
+<ol><li><strong>Static config</strong> (<code>/1.1/help/settings.json</code>, feature switches, emoji map) — Long <code>staleTime</code>, versioned by <code>configVersion</code> in bootstrap payload. SW or HTTP cache (see Deep Q3) serves shell; client refetches only on version mismatch or 24h TTL.</li></ol>
+<ol><li><strong><code>revalidateOnFocus</code> tradeoffs</strong> —</li></ol>
+<p>| Surface | refetchOnFocus | Rationale |</p>
+<p>|---------|----------------|-----------|</p>
+<p>| Profile header (counts, bio) | Debounced true | User expects fresh counts when returning |</p>
+<p>| Home timeline | false | WS + manual refresh; focus refetch causes scroll jank |</p>
+<p>| Notifications badge | true | Small payload, high freshness need |</p>
+<p>| Static config | false | Wastes bandwidth |</p>
+<ol><li><strong>Debounced focus refetch</strong> — Global listener coalesces focus events within 5s:</li></ol>
+<pre><code>   let lastFocusRefetch = 0;
+   window.addEventListener(&#x27;visibilitychange&#x27;, () =&gt; {
+     if (document.visibilityState !== &#x27;visible&#x27;) return;
+     if (Date.now() - lastFocusRefetch &lt; 5000) return;
+     lastFocusRefetch = Date.now();
+     queryClient.invalidateQueries({ queryKey: [&#x27;user&#x27;], refetchType: &#x27;active&#x27; });
+   });</code></pre>
+<ol><li><strong>Visual reconciliation</strong> — Follower count animates or updates quietly; avoid full header skeleton on background refetch (<code>isFetching &amp;&amp; !isLoading</code> → no layout shift).</li></ol>
+<ol><li><strong>CDN + client</strong> — Profile metadata GET with <code>Cache-Control: private, max-age=60</code>; client SWR aligns with server TTL to avoid redundant 304 round-trips when ETag matches.</li></ol>
+<p><strong>Tradeoffs:</strong> Long staleTime on config means gradual rollout delay — mitigate with version poll on WS <code>config_updated</code>. Aggressive focus refetch drains mobile battery on app switchers. <strong>Pitfall:</strong> Refetch replaces entire profile object and resets form fields mid-edit — patch merge, don&#x27;t replace. <strong>Pitfall:</strong> Same policy for protected vs public profiles — protected need shorter stale or auth-aware keys.</p>
+<hr>
+</article>
+<article class="qa" id="when-would-a-bff-aggregate-timeline-suggested-users-ads-in-one-round-trip-vs-many-parallel-rest-calls">
+<h3 class="question">When would a BFF aggregate timeline + suggested users + ads in one round trip vs many parallel REST calls?</h3>
+<p><strong>Problem framing:</strong> Home first paint needs timeline (~20 tweets), sidebar suggestions, promoted slots, and viewer context. Parallel REST on cold start opens 4–8 connections, duplicates auth/user hydration, and hits <strong>rate-limit buckets</strong> separately. Over-aggregating creates a monolith payload that blocks LCP on slow suggestions.</p>
+<p><strong>Approach:</strong> <strong>BFF aggregate for critical path</strong> (first screen); <strong>parallel lazy fetch</strong> for below-fold and non-blocking modules.</p>
+<div class="mermaid-wrap"><pre class="mermaid">sequenceDiagram
+  participant C as Client
+  participant BFF as Home BFF
+  participant T as Timeline svc
+  participant A as Ads svc
+  participant S as Suggestions
+  C->>BFF: GET /2/home/bootstrap
+  par Internal fan-out
+    BFF->>T: timeline page 0
+    BFF->>A: ad slots for viewer
+    BFF->>S: who to follow x3
+  end
+  BFF-->>C: unified GraphQL or JSON bundle
+  C->>C: paint timeline first slice
+  Note over C: defer sidebar if TTFB > budget</pre></div>
+<ol><li><strong>Prefer one round trip when</strong> —</li></ol>
+<ul><li>Cold <strong>first paint</strong> / LCP-critical path (mobile 3G, TTFB budget &lt; 600ms)</li><li>Shared <strong>viewer context</strong> (blocks, mutes, ad eligibility) needed by all three</li><li><strong>HTTP/1.1</strong> or high-latency networks — connection setup dominates</li><li><strong>Rate-limit coordination</strong> — one token vs three</li></ul>
+<ol><li><strong>Prefer parallel REST/GraphQL when</strong> —</li></ol>
+<ul><li>Modules independently cacheable at CDN (<code>static suggestions</code> vs personalized timeline)</li><li><strong>Partial failure isolation</strong> — ads down must not block timeline</li><li><strong>Streaming</strong> — timeline SSR streams first; suggestions load after <code>&lt;/first-tweet&gt;</code></li><li><strong>HTTP/2 multiplex</strong> on warm connection — marginal gain from BFF</li><li><strong>Different stale policies</strong> — timeline 30s, ads per-request, suggestions 5min</li></ul>
+<ol><li><strong>BFF response shape</strong> —</li></ol>
+<pre><code>   type HomeBootstrap = {
+     timeline: { ids: string[]; cursor: string; tweets: Tweet[]; users: User[] };
+     injections: { index: number; kind: &#x27;ad&#x27; | &#x27;who_to_follow&#x27;; payload: unknown }[];
+     viewer: { rest_id: string; features: Record&lt;string, boolean&gt; };
+   };</code></pre>
+<p>Client hydrates normalized store once; applies injection indices when rendering virtualized list.</p>
+<ol><li><strong>GraphQL as BFF</strong> — Single <code>HomeTimelineQuery</code> with <code>@defer</code> on sidebar fields — timeline fields resolve first, suggestions stream second.</li></ol>
+<ol><li><strong>Fallback contract</strong> — If BFF timeout &gt; 800ms, client renders cached stale timeline + skeleton sidebar; retry suggestions via separate endpoint.</li></ol>
+<table>
+<thead><tr>
+<th>Factor</th>
+<th>BFF aggregate</th>
+<th>Parallel REST</th>
+</tr></thead><tbody>
+<tr>
+<td>Cold start mobile</td>
+<td>✓</td>
+<td></td>
+</tr>
+<tr>
+<td>Ads failure isolation</td>
+<td></td>
+<td>✓</td>
+</tr>
+<tr>
+<td>HTTP/2 warm tab</td>
+<td>marginal</td>
+<td>✓</td>
+</tr>
+<tr>
+<td>Shared auth/rate limit</td>
+<td>✓</td>
+<td></td>
+</tr>
+<tr>
+<td>CDN edge cache per resource</td>
+<td></td>
+<td>✓</td>
+</tr>
+</tbody></table>
+<p><strong>Tradeoffs:</strong> BFF adds operational surface and deploy coupling — timeline schema change requires BFF deploy. Parallel calls simplify teams but hurt p95 first paint. <strong>Pitfall:</strong> BFF sequential internal calls — must fan-out in parallel inside BFF. <strong>Pitfall:</strong> Giant bundle blocking parse — gzip + split <code>tweets</code> array first in JSON serializer order.</p>
+<hr>
+</article>
+<article class="qa" id="how-do-you-batch-or-coalesce-api-requests-on-first-paint-without-violating-rate-limits">
+<h3 class="question">How do you batch or coalesce API requests on first paint without violating rate limits?</h3>
+<p><strong>Problem framing:</strong> App boot triggers timeline, notifications count, DM inbox badge, feature config, and unread settings — easily 6+ requests in 200ms. Uncoordinated bursts hit <strong>429</strong> on shared IP or per-user buckets; HTTP/2 helps concurrency not limits. Interviewers want <strong>coalescing</strong>, <strong>priority queues</strong>, and <strong>server-side batch endpoints</strong>.</p>
+<p><strong>Approach:</strong> <strong>Boot scheduler</strong> with priority tiers, request deduplication, and exponential spacing against limit headers.</p>
+<pre><code>type Priority = &#x27;critical&#x27; | &#x27;high&#x27; | &#x27;low&#x27;;
+
+const bootQueue = createRequestScheduler({
+  maxConcurrent: 4,
+  minIntervalMs: 50, // smooth burst
+  respectRateLimitHeaders: true,
+});
+
+bootQueue.enqueue(() =&gt; fetchHomeBootstrap(), &#x27;critical&#x27;);
+bootQueue.enqueue(() =&gt; fetchNotificationsBadge(), &#x27;high&#x27;);
+bootQueue.enqueue(() =&gt; fetchDmUnread(), &#x27;high&#x27;);
+bootQueue.enqueue(() =&gt; fetchFeatureConfig(), &#x27;low&#x27;); // may use stale cache</code></pre>
+<ol><li><strong>Dedup in-flight</strong> — Same <code>queryKey</code> → single Promise:</li></ol>
+<pre><code>   const inflight = new Map&lt;string, Promise&lt;unknown&gt;&gt;();
+   function dedupeFetch(key: string, fn: () =&gt; Promise&lt;unknown&gt;) {
+     if (!inflight.has(key)) inflight.set(key, fn().finally(() =&gt; inflight.delete(key)));
+     return inflight.get(key)!;
+   }</code></pre>
+<ol><li><strong>Server batch API</strong> — <code>POST /2/batch</code> with allowlisted read operations:</li></ol>
+<pre><code>   { &quot;requests&quot;: [
+     { &quot;id&quot;: &quot;1&quot;, &quot;method&quot;: &quot;GET&quot;, &quot;path&quot;: &quot;/2/notifications/unread_count&quot; },
+     { &quot;id&quot;: &quot;2&quot;, &quot;method&quot;: &quot;GET&quot;, &quot;path&quot;: &quot;/2/dm/inbox/unread_count&quot; }
+   ]}</code></pre>
+<p>Counts as <strong>one</strong> rate-limit unit on many platforms.</p>
+<ol><li><strong>Read limit headers</strong> — On 429 or <code>x-rate-limit-remaining: 0</code>, pause scheduler until <code>x-rate-limit-reset</code>:</li></ol>
+<pre><code>   function onResponse(res: Response) {
+     const remaining = Number(res.headers.get(&#x27;x-rate-limit-remaining&#x27;));
+     const reset = Number(res.headers.get(&#x27;x-rate-limit-reset&#x27;)) * 1000;
+     if (remaining &lt; 5) scheduler.pauseUntil(reset);
+   }</code></pre>
+<ol><li><strong>Priority table (first paint)</strong> —</li></ol>
+<p>| Priority | Request | Defer if low bandwidth |</p>
+<p>|----------|---------|------------------------|</p>
+<p>| P0 | Home timeline bootstrap | never |</p>
+<p>| P1 | Auth/session validate | never |</p>
+<p>| P2 | Notifications + DM counts | 500ms |</p>
+<p>| P3 | Who to follow, trends | idle callback |</p>
+<p>| P4 | Analytics beacon | after <code>load</code> event |</p>
+<ol><li><strong>Coalesce hover prefetches</strong> — Profile hover debounced 150ms; cancel if pointer leaves; max 2 parallel prefetches globally.</li></ol>
+<ol><li><strong>Service worker boot</strong> — SW returns cached config immediately; network refresh queued at <code>low</code> priority — zero rate-limit cost for repeat visits.</li></ol>
+<p><strong>Tradeoffs:</strong> Batch API failure fails all sub-requests unless partial results — need per-item error codes. Artificial <code>minIntervalMs</code> adds latency on fast networks — tune by connection type (<code>navigator.connection.saveData</code>). <strong>Pitfall:</strong> Each component firing <code>useEffect</code> fetch on mount — centralize boot in router loader. <strong>Pitfall:</strong> Ignoring <code>Retry-After</code> — retry storm extends ban.</p>
+<hr>
+</article>
+<article class="qa" id="how-do-you-show-rate-limit-ux-countdown-queue-or-downgrade-for-post-like-and-search-actions">
+<h3 class="question">How do you show rate-limit UX — countdown, queue, or downgrade — for post, like, and search actions?</h3>
+<p><strong>Problem framing:</strong> X rate-limits writes (tweets, likes, follows) and reads (search) per 15-minute window. Silent failure erodes trust; modal spam on every like annoys. Different actions need different UX: <strong>post</strong> is high-stakes (draft loss), <strong>like</strong> is high-frequency, <strong>search</strong> is read-path.</p>
+<p><strong>Approach:</strong> <strong>Action-class policies</strong> — countdown for user-initiated writes, queue for retryable background work, downgrade for read surfaces.</p>
+<pre><code>type RateLimitState = {
+  resource: &#x27;tweets&#x27; | &#x27;favorites&#x27; | &#x27;search&#x27;;
+  remaining: number;
+  resetAt: number; // unix ms
+};
+
+function rateLimitUx(action: Action, limit: RateLimitState): UxDecision {
+  if (limit.remaining &gt; 0) return { kind: &#x27;allow&#x27; };
+  const secLeft = Math.ceil((limit.resetAt - Date.now()) / 1000);
+  switch (action) {
+    case &#x27;compose_post&#x27;:
+      return { kind: &#x27;countdown&#x27;, secLeft, saveDraft: true, disableSubmit: true };
+    case &#x27;like&#x27;:
+      return { kind: &#x27;downgrade&#x27;, message: &#x27;Try again later&#x27;, revertOptimistic: true };
+    case &#x27;search&#x27;:
+      return { kind: &#x27;downgrade&#x27;, showCachedResults: true, banner: `Search limited · ${fmt(secLeft)}` };
+    case &#x27;background_retry&#x27;:
+      return { kind: &#x27;queue&#x27;, retryAt: limit.resetAt };
+  }
+}</code></pre>
+<ol><li><strong>Compose / post — countdown + draft preservation</strong> —</li></ol>
+<ul><li>Disable Post button; show inline &quot;Limit reached · try again in 12:34&quot;</li><li>Persist draft to IndexedDB regardless — never lose text</li><li>Optional: queue post for auto-send at reset (explicit opt-in — legal/consent)</li></ul>
+<ol><li><strong>Like / repost — optimistic with fast rollback</strong> —</li></ol>
+<ul><li>Optimistic toggle immediately</li><li>On 429: revert heart state, toast &quot;Too many requests — wait a few minutes&quot;</li><li>No modal — blocks scroll thread</li><li>Disable rapid repeat taps 300ms debounce</li></ul>
+<ol><li><strong>Search — downgrade</strong> —</li></ol>
+<ul><li>Keep showing last successful results (stale SWR)</li><li>Banner with countdown; disable new query submit</li><li>Typeahead returns cached prefix matches only</li></ul>
+<ol><li><strong>Global limit store</strong> — Parse headers on every response; central <code>rateLimits</code> atom:</li></ol>
+<pre><code>   // x-rate-limit-resource: favorites
+   function ingestRateLimitHeaders(resource: string, headers: Headers) {
+     store.set(resource, {
+       remaining: Number(headers.get(&#x27;x-rate-limit-remaining&#x27;)),
+       resetAt: Number(headers.get(&#x27;x-rate-limit-reset&#x27;)) * 1000,
+     });
+   }</code></pre>
+<ol><li><strong>Queue for failed mutations</strong> — Outbox pattern (from compose section): 429 → <code>{ status: &#x27;rate_limited&#x27;, retryAt }</code>; background worker retries once after reset; max one retry then surface failed state.</li></ol>
+<table>
+<thead><tr>
+<th>Action</th>
+<th>UX pattern</th>
+<th>Optimistic</th>
+<th>User sees</th>
+</tr></thead><tbody>
+<tr>
+<td>Post tweet</td>
+<td>Countdown</td>
+<td>No (or queued)</td>
+<td>Disabled composer + timer</td>
+</tr>
+<tr>
+<td>Like</td>
+<td>Downgrade</td>
+<td>Yes, revert</td>
+<td>Toast</td>
+</tr>
+<tr>
+<td>Search</td>
+<td>Downgrade</td>
+<td>N/A</td>
+<td>Stale results + banner</td>
+</tr>
+<tr>
+<td>Upload media</td>
+<td>Queue</td>
+<td>Progress paused</td>
+<td>&quot;Resume when limit resets&quot;</td>
+</tr>
+</tbody></table>
+<p><strong>Tradeoffs:</strong> Auto-queue posts at reset can surprise users — require confirmation. Showing exact reset time reveals limit internals — acceptable for power users. <strong>Pitfall:</strong> Per-endpoint limits — global banner wrong if only search limited; key by resource header. <strong>Pitfall:</strong> Countdown drift — sync from server <code>resetAt</code>, not client timer only.</p>
+<hr>
+</article>
+<h2 class="section" id="deep">Deep</h2>
+<article class="qa" id="how-do-you-defend-graphql-on-a-read-heavy-feed-vs-rest-field-expansion-cdn-edge-caching">
+<h3 class="question">How do you defend GraphQL on a read-heavy feed vs REST + field expansion + CDN edge caching?</h3>
+<p><strong>Problem framing:</strong> Home feed is <strong>millions of reads per second</strong>; REST advocates cite CDN-cacheable GET URLs and simple edge scaling. GraphQL critics cite N+1 resolvers and POST-only caches. Senior answer: defend GraphQL where <strong>client-driven shape + normalized store</strong> wins; acknowledge REST+CDN for <strong>public, anonymous, stable</strong> resources.</p>
+<p><strong>Approach:</strong> <strong>Hybrid transport</strong> — GraphQL (or BFF) for personalized authenticated feeds; REST + <code>?expansions=</code> + CDN for public tweet oEmbed and static assets.</p>
+<div class="mermaid-wrap"><pre class="mermaid">flowchart TB
+  subgraph Personalized
+    GQL[GraphQL HomeTimeline]
+    NS[Normalized store]
+    GQL --> NS
+  end
+  subgraph PublicEdge
+    REST[GET /2/tweets/:id?expansions=author,media]
+    CDN[CDN edge cache]
+    REST --> CDN
+  end</pre></div>
+<ol><li><strong>GraphQL wins on read-heavy feed because</strong> —</li></ol>
+<ul><li><strong>One round trip</strong> replaces 5 REST calls (timeline + users + media + polls + card)</li><li><strong>Field masks</strong> via fragments — mobile omits heavy fields desktop fetches</li><li><strong>Normalized cache</strong> dedupes author across 20 tweets automatically (Relay)</li><li><strong>Incremental delivery</strong> — <code>@defer</code> / <code>@stream</code> for ranked feed chunks</li><li><strong>Schema evolution</strong> — add <code>CommunityNote</code> field without v3 REST version</li></ul>
+<ol><li><strong>REST + expansions + CDN wins when</strong> —</li></ol>
+<ul><li><strong>Anonymous</strong> tweet detail pages — cache key <code>GET /2/tweets/123?expansions=author,media.public_metrics</code></li><li><strong>Surrogate-Key</strong> purge on delete propagates in seconds globally</li><li><strong>No POST</strong> — GraphQL over POST bypasses most CDNs for full query</li><li><strong>Bot/scraper</strong> traffic — edge serves 304 without origin GraphQL cost</li></ul>
+<ol><li><strong>Defending at X-scale</strong> —</li></ol>
+<ul><li><strong>Persisted queries</strong> — APQ hash → GET <code>/graphql?extensions={&quot;persistedQuery&quot;:{&quot;sha256Hash&quot;:&quot;...&quot;}}}</code> enables CDN cache for <strong>repeat</strong> read shapes</li><li><strong>Query complexity limits</strong> — max depth 8, cost analysis per operation</li><li><strong>Batched dataloaders</strong> — author/media resolved in O(1) DB round-trips per request, not N+1</li><li><strong>Separate read replicas</strong> — GraphQL gateway routes to read pool; writes on REST mutation paths</li></ul>
+<ol><li><strong>Comparison table</strong> —</li></ol>
+<p>| Concern | GraphQL feed | REST + expansions + CDN |</p>
+<p>|---------|--------------|-------------------------|</p>
+<p>| Personalized ranking | ✓ native | awkward cache |</p>
+<p>| Public tweet share URL | needs APQ/GET | ✓ edge TTL |</p>
+<p>| Client field selection | ✓ fragments | fixed expansion sets |</p>
+<p>| Cache invalidation | normalized node | Surrogate-Key purge |</p>
+<p>| Tooling / debug | complexity | curl-friendly |</p>
+<ol><li><strong>Pragmatic X architecture</strong> — Authenticated app: GraphQL live pipeline + normalized client. Public web: REST or persisted GET GraphQL at edge. Same protobuf models underneath.</li></ol>
+<p><strong>Tradeoffs:</strong> GraphQL gateway is single chokepoint — requires aggressive caching and complexity limits. REST proliferation (<code>/timeline</code>, <code>/timeline/ranked</code>, …) fragments clients. <strong>Pitfall:</strong> Caching GraphQL POST bodies at CDN — only safe for public persisted queries. <strong>Pitfall:</strong> Denormalized REST expansions duplicated across 20 tweets — 20× author payload vs GraphQL normalized refs.</p>
+<hr>
+</article>
+<article class="qa" id="how-do-you-implement-cursor-stable-cache-merges-when-the-server-returns-overlapping-tweet-ids-across-pages">
+<h3 class="question">How do you implement cursor-stable cache merges when the server returns overlapping tweet ids across pages?</h3>
+<p><strong>Problem framing:</strong> Infinite scroll fetches page N and N+1; ranking shifts, edits, or <strong>&quot;duplicate edges&quot;</strong> from GraphQL connections can return the same <code>tweetId</code> twice. Naive <code>pages.flatMap(p =&gt; p.ids)</code> shows duplicate rows; replacing entire cache on overlap loses scroll position.</p>
+<p><strong>Approach:</strong> <strong>Ordered dedupe merge</strong> with stable cursor invariants — append-only tail, dedupe by id preserving first occurrence unless server <code>sortIndex</code> increases.</p>
+<pre><code>function mergeTimelinePages(
+  pages: TimelinePage[],
+  entities: EntityStore
+): string[] {
+  const seen = new Set&lt;string&gt;();
+  const ordered: string[] = [];
+  for (const page of pages) {
+    for (const id of page.ids) {
+      if (seen.has(id)) continue;
+      seen.add(id);
+      ordered.push(id);
+      upsertTweet(entities, page.tweetsById[id]); // always refresh entity
+    }
+  }
+  return ordered;
+}</code></pre>
+<ol><li><strong>Infinite query merge on fetch</strong> —</li></ol>
+<pre><code>   getNextPageParam: (lastPage) =&gt; lastPage.cursorBottom,
+   // React Query keeps pages[] — derive display list via mergeTimelinePages(data.pages)</code></pre>
+<ol><li><strong>Overlap detection</strong> — When new page&#x27;s first id exists in previous pages:</li></ol>
+<ul><li><strong>Expected</strong> — cursoring bug or rank refresh → dedupe display, <strong>do not</strong> discard page (cursor may differ)</li><li><strong>Log</strong> <code>overlapCount</code> metric for ranking team</li></ul>
+<ol><li><strong>Cursor-stable invariant</strong> — Store <code>pageMeta: { cursorIn, cursorOut, fetchedAt }</code> per page. Never reorder pages in array — only dedupe flattened view. Virtualizer indexes map to deduped list.</li></ol>
+<ol><li><strong>Head prepend (new tweets)</strong> — Separate <code>pendingHeadIds</code> buffer; on &quot;Show new posts&quot;, prepend ids not in <code>seen</code>; dedupe against tail pages.</li></ol>
+<ol><li><strong>GraphQL connection merge</strong> —</li></ol>
+<pre><code>   function mergeConnection&lt;T extends { cursor: string; node: { id: string } }&gt;(
+     existing: T[],
+     incoming: T[]
+   ) {
+     const byId = new Map(existing.map((e) =&gt; [e.node.id, e]));
+     for (const edge of incoming) byId.set(edge.node.id, edge); // newer edge wins
+     return sortByCursor([...byId.values()]);
+   }</code></pre>
+<ol><li><strong>Rank refresh mid-scroll</strong> — Server returns <code>rankingVersion</code> bump → optional soft invalidate: keep entities, reset pages[], refetch from anchor tweet id cursor (advanced) or show &quot;Feed updated&quot; banner without silent shuffle.</li></ol>
+<div class="mermaid-wrap"><pre class="mermaid">flowchart LR
+  P1[Page1 ids a b c] --> Merge
+  P2[Page2 ids c d e] --> Merge
+  Merge --> View[a b c d e]
+  ES[Entity store] --> View</pre></div>
+<p><strong>Tradeoffs:</strong> First-occurrence wins hides rank changes for duplicate id — acceptable for display; entity store still gets latest metrics. Full page replace on overlap simpler but janks scroll. <strong>Pitfall:</strong> Dedupe only in render — memory retains duplicate pages forever; periodic page compaction. <strong>Pitfall:</strong> Tombstoned deleted tweets — filter <code>entities.tweetsById[id]._deleted</code> in merge step.</p>
+<hr>
+</article>
+<article class="qa" id="how-do-you-use-service-worker-or-http-cache-for-emoji-fonts-static-bundles-and-read-only-tweet-json-at-the-edge">
+<h3 class="question">How do you use service worker or HTTP cache for emoji fonts, static bundles, and read-only tweet JSON at the edge?</h3>
+<p><strong>Problem framing:</strong> Repeat visits should not re-download MB of JS and emoji fonts; public tweet permalinks should serve from <strong>edge</strong> when auth absent. Wrong cache strategy shows deleted tweets or stale JS after deploy.</p>
+<p><strong>Approach:</strong> <strong>Cache-first static assets</strong>, <strong>stale-while-revalidate for fonts</strong>, <strong>HTTP CDN for anonymous tweet JSON</strong> with short TTL + surrogate purge — SW orchestrates, CDN does heavy lifting.</p>
+<ol><li><strong>Static bundles (JS/CSS)</strong> — Content-hash filenames (<code>main.a3f2.js</code>) → <code>Cache-Control: public, max-age=31536000, immutable</code>. SW install precache manifest; activate deletes old hashes.</li></ol>
+<ol><li><strong>Emoji / icon fonts</strong> —</li></ol>
+<pre><code>   // sw.ts — stale-while-revalidate
+   registerRoute(
+     ({ url }) =&gt; url.pathname.endsWith(&#x27;.woff2&#x27;),
+     new StaleWhileRevalidate({ cacheName: &#x27;fonts-v1&#x27;, plugins: [expirationPlugin({ maxEntries: 20 })] })
+   );</code></pre>
+<p><code>font-display: optional</code> or <code>swap</code> on CSS — avoid CLS on slow font.</p>
+<ol><li><strong>Read-only tweet JSON (anonymous)</strong> —</li></ol>
+<ul><li>CDN caches <code>GET /2/tweets/:id?expansions=...</code> with <code>Cache-Control: public, s-maxage=60, stale-while-revalidate=300</code></li><li><strong>Surrogate-Key</strong>: <code>tweet-123</code>, <code>user-456</code> — purge on delete within ~5s globally</li><li><strong>Authenticated</strong> reads: <code>private, no-store</code> — SW passes through, no cache</li></ul>
+<ol><li><strong>SW strategy matrix</strong> —</li></ol>
+<p>| Asset | Strategy | Invalidation |</p>
+<p>|-------|----------|--------------|</p>
+<p>| Hashed JS/CSS | cache-first | new deploy hash |</p>
+<p>| Emoji fonts | stale-while-revalidate | version bump |</p>
+<p>| Public tweet API | network-first or CDN only | Surrogate-Key purge |</p>
+<p>| GraphQL POST | no SW cache | n/a |</p>
+<p>| index.html | network-first | short max-age |</p>
+<ol><li><strong>Offline read-only mode</strong> — SW serves cached public tweet from Cache API if network fails; show banner &quot;Offline · cached copy&quot;.</li></ol>
+<ol><li><strong>Security</strong> — Never cache responses with <code>Set-Cookie</code> or personalized fields (<code>liked_by_viewer</code>). Strip viewer-specific expansions from edge cache key.</li></ol>
+<p><strong>Tradeoffs:</strong> SW adds debug complexity and iOS WebKit quirks — measure repeat-visit LCP win. CDN 60s TTL means deleted tweet may linger — purge latency vs origin load. <strong>Pitfall:</strong> Caching HTML shell aggressively — users stuck on old app version; always network-first for <code>index.html</code>. <strong>Pitfall:</strong> SW intercepting auth API — breaks login; bypass <code>/oauth</code> paths.</p>
+<hr>
+</article>
+<article class="qa" id="how-do-you-invalidate-following-graph-changed-across-home-lists-and-dms-without-global-queryclientclear">
+<h3 class="question">How do you invalidate &quot;following graph changed&quot; across home, lists, and DMs without global <code>queryClient.clear()</code>?</h3>
+<p><strong>Problem framing:</strong> Follow/unfollow mutates <strong>social graph</strong> affecting home ranking, list membership hints, DM permission (&quot;can message&quot;), and suggestions — but not tweet entities themselves. <code>queryClient.clear()</code> refetches everything, causes scroll reset, and spikes QPS; ignoring invalidation leaves &quot;following-only&quot; tweets from unfollowed users.</p>
+<p><strong>Approach:</strong> <strong>Event-scoped invalidation</strong> with dependency tags — graph change emits invalidation map; patch what you can, invalidate lists only where needed.</p>
+<pre><code>async function onFollowGraphChange(
+  viewerId: string,
+  targetUserId: string,
+  action: &#x27;follow&#x27; | &#x27;unfollow&#x27;
+) {
+  // 1. Patch user entity
+  patchUser(targetUserId, { following: action === &#x27;follow&#x27; });
+
+  // 2. Targeted query invalidation
+  await queryClient.invalidateQueries({
+    queryKey: timelineKeys.feed(viewerId, &#x27;following&#x27;),
+    refetchType: &#x27;active&#x27;, // background refetch, keep stale pages visible
+  });
+  await queryClient.invalidateQueries({
+    queryKey: [&#x27;timeline&#x27;, viewerId, &#x27;list&#x27;],
+  });
+  await queryClient.invalidateQueries({
+    queryKey: [&#x27;suggestions&#x27;, viewerId],
+  });
+  await queryClient.invalidateQueries({
+    queryKey: [&#x27;dm&#x27;, viewerId, &#x27;canMessage&#x27;, targetUserId],
+  });
+
+  // 3. For You — softer: mark stale, no immediate refetch (ranking lags OK)
+  queryClient.invalidateQueries({
+    queryKey: timelineKeys.feed(viewerId, &#x27;for_you&#x27;),
+    refetchType: &#x27;none&#x27;,
+  });
+
+  // 4. Do NOT invalidate: [&#x27;tweet&#x27;, tweetId] entities, static config
+}</code></pre>
+<ol><li><strong>Invalidation dependency graph</strong> —</li></ol>
+<p>| Event | Invalidate | Patch in place |</p>
+<p>|-------|------------|----------------|</p>
+<p>| follow/unfollow | following timeline, suggestions | <code>User.following</code> |</p>
+<p>| block | home, search, profile tabs, DMs | remove user from lists |</p>
+<p>| mute | home (client filter), notifications | <code>User.muted</code> flag |</p>
+<p>| list CRUD | that list timeline only | list metadata |</p>
+<ol><li><strong>Client-side filter pass (mute/unfollow)</strong> — Until refetch completes, filter page ids against <code>mutedUserIds</code> / <code>unfollowedUserIds</code> Set — instant UX, reconciled on fetch.</li></ol>
+<ol><li><strong>WS graph event</strong> — <code>following_graph_changed { userId, action }</code> from live pipeline triggers same handler — cross-tab via <code>BroadcastChannel</code>.</li></ol>
+<ol><li><strong>Relay equivalent</strong> — <code>updater</code> on follow mutation invalidates <code>HomeTimelineFollowingConnection</code> only; records in store updated via <code>commitFollow</code>.</li></ol>
+<ol><li><strong>Avoid</strong> — <code>queryClient.clear()</code>, <code>invalidateQueries({ queryKey: [&#x27;timeline&#x27;] })</code> without viewerId (cross-account bug).</li></ol>
+<div class="mermaid-wrap"><pre class="mermaid">flowchart TB
+  Follow[Follow mutation] --> Patch[Patch User entity]
+  Patch --> InvF[Invalidate following timeline]
+  Patch --> InvS[Invalidate suggestions]
+  Patch --> InvDM[Invalidate DM eligibility]
+  InvF --> Soft[Keep stale pages SWR]</pre></div>
+<p><strong>Tradeoffs:</strong> Partial invalidation may show unfollowed user&#x27;s tweet until refetch — client filter masks gap. Immediate following feed refetch costs bytes — debounce rapid follow spam 2s batch invalidate. <strong>Pitfall:</strong> Invalidating all profile tabs globally — scope to graph-dependent tabs. <strong>Pitfall:</strong> For You full refetch on every follow — expensive; mark stale suffices.</p>
+<hr>
+</article>
+<article class="qa" id="how-do-you-handle-partial-graphql-errors-render-timeline-with-missing-attachment-hydration-vs-fail-the-whole-page">
+<h3 class="question">How do you handle partial GraphQL errors — render timeline with missing attachment hydration vs fail the whole page?</h3>
+<p><strong>Problem framing:</strong> GraphQL returns <code>200</code> with <code>{ data: { home: { edges: [...] } }, errors: [{ path: [&#x27;home&#x27;,&#x27;edges&#x27;,2,&#x27;node&#x27;,&#x27;media&#x27;,0], message: &#x27;Timeout&#x27; }] }</code>. Failing the whole feed for one broken GIF punishes millions; silently omitting media without indicator feels broken. Policy must be <strong>per-field</strong> and <strong>user-visible</strong>.</p>
+<p><strong>Approach:</strong> <strong>Render partial success</strong> with field-level fallbacks; only fail page on auth or root timeline errors.</p>
+<pre><code>type FieldError = { path: (string | number)[]; message: string; extensions?: { code?: string } };
+
+function classifyGraphQLErrors(errors: FieldError[]) {
+  const fatal = errors.filter((e) =&gt; e.extensions?.code === &#x27;UNAUTHENTICATED&#x27; || e.path.length &lt;= 2);
+  const field = errors.filter((e) =&gt; !fatal.includes(e));
+  return { fatal, field };
+}</code></pre>
+<ol><li><strong>Error boundaries by depth</strong> —</li></ol>
+<p>| Error path | Behavior |</p>
+<p>|------------|----------|</p>
+<p>| <code>home</code> root | Full page error + retry |</p>
+<p>| <code>edges[n].node</code> | Omit tweet row OR placeholder &quot;Unavailable&quot; |</p>
+<p>| <code>edges[n].node.media[k]</code> | Tweet renders; media slot shows retry skeleton |</p>
+<p>| <code>edges[n].node.author</code> | Omit tweet — author required |</p>
+<p>| <code>card.binding_values</code> | Link card fallback to plain URL |</p>
+<ol><li><strong>Nullability schema design</strong> — Media, poll, card as nullable fields; timeline edge non-null if tweet id exists. Server returns <code>media: null</code> with <code>mediaUnavailableReason</code> instead of error when possible — errors for truly exceptional paths.</li></ol>
+<ol><li><strong>Client merge</strong> —</li></ol>
+<pre><code>   function TweetRow({ tweetId }: { tweetId: string }) {
+     const tweet = useTweet(tweetId);
+     const mediaError = useFieldError([&#x27;tweet&#x27;, tweetId, &#x27;media&#x27;]);
+     if (!tweet) return &lt;TweetUnavailable /&gt;;
+     return (
+       &lt;&gt;
+         &lt;TweetText tweet={tweet} /&gt;
+         {mediaError ? &lt;MediaRetry tweetId={tweetId} /&gt; : &lt;MediaGrid ids={tweet.mediaIds} /&gt;}
+       &lt;/&gt;
+     );
+   }</code></pre>
+<ol><li><strong>Retry hydration</strong> — <code>queryClient.fetchQuery({ queryKey: [&#x27;tweet&#x27;, id, &#x27;media&#x27;], retry: 2 })</code> on media expand only — don&#x27;t refetch entire timeline.</li></ol>
+<ol><li><strong>Telemetry</strong> — Log <code>partial_graphql_error</code> with path histogram — ops detects systemic media outage.</li></ol>
+<ol><li><strong>vs fail whole page</strong> — Fail only when <code>edges</code> empty AND errors present, or <code>UNAUTHENTICATED</code>. Super Bowl traffic: partial render keeps feed usable when card service degrades.</li></ol>
+<p><strong>Tradeoffs:</strong> Placeholder slots add UI complexity. Omitting broken tweets changes rank/count — prefer placeholder row with &quot;Something went wrong&quot;. <strong>Pitfall:</strong> <code>@required</code> client directives treating optional server null as crash — align schema. <strong>Pitfall:</strong> Retrying full HomeQuery on any error — amplifies outage.</p>
+<hr>
+</article>
+<article class="qa" id="how-do-you-design-etagif-none-match-for-tweet-detail-while-keeping-engagement-counts-fresh">
+<h3 class="question">How do you design ETag/<code>If-None-Match</code> for tweet detail while keeping engagement counts fresh?</h3>
+<p><strong>Problem framing:</strong> Tweet detail permalink is revisited and CDN-cacheable; full refetch on every view wastes bandwidth. But like/reply counts change by the second on viral posts — blind 304 on entire payload shows stale counts. Need <strong>split caching</strong>: stable tweet body vs volatile metrics.</p>
+<p><strong>Approach:</strong> <strong>Composite resource model</strong> — ETag on immutable-ish core; counts via short-TTL sidecar, separate request, or <code>Cache-Control: must-revalidate</code> on metrics fields.</p>
+<div class="mermaid-wrap"><pre class="mermaid">flowchart TB
+  Client -->|If-None-Match weak tag| CDN
+  CDN -->|304| Client
+  Client -->|parallel or inline| Counts[GET metrics or WS patch]
+  Counts --> Client</pre></div>
+<ol><li><strong>Split response (REST)</strong> —</li></ol>
+<pre><code>   GET /2/tweets/:id
+     → body, author, media, created_at
+     → ETag: W/&quot;tweet-123-v7&quot;  (bump v on edit/delete)
+     → Cache-Control: public, max-age=300
+
+   GET /2/tweets/:id/metrics
+     → like_count, reply_count, repost_count, view_count
+     → Cache-Control: private, max-age=15, must-revalidate
+     → no CDN cache OR edge TTL 5s</code></pre>
+<p>Detail page: first request conditional GET for core; always fetch metrics (cheap) or subscribe WS <code>tweet_metrics_updated</code>.</p>
+<ol><li><strong>Single endpoint with field-level freshness (GraphQL)</strong> —</li></ol>
+<pre><code>   query TweetDetail($id: ID!) {
+     tweet(id: $id) {
+       id text created_at author { ... }
+       ... @defer(label: &quot;metrics&quot;) {
+         like_count reply_count repost_count quote_count
+       }
+     }
+   }</code></pre>
+<p>Core resolves first from CDN-cached persisted query; metrics stream deferred chunk — not covered by core ETag.</p>
+<ol><li><strong>ETag construction</strong> —</li></ol>
+<pre><code>   // Server
+   const coreFingerprint = hash(tweet.id, tweet.text, tweet.updated_at, mediaKeys);
+   const etag = `W/&quot;${tweet.id}-${coreFingerprint}&quot;`;
+   if (req.headers[&#x27;if-none-match&#x27;] === etag) return 304;</code></pre>
+<p>Exclude counts from fingerprint — counts delivered separately.</p>
+<ol><li><strong>Client strategy</strong> —</li></ol>
+<pre><code>   const core = await fetchTweetCore(id, { headers: { &#x27;If-None-Match&#x27;: cachedEtag } });
+   if (core.status === 304) useNormalizedStore(id);
+   const metrics = await fetchTweetMetrics(id); // never send If-None-Match on first paint
+   mergeTweet(id, { ...core.body, ...metrics });</code></pre>
+<p>On WS patch: update counts in entity store only — no core refetch.</p>
+<ol><li><strong>Deleted tweet</strong> — Surrogate-Key purge + ETag mismatch on next GET → 404; client tombstones normalized entry.</li></ol>
+<table>
+<thead><tr>
+<th>Layer</th>
+<th>ETag</th>
+<th>TTL</th>
+<th>CDN</th>
+</tr></thead><tbody>
+<tr>
+<td>Tweet text/media</td>
+<td>yes</td>
+<td>minutes</td>
+<td>public</td>
+</tr>
+<tr>
+<td>Engagement counts</td>
+<td>no</td>
+<td>5–15s</td>
+<td>private or bypass</td>
+</tr>
+<tr>
+<td>Viewer-specific (liked)</td>
+<td>no</td>
+<td>0</td>
+<td>never</td>
+</tr>
+</tbody></table>
+<p><strong>Tradeoffs:</strong> Two requests vs one fat request — trade extra RTT for cache hit on core; HTTP/2 multiplex minimizes cost. Weak ETags (<code>W/</code>) allow gzip transformation at CDN. <strong>Pitfall:</strong> Including counts in ETag — 304 forever on viral tweet. <strong>Pitfall:</strong> Client caches 304 response body incorrectly — 304 has no body; hydrate from normalized store. <strong>Pitfall:</strong> View count freshness expectations — label &quot;· updated just now&quot; if &gt;60s stale.</p>
+</article>
+  </main>
+  <footer class="page-footer">
+    <a href="index.html">← All sections</a> ·
+    <a href="../twitter-frontend-architecture.html">Architecture map</a>
+  </footer>
+  <script src="assets/interactive.js" defer></script>
+</body>
+</html>

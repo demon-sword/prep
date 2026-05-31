@@ -1,0 +1,765 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Slack Frontend System — Interactive Architecture</title>
+  <meta name="description" content="Interactive architecture map covering all 8 Slack frontend system design prep sections.">
+  <style>
+    :root {
+      --bg: #1a1d21;
+      --surface: #222529;
+      --surface2: #2c2d30;
+      --text: #d1d2d3;
+      --muted: #9a9b9e;
+      --border: #3d3e42;
+      --accent: #611f69;
+      --accent-soft: rgba(97, 31, 105, 0.22);
+      --ui: #36c5f0;
+      --client: #2eb67d;
+      --transport: #ecb22e;
+      --api: #e01e5a;
+      --backend: #9b59b6;
+      --data: #1264a3;
+      --shadow: 0 8px 32px rgba(0,0,0,.4);
+    }
+    @media (prefers-color-scheme: light) {
+      :root {
+        --bg: #f8f8f8;
+        --surface: #fff;
+        --surface2: #f4f4f4;
+        --text: #1d1c1d;
+        --muted: #616061;
+        --border: #ddd;
+        --accent: #4a154b;
+        --accent-soft: rgba(74, 21, 75, 0.1);
+        --shadow: 0 4px 20px rgba(0,0,0,.08);
+      }
+    }
+    *, *::before, *::after { box-sizing: border-box; }
+    html, body { height: 100%; margin: 0; }
+    body {
+      font-family: "Lato", "Segoe UI", system-ui, -apple-system, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      overflow: hidden;
+    }
+    .app {
+      display: grid;
+      grid-template-columns: 280px 1fr 340px;
+      grid-template-rows: auto 1fr;
+      height: 100vh;
+    }
+    header {
+      grid-column: 1 / -1;
+      display: flex;
+      align-items: center;
+      gap: 1rem;
+      padding: 0.75rem 1.25rem;
+      border-bottom: 1px solid var(--border);
+      background: var(--surface);
+    }
+    header h1 { font-size: 1rem; font-weight: 700; margin: 0; letter-spacing: -0.02em; }
+    header p { margin: 0; font-size: 0.8125rem; color: var(--muted); }
+    .header-links { margin-left: auto; display: flex; gap: 0.75rem; font-size: 0.8125rem; }
+    .header-links a { color: var(--accent); text-decoration: none; }
+    .header-links a:hover { text-decoration: underline; }
+    .sidebar {
+      border-right: 1px solid var(--border);
+      background: var(--surface);
+      overflow-y: auto;
+      padding: 1rem;
+    }
+    .sidebar h2 {
+      font-size: 0.6875rem;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      color: var(--muted);
+      margin: 0 0 0.5rem;
+    }
+    .sidebar section { margin-bottom: 1.25rem; }
+    .filter-group { display: flex; flex-wrap: wrap; gap: 0.35rem; }
+    .chip {
+      font-size: 0.75rem;
+      padding: 0.25rem 0.55rem;
+      border-radius: 999px;
+      border: 1px solid var(--border);
+      background: var(--surface2);
+      color: var(--muted);
+      cursor: pointer;
+      user-select: none;
+      transition: all 0.15s;
+    }
+    .chip:hover { border-color: var(--accent); color: var(--text); }
+    .chip.active { background: var(--accent-soft); border-color: var(--accent); color: var(--accent); font-weight: 600; }
+    .chip.layer-ui.active { border-color: var(--ui); color: var(--ui); background: rgba(54,197,240,.12); }
+    .chip.layer-client.active { border-color: var(--client); color: var(--client); background: rgba(46,182,125,.12); }
+    .chip.layer-transport.active { border-color: var(--transport); color: #b8860b; background: rgba(236,178,46,.12); }
+    .chip.layer-api.active { border-color: var(--api); color: var(--api); background: rgba(224,30,90,.12); }
+    .chip.layer-backend.active { border-color: var(--backend); color: var(--backend); background: rgba(155,89,182,.12); }
+    .chip.layer-data.active { border-color: var(--data); color: var(--data); background: rgba(18,100,163,.12); }
+    select, input[type="search"] {
+      width: 100%;
+      font: inherit;
+      font-size: 0.8125rem;
+      padding: 0.45rem 0.65rem;
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      background: var(--surface2);
+      color: var(--text);
+    }
+    .flow-btn {
+      display: block;
+      width: 100%;
+      text-align: left;
+      font: inherit;
+      font-size: 0.8125rem;
+      padding: 0.5rem 0.65rem;
+      margin-bottom: 0.35rem;
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      background: var(--surface2);
+      color: var(--text);
+      cursor: pointer;
+    }
+    .flow-btn:hover, .flow-btn.active { border-color: var(--accent); background: var(--accent-soft); }
+    .legend { font-size: 0.75rem; color: var(--muted); line-height: 1.5; }
+    .legend span { display: inline-block; width: 10px; height: 10px; border-radius: 2px; margin-right: 4px; vertical-align: middle; }
+    .canvas-wrap {
+      position: relative;
+      overflow: hidden;
+      background: radial-gradient(circle at 50% 0%, rgba(97,31,105,.08), transparent 50%), var(--bg);
+    }
+    .canvas-toolbar {
+      position: absolute;
+      top: 0.75rem;
+      left: 0.75rem;
+      z-index: 5;
+      display: flex;
+      gap: 0.35rem;
+    }
+    .canvas-toolbar button {
+      font: inherit;
+      font-size: 0.75rem;
+      padding: 0.35rem 0.6rem;
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      background: var(--surface);
+      color: var(--text);
+      cursor: pointer;
+    }
+    .canvas { width: 100%; height: 100%; cursor: grab; touch-action: none; }
+    .canvas.dragging { cursor: grabbing; }
+    .diagram-inner { position: absolute; width: 1200px; height: 880px; transform-origin: 0 0; }
+    svg.connections { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; }
+    svg.connections line { stroke: var(--border); stroke-width: 1.5; fill: none; transition: stroke 0.2s, stroke-width 0.2s; }
+    svg.connections .flow-active {
+      stroke: var(--accent);
+      stroke-width: 2.5;
+      stroke-dasharray: 8 4;
+      animation: flowDash 0.6s linear infinite;
+    }
+    @keyframes flowDash { to { stroke-dashoffset: -12; } }
+    .lane {
+      position: absolute;
+      left: 12px;
+      right: 12px;
+      border: 1px dashed var(--border);
+      border-radius: 10px;
+      background: rgba(255,255,255,.02);
+    }
+    .lane-label {
+      position: absolute;
+      left: 12px;
+      top: 6px;
+      font-size: 0.6875rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      color: var(--muted);
+    }
+    .node {
+      position: absolute;
+      width: 148px;
+      padding: 0.55rem 0.65rem;
+      border-radius: 8px;
+      border: 2px solid var(--border);
+      background: var(--surface);
+      font-size: 0.75rem;
+      line-height: 1.35;
+      cursor: pointer;
+      transition: transform 0.15s, box-shadow 0.15s, opacity 0.2s, border-color 0.15s;
+      box-shadow: var(--shadow);
+    }
+    .node:hover { transform: translateY(-2px); z-index: 10; }
+    .node.selected { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); z-index: 11; }
+    .node.dimmed { opacity: 0.2; pointer-events: none; }
+    .node.highlight { border-color: var(--accent); animation: pulse 1s ease infinite; }
+    @keyframes pulse { 50% { box-shadow: 0 0 0 6px var(--accent-soft); } }
+    .node-title { font-weight: 700; margin-bottom: 0.15rem; }
+    .node-sub { font-size: 0.6875rem; color: var(--muted); }
+    .node-tags { display: flex; flex-wrap: wrap; gap: 2px; margin-top: 0.35rem; }
+    .node-tag { font-size: 0.5625rem; padding: 1px 4px; border-radius: 3px; background: var(--surface2); color: var(--muted); }
+    .node[data-layer="ui"] { border-left: 4px solid var(--ui); }
+    .node[data-layer="client"] { border-left: 4px solid var(--client); }
+    .node[data-layer="transport"] { border-left: 4px solid var(--transport); }
+    .node[data-layer="api"] { border-left: 4px solid var(--api); }
+    .node[data-layer="backend"] { border-left: 4px solid var(--backend); }
+    .node[data-layer="data"] { border-left: 4px solid var(--data); }
+    .detail { border-left: 1px solid var(--border); background: var(--surface); overflow-y: auto; padding: 1.25rem; }
+    .detail-empty { color: var(--muted); font-size: 0.9375rem; margin-top: 2rem; text-align: center; }
+    .detail h2 { font-size: 1.125rem; margin: 0 0 0.35rem; }
+    .detail .layer-badge {
+      display: inline-block;
+      font-size: 0.6875rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      padding: 0.2rem 0.5rem;
+      border-radius: 4px;
+      margin-bottom: 0.75rem;
+    }
+    .detail p { font-size: 0.875rem; line-height: 1.6; color: var(--muted); margin: 0 0 0.75rem; }
+    .detail h3 { font-size: 0.8125rem; text-transform: uppercase; letter-spacing: 0.04em; color: var(--accent); margin: 1rem 0 0.4rem; }
+    .detail ul { margin: 0; padding-left: 1.1rem; font-size: 0.8125rem; line-height: 1.55; }
+    .detail li { margin-bottom: 0.3rem; }
+    .section-links { display: flex; flex-wrap: wrap; gap: 0.35rem; margin-top: 0.5rem; }
+    .section-links a {
+      font-size: 0.75rem;
+      padding: 0.25rem 0.5rem;
+      border-radius: 4px;
+      background: var(--accent-soft);
+      color: var(--accent);
+      text-decoration: none;
+    }
+    .section-links a:hover { text-decoration: underline; }
+    .flow-step {
+      font-size: 0.8125rem;
+      padding: 0.5rem 0.65rem;
+      margin-bottom: 0.35rem;
+      border-left: 3px solid var(--border);
+      background: var(--surface2);
+      border-radius: 0 6px 6px 0;
+      cursor: pointer;
+    }
+    .flow-step.active { border-left-color: var(--accent); background: var(--accent-soft); }
+    @media (max-width: 1100px) {
+      .app { grid-template-columns: 1fr; grid-template-rows: auto auto 1fr auto; overflow-y: auto; height: auto; min-height: 100vh; }
+      body { overflow: auto; }
+      .sidebar { border-right: none; border-bottom: 1px solid var(--border); }
+      .canvas-wrap { min-height: 520px; }
+      .detail { border-left: none; border-top: 1px solid var(--border); }
+    }
+  </style>
+</head>
+<body>
+  <div class="app">
+    <header>
+      <div>
+        <h1>Slack Frontend System Architecture</h1>
+        <p>Interactive map · all 8 prep sections</p>
+      </div>
+      <div class="header-links">
+        <a href="answers-html/01-realtime-messaging-websocket.html">Answer pages</a>
+        <a href="slack-design-doc.md">Question bank</a>
+      </div>
+    </header>
+
+    <aside class="sidebar">
+      <section>
+        <h2>Search</h2>
+        <input type="search" id="search" placeholder="Filter nodes…" autocomplete="off">
+      </section>
+      <section>
+        <h2>Layer filter</h2>
+        <div class="filter-group" id="layerFilters"></div>
+      </section>
+      <section>
+        <h2>Section filter</h2>
+        <div class="filter-group" id="sectionFilters"></div>
+      </section>
+      <section>
+        <h2>Walk a flow</h2>
+        <div id="flowButtons"></div>
+      </section>
+      <section>
+        <h2>Legend</h2>
+        <div class="legend" id="legend"></div>
+      </section>
+    </aside>
+
+    <main class="canvas-wrap">
+      <div class="canvas-toolbar">
+        <button type="button" id="zoomIn">+</button>
+        <button type="button" id="zoomOut">−</button>
+        <button type="button" id="resetView">Reset view</button>
+      </div>
+      <div class="canvas" id="canvas">
+        <div class="diagram-inner" id="diagram">
+          <svg class="connections" id="connections"></svg>
+        </div>
+      </div>
+    </main>
+
+    <aside class="detail" id="detailPanel">
+      <div class="detail-empty" id="detailEmpty">
+        Click a node or run a flow walkthrough to see details, interview angles, and links to answer sections.
+      </div>
+      <div id="detailContent" hidden></div>
+    </aside>
+  </div>
+
+  <script>
+    const LAYERS = {
+      ui: { label: 'UI Surfaces', color: 'var(--ui)' },
+      client: { label: 'Client State', color: 'var(--client)' },
+      transport: { label: 'Transport', color: 'var(--transport)' },
+      api: { label: 'API / BFF', color: 'var(--api)' },
+      backend: { label: 'Backend Services', color: 'var(--backend)' },
+      data: { label: 'Data', color: 'var(--data)' }
+    };
+
+    const SECTIONS = [
+      { id: '01', name: 'Realtime & WebSocket', file: 'answers-html/01-realtime-messaging-websocket.html' },
+      { id: '02', name: 'Channels & Threads', file: 'answers-html/02-channels-threads-message-organization.html' },
+      { id: '03', name: 'Presence & Typing', file: 'answers-html/03-presence-typing-live-indicators.html' },
+      { id: '04', name: 'Composer & Formatting', file: 'answers-html/04-message-composer-rich-formatting.html' },
+      { id: '05', name: 'Search & Discovery', file: 'answers-html/05-search-discovery.html' },
+      { id: '06', name: 'Notifications & Unread', file: 'answers-html/06-notifications-unread-state.html' },
+      { id: '07', name: 'Auth & Performance', file: 'answers-html/07-auth-workspaces-offline-performance.html' },
+      { id: '08', name: 'Killer Questions', file: 'answers-html/08-the-killer-questions.html' }
+    ];
+
+    const NODES = [
+      { id: 'composer', layer: 'ui', x: 40, y: 48, title: 'Message Composer', sub: 'Draft · mentions · files', sections: ['04','01','07'],
+        desc: 'Rich input with @-mention autocomplete, emoji shortcodes, slash commands, drag-and-drop uploads, and per-channel draft persistence.',
+        bullets: ['Draft keyed by workspaceId:channelId', 'Optimistic send with client_msg_id', 'Also-send-to-channel toggle for thread replies', 'Character limit + scheduling UI'],
+        questions: ['@-mention autocomplete', 'Per-channel draft persistence', 'File upload with progress'] },
+      { id: 'channelList', layer: 'ui', x: 220, y: 48, title: 'Channel Message List', sub: 'Virtualized timeline', sections: ['02','01','07'],
+        desc: 'Main conversation feed with virtualized rows, scroll anchoring, lazy history load, and mrkdwn rendering for sent messages.',
+        bullets: ['Windowed DOM — only visible messages mounted', 'Scroll anchoring when images load above viewport', 'New-messages pill when scrolled up', 'Dedup socket events vs REST history fetch'],
+        questions: ['Virtualize 100k messages', 'Scroll anchoring', 'Socket + REST dedup'] },
+      { id: 'threadPane', layer: 'ui', x: 400, y: 48, title: 'Thread Flex Pane', sub: 'Replies · badges', sections: ['02','06','01'],
+        desc: 'Side panel for thread replies. Shows reply count badge on parent, unread thread indicator, and "Also send to channel" cross-post.',
+        bullets: ['Lazy-load thread replies on open', 'Keep reply counts synced with main feed', 'Separate scroll position from channel list', 'Handle message_deleted with existing replies'],
+        questions: ['Thread sidebar without full refetch', 'Unread thread badge on parent', 'Also send to #channel'] },
+      { id: 'sidebar', layer: 'ui', x: 580, y: 48, title: 'Channel Sidebar', sub: '500+ channels · DMs', sections: ['02','06','07'],
+        desc: 'Virtualized channel/DM list with unread badges, mute indicators, section grouping, and workspace-scoped channel metadata.',
+        bullets: ['Virtualize sidebar at 500+ channels', 'Bold badge for @mention vs normal unread', 'Per-channel notification prefs reflected in UI', 'Slack Connect shared channel markers'],
+        questions: ['Sidebar virtualization', 'Unread badge math', 'Slack Connect channel display'] },
+      { id: 'quickSwitcher', layer: 'ui', x: 760, y: 48, title: 'Quick Switcher', sub: 'Cmd+K · fuzzy search', sections: ['05','07','08'],
+        desc: 'Unified fuzzy search across channels, DMs, people, files, and recent items. Keyboard-navigable ranked results.',
+        bullets: ['Fuzzy match with recency boost', 'Recent searches cached client-side', 'Workspace-scoped result filtering', 'Jump to channel vs jump to message modes'],
+        questions: ['Quick switcher at 8k channels', 'Recent searches cache', 'Cross-workspace scoping'] },
+      { id: 'memberList', layer: 'ui', x: 940, y: 48, title: 'Member List', sub: 'Presence · typing', sections: ['03','02'],
+        desc: 'Workspace member roster with online/away/DND dots, custom status, huddle indicators, and aggregated typing display.',
+        bullets: ['Green active dot without polling', 'Typing: "Alice, Bob and 3 others"', 'Custom status emoji + expiry', 'Calendar integration status display'],
+        questions: ['Presence without polling', 'Typing aggregation at scale', 'Multi-device presence'] },
+      { id: 'notifUI', layer: 'ui', x: 40, y: 130, title: 'Notification UI', sub: 'Badges · toasts · DND', sections: ['06','01'],
+        desc: 'Desktop toasts, mobile push triggers, badge counts on sidebar, and DND suppression rules across devices.',
+        bullets: ['Suppress push when window is focused', 'Mention vs regular unread styling', 'Thread follow vs channel mute prefs', 'Notification grouping on mobile'],
+        questions: ['Double-notify active window', 'DND badge suppression', 'Cross-device read sync'] },
+      { id: 'connBanner', layer: 'ui', x: 220, y: 130, title: 'Connection Banner', sub: 'Reconnecting · degraded', sections: ['01','07','08'],
+        desc: 'Surfaces WebSocket state — connected, reconnecting, degraded REST-only mode — without alarming the user.',
+        bullets: ['Exponential backoff on reconnect', '"Some messages may be delayed" copy', 'Degraded mode when REST works but socket is down', 'Enterprise Grid multi-shard socket status'],
+        questions: ['Reconnect backoff after fleet outage', 'Degraded-mode UI', 'Connection state UX'] },
+
+      { id: 'channelStore', layer: 'client', x: 80, y: 220, title: 'Channel/Thread Store', sub: 'Messages · ordering', sections: ['02','01','08'],
+        desc: 'Normalized store of channels, messages keyed by ts, thread parent→reply mapping, and merge logic for concurrent sends.',
+        bullets: ['client_msg_id maps optimistic → confirmed', 'Out-of-order message_changed handling', 'Per-channel message ordering by ts', 'Thread reply count derived from store'],
+        questions: ['Model channel + thread in state', 'Same-ms ordering in busy channel', 'message_changed before message event'] },
+      { id: 'workspaceStore', layer: 'client', x: 280, y: 220, title: 'Workspace Store', sub: 'Multi-tenant scope', sections: ['07','02','08'],
+        desc: 'Isolated state namespace per workspace. Switching workspaces swaps entire store slice without cross-leak.',
+        bullets: ['All stores keyed by workspaceId', 'Lazy-load workspace data on switch', '30-workspace user: prefetch vs on-demand', 'Enterprise Grid org-level grouping'],
+        questions: ['Workspace switch without reload', 'Prevent cross-workspace leaks', '30 workspaces lazy vs eager'] },
+      { id: 'unreadStore', layer: 'client', x: 480, y: 220, title: 'Unread & Read Store', sub: 'last_read · badges', sections: ['06','02','01'],
+        desc: 'Tracks last-read timestamp per channel/thread, computes badge counts, and reconciles after reconnect from other devices.',
+        bullets: ['last_read_ts vs last_seen_message_ts', 'Mark read on scroll / focus / explicit', 'Reconcile missed mark_read after reconnect', '@mention bold badge separate from count'],
+        questions: ['Unread count computation', 'Mark-as-read triggers', 'Badge reconcile after reconnect'] },
+      { id: 'draftStore', layer: 'client', x: 680, y: 220, title: 'Draft Store', sub: 'Per-conversation', sections: ['04','07'],
+        desc: 'Unsent composer text persisted per channel/DM. Survives channel switch, workspace switch, and app restart.',
+        bullets: ['Key: workspaceId:channelId (or threadId)', 'Persist to IndexedDB on debounce', 'Restore on channel re-open', 'Clear on successful send'],
+        questions: ['Draft per channel on switch', 'Offline draft persistence', 'Draft + outbox interaction'] },
+      { id: 'outbox', layer: 'client', x: 880, y: 220, title: 'Outbox Queue', sub: 'Offline · replay', sections: ['01','07','08'],
+        desc: 'Queued sends while offline. Replays with same client_msg_id on reconnect for idempotent delivery.',
+        bullets: ['FIFO drain on socket reconnect', 'Optimistic bubble shown while queued', 'Same client_msg_id prevents duplicates', 'Leader tab election for multi-tab drain'],
+        questions: ['Offline send + reconnect replay', 'Optimistic message while offline', 'Multi-tab outbox coordination'] },
+      { id: 'presenceAgg', layer: 'client', x: 1080, y: 220, title: 'Presence Aggregator', sub: 'Debounce · merge', sections: ['03','01'],
+        desc: 'Client-side debounce/throttle for typing events and presence staleness detection when tab is backgrounded.',
+        bullets: ['Debounce typing: emit start, silence → stop', 'Tab-hidden → stale presence after N min', 'Merge typing from socket into channel view', 'Throttle high-frequency reaction bursts'],
+        questions: ['Debounce typing keystrokes', 'Presence staleness on tab switch', 'Batch 50 reactions in thread'] },
+      { id: 'clientCache', layer: 'client', x: 480, y: 310, title: 'Client Cache', sub: 'Memory · LRU · hydrate', sections: ['07','05','02'],
+        desc: 'In-memory hot set of recent channels/messages with IndexedDB backing for offline reads and search result cache.',
+        bullets: ['LRU evict cold channels from memory', 'Hydrate from IndexedDB on cold start', 'Search result cache keyed by query hash', 'Height cache for virtualizer rows'],
+        questions: ['Caching strategy tiers', 'Search result instant revisit', 'IndexedDB eviction policy'] },
+
+      { id: 'websocket', layer: 'transport', x: 200, y: 400, title: 'WebSocket', sub: 'Events API · RTM', sections: ['01','03','06'],
+        desc: 'Persistent connection for message, presence, typing, reaction, and mark_read events. Heartbeat + reconnect protocol.',
+        bullets: ['Subscribe to workspace event stream', 'Handle message, message_changed, reaction_added', 'Presence + user_typing events', 'Enterprise Grid: sockets per shard'],
+        questions: ['Establish + maintain WebSocket', 'Event types handled client-side', 'Multi-shard Enterprise Grid'] },
+      { id: 'restClient', layer: 'transport', x: 520, y: 400, title: 'REST Client', sub: 'History · send · search', sections: ['01','04','05','07'],
+        desc: 'HTTP client for chat.postMessage, conversations.history, search.messages, files.upload, and auth token refresh.',
+        bullets: ['Paginated history with cursor', 'chat.postMessage with client_msg_id', 'Token refresh on 401', 'Fallback when socket is down'],
+        questions: ['History pagination on scroll-up', 'REST fallback in degraded mode', 'OAuth token refresh'] },
+      { id: 'reconnectSync', layer: 'transport', x: 840, y: 400, title: 'Reconnect & Sync', sub: 'Backoff · replay · dedup', sections: ['01','07','08'],
+        desc: 'Exponential backoff reconnect, incremental event replay vs full channel refetch, and dedup against REST history.',
+        bullets: ['Backoff: 1s → 2s → 4s … cap 30s', '5 min offline → incremental sync decision', 'Dedup by event_id + client_msg_id', 'Batch catch-up for high-traffic channels'],
+        questions: ['Reconnect after 5 min offline', 'Incremental sync vs full refetch', 'Dedup after fleet-wide outage'] },
+
+      { id: 'apiGateway', layer: 'api', x: 80, y: 530, title: 'API Gateway', sub: 'Auth · rate limit', sections: ['07','01'],
+        desc: 'Validates OAuth token, attaches workspace context, enforces rate limits, and routes to backend services.',
+        bullets: ['Bearer token on every request', 'Workspace-scoped request context', 'Rate limit headers surfaced to client', 'SSO/SAML session for Enterprise Grid'],
+        questions: ['OAuth + token refresh', 'SSO/SAML redirect flow', 'Rate limit UX'] },
+      { id: 'postMessage', layer: 'api', x: 320, y: 530, title: 'chat.postMessage', sub: 'Send · edit · thread', sections: ['01','04','02'],
+        desc: 'BFF endpoint for sending messages, editing, thread replies, and scheduling. Returns ts + channel for optimistic reconciliation.',
+        bullets: ['client_msg_id idempotency', 'thread_ts for reply-in-thread', 'reply_broadcast for also-send-to-channel', 'Returns normalized message object'],
+        questions: ['client_msg_id purpose', 'Thread reply API shape', 'Edit message propagation'] },
+      { id: 'searchApi', layer: 'api', x: 560, y: 530, title: 'Search API', sub: 'Filters · jump context', sections: ['05','07'],
+        desc: 'search.messages with from:/in:/has:/before:/after: filters. Returns message ts + channel for jump-to-context navigation.',
+        bullets: ['Structured filter query parsing', 'Highlight match snippets in results', 'Jump payload: channelId + messageTs', 'Enterprise Grid cross-shard search'],
+        questions: ['Search filter syntax', 'Jump to exact message', 'Cross-org Grid search'] },
+      { id: 'authService', layer: 'api', x: 800, y: 530, title: 'Auth Service', sub: 'OAuth · SSO · tokens', sections: ['07'],
+        desc: 'OAuth 2.0 flow, token refresh, SSO/SAML for Enterprise, and workspace membership validation.',
+        bullets: ['Refresh token rotation', 'SSO redirect + session cookie', 'Scoped tokens per workspace', 'Guest vs member role claims'],
+        questions: ['OAuth login flow', 'SSO session persistence', 'Role-based UI gating'] },
+
+      { id: 'eventsBus', layer: 'backend', x: 120, y: 660, title: 'Events API Bus', sub: 'Fan-out · ordering', sections: ['01','03','06'],
+        desc: 'Realtime event distribution to connected WebSocket clients. Handles message, presence, typing, and notification events.',
+        bullets: ['Per-workspace event stream partitioning', 'At-least-once delivery with event_id', 'Typing/presence low-priority lane', 'Burst throttling during all-hands'],
+        questions: ['Event ordering guarantees', 'High-frequency event batching', 'Fleet-wide reconnect storm'] },
+      { id: 'messageSvc', layer: 'backend', x: 360, y: 660, title: 'Message Service', sub: 'Persist · thread · edit', sections: ['01','02','04'],
+        desc: 'Authoritative message storage, thread parent linkage, edit/delete propagation, and mrkdwn + Block Kit rendering pipeline.',
+        bullets: ['Messages keyed by channel_id + ts', 'thread_ts links reply to parent', 'message_changed fan-out to all views', 'Link unfurl async attachment pipeline'],
+        questions: ['Message ordering at same ms', 'Edit propagates to open views', 'Link unfurl loading skeleton'] },
+      { id: 'searchSvc', layer: 'backend', x: 600, y: 660, title: 'Search Service', sub: 'Index · rank · snippet', sections: ['05','08'],
+        desc: 'Full-text index across messages, files, channels. Ranked results with snippet highlighting and retention-policy filtering.',
+        bullets: ['Inverted index per workspace shard', 'Snippet generation without full mrkdwn re-parse', 'Slack Connect retention policy per org', 'Jump-to-date as scroll alternative'],
+        questions: ['Highlight matches in snippets', 'Retention policy in shared channels', 'Jump to date in channel'] },
+      { id: 'notifSvc', layer: 'backend', x: 840, y: 660, title: 'Notification Service', sub: 'Push · prefs · grouping', sections: ['06','01'],
+        desc: 'Evaluates per-channel prefs, mention parsing, DND rules, and dispatches desktop/mobile push with grouping.',
+        bullets: ['@channel/@here vs @user distinction', 'Mute + thread-follow override logic', 'Push grouping: 47 msgs → 1 notification', 'Cross-device mark_read propagation'],
+        questions: ['Mention vs mute interaction', 'Notification grouping', 'Cross-device read sync'] },
+      { id: 'presenceSvc', layer: 'backend', x: 1040, y: 660, title: 'Presence Service', sub: 'Online · DND · status', sections: ['03','01'],
+        desc: 'Aggregates client heartbeats into online/away/DND state. Manages custom status and calendar integration.',
+        bullets: ['Multi-device: desktop + mobile merge rules', 'Custom status with expiry cron', 'Calendar "In a meeting" overlay', 'Workspace-wide presence throttle'],
+        questions: ['Multi-device presence merge', 'Custom status sync', 'Presence throttle at scale'] },
+
+      { id: 'messageDb', layer: 'data', x: 160, y: 790, title: 'Message DB', sub: 'Timeline · threads', sections: ['01','02'],
+        desc: 'Durable store for channel timelines, thread replies, edits, and reactions. Source of truth for history API.',
+        bullets: ['Partitioned by workspace + channel', 'ts as ordering key (float string)', 'Soft-delete with thread orphan handling', 'Retention policy per workspace/org'],
+        questions: ['Timeline storage model', 'Deleted message with 40 replies', 'Retention in Slack Connect'] },
+      { id: 'searchIndex', layer: 'data', x: 400, y: 790, title: 'Search Index', sub: 'Elasticsearch · shards', sections: ['05','07'],
+        desc: 'Full-text inverted index sharded by workspace. Powers quick switcher, message search, and people/channel discovery.',
+        bullets: ['Async index on message create/edit', 'Per-shard for Enterprise Grid', 'Stale index fallback to REST search', 'Recent-items cache in client'],
+        questions: ['Offline/stale index behavior', 'Cross-shard Grid search', 'Quick switcher indexing'] },
+      { id: 'redisCache', layer: 'data', x: 640, y: 790, title: 'Redis Cache', sub: 'Presence · dedup · buffer', sections: ['01','03','06'],
+        desc: 'Hot cache for presence state, typing indicators, event dedup keys, and reconnect replay buffer.',
+        bullets: ['TTL on typing indicator keys', 'event_id dedup set per connection', 'Short replay buffer for reconnect', 'Presence bitmap per workspace'],
+        questions: ['Typing TTL duration', 'Event dedup on reconnect', 'Presence cache invalidation'] },
+      { id: 'localIdb', layer: 'data', x: 880, y: 790, title: 'IndexedDB', sub: 'Offline · drafts · cache', sections: ['07','05','04'],
+        desc: 'Browser persistence for message pages, drafts, outbox, search cache, and sidebar metadata for offline reads.',
+        bullets: ['Schema: messages, drafts, outbox, searchCache', 'Workspace-scoped key namespaces', 'Eviction: LRU message pages', 'Optional encryption at rest'],
+        questions: ['IndexedDB schema design', 'Eviction policy', 'Encryption at rest'] }
+    ];
+
+    const EDGES = [
+      ['composer', 'draftStore', 'autosave draft'],
+      ['composer', 'channelStore', 'optimistic send'],
+      ['composer', 'restClient', 'chat.postMessage'],
+      ['channelList', 'channelStore', 'render timeline'],
+      ['channelList', 'unreadStore', 'mark read on scroll'],
+      ['threadPane', 'channelStore', 'thread replies'],
+      ['threadPane', 'unreadStore', 'thread unread badge'],
+      ['sidebar', 'unreadStore', 'badge counts'],
+      ['sidebar', 'workspaceStore', 'channel list'],
+      ['quickSwitcher', 'searchApi', 'fuzzy query'],
+      ['quickSwitcher', 'clientCache', 'recent items'],
+      ['memberList', 'presenceAgg', 'typing + dots'],
+      ['notifUI', 'unreadStore', 'badge source'],
+      ['connBanner', 'reconnectSync', 'connection state'],
+      ['channelStore', 'outbox', 'queued sends'],
+      ['channelStore', 'websocket', 'live events'],
+      ['workspaceStore', 'clientCache', 'scoped hydrate'],
+      ['draftStore', 'localIdb', 'persist drafts'],
+      ['outbox', 'restClient', 'replay on reconnect'],
+      ['presenceAgg', 'websocket', 'user_typing emit'],
+      ['clientCache', 'localIdb', 'hydrate pages'],
+      ['websocket', 'reconnectSync', 'disconnect handler'],
+      ['restClient', 'apiGateway', 'HTTP + auth'],
+      ['reconnectSync', 'channelStore', 'merge + dedup'],
+      ['reconnectSync', 'unreadStore', 'reconcile badges'],
+      ['apiGateway', 'postMessage', 'route send'],
+      ['apiGateway', 'searchApi', 'route search'],
+      ['apiGateway', 'authService', 'validate token'],
+      ['postMessage', 'messageSvc', 'persist message'],
+      ['searchApi', 'searchSvc', 'query index'],
+      ['messageSvc', 'eventsBus', 'fan-out event'],
+      ['messageSvc', 'messageDb', 'write timeline'],
+      ['eventsBus', 'websocket', 'push to client'],
+      ['eventsBus', 'notifSvc', 'trigger notify'],
+      ['eventsBus', 'presenceSvc', 'presence update'],
+      ['searchSvc', 'searchIndex', 'query'],
+      ['notifSvc', 'redisCache', 'dedup push'],
+      ['presenceSvc', 'redisCache', 'presence TTL'],
+      ['messageDb', 'restClient', 'history API'],
+      ['searchIndex', 'clientCache', 'cache results']
+    ];
+
+    const FLOWS = {
+      send: {
+        title: 'Send message in channel',
+        steps: [
+          { nodes: ['composer', 'draftStore'], text: 'User types; draft autosaved per channel. Hits send with client_msg_id.' },
+          { nodes: ['channelStore', 'channelList'], text: 'Optimistic message appended to store; bubble renders immediately in timeline.' },
+          { nodes: ['restClient', 'apiGateway', 'postMessage'], text: 'POST chat.postMessage with client_msg_id for idempotency.' },
+          { nodes: ['messageSvc', 'messageDb', 'eventsBus'], text: 'Server persists message, assigns ts, fans out message event.' },
+          { nodes: ['websocket', 'channelStore', 'channelList'], text: 'Socket confirms event; store reconciles optimistic → confirmed by client_msg_id match.' }
+        ],
+        sections: ['01','04','02']
+      },
+      thread: {
+        title: 'Reply in thread',
+        steps: [
+          { nodes: ['channelList', 'threadPane'], text: 'User clicks "Reply in thread" on parent message; flex pane opens.' },
+          { nodes: ['composer', 'draftStore'], text: 'Separate draft scope for thread. Optional "Also send to #channel" toggle.' },
+          { nodes: ['channelStore', 'threadPane'], text: 'Optimistic reply appended under thread_ts in store; parent reply count increments.' },
+          { nodes: ['restClient', 'postMessage', 'messageSvc'], text: 'POST with thread_ts (+ reply_broadcast if also-send). Server links reply to parent.' },
+          { nodes: ['eventsBus', 'websocket', 'channelStore'], text: 'message event arrives; thread pane + parent badge update; channel feed shows cross-post if enabled.' }
+        ],
+        sections: ['02','04','01']
+      },
+      reconnect: {
+        title: 'WebSocket reconnect after drop',
+        steps: [
+          { nodes: ['websocket', 'connBanner'], text: 'Socket closes; banner shows "Reconnecting…" with backoff timer.' },
+          { nodes: ['reconnectSync'], text: 'Exponential backoff reconnect attempt; decide incremental sync vs full refetch based on offline duration.' },
+          { nodes: ['outbox', 'restClient'], text: 'Drain outbox queue with original client_msg_id values for idempotent replay.' },
+          { nodes: ['websocket', 'eventsBus', 'redisCache'], text: 'Replay missed events from buffer; dedup by event_id against already-seen set.' },
+          { nodes: ['channelStore', 'unreadStore', 'connBanner'], text: 'Merge catch-up messages; reconcile badge counts from missed mark_read events; banner clears.' }
+        ],
+        sections: ['01','07','08']
+      },
+      workspace: {
+        title: 'Switch workspace',
+        steps: [
+          { nodes: ['sidebar', 'workspaceStore'], text: 'User selects different workspace from switcher; current UI state frozen.' },
+          { nodes: ['draftStore', 'localIdb'], text: 'Persist all open drafts for outgoing workspace to IndexedDB.' },
+          { nodes: ['workspaceStore', 'clientCache'], text: 'Swap active store slice; hydrate target workspace from cache or fetch.' },
+          { nodes: ['websocket', 'authService'], text: 'Close old socket; open new WebSocket authenticated to target workspace token.' },
+          { nodes: ['sidebar', 'channelList', 'composer'], text: 'Render target workspace sidebar + last-active channel; restore draft if any.' }
+        ],
+        sections: ['07','02','04']
+      },
+      searchJump: {
+        title: 'Search → jump to message',
+        steps: [
+          { nodes: ['quickSwitcher', 'searchApi'], text: 'User enters query with filters (from:, in:, has:); ranked results stream in.' },
+          { nodes: ['searchSvc', 'searchIndex'], text: 'Backend queries inverted index; returns snippets with channelId + messageTs per hit.' },
+          { nodes: ['clientCache'], text: 'Results cached by query hash for instant revisit on same search.' },
+          { nodes: ['quickSwitcher', 'sidebar', 'channelList'], text: 'User selects result; navigate to channel, scroll virtualized list to target ts.' },
+          { nodes: ['channelStore', 'restClient', 'messageDb'], text: 'If message not in local cache, fetch surrounding history page via conversations.history.' }
+        ],
+        sections: ['05','02','07']
+      },
+      mention: {
+        title: '@mention → notification burst',
+        steps: [
+          { nodes: ['messageSvc', 'eventsBus'], text: 'New message with @user parsed server-side; mention event emitted.' },
+          { nodes: ['notifSvc', 'redisCache'], text: 'Evaluate channel mute prefs, DND state, thread-follow overrides; dedup push key.' },
+          { nodes: ['websocket', 'unreadStore'], text: 'Socket delivers event; unread store increments bold @mention badge on sidebar.' },
+          { nodes: ['notifUI', 'sidebar'], text: 'Desktop toast if window unfocused; mobile push grouped if burst; sidebar badge updates.' },
+          { nodes: ['unreadStore', 'channelList'], text: 'User opens channel; mark-as-read on scroll/focus; sync mark_read to other devices.' }
+        ],
+        sections: ['06','01','08']
+      }
+    };
+
+    const LANES = [
+      { y: 28, h: 140, label: 'UI Surfaces', layer: 'ui' },
+      { y: 198, h: 150, label: 'Client State', layer: 'client' },
+      { y: 378, h: 110, label: 'Transport', layer: 'transport' },
+      { y: 508, h: 110, label: 'API / BFF', layer: 'api' },
+      { y: 638, h: 110, label: 'Backend Services', layer: 'backend' },
+      { y: 768, h: 100, label: 'Data', layer: 'data' }
+    ];
+
+    let scale = 0.78, panX = 16, panY = 8;
+    let activeLayers = new Set(Object.keys(LAYERS));
+    let activeSections = new Set(SECTIONS.map(s => s.id));
+    let selectedNode = null, activeFlow = null, flowStepIndex = -1, searchQuery = '';
+
+    const diagram = document.getElementById('diagram');
+    const connections = document.getElementById('connections');
+    const canvas = document.getElementById('canvas');
+
+    function nodeCenter(id) {
+      const n = NODES.find(x => x.id === id);
+      return { x: n.x + 74, y: n.y + 28 };
+    }
+
+    function renderLanes() {
+      diagram.querySelectorAll('.lane').forEach(el => el.remove());
+      LANES.forEach(lane => {
+        if (!activeLayers.has(lane.layer)) return;
+        const el = document.createElement('div');
+        el.className = 'lane';
+        el.style.top = lane.y + 'px';
+        el.style.height = lane.h + 'px';
+        el.innerHTML = '<span class="lane-label">' + lane.label + '</span>';
+        diagram.insertBefore(el, connections);
+      });
+    }
+
+    function nodeMatchesFilters(n) {
+      const q = searchQuery.toLowerCase();
+      const matchSearch = !q || n.title.toLowerCase().includes(q) || n.sub.toLowerCase().includes(q) || n.desc.toLowerCase().includes(q);
+      return matchSearch && activeLayers.has(n.layer) && n.sections.some(s => activeSections.has(s));
+    }
+
+    function getActiveFlowStep() {
+      if (!activeFlow || flowStepIndex < 0) return null;
+      return FLOWS[activeFlow]?.steps[flowStepIndex] || null;
+    }
+
+    function getFlowHighlightEdges(stepNodes) {
+      const inStep = new Set(stepNodes);
+      return EDGES.filter(([from, to]) => inStep.has(from) && inStep.has(to));
+    }
+
+    function renderNodes() {
+      diagram.querySelectorAll('.node').forEach(el => el.remove());
+      const flowStep = getActiveFlowStep();
+      const flowNodeIds = flowStep ? new Set(flowStep.nodes) : null;
+      NODES.forEach(n => {
+        const el = document.createElement('div');
+        el.className = 'node';
+        el.dataset.id = n.id;
+        el.dataset.layer = n.layer;
+        el.style.left = n.x + 'px';
+        el.style.top = n.y + 'px';
+        const visible = nodeMatchesFilters(n);
+        if (!visible) el.classList.add('dimmed');
+        else if (flowNodeIds && !flowNodeIds.has(n.id)) el.classList.add('dimmed');
+        if (flowNodeIds && flowNodeIds.has(n.id) && visible) el.classList.add('highlight');
+        if (selectedNode === n.id) el.classList.add('selected');
+        el.innerHTML = '<div class="node-title">' + n.title + '</div><div class="node-sub">' + n.sub + '</div><div class="node-tags">' + n.sections.map(s => '<span class="node-tag">' + s + '</span>').join('') + '</div>';
+        el.addEventListener('click', () => selectNode(n.id));
+        diagram.appendChild(el);
+      });
+    }
+
+    function renderEdges(highlightPairs) {
+      const hl = new Set((highlightPairs || []).map(p => p.join('|')));
+      connections.innerHTML = '';
+      EDGES.forEach(([from, to]) => {
+        const a = nodeCenter(from), b = nodeCenter(to);
+        const line = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+        line.setAttribute('x1', a.x); line.setAttribute('y1', a.y);
+        line.setAttribute('x2', b.x); line.setAttribute('y2', b.y);
+        if (hl.has(from + '|' + to) || hl.has(to + '|' + from)) line.classList.add('flow-active');
+        const nf = NODES.find(n => n.id === from), nt = NODES.find(n => n.id === to);
+        const visible = nf && nt && activeLayers.has(nf.layer) && activeLayers.has(nt.layer) && nf.sections.some(s => activeSections.has(s)) && nt.sections.some(s => activeSections.has(s));
+        if (!visible) line.style.opacity = '0.15';
+        connections.appendChild(line);
+      });
+    }
+
+    function applyTransform() {
+      diagram.style.transform = 'translate(' + panX + 'px, ' + panY + 'px) scale(' + scale + ')';
+    }
+
+    function selectNode(id) {
+      selectedNode = id; activeFlow = null; flowStepIndex = -1;
+      document.querySelectorAll('.flow-btn').forEach(b => b.classList.remove('active'));
+      renderNodes(); renderEdges(); showNodeDetail(id);
+    }
+
+    function showNodeDetail(id) {
+      const n = NODES.find(x => x.id === id);
+      if (!n) return;
+      document.getElementById('detailEmpty').hidden = true;
+      const content = document.getElementById('detailContent');
+      content.hidden = false;
+      const layer = LAYERS[n.layer];
+      content.innerHTML = '<span class="layer-badge" style="background:' + layer.color + '22;color:' + layer.color + '">' + layer.label + '</span><h2>' + n.title + '</h2><p>' + n.desc + '</p><h3>Key mechanisms</h3><ul>' + n.bullets.map(b => '<li>' + b + '</li>').join('') + '</ul><h3>Interview questions</h3><ul>' + n.questions.map(q => '<li>' + q + '</li>').join('') + '</ul><h3>Prep sections</h3><div class="section-links">' + n.sections.map(s => { const sec = SECTIONS.find(x => x.id === s); return sec ? '<a href="' + sec.file + '">§' + s + ' ' + sec.name + '</a>' : ''; }).join('') + '</div>';
+    }
+
+    function showFlowDetail(flowKey) {
+      const flow = FLOWS[flowKey];
+      document.getElementById('detailEmpty').hidden = true;
+      const content = document.getElementById('detailContent');
+      content.hidden = false;
+      content.innerHTML = '<h2>' + flow.title + '</h2><p>Click steps to highlight nodes on the diagram.</p><h3>Steps</h3>' + flow.steps.map((step, i) => '<div class="flow-step' + (i === flowStepIndex ? ' active' : '') + '" data-step="' + i + '"><strong>' + (i + 1) + '.</strong> ' + step.text + '</div>').join('') + '<h3>Related sections</h3><div class="section-links">' + flow.sections.map(s => { const sec = SECTIONS.find(x => x.id === s); return sec ? '<a href="' + sec.file + '">§' + s + ' ' + sec.name + '</a>' : ''; }).join('') + '</div>';
+      content.querySelectorAll('.flow-step').forEach(el => {
+        el.addEventListener('click', () => { highlightFlowStep(flowKey, Number(el.dataset.step)); showFlowDetail(flowKey); });
+      });
+    }
+
+    function highlightFlowStep(flowKey, stepIndex) {
+      const step = FLOWS[flowKey]?.steps[stepIndex];
+      if (!step) return;
+      activeFlow = flowKey; flowStepIndex = stepIndex;
+      renderNodes(); renderEdges(getFlowHighlightEdges(step.nodes));
+    }
+
+    function startFlow(flowKey) {
+      activeFlow = flowKey; flowStepIndex = 0; selectedNode = null;
+      document.querySelectorAll('.flow-btn').forEach(b => b.classList.toggle('active', b.dataset.flow === flowKey));
+      renderNodes(); highlightFlowStep(flowKey, 0); showFlowDetail(flowKey);
+    }
+
+    function buildFilters() {
+      const lf = document.getElementById('layerFilters');
+      Object.entries(LAYERS).forEach(([key, val]) => {
+        const chip = document.createElement('button');
+        chip.type = 'button'; chip.className = 'chip layer-' + key + ' active'; chip.textContent = val.label;
+        chip.addEventListener('click', () => { activeLayers.has(key) ? (activeLayers.delete(key), chip.classList.remove('active')) : (activeLayers.add(key), chip.classList.add('active')); refresh(); });
+        lf.appendChild(chip);
+      });
+      const sf = document.getElementById('sectionFilters');
+      SECTIONS.forEach(sec => {
+        const chip = document.createElement('button');
+        chip.type = 'button'; chip.className = 'chip active'; chip.textContent = sec.id + ' ' + sec.name;
+        chip.addEventListener('click', () => { activeSections.has(sec.id) ? (activeSections.delete(sec.id), chip.classList.remove('active')) : (activeSections.add(sec.id), chip.classList.add('active')); refresh(); });
+        sf.appendChild(chip);
+      });
+      const fb = document.getElementById('flowButtons');
+      Object.entries(FLOWS).forEach(([key, flow]) => {
+        const btn = document.createElement('button');
+        btn.type = 'button'; btn.className = 'flow-btn'; btn.dataset.flow = key; btn.textContent = flow.title;
+        btn.addEventListener('click', () => startFlow(key));
+        fb.appendChild(btn);
+      });
+      const legend = document.getElementById('legend');
+      Object.entries(LAYERS).forEach(([key, val]) => { legend.innerHTML += '<div><span style="background:' + val.color + '"></span>' + val.label + '</div>'; });
+    }
+
+    function refresh() {
+      renderLanes(); renderNodes();
+      if (activeFlow && flowStepIndex >= 0) {
+        const step = FLOWS[activeFlow]?.steps[flowStepIndex];
+        renderEdges(step ? getFlowHighlightEdges(step.nodes) : []);
+      } else renderEdges();
+    }
+
+    document.getElementById('search').addEventListener('input', e => { searchQuery = e.target.value; refresh(); });
+    document.getElementById('zoomIn').addEventListener('click', () => { scale = Math.min(1.4, scale + 0.1); applyTransform(); });
+    document.getElementById('zoomOut').addEventListener('click', () => { scale = Math.max(0.45, scale - 0.1); applyTransform(); });
+    document.getElementById('resetView').addEventListener('click', () => { scale = 0.78; panX = 16; panY = 8; applyTransform(); });
+
+    let dragging = false, lastX = 0, lastY = 0;
+    canvas.addEventListener('pointerdown', e => {
+      if (e.target.closest('.node')) return;
+      dragging = true; lastX = e.clientX; lastY = e.clientY;
+      canvas.classList.add('dragging'); canvas.setPointerCapture(e.pointerId);
+    });
+    canvas.addEventListener('pointermove', e => {
+      if (!dragging) return;
+      panX += e.clientX - lastX; panY += e.clientY - lastY;
+      lastX = e.clientX; lastY = e.clientY; applyTransform();
+    });
+    canvas.addEventListener('pointerup', () => { dragging = false; canvas.classList.remove('dragging'); });
+
+    buildFilters(); renderLanes(); renderNodes(); renderEdges(); applyTransform();
+  </script>
+</body>
+</html>

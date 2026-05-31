@@ -1,0 +1,539 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Section 6 — Notifications &amp; Unread State (Answers) | System Design Answers</title>
+  <meta name="description" content="Interview-depth answers for Slack frontend system design.">
+  <style>
+    :root {
+      --bg: #f8f9fb; --surface: #ffffff; --text: #1a1d26; --text-muted: #5c6370;
+      --border: #e2e6ed; --accent: #3d5a80; --accent-soft: #eef2f7;
+      --code-bg: #f0f2f6; --pre-bg: #1e2433; --pre-text: #e8ecf4;
+      --nav-bg: rgba(248, 249, 251, 0.92); --shadow: 0 1px 3px rgba(0, 0, 0, 0.06);
+    }
+    @media (prefers-color-scheme: dark) {
+      :root {
+        --bg: #12151c; --surface: #1a1f2a; --text: #e8ecf4; --text-muted: #9aa3b2;
+        --border: #2d3548; --accent: #8cb4d9; --accent-soft: #232a38;
+        --code-bg: #252d3d; --pre-bg: #0d1017; --pre-text: #d4dae6;
+        --nav-bg: rgba(18, 21, 28, 0.94); --shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
+      }
+    }
+    *, *::before, *::after { box-sizing: border-box; }
+    html { scroll-behavior: smooth; scroll-padding-top: 5.5rem; }
+    body { margin: 0; font-family: "Segoe UI", system-ui, sans-serif; font-size: 1.0625rem;
+      line-height: 1.65; color: var(--text); background: var(--bg); }
+    .site-nav { position: sticky; top: 0; z-index: 100; background: var(--nav-bg);
+      backdrop-filter: blur(10px); border-bottom: 1px solid var(--border); box-shadow: var(--shadow); }
+    .site-nav-inner { max-width: 900px; margin: 0 auto; padding: 0.75rem 1.5rem; }
+    .site-nav-title { font-size: 0.8125rem; font-weight: 600; text-transform: uppercase;
+      letter-spacing: 0.04em; color: var(--text-muted); margin: 0 0 0.5rem; }
+    .toc { display: flex; flex-wrap: wrap; gap: 0.35rem 0.75rem; margin: 0; padding: 0;
+      list-style: none; font-size: 0.8125rem; }
+    .toc a { color: var(--accent); text-decoration: none; white-space: nowrap; }
+    .toc a:hover { text-decoration: underline; }
+    .page { max-width: 900px; margin: 0 auto; padding: 2rem 1.5rem 4rem; }
+    header.page-header { margin-bottom: 2.5rem; padding-bottom: 1.5rem; border-bottom: 1px solid var(--border); }
+    h1 { font-size: 1.75rem; font-weight: 700; margin: 0 0 0.75rem; }
+    .lead { margin: 0; color: var(--text-muted); font-size: 1.05rem; }
+    h2.section { font-size: 1.35rem; font-weight: 700; margin: 2.5rem 0 1.25rem;
+      color: var(--accent); border-bottom: 2px solid var(--accent-soft); padding-bottom: 0.35rem; }
+    article.qa { margin-bottom: 2.75rem; background: var(--surface); border: 1px solid var(--border);
+      border-radius: 10px; padding: 1.5rem 1.75rem; box-shadow: var(--shadow); }
+    h3.question { font-size: 1.2rem; font-weight: 600; margin: 0 0 1rem; }
+    article.qa p { margin: 0 0 1rem; }
+    ol, ul { margin: 0 0 1rem; padding-left: 1.35rem; }
+    table { width: 100%; border-collapse: collapse; margin: 0 0 1rem; font-size: 0.95rem; }
+    th, td { border: 1px solid var(--border); padding: 0.55rem 0.75rem; text-align: left; }
+    th { background: var(--accent-soft); font-weight: 600; }
+    code { font-family: ui-monospace, Menlo, Consolas, monospace; font-size: 0.88em;
+      background: var(--code-bg); padding: 0.15em 0.4em; border-radius: 4px; }
+    pre { margin: 0 0 1rem; padding: 1rem; background: var(--pre-bg); color: var(--pre-text);
+      border-radius: 8px; overflow-x: auto; font-size: 0.875rem; }
+    pre code { background: none; padding: 0; color: inherit; }
+    .mermaid-wrap { margin: 0 0 1rem; padding: 1rem; background: var(--surface);
+      border: 1px solid var(--border); border-radius: 8px; overflow-x: auto; }
+    footer.page-footer { max-width: 900px; margin: 0 auto; padding: 1.5rem;
+      border-top: 1px solid var(--border); font-size: 0.9375rem; }
+    footer.page-footer a { color: var(--accent); text-decoration: none; font-weight: 500; }
+  </style>
+  <link rel="stylesheet" href="assets/interactive.css">
+</head>
+<body>
+  <nav class="site-nav" aria-label="Table of contents">
+    <div class="site-nav-inner">
+      <p class="site-nav-title">On this page</p>
+      <ol class="toc"><li><a href="#how-do-you-compute-unread-counts-per-channel-last-read-timestamp-vs-last-seen-message-ts">How do you compute unread counts per</a></li><li><a href="#how-do-you-distinguish-a-regular-unread-from-an-unread-mention-bold-badge-vs-normal">How do you distinguish a regular unr</a></li><li><a href="#how-do-you-mark-a-channel-as-read-on-scroll-on-focus-on-explicit-action-or-a-combination">How do you mark a channel as read — </a></li><li><a href="#how-do-you-respect-per-channel-notification-preferences-all-messages-mentions-only-mute">How do you respect per-channel notif</a></li><li><a href="#how-do-you-sync-read-state-across-desktop-mobile-and-web-when-the-user-reads-on-one-device">How do you sync read state across de</a></li><li><a href="#how-do-you-handle-desktop-push-notifications-without-double-notifying-an-active-window">How do you handle desktop push notif</a></li><li><a href="#how-do-you-implement-do-not-disturb-suppress-badges-suppress-push-or-both">How do you implement Do Not Disturb </a></li><li><a href="#how-do-you-handle-notification-bursts-in-a-high-traffic-channel-during-an-incident">How do you handle notification burst</a></li><li><a href="#how-do-you-implement-thread-specific-notification-settings-follow-thread-vs-parent-channel-mute">How do you implement thread-specific</a></li><li><a href="#how-do-you-reconcile-badge-counts-after-reconnect-when-you-missed-mark-read-events-from-another-client">How do you reconcile badge counts af</a></li><li><a href="#how-do-you-implement-notification-grouping-on-mobile-47-messages-from-incidents-becomes-one-push">How do you implement notification gr</a></li><li><a href="#how-do-you-handle-channel-and-here-notifications-differently-from-direct-user-mentions-in-the-ui">How do you handle @channel and @here</a></li></ol>
+    </div>
+  </nav>
+  <main class="page">
+    <header class="page-header">
+      <h1>Section 6 — Notifications &amp; Unread State (Answers)</h1>
+      <p class="lead">Interview-depth answers for Slack frontend system design.</p>
+    </header>
+    <h1 id="section-6-notifications-unread-state-answers">Section 6 — Notifications &amp; Unread State (Answers)</h1>
+<p>Interview-depth answers for Slack&#x27;s client notification layer: unread badge math, read cursors, per-channel prefs, cross-device sync, push delivery, DND, thread follow, and burst handling. Badge counts wrong erode trust immediately — this section is about getting the numbers and signals right.</p>
+<hr>
+<h2 class="section" id="core">Core</h2>
+<article class="qa" id="how-do-you-compute-unread-counts-per-channel-last-read-timestamp-vs-last-seen-message-ts">
+<h3 class="question">How do you compute unread counts per channel — last-read timestamp vs last-seen message ts?</h3>
+<p><strong>Problem framing:</strong> Every sidebar row needs a trustworthy unread count (or boolean) without scanning 100k messages on each socket event. The client must reconcile <strong>what the user has acknowledged</strong> with <strong>what arrived since</strong>, across channel feed, threads, and DMs — while staying consistent with server state after reconnect.</p>
+<p><strong>Approach:</strong> Slack uses a <strong>last-read cursor</strong> (<code>last_read</code> / <code>last_read_ts</code>) per <code>(user, conversation)</code>, not a literal &quot;count unread messages&quot; scan on every update.</p>
+<table>
+<thead><tr>
+<th>Concept</th>
+<th>Meaning</th>
+</tr></thead><tbody>
+<tr>
+<td><code>last_read_ts</code></td>
+<td>Server-authoritative watermark — messages with <code>ts &gt; last_read_ts</code> are unread</td>
+</tr>
+<tr>
+<td><code>latest</code> / <code>last_message_ts</code></td>
+<td>Newest message in conversation (from channel metadata or latest socket event)</td>
+</tr>
+<tr>
+<td>Unread count</td>
+<td>Derived: count messages where <code>ts &gt; last_read_ts</code> <strong>or</strong> approximate with metadata</td>
+</tr>
+</tbody></table>
+<p><strong>Computation paths:</strong></p>
+<ol><li><strong>Exact count (small channels / DMs)</strong> — Client maintains ordered <code>ts[]</code> for loaded messages. <code>unreadCount = messages.filter(m =&gt; m.ts &gt; last_read_ts).length</code>. Updates incrementally on each new socket <code>message</code>.</li></ol>
+<ol><li><strong>Metadata approximation (large channels)</strong> — Channel object from <code>conversations.list</code> includes <code>unread_count_display</code> or similar server-computed field. Client trusts server count until local catch-up reconciles.</li></ol>
+<ol><li><strong>Boolean mode</strong> — Some surfaces only need &quot;has unread&quot; (bold name) not a number: <code>hasUnread = latest_ts &gt; last_read_ts</code>.</li></ol>
+<pre><code>on message event (channel C, ts T):
+  if T &gt; channel.last_read_ts:
+    channel.hasUnread = true
+    channel.unreadCount++   // if tracking exact count locally
+  if channel is focused AND user at live edge:
+    // defer mark-read (see next question)</code></pre>
+<ol><li><strong>Thread separation</strong> — Channel <code>last_read_ts</code> covers <strong>top-level feed only</strong>. Thread replies use separate cursors (<code>last_read_reply_ts</code> per parent or thread subscription). Never fold thread traffic into channel count unless <code>reply_broadcast</code>.</li></ol>
+<ol><li><strong>Persistence</strong> — <code>last_read_ts</code> synced from server on workspace load (<code>conversations.info</code> / bulk <code>conversations.list</code>). Local optimistic advance on mark-read; revert if API fails.</li></ol>
+<div class="mermaid-wrap"><pre class="mermaid">sequenceDiagram
+  participant Client
+  participant Server
+  participant Sidebar
+  Server-->>Client: conversations.list (last_read, latest)
+  Client->>Sidebar: render badges
+  Client->>Client: socket message ts > last_read
+  Client->>Sidebar: increment unread
+  Client->>Server: conversations.mark (read up to ts)
+  Server-->>Client: ACK + broadcast channel_marked
+  Client->>Sidebar: clear badge</pre></div>
+<p><strong>Tradeoffs:</strong> <code>last_read_ts</code> is O(1) per channel vs counting — essential at scale. Exact local counts drift if history isn&#x27;t fully loaded — reconcile with server <code>unread_count</code> on focus. <strong>Pitfall:</strong> Using &quot;last message user scrolled past&quot; locally without syncing — other devices show different state. <strong>Pitfall:</strong> Comparing <code>ts</code> as numbers — Slack <code>ts</code> is string <code>seconds.microseconds</code>; lexicographic compare works.</p>
+<hr>
+</article>
+<article class="qa" id="how-do-you-distinguish-a-regular-unread-from-an-unread-mention-bold-badge-vs-normal">
+<h3 class="question">How do you distinguish a regular unread from an unread @mention (bold badge vs normal)?</h3>
+<p><strong>Problem framing:</strong> Not all unreads are equal — a direct <code>@you</code> or <code>@engineering</code> (where you&#x27;re a member) demands attention; 200 messages in <code>#random</code> while you were in a meeting should not hijack the sidebar with the same urgency. The UI encodes this as <strong>bold channel name</strong>, <strong>highlighted badge</strong>, or <strong>red dot</strong> for mentions vs subtle unbold count for regular traffic.</p>
+<p><strong>Approach:</strong> Maintain <strong>two independent flags</strong> per conversation, derived from message metadata and mention parsing:</p>
+<table>
+<thead><tr>
+<th>Flag</th>
+<th>Set when</th>
+<th>UI</th>
+</tr></thead><tbody>
+<tr>
+<td><code>hasUnread</code></td>
+<td>Any message <code>ts &gt; last_read_ts</code></td>
+<td>Unread count or dot</td>
+</tr>
+<tr>
+<td><code>hasUnreadMention</code></td>
+<td>Unread message mentions local user / subscribed group / <code>@here</code> (if present)</td>
+<td><strong>Bold</strong> channel name, accent badge</td>
+</tr>
+</tbody></table>
+<p><strong>Mention detection on ingest:</strong></p>
+<pre><code>on message (channel, ts, text, blocks):
+  if ts &lt;= last_read_ts: return
+  if mentionsMe(message):
+    channel.hasUnreadMention = true
+  channel.hasUnread = true
+
+mentionsMe(msg):
+  parse mrkdwn / blocks for &lt;@U_local&gt;, &lt;!subteam^S_id&gt;, &lt;!here&gt;, &lt;!channel&gt;
+  match user id, usergroup membership, channel membership for @here</code></pre>
+<ol><li><strong>Server assist</strong> — Slack API may expose <code>unread_count_display</code> split or <code>mention_count</code> on conversation objects. Prefer server fields when available; client recomputes for realtime between syncs.</li></ol>
+<ol><li><strong>Clear mention flag independently</strong> — When user reads channel, both flags clear. Some products keep mention highlight until user <strong>views</strong> the specific message — Slack typically clears on channel mark-read up to visible <code>ts</code>.</li></ol>
+<ol><li><strong>Thread @mentions</strong> — <code>@you</code> in a thread you&#x27;re <strong>not</strong> following may still bump channel mention badge (product rule) or only thread subscription badge — see Deep question on thread follow.</li></ol>
+<ol><li><strong>Muted channels</strong> — Mention may still bold the row even when count is suppressed (see notification prefs).</li></ol>
+<pre><code>Sidebar row states:
+  #general     (3)           ← regular unread
+  #incidents   (12) ● bold   ← unread + mention
+  #random      muted gray    ← no badge, mention may still show @ badge</code></pre>
+<p><strong>Tradeoffs:</strong> Client-side mention parsing must mirror server notification rules — drift causes &quot;I got notified but no bold&quot; bugs. <strong>Pitfall:</strong> Treating <code>@channel</code> the same as <code>@user</code> in UI — <code>@channel</code> is a broadcast (different icon/warning). <strong>Pitfall:</strong> Clearing mention flag when only scrolling past without mark-read — user misses that they were pinged.</p>
+<hr>
+</article>
+<article class="qa" id="how-do-you-mark-a-channel-as-read-on-scroll-on-focus-on-explicit-action-or-a-combination">
+<h3 class="question">How do you mark a channel as read — on scroll, on focus, on explicit action, or a combination?</h3>
+<p><strong>Problem framing:</strong> Mark-read too aggressively (tab focus alone) and users miss unread indicators while multitasking. Too conservatively (explicit click only) and badges never clear — both feel broken. The rules must differ for <strong>focused vs background</strong>, <strong>at bottom vs scrolled up</strong>, and <strong>mobile vs desktop</strong>.</p>
+<p><strong>Approach:</strong> <strong>Combination policy</strong> — focus + visibility + scroll position + debounce:</p>
+<table>
+<thead><tr>
+<th>Trigger</th>
+<th>Mark read?</th>
+<th>Notes</th>
+</tr></thead><tbody>
+<tr>
+<td>Channel becomes active + window focused</td>
+<td>Partial</td>
+<td>Start read timer</td>
+</tr>
+<tr>
+<td>User at live edge (bottom) for ≥1–2 s</td>
+<td>Yes</td>
+<td><code>conversations.mark</code> with latest visible <code>ts</code></td>
+</tr>
+<tr>
+<td>User scrolled up reading history</td>
+<td>No</td>
+<td>Keep badge; &quot;Mark as read&quot; in menu</td>
+</tr>
+<tr>
+<td>Window blur / switch channel</td>
+<td>Flush pending</td>
+<td>Mark up to last committed read cursor</td>
+</tr>
+<tr>
+<td>Explicit &quot;Mark as read&quot; / Esc</td>
+<td>Yes</td>
+<td>Immediate API call</td>
+</tr>
+<tr>
+<td>Mobile: conversation opened</td>
+<td>Yes (often)</td>
+<td>Mobile marks on enter; desktop stricter</td>
+</tr>
+</tbody></table>
+<p><strong>Implementation:</strong></p>
+<pre><code>readCursor = last_read_ts  // local optimistic
+
+onFocus(channel):
+  if atBottom(channel): startDebounce(1500ms → markRead(latestVisibleTs))
+
+onScroll(channel):
+  if atBottom: schedule markRead
+  else: cancel pending markRead
+
+markRead(ts):
+  readCursor = max(readCursor, ts)
+  optimistic clear badge
+  API conversations.mark(channel, ts)
+  on failure: revert badge + toast</code></pre>
+<ol><li><strong>Visible message threshold</strong> — Mark only up to the <strong>lowest visible message ts</strong> at bottom, not future messages that arrived off-screen while scrolled up.</li></ol>
+<ol><li><strong>Thread pane</strong> — Opening thread and viewing latest marks <strong>thread</strong> read (<code>ts = parentTs</code> or latest reply ts) separately from channel feed.</li></ol>
+<ol><li><strong>Keyboard navigation</strong> — Arrow-key through sidebar may preview channel without marking read until Enter and dwell time — prevents badge wipe on hover-preview.</li></ol>
+<ol><li><strong>Unread-only filter</strong> — &quot;All unreads&quot; view may use explicit tap-to-clear per row.</li></ol>
+<div class="mermaid-wrap"><pre class="mermaid">stateDiagram-v2
+  [*] --> Background: channel not visible
+  Background --> Focused: user selects channel
+  Focused --> AtBottom: scroll to live edge
+  Focused --> ScrolledUp: user reads history
+  AtBottom --> MarkRead: debounce fires
+  ScrolledUp --> MarkRead: user clicks "Mark as read"
+  MarkRead --> [*]: badge cleared
+  ScrolledUp --> ScrolledUp: new msg (badge++)</pre></div>
+<p><strong>Tradeoffs:</strong> Debounce prevents mark-read while user flips through channels quickly — 1–2 s is typical. <strong>Pitfall:</strong> Marking read on focus while user is scrolled up in a firehose — they never saw new messages. <strong>Pitfall:</strong> Not marking on blur — badge persists after user clearly read at bottom.</p>
+<hr>
+</article>
+<article class="qa" id="how-do-you-respect-per-channel-notification-preferences-all-messages-mentions-only-mute">
+<h3 class="question">How do you respect per-channel notification preferences (all messages, mentions only, mute)?</h3>
+<p><strong>Problem framing:</strong> Users want <code>#announcements</code> loud and <code>#random</code> silent. Preferences must affect <strong>badges</strong>, <strong>desktop/mobile push</strong>, <strong>sounds</strong>, and <strong>email digests</strong> consistently — but not hide messages from the feed itself.</p>
+<p><strong>Approach:</strong> <strong>Per-conversation notification level</strong> stored server-side, cached client-side, applied at <strong>ingest</strong> and <strong>delivery</strong> layers separately:</p>
+<table>
+<thead><tr>
+<th>Level</th>
+<th>Badge</th>
+<th>Push</th>
+<th>Sound</th>
+<th>Feed</th>
+</tr></thead><tbody>
+<tr>
+<td>All messages</td>
+<td>Yes</td>
+<td>Yes</td>
+<td>Yes</td>
+<td>Always show</td>
+</tr>
+<tr>
+<td>Mentions only</td>
+<td>Mention only</td>
+<td>Mentions</td>
+<td>Mentions</td>
+<td>Always show</td>
+</tr>
+<tr>
+<td>Mute</td>
+<td>Hidden (or dot only)</td>
+<td>No</td>
+<td>No</td>
+<td>Always show</td>
+</tr>
+</tbody></table>
+<ol><li><strong>Data model</strong> — <code>channel.notificationPreference: &#x27;all&#x27; | &#x27;mentions&#x27; | &#x27;mute&#x27;</code> from <code>conversations.info</code> or user prefs API. Workspace defaults + per-channel override.</li></ol>
+<ol><li><strong>Badge gating</strong> — On <code>message</code> event:</li></ol>
+<pre><code>if pref == &#x27;mute&#x27;: suppress sidebar count (optional subtle dot for @mention)
+if pref == &#x27;mentions&#x27;: increment badge only if mentionsMe(msg)
+if pref == &#x27;all&#x27;: increment on any unread</code></pre>
+<ol><li><strong>Push gating</strong> — Same rules at notification service (server-side). Client registers device tokens; server decides whether to APNs/FCM — client should not double-send locally.</li></ol>
+<ol><li><strong>UI affordances</strong> — Channel header bell icon: filled / half / slashed. Right-click sidebar → &quot;Change notifications&quot;. Muted channels section or gray text.</li></ol>
+<ol><li><strong>Global overrides</strong> — DND, mobile &quot;notify me on mobile even when active on desktop&quot;, and <code>@mention</code> always-notify escape hatches layered on top (see DND Deep question).</li></ol>
+<p><strong>Tradeoffs:</strong> Mute vs hide-from-sidebar are different features — mute still lists channel, just silent. <strong>Pitfall:</strong> Applying mute to <strong>unread math</strong> but not <strong>push</strong> — user gets pinged for muted channel. <strong>Pitfall:</strong> Client-only mute that resets on new device — must persist server-side.</p>
+<hr>
+</article>
+<article class="qa" id="how-do-you-sync-read-state-across-desktop-mobile-and-web-when-the-user-reads-on-one-device">
+<h3 class="question">How do you sync read state across desktop, mobile, and web when the user reads on one device?</h3>
+<p><strong>Problem framing:</strong> User reads <code>#incidents</code> on phone during commute; desktop at office still shows <code>(47)</code> until sync — classic multi-device bug. Read state is <strong>shared user state</strong>, not per-device, and must converge within seconds.</p>
+<p><strong>Approach:</strong> <strong>Server-authoritative <code>last_read_ts</code> with realtime broadcast:</strong></p>
+<div class="mermaid-wrap"><pre class="mermaid">sequenceDiagram
+  participant Mobile
+  participant Server
+  participant Desktop
+  Mobile->>Server: conversations.mark(C, ts=T)
+  Server->>Server: persist last_read for user
+  Server-->>Desktop: channel_marked / im_marked event
+  Desktop->>Desktop: last_read_ts = T, clear badge</pre></div>
+<ol><li><strong>Write path</strong> — Any device calling <code>conversations.mark</code> (or <code>mark</code> on DM) updates canonical cursor. Include <code>ts</code> = latest read message, not wall clock.</li></ol>
+<ol><li><strong>Sync path</strong> — Other connected clients receive <strong><code>channel_marked</code></strong> (or equivalent) on workspace WebSocket with <code>{ channel, ts, mention_count: 0 }</code>. Patch local store atomically.</li></ol>
+<ol><li><strong>Optimistic local read</strong> — Device that marked read clears badge immediately; others wait for event (~100ms–2s). On reconnect, bulk-fetch <code>conversations.list</code> with <code>last_read</code> to heal drift.</li></ol>
+<ol><li><strong>Conflict resolution</strong> — If desktop locally thought unread but server says <code>last_read</code> advanced: <strong>server wins</strong> (max of cursors). Never decrement <code>last_read</code> from client without explicit &quot;Mark unread&quot; action.</li></ol>
+<ol><li><strong>Thread cursors</strong> — Same pattern with thread-specific mark API; broadcast <code>thread_marked</code> or embed in parent metadata update.</li></ol>
+<ol><li><strong>Offline device</strong> — On next launch, <code>conversations.list</code> sync reconciles all badges in one pass — no need for missed events if REST snapshot is fresh.</li></ol>
+<p><strong>Tradeoffs:</strong> Eventual consistency means brief dual-badge on desktop after mobile read — acceptable if &lt;2 s. <strong>Pitfall:</strong> Local mark-read without API when offline — queue <code>mark</code> for replay; other devices stay stale until sync. <strong>Pitfall:</strong> Applying <code>channel_marked</code> only to sidebar, not open channel view — user still sees &quot;New&quot; divider incorrectly.</p>
+<hr>
+</article>
+<article class="qa" id="how-do-you-handle-desktop-push-notifications-without-double-notifying-an-active-window">
+<h3 class="question">How do you handle desktop push notifications without double-notifying an active window?</h3>
+<p><strong>Problem framing:</strong> User has Slack focused on <code>#general</code> chatting actively — a new message in <code>#random</code> should not produce an OS banner <strong>and</strong> in-app badge noise for the focused conversation. Conversely, background conversations should still notify. Desktop must know <strong>&quot;user is present and viewing conversation X&quot;</strong> and suppress redundant pushes.</p>
+<p><strong>Approach:</strong> <strong>Multi-layer suppression: server-side presence + client-side focus report:</strong></p>
+<ol><li><strong>Active window registration</strong> — Desktop client sends <strong><code>user_active</code></strong> / <strong><code>presence</code></strong> with <code>{ active: true, viewing_channel_id }</code> on focus change. Notification service suppresses push for messages in <strong>currently viewed</strong> channel when window is focused and not minimized.</li></ol>
+<ol><li><strong>Client-side guard</strong> — Even if push arrives (race), client drops notification if:</li></ol>
+<ul><li>App is focused AND message channel === active channel AND user at bottom (already saw message via socket).</li><li>Message was inserted optimistically from local send.</li></ul>
+<ol><li><strong>Do Not Disturb / mute</strong> — Layered before push (see prefs).</li></ol>
+<ol><li><strong>Platform APIs</strong> — macOS <code>NSUserNotification</code> / Electron: set <code>silent: true</code> or skip <code>show()</code> when suppressed. Windows toast activation same pattern.</li></ol>
+<pre><code>New message in #random
+  → Server checks: user active on desktop viewing #general?
+      → yes: skip desktop push for #random (badge still updates unless muted)
+      → no: send OS notification
+  → Mobile: separate device token — always evaluate mobile rules</code></pre>
+<ol><li><strong>@mention escape</strong> — Many users want @mention push even when active in another channel — product flag: <strong>notify mentions always</strong> bypasses focus suppression.</li></ol>
+<p><strong>Tradeoffs:</strong> Server-side suppression requires accurate focus telemetry — stale &quot;viewing #general&quot; suppresses wrong pushes briefly. <strong>Pitfall:</strong> Suppressing push for active channel but also skipping badge increment — user sees message but sidebar wrong elsewhere. <strong>Pitfall:</strong> Double notification from <strong>socket-triggered local toast</strong> + <strong>OS push</strong> — single notification pipeline owned by one layer.</p>
+<hr>
+</article>
+<h2 class="section" id="deep">Deep</h2>
+<article class="qa" id="how-do-you-implement-do-not-disturb-suppress-badges-suppress-push-or-both">
+<h3 class="question">How do you implement Do Not Disturb — suppress badges, suppress push, or both?</h3>
+<p><strong>Problem framing:</strong> DND means &quot;I&#x27;m unavailable.&quot; Users expect <strong>no interruptions</strong>, but still want to <strong>catch up visually</strong> when they return. Suppressing everything including badges hides actionable state; suppressing only push leaves noisy badges during focus time.</p>
+<p><strong>Approach:</strong> <strong>Split suppression by surface</strong> — Slack typically:</p>
+<table>
+<thead><tr>
+<th>Surface</th>
+<th>DND behavior</th>
+</tr></thead><tbody>
+<tr>
+<td>Push (desktop/mobile)</td>
+<td><strong>Suppressed</strong> (except optional priority @mention override)</td>
+</tr>
+<tr>
+<td>Sound / banner</td>
+<td><strong>Suppressed</strong></td>
+</tr>
+<tr>
+<td>Sidebar badges</td>
+<td><strong>Still accumulate</strong> (or muted styling — product choice; Slack shows badges but no ping)</td>
+</tr>
+<tr>
+<td>Red badge on app icon</td>
+<td>Often <strong>still updates</strong> so user sees backlog count</td>
+</tr>
+<tr>
+<td>@mention highlight</td>
+<td>May still <strong>bold</strong> channel when DND ends or in &quot;All unreads&quot;</td>
+</tr>
+</tbody></table>
+<ol><li><strong>Schedule model</strong> — <code>dnd_enabled_until</code>, daily recurring windows, calendar integration. Synced user pref via <code>dnd_updated</code> WebSocket event to all devices.</li></ol>
+<ol><li><strong>Notification service gate</strong> — Server checks DND before APNs/FCM/desktop push. Client checks DND before local <code>Notification()</code> API.</li></ol>
+<ol><li><strong>Badge policy (recommended)</strong> — <strong>Do not suppress badge math</strong> — user opens Slack after DND and sees what they missed. Optionally show moon icon on workspace tab without hiding counts.</li></ol>
+<ol><li><strong>Override paths</strong> — &quot;Notify me even during DND&quot; for specific people or <code>@urgent</code> keyword; emergency on-call rotations.</li></ol>
+<pre><code>DND active + new @you in #incidents:
+  push: suppressed
+  sound: suppressed
+  sidebar: bold #incidents + mention flag (queued visually)
+  on DND end: optional summary &quot;3 mentions while you were away&quot;</code></pre>
+<p><strong>Tradeoffs:</strong> Full badge suppress during DND feels &quot;clean&quot; but causes surprise flood on disable — most products keep badges. <strong>Pitfall:</strong> DND on mobile not synced to desktop — user gets desktop pings. <strong>Pitfall:</strong> Treating DND as mute for all channels — DND is global time window; mute is per-channel.</p>
+<hr>
+</article>
+<article class="qa" id="how-do-you-handle-notification-bursts-in-a-high-traffic-channel-during-an-incident">
+<h3 class="question">How do you handle notification bursts in a high-traffic channel during an incident?</h3>
+<p><strong>Problem framing:</strong> <code>#incidents</code> during an outage may receive <strong>500 messages/minute</strong>. Per-message badge increments, push fan-out, and sidebar re-renders will melt client CPU and notification quotas — users can&#x27;t read 500 toasts anyway.</p>
+<p><strong>Approach:</strong> <strong>Coalesce at server and client; cap display; defer non-critical signals:</strong></p>
+<ol><li><strong>Server push coalescing</strong> — Notification service batches: max <strong>1 push per channel per N minutes</strong> with body &quot;47 new messages in #incidents&quot; unless <code>@mention</code> (immediate).</li></ol>
+<ol><li><strong>Client badge batching</strong> — On high event rate, switch from exact count to <strong><code>99+</code></strong> or <code>hasUnread</code> boolean; update sidebar on <code>requestAnimationFrame</code> at most 2–4 times/sec.</li></ol>
+<ol><li><strong>Mention priority lane</strong> — <code>@you</code> events bypass coalesce for badge bold flag; regular messages aggregate.</li></ol>
+<ol><li><strong>Sound once</strong> — First unread in burst plays sound; subsequent suppressed until mark-read.</li></ol>
+<ol><li><strong>In-channel UX</strong> — &quot;New messages&quot; pill aggregates (&quot;500 new messages ↓&quot;); don&#x27;t flash row per message in sidebar.</li></ol>
+<ol><li><strong>Auto-mute suggestion</strong> — Prompt: &quot;High activity in #incidents — mute notifications?&quot; without hiding from feed.</li></ol>
+<table>
+<thead><tr>
+<th>Rate</th>
+<th>Badge</th>
+<th>Push</th>
+<th>Sidebar render</th>
+</tr></thead><tbody>
+<tr>
+<td>Normal</td>
+<td>exact count</td>
+<td>per pref</td>
+<td>immediate</td>
+</tr>
+<tr>
+<td>Burst (&gt;20/s)</td>
+<td><code>99+</code> / boolean</td>
+<td>batched 1/5min</td>
+<td>rAF batch</td>
+</tr>
+<tr>
+<td>@mention in burst</td>
+<td>immediate bold</td>
+<td>immediate (unless DND)</td>
+<td>immediate</td>
+</tr>
+</tbody></table>
+<p><strong>Tradeoffs:</strong> Coalesced push delays awareness by minutes — acceptable for non-mentions in incident channels users already watch. <strong>Pitfall:</strong> Dropping badge increments entirely during burst — user thinks channel is caught up. <strong>Pitfall:</strong> Exact unread count reconciliation after burst requires server <code>unread_count</code> resync.</p>
+<hr>
+</article>
+<article class="qa" id="how-do-you-implement-thread-specific-notification-settings-follow-thread-vs-parent-channel-mute">
+<h3 class="question">How do you implement thread-specific notification settings (&quot;Follow thread&quot; vs parent channel mute)?</h3>
+<p><strong>Problem framing:</strong> User mutes <code>#engineering</code> but participates in one critical thread. Or channel is loud but they only care about <strong>replies on a parent they started</strong>. Thread notification state must be <strong>orthogonal</strong> to channel mute.</p>
+<p><strong>Approach:</strong> <strong>Thread subscription / follow flag</strong> independent of channel prefs:</p>
+<table>
+<thead><tr>
+<th>State</th>
+<th>Channel msgs</th>
+<th>Thread replies on followed parent</th>
+</tr></thead><tbody>
+<tr>
+<td>Channel unmuted, thread not followed</td>
+<td>Notify per channel pref</td>
+<td>Only if @mentioned (default)</td>
+</tr>
+<tr>
+<td>Channel muted, thread followed</td>
+<td>Suppressed</td>
+<td><strong>Notify</strong> (badge on parent + optional push)</td>
+</tr>
+<tr>
+<td>Thread followed</td>
+<td>—</td>
+<td>Reply count + &quot;new&quot; on parent row</td>
+</tr>
+</tbody></table>
+<ol><li><strong>Follow actions</strong> — &quot;Follow thread&quot; sets <code>thread_subscription: { channel, parent_ts, follow: true }</code> via API. Persist server-side; receive <code>thread_subscribed</code> event.</li></ol>
+<ol><li><strong>Badge placement</strong> — Followed thread unread shows on <strong>parent message</strong> in channel feed (<code>&quot;5 replies · 3 new&quot;</code>) and may appear in <strong>All Threads</strong> / <strong>Threads</strong> sidebar section — not in channel-level count if channel muted.</li></ol>
+<ol><li><strong>Push rules</strong> — New reply in followed thread → push even if channel muted (unless global DND). @mention in non-followed thread while channel muted → no push.</li></ol>
+<ol><li><strong>Unfollow</strong> — On thread close or explicit unfollow; clear thread cursor.</li></ol>
+<div class="mermaid-wrap"><pre class="mermaid">flowchart TD
+  Reply[New thread reply] --> Followed{User follows thread?}
+  Followed -->|yes| ThreadBadge[Parent thread badge + push]
+  Followed -->|no| Mention{@mentioned?}
+  Mention -->|yes| MentionPath[Channel mention rules]
+  Mention -->|no| MuteCheck{Channel muted?}
+  MuteCheck -->|yes| Suppress[Suppress]
+  MuteCheck -->|no| ChannelPath[Channel pref]</pre></div>
+<p><strong>Tradeoffs:</strong> Many followed threads recreate notification noise — cap followed threads or auto-unfollow on mark-read. <strong>Pitfall:</strong> Incrementing <strong>channel</strong> unread when channel is muted but thread followed — double accounting. <strong>Pitfall:</strong> Not syncing follow state across devices — mobile follows, desktop never gets thread pushes.</p>
+<hr>
+</article>
+<article class="qa" id="how-do-you-reconcile-badge-counts-after-reconnect-when-you-missed-mark-read-events-from-another-client">
+<h3 class="question">How do you reconcile badge counts after reconnect when you missed <code>mark_read</code> events from another client?</h3>
+<p><strong>Problem framing:</strong> WebSocket drops for 90 s while user reads on mobile. Desktop reconnects with <strong>stale local <code>last_read_ts</code></strong> and inflated badges — or worse, decrements wrong after duplicate <code>message</code> events. Client must <strong>resync authoritative read state</strong> without user noticing flicker.</p>
+<p><strong>Approach:</strong> <strong>Reconnect hygiene: REST snapshot wins, then incremental events:</strong></p>
+<ol><li><strong>On reconnect (before processing live queue)</strong> — Fetch <code>conversations.list</code> with <code>exclude_archived</code>, include <code>last_read</code>, <code>unread_count_display</code>, <code>mention_count</code>. Replace local read cursors for all channels in one reducer transaction.</li></ol>
+<ol><li><strong>Missed <code>channel_marked</code> events</strong> — Irrelevant if REST snapshot is fresh (taken after mobile mark). Snapshot timestamp vs event log: use <strong>max(last_read_ts)</strong> across sources.</li></ol>
+<ol><li><strong>Message dedup first</strong> — Apply reconnect message catch-up (Section 1) before badge recompute — otherwise new messages double-count.</li></ol>
+<ol><li><strong>Recompute algorithm:</strong></li></ol>
+<pre><code>onReconnectSync(serverChannels):
+  for ch in serverChannels:
+    local.last_read_ts = server.last_read_ts
+    local.unread_count = server.unread_count_display
+    local.hasUnreadMention = server.mention_count &gt; 0
+  suppress sidebar animation for bulk update (single frame)</code></pre>
+<ol><li><strong>Open channel exception</strong> — If desktop has <code>#incidents</code> open at bottom on reconnect, re-issue local <code>markRead</code> with latest <code>ts</code> after sync — heals race where mobile read but desktop was mid-view.</li></ol>
+<ol><li><strong>Workspace badge</strong> — Sum unread across conversations or use server <code>team.unread_count</code> if provided — avoid client sum drift.</li></ol>
+<p><strong>Tradeoffs:</strong> Full <code>conversations.list</code> on every reconnect is heavy for 500-channel users — use delta API or sync since <code>sync_ts</code> if available. <strong>Pitfall:</strong> Applying old events from reconnect buffer <strong>after</strong> snapshot — badges bounce; order: snapshot → deduped events. <strong>Pitfall:</strong> Animating each of 200 badge clears — batch UI update.</p>
+<hr>
+</article>
+<article class="qa" id="how-do-you-implement-notification-grouping-on-mobile-47-messages-from-incidents-becomes-one-push">
+<h3 class="question">How do you implement notification grouping on mobile — 47 messages from #incidents becomes one push?</h3>
+<p><strong>Problem framing:</strong> iOS and Android limit notification volume; 47 separate pushes for <code>#incidents</code> gets the app muted or uninstalled. Grouping must preserve <strong>mention urgency</strong>, <strong>channel identity</strong>, and <strong>tap-to-navigate</strong> behavior.</p>
+<p><strong>Approach:</strong> <strong>Platform notification groups + server-side aggregation:</strong></p>
+<ol><li><strong>Android <code>NotificationCompat.MessagingStyle</code></strong> — Group key <code>channel:C123</code>; each push updates existing notification with new line &quot;Alice: …&quot;, &quot;Bob: …&quot;, summary &quot;47 messages in #incidents&quot;. <code>setGroupSummary(true)</code> on summary notification.</li></ol>
+<ol><li><strong>iOS thread identifier</strong> — <code>thread-id: C123</code> (iOS 12+) collapses notifications from same channel. Summary arg shows count.</li></ol>
+<ol><li><strong>Server batching window</strong> — Notification service holds non-mention messages for <strong>30–120 s</strong> per <code>(user, channel)</code> before emitting one grouped payload: <code>{ channel, count: 47, latest_preview, participants[] }</code>.</li></ol>
+<ol><li><strong>@mention breakout</strong> — Direct @user creates <strong>separate notification</strong> (or adds highlighted line) even within group — user sees &quot;Alice mentioned you&quot; atop summary.</li></ol>
+<ol><li><strong>Tap action</strong> — Single intent: open app to channel <code>C123</code> at <code>latest_ts</code> or first unread — deep link <code>slack://channel?id=C123&amp;ts=…</code>.</li></ol>
+<pre><code>t=0   msg1  → start batch timer
+t=30s msg47 → flush: one push &quot;47 messages in #incidents&quot;
+t=31s @you  → immediate push &quot;Alice mentioned you in #incidents&quot; (may merge into group with highlight)</code></pre>
+<ol><li><strong>Client local notifications</strong> — When app is backgrounded but socket alive, apply same grouping before calling native APIs — don&#x27;t rely on server alone for foreground-service paths.</li></ol>
+<p><strong>Tradeoffs:</strong> Batch window delays first message awareness — shorten for DMs (often 0 batch). <strong>Pitfall:</strong> Grouping across <strong>different channels</strong> — never; one group per conversation. <strong>Pitfall:</strong> Losing individual message text in summary — include 3–5 recent lines in expanded style.</p>
+<hr>
+</article>
+<article class="qa" id="how-do-you-handle-channel-and-here-notifications-differently-from-direct-user-mentions-in-the-ui">
+<h3 class="question">How do you handle @channel and @here notifications differently from direct @user mentions in the UI?</h3>
+<p><strong>Problem framing:</strong> <code>@alice</code> is personal; <code>@here</code> notifies online members; <code>@channel</code> notifies everyone — different <strong>social cost</strong>, <strong>fan-out</strong>, and <strong>user expectation</strong>. UI must warn composers, distinguish badges, and parse notification settings that treat broadcasts differently.</p>
+<p><strong>Approach:</strong> <strong>Typed mention classes with distinct visual and notification pipelines:</strong></p>
+<table>
+<thead><tr>
+<th>Mention type</th>
+<th>Who notified</th>
+<th>Composer UX</th>
+<th>Badge / push</th>
+</tr></thead><tbody>
+<tr>
+<td><code>@user</code></td>
+<td>One user</td>
+<td>Standard chip</td>
+<td>Personal mention highlight</td>
+</tr>
+<tr>
+<td><code>@usergroup</code></td>
+<td>Group members</td>
+<td>Group chip + count</td>
+<td>Mention if member</td>
+</tr>
+<tr>
+<td><code>@here</code></td>
+<td>Online members</td>
+<td>Warning color + &quot;Notify N online&quot;</td>
+<td>Broadcast mention (lower priority than direct @you)</td>
+</tr>
+<tr>
+<td><code>@channel</code></td>
+<td>All members</td>
+<td>Strong confirm dialog</td>
+<td>Broadcast; often respects &quot;mentions only&quot; pref</td>
+</tr>
+</tbody></table>
+<ol><li><strong>Parsing</strong> — mrkdwn <code>&lt;!here&gt;</code>, <code>&lt;!channel&gt;</code>, <code>&lt;@U123&gt;</code>, <code>&lt;!subteam^S456|@eng&gt;</code> map to enum <code>MentionKind</code>. Store on message object at ingest.</li></ol>
+<ol><li><strong>Sidebar / badge</strong> — Direct <code>@you</code> → boldest treatment (red dot, top of &quot;All unreads&quot;). <code>@here</code>/<code>@channel</code> you received → bold channel but distinct icon (megaphone vs <code>@</code>). Regular unread without mention → count only.</li></ol>
+<ol><li><strong>Notification prefs interaction</strong> — &quot;Mentions only&quot; includes direct @ and often @usergroup; <strong><code>@channel</code>/<code>@here</code> may be excluded</strong> unless user opts into &quot;all messages&quot; — document clearly in settings copy.</li></ol>
+<ol><li><strong>Push copy</strong> — &quot;@channel in #general: Standup in 5&quot; vs &quot;Alice mentioned you in #general&quot; — different templates help user triage.</li></ol>
+<ol><li><strong>Composer safeguards</strong> — Restrict <code>@channel</code> in threads or large channels without extra confirm; show member count from <code>conversations.info</code>.</li></ol>
+<pre><code>All unreads view (sorted):
+  1. @you      #incidents  Alice: &quot;can you look?&quot;
+  2. @here     #general    Bob: &quot;@here standup&quot;
+  3. (3)       #random     regular messages</code></pre>
+<p><strong>Tradeoffs:</strong> Deprioritizing <code>@here</code> in sort anger users who treat it as urgent — workspace culture varies; offer setting. <strong>Pitfall:</strong> Counting <code>@channel</code> as personal mention in analytics — skews engagement metrics. <strong>Pitfall:</strong> Guest users receiving <code>@channel</code> against policy — server must block; client shows &quot;message hidden&quot; not broken badge.</p>
+<hr>
+<p>*Section 6 complete. Next: auth, workspaces, offline &amp; performance (Section 7).*</p>
+</article>
+  </main>
+  <footer class="page-footer">
+    <a href="index.html">← All sections</a> ·
+    <a href="../slack-frontend-architecture.html">Architecture map</a>
+  </footer>
+  <script src="assets/interactive.js" defer></script>
+</body>
+</html>

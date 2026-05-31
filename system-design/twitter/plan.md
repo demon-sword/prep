@@ -26,4 +26,4 @@ created: 2026-05-30
 - [x] index-html — write answers-html/index.html
 
 ## Next
-- [ ] validate — run: bash ralph/validate.sh twitter
+- [ ] validate — run: bash ralph-system-design/validate.sh twitter

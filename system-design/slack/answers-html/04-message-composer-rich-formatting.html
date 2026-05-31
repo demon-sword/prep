@@ -1,0 +1,371 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Section 4 — Message Composer &amp; Rich Formatting | System Design Answers</title>
+  <meta name="description" content="Interview-depth answers for Slack frontend system design.">
+  <style>
+    :root {
+      --bg: #f8f9fb; --surface: #ffffff; --text: #1a1d26; --text-muted: #5c6370;
+      --border: #e2e6ed; --accent: #3d5a80; --accent-soft: #eef2f7;
+      --code-bg: #f0f2f6; --pre-bg: #1e2433; --pre-text: #e8ecf4;
+      --nav-bg: rgba(248, 249, 251, 0.92); --shadow: 0 1px 3px rgba(0, 0, 0, 0.06);
+    }
+    @media (prefers-color-scheme: dark) {
+      :root {
+        --bg: #12151c; --surface: #1a1f2a; --text: #e8ecf4; --text-muted: #9aa3b2;
+        --border: #2d3548; --accent: #8cb4d9; --accent-soft: #232a38;
+        --code-bg: #252d3d; --pre-bg: #0d1017; --pre-text: #d4dae6;
+        --nav-bg: rgba(18, 21, 28, 0.94); --shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
+      }
+    }
+    *, *::before, *::after { box-sizing: border-box; }
+    html { scroll-behavior: smooth; scroll-padding-top: 5.5rem; }
+    body { margin: 0; font-family: "Segoe UI", system-ui, sans-serif; font-size: 1.0625rem;
+      line-height: 1.65; color: var(--text); background: var(--bg); }
+    .site-nav { position: sticky; top: 0; z-index: 100; background: var(--nav-bg);
+      backdrop-filter: blur(10px); border-bottom: 1px solid var(--border); box-shadow: var(--shadow); }
+    .site-nav-inner { max-width: 900px; margin: 0 auto; padding: 0.75rem 1.5rem; }
+    .site-nav-title { font-size: 0.8125rem; font-weight: 600; text-transform: uppercase;
+      letter-spacing: 0.04em; color: var(--text-muted); margin: 0 0 0.5rem; }
+    .toc { display: flex; flex-wrap: wrap; gap: 0.35rem 0.75rem; margin: 0; padding: 0;
+      list-style: none; font-size: 0.8125rem; }
+    .toc a { color: var(--accent); text-decoration: none; white-space: nowrap; }
+    .toc a:hover { text-decoration: underline; }
+    .page { max-width: 900px; margin: 0 auto; padding: 2rem 1.5rem 4rem; }
+    header.page-header { margin-bottom: 2.5rem; padding-bottom: 1.5rem; border-bottom: 1px solid var(--border); }
+    h1 { font-size: 1.75rem; font-weight: 700; margin: 0 0 0.75rem; }
+    .lead { margin: 0; color: var(--text-muted); font-size: 1.05rem; }
+    h2.section { font-size: 1.35rem; font-weight: 700; margin: 2.5rem 0 1.25rem;
+      color: var(--accent); border-bottom: 2px solid var(--accent-soft); padding-bottom: 0.35rem; }
+    article.qa { margin-bottom: 2.75rem; background: var(--surface); border: 1px solid var(--border);
+      border-radius: 10px; padding: 1.5rem 1.75rem; box-shadow: var(--shadow); }
+    h3.question { font-size: 1.2rem; font-weight: 600; margin: 0 0 1rem; }
+    article.qa p { margin: 0 0 1rem; }
+    ol, ul { margin: 0 0 1rem; padding-left: 1.35rem; }
+    table { width: 100%; border-collapse: collapse; margin: 0 0 1rem; font-size: 0.95rem; }
+    th, td { border: 1px solid var(--border); padding: 0.55rem 0.75rem; text-align: left; }
+    th { background: var(--accent-soft); font-weight: 600; }
+    code { font-family: ui-monospace, Menlo, Consolas, monospace; font-size: 0.88em;
+      background: var(--code-bg); padding: 0.15em 0.4em; border-radius: 4px; }
+    pre { margin: 0 0 1rem; padding: 1rem; background: var(--pre-bg); color: var(--pre-text);
+      border-radius: 8px; overflow-x: auto; font-size: 0.875rem; }
+    pre code { background: none; padding: 0; color: inherit; }
+    .mermaid-wrap { margin: 0 0 1rem; padding: 1rem; background: var(--surface);
+      border: 1px solid var(--border); border-radius: 8px; overflow-x: auto; }
+    footer.page-footer { max-width: 900px; margin: 0 auto; padding: 1.5rem;
+      border-top: 1px solid var(--border); font-size: 0.9375rem; }
+    footer.page-footer a { color: var(--accent); text-decoration: none; font-weight: 500; }
+  </style>
+  <link rel="stylesheet" href="assets/interactive.css">
+</head>
+<body>
+  <nav class="site-nav" aria-label="Table of contents">
+    <div class="site-nav-inner">
+      <p class="site-nav-title">On this page</p>
+      <ol class="toc"><li><a href="#how-do-you-implement--mention-autocomplete-that-searches-users-user-groups-and-channelhere">How do you implement @-mention autoc</a></li><li><a href="#how-do-you-render-slack-mrkdwn-bold-italic-c123general-u123-in-sent-messages">How do you render Slack mrkdwn (`*bo</a></li><li><a href="#how-do-you-handle-emoji-shortcode-autocomplete-and-custom-workspace-emoji">How do you handle emoji `:shortcode:</a></li><li><a href="#how-do-you-implement-slash-commands-remind-poll-client-side-routing-vs-server-round-trip">How do you implement slash commands </a></li><li><a href="#how-do-you-preserve-an-unsent-draft-per-channel-when-the-user-switches-between-conversations">How do you preserve an unsent draft </a></li><li><a href="#how-do-you-handle-file-drag-and-drop-with-upload-progress-cancellation-and-inline-preview-before-send">How do you handle file drag-and-drop</a></li><li><a href="#how-do-you-implement-link-unfurling-show-a-loading-skeleton-then-replace-with-a-rich-attachment-card">How do you implement link unfurling </a></li><li><a href="#how-do-you-handle-a-message-that-exceeds-the-character-limit-hard-block-warn-or-split">How do you handle a message that exc</a></li><li><a href="#how-do-you-implement-message-scheduling-send-later-with-optimistic-ui-and-timezone-display">How do you implement message schedul</a></li><li><a href="#how-do-you-render-block-kit-messages-sections-actions-context-blocks-from-bot-integrations">How do you render Block Kit messages</a></li><li><a href="#how-do-you-implement-edit-message-with-inline-replacement-and-propagate-message-changed-to-all-open-views">How do you implement &quot;Edit message&quot; </a></li><li><a href="#how-do-you-handle-paste-from-clipboard-that-includes-both-text-and-an-image-in-one-composer-action">How do you handle paste-from-clipboa</a></li></ol>
+    </div>
+  </nav>
+  <main class="page">
+    <header class="page-header">
+      <h1>Section 4 — Message Composer &amp; Rich Formatting</h1>
+      <p class="lead">Interview-depth answers for Slack frontend system design.</p>
+    </header>
+    <h1 id="section-4-message-composer-rich-formatting">Section 4 — Message Composer &amp; Rich Formatting</h1>
+<p>Interview-prep system design answers for Slack&#x27;s message composer: mentions, mrkdwn, emoji, slash commands, drafts, uploads, unfurls, Block Kit, edits, and scheduling.</p>
+<hr>
+<h2 class="section" id="core">Core</h2>
+<article class="qa" id="how-do-you-implement--mention-autocomplete-that-searches-users-user-groups-and-channelhere">
+<h3 class="question">How do you implement @-mention autocomplete that searches users, user groups, and @channel/@here?</h3>
+<p><strong>Problem framing:</strong> The composer must offer typeahead for <code>@alice</code>, <code>@engineering</code> (user group), <code>@channel</code>, and <code>@here</code> without blocking typing or firing a network request on every keystroke. Results must respect channel membership, guest boundaries, and notification semantics — a wrong <code>@channel</code> suggestion erodes trust fast.</p>
+<p><strong>Approach:</strong> Treat mentions as a <strong>token trigger</strong> inside a rich-text composer (contenteditable or Slate/ProseMirror-style document model). When the caret sits inside an <code>@</code>-prefixed token (regex: <code>(^|\s)@([\w-]*)$</code> before caret), mount a <strong>floating mention menu</strong> anchored to the caret via <code>Range.getBoundingClientRect()</code>.</p>
+<p>Maintain a <strong>local mention index</strong> hydrated at workspace/channel load: channel members (from <code>conversations.members</code> or cached roster), user groups (<code>usergroups.list</code>), and reserved tokens <code>@channel</code>, <code>@here</code>, <code>@everyone</code> (if enabled). Filter client-side with fuzzy match (Fuse.js or prefix trie) for sub-50ms feedback; debounce optional server <code>search.members</code> only when the local index is stale or query length &gt; 2 and local results &lt; 5.</p>
+<p>Menu rows are typed: <code>{ kind: &#x27;user&#x27; | &#x27;usergroup&#x27; | &#x27;broadcast&#x27;, id, label, avatar, memberCount?, warning? }</code>. Selecting a row <strong>replaces the trigger token</strong> with a canonical mrkdwn entity stored in the doc model — e.g. <code>&lt;@U123&gt;</code> for users, <code>&lt;!subteam^S456|@eng&gt;</code> for groups, <code>&lt;!channel&gt;</code> / <code>&lt;!here&gt;</code> for broadcasts — while rendering a styled <strong>chip</strong> in the composer (<code>@Alice</code>, <code>@engineering</code>, <code>@channel</code> with distinct color for broadcast). Show a <strong>confirmation affordance</strong> for <code>@channel</code>/<code>@here</code> (extra click or &quot;Notify X members&quot; subtitle) because they fan out notifications.</p>
+<p>Keyboard: ↑↓ navigate, Enter/Tab select, Esc dismiss. Accessibility: <code>aria-activedescendant</code>, announce selection via live region.</p>
+<div class="mermaid-wrap"><pre class="mermaid">flowchart LR
+  subgraph Composer
+    Token["@ trigger token"]
+    Menu[Mention menu]
+  end
+  subgraph Index
+    Local[Local member cache]
+    API[search.members fallback]
+  end
+  Token --> Menu
+  Menu --> Local
+  Menu -.->|stale / empty| API
+  Menu -->|select| Chip["mrkdwn entity + chip"]</pre></div>
+<p><strong>Tradeoffs:</strong> Pure client index is instant but can be wrong after mid-session joins — refresh on <code>member_joined_channel</code> events. Server-only search is always fresh but adds latency; hybrid is Slack&#x27;s shape. <code>@everyone</code> is often admin-gated — hide unless <code>canNotifyEveryone</code>. Guest users may see truncated member lists; never leak users outside the shared channel boundary.</p>
+<hr>
+</article>
+<article class="qa" id="how-do-you-render-slack-mrkdwn-bold-italic-c123general-u123-in-sent-messages">
+<h3 class="question">How do you render Slack mrkdwn (<code>*bold*</code>, <code>_italic_</code>, <code>&lt;#C123|general&gt;</code>, <code>&lt;@U123&gt;</code>) in sent messages?</h3>
+<p><strong>Problem framing:</strong> Slack stores messages as <strong>mrkdwn strings</strong>, not HTML. The client must parse a constrained markup dialect into safe, accessible React (or equivalent) while resolving IDs to live labels (user left workspace, channel renamed) and avoiding XSS from <code>&lt;http://evil|click me&gt;</code>-style links.</p>
+<p><strong>Approach:</strong> Split rendering into <strong>parse → resolve → render</strong>, never <code>dangerouslySetInnerHTML</code> on raw message text.</p>
+<ol><li><strong>Parse:</strong> Walk the string with a tokenizer (or compiled regex pipeline) for mrkdwn entities: <code>*bold*</code>, <code>_italic_</code>, <code>~strike~</code>, `<code> </code>code<code> </code><code>, </code>``<code> </code>`<code>block</code>``<code> </code>``<code>, </code>&lt;url|label&gt;<code>, </code>&lt;@U123&gt;<code>, </code>&lt;#C123|name&gt;<code>, </code>&lt;!date^unix^format|fallback&gt;<code>, </code>&lt;!channel&gt;<code>, emoji shortcodes </code>:wave:<code>. Build an AST of </code>{ type, children, meta }` nodes. Code blocks and preformatted regions are <strong>literal</strong> — no nested formatting inside.</li></ol>
+<ol><li><strong>Resolve:</strong> Batch unresolved IDs against client caches: <code>usersById</code>, <code>channelsById</code>. Missing entries trigger lazy <code>users.info</code> / <code>conversations.info</code> or show fallback (<code>@deactivated</code>, <code>#unknown-channel</code>). Links pass through an allowlist scheme check (<code>http</code>, <code>https</code>, <code>mailto</code>, <code>tel</code>); strip or neutralize <code>javascript:</code>.</li></ol>
+<ol><li><strong>Render:</strong> Map AST nodes to components: <code>MrkdwnBold</code>, <code>MrkdwnLink</code> (opens in new tab, <code>rel=&quot;noopener&quot;</code>), <code>MentionChip</code> (click → profile / DM), <code>ChannelLink</code> (click → navigate), <code>Emoji</code> (sprite or CDN URL). Search highlighting and edit mode reuse the same parser with a different leaf renderer.</li></ol>
+<p>For <strong>composer preview</strong> (optional WYSIWYG), maintain parallel representations: visual doc model ↔ canonical mrkdwn on send via <code>serialize()</code>.</p>
+<table>
+<thead><tr>
+<th>Entity</th>
+<th>Stored form</th>
+<th>Rendered</th>
+</tr></thead><tbody>
+<tr>
+<td>User mention</td>
+<td><code>&lt;@U123&gt;</code> or `&lt;@U123\</td>
+<td>alice&gt;`</td>
+<td><code>@Alice</code> link</td>
+</tr>
+<tr>
+<td>Channel</td>
+<td>`&lt;#C123\</td>
+<td>general&gt;`</td>
+<td><code>#general</code> link</td>
+</tr>
+<tr>
+<td>Link</td>
+<td>`&lt;https://x.com\</td>
+<td>label&gt;`</td>
+<td>anchor</td>
+</tr>
+<tr>
+<td>Broadcast</td>
+<td><code>&lt;!here&gt;</code></td>
+<td><code>@here</code> badge</td>
+</tr>
+</tbody></table>
+<p><strong>Tradeoffs:</strong> Regex-only parsers are fast but brittle for nested edge cases; AST parser costs more code but powers edit, copy, and search consistently. Caching parsed AST per <code>message.ts + message.text</code> avoids re-parse on unrelated re-renders in virtualized lists. Server also sends <code>blocks</code> for rich bot messages — prefer Block Kit when present, mrkdwn fallback on <code>text</code> field.</p>
+<hr>
+</article>
+<article class="qa" id="how-do-you-handle-emoji-shortcode-autocomplete-and-custom-workspace-emoji">
+<h3 class="question">How do you handle emoji <code>:shortcode:</code> autocomplete and custom workspace emoji?</h3>
+<p><strong>Problem framing:</strong> Users expect <code>:th</code> → <code>:thinking_face:</code> with skin-tone variants and <strong>custom workspace emoji</strong> mixed with Unicode. Autocomplete must not fight with mrkdwn link syntax or code spans, and custom emoji need CDN URLs scoped per workspace.</p>
+<p><strong>Approach:</strong> Reuse the same <strong>trigger-token</strong> machinery as <code>@</code> mentions. Detect <code>:</code>-wrapped partial at caret (<code>(?:^|\s):([a-z0-9_+-]*)$</code>), excluding regions inside `<code> </code> `<code> and </code> ``<code> </code> via the doc model&#x27;s <strong>mark boundaries</strong>.</p>
+<p><strong>Emoji catalog:</strong> On workspace boot, fetch <code>emoji.list</code> → build <code>{ shortcode, url, aliasOf?, isCustom }[]</code>. Unicode emoji come from a static CLDR/emoji-mart dataset; custom emoji map shortcode → <code>https://…/emoji/name.png</code>. Index with prefix trie for <code>:smi</code> → <code>:smile:</code>, <code>:smiley:</code>, custom <code>:smile-brand:</code>.</p>
+<p>Menu shows grid row: thumbnail, <code>:shortcode:</code>, <code>(custom)</code> badge for workspace uploads. <strong>Skin tones:</strong> if base emoji supports Fitzpatrick modifiers, sub-menu or long-press on <code>:+1:</code> → <code>:+1::skin-tone-3:</code>. On select, insert either Unicode codepoint sequence or <code>&lt;emoji name&gt;</code> mrkdwn for custom (<code>:blob-wave:</code> stored as shortcode in text; render resolves to <code>&lt;img&gt;</code>).</p>
+<p>Custom emoji are <strong>workspace-scoped</strong> — when rendering messages from shared Slack Connect channels, resolve against the <strong>host workspace&#x27;s</strong> emoji set or fall back to <code>:shortcode:</code> text if unknown.</p>
+<p><strong>Tradeoffs:</strong> Bundling all Unicode emoji bloats initial JS; lazy-load emoji data on first <code>:</code> trigger. Client-only list can drift until <code>emoji_changed</code> socket event — subscribe and patch catalog. <code>:shortcode:</code> inside code must never autocomplete — mark-aware parsing is non-negotiable.</p>
+<hr>
+</article>
+<article class="qa" id="how-do-you-implement-slash-commands-remind-poll-client-side-routing-vs-server-round-trip">
+<h3 class="question">How do you implement slash commands (<code>/remind</code>, <code>/poll</code>) — client-side routing vs server round-trip?</h3>
+<p><strong>Problem framing:</strong> Slash commands look like a chat prefix but span three behaviors: <strong>built-in client shortcuts</strong>, <strong>workspace-installed app commands</strong>, and <strong>Slack-native server commands</strong> (<code>/remind</code>, <code>/topic</code>). The client must route correctly, show help text before send, and never execute privileged actions without server validation.</p>
+<p><strong>Approach:</strong> Partition commands into tiers:</p>
+<table>
+<thead><tr>
+<th>Tier</th>
+<th>Examples</th>
+<th>Where handled</th>
+</tr></thead><tbody>
+<tr>
+<td>Client-native UI</td>
+<td><code>/me</code>, <code>/shrug</code>, draft formatting</td>
+<td>Client expands text before <code>chat.postMessage</code></td>
+</tr>
+<tr>
+<td>Server Slack commands</td>
+<td><code>/remind</code>, <code>/topic</code>, <code>/archive</code></td>
+<td>Client sends to <strong><code>/api/chat.command</code></strong> or dedicated endpoint; server executes</td>
+</tr>
+<tr>
+<td>App commands</td>
+<td><code>/poll</code>, <code>/standup</code></td>
+<td>Client shows app-provided <strong>dialog/modal</strong> or forwards payload to app backend via Slack API</td>
+</tr>
+</tbody></table>
+<p><strong>Composer UX:</strong> When input matches <code>^/(\w*)$</code> at line start, show <strong>command palette</strong> filtered by registry merged from <code>commands.list</code> + static built-ins. Each entry: <code>{ name, desc, usage, appId?, supportsModal }</code>. Tab-complete inserts <code>/remind </code> with trailing space; some commands open <strong>modal forms</strong> (datetime picker for remind) instead of free-text send.</p>
+<p>On <strong>Enter</strong> with a slash command:</p>
+<ol><li>If <code>handler.type === &#x27;modal&#x27;</code> → <code>views.open</code> / in-client modal; do not post a visible message until submit.</li><li>If <code>handler.type === &#x27;server&#x27;</code> → POST command string + <code>channel_id</code> + <code>trigger_id</code>; render <strong>ephemeral response</strong> in composer area or thread (only visible to user) per response type.</li><li>If <code>handler.type === &#x27;expand&#x27;</code> → transform text (<code>/me hello</code> → <code>_hello_</code>) and fall through to normal send.</li></ol>
+<p>Register handlers in a <strong>command router</strong> keyed by command name; unknown commands show inline error before network call.</p>
+<div class="mermaid-wrap"><pre class="mermaid">sequenceDiagram
+  participant User
+  participant Client
+  participant SlackAPI
+  participant App
+  User->>Client: /poll "Lunch?"
+  Client->>Client: match registry → app command
+  Client->>SlackAPI: commands.run / dialog.open
+  SlackAPI->>App: slash payload
+  App-->>Client: modal or in_channel message</pre></div>
+<p><strong>Tradeoffs:</strong> Client-side expansion is snappy but must mirror server rules or users see different outcomes on other clients — reserve for cosmetic transforms only. Always treat server response <code>response_type</code> (<code>ephemeral</code> vs <code>in_channel</code>) as authoritative. Debounce command list fetch; stale list misses new app installs until <code>app_installed</code> event.</p>
+<hr>
+</article>
+<article class="qa" id="how-do-you-preserve-an-unsent-draft-per-channel-when-the-user-switches-between-conversations">
+<h3 class="question">How do you preserve an unsent draft per channel when the user switches between conversations?</h3>
+<p><strong>Problem framing:</strong> Users expect <code>#incidents</code> draft to survive switching to a DM and back — including text, pending uploads, and mention chips. Drafts must be <strong>scoped per workspace + conversation</strong> (channel, DM, or thread composer) without leaking across workspaces or syncing stale content over sent messages.</p>
+<p><strong>Approach:</strong> Key drafts by <strong><code>{ workspaceId, conversationId, threadTs? }</code></strong>. Store in two layers:</p>
+<ol><li><strong>Hot memory:</strong> <code>drafts: Map&lt;DraftKey, DraftState&gt;</code> in client store for instant restore on conversation switch (<code>{ text, docJson?, attachments[], scheduledAt? }</code>).</li><li><strong>Durable local:</strong> IndexedDB table <code>drafts</code> (same key) — survives refresh; optional sync via <strong><code>drafts.list</code> / <code>drafts.update</code></strong> Slack API for cross-device (Enterprise feature).</li></ol>
+<p>On <strong>conversation blur</strong> (switch channel, open thread, Cmd+K away): serialize composer → write to map + debounced IDB persist (300ms). On <strong>conversation focus</strong>: hydrate composer from map; if empty, async read IDB/server. Clear draft on <strong>successful send</strong> or explicit discard.</p>
+<p>Thread vs main channel are <strong>separate keys</strong> — replying in thread does not clobber channel draft. Show subtle <strong>&quot;Draft&quot;</strong> pill in sidebar channel list from persisted keys.</p>
+<p>Handle <strong>optimistic conflict:</strong> if user had draft and receives a <code>draft_changed</code> event from another device, prompt &quot;Replace local draft?&quot; or merge if trivial.</p>
+<div class="mermaid-wrap"><pre class="mermaid">flowchart TD
+  A[User switches conversation] --> B{Draft key exists?}
+  B -->|yes| C[Hydrate composer]
+  B -->|no| D[Empty composer]
+  E[User types] --> F[Update memory map]
+  F --> G[Debounced IDB + optional server sync]
+  H[Send message] --> I[Delete draft key]</pre></div>
+<p><strong>Tradeoffs:</strong> Server-synced drafts enable mobile↔desktop continuity but add latency and privacy review (drafts may contain secrets). Local-only is simpler; cap IDB size and evict LRU drafts beyond N conversations. Do not autosave empty drafts — avoids noise in sidebar indicators.</p>
+<hr>
+</article>
+<article class="qa" id="how-do-you-handle-file-drag-and-drop-with-upload-progress-cancellation-and-inline-preview-before-send">
+<h3 class="question">How do you handle file drag-and-drop with upload progress, cancellation, and inline preview before send?</h3>
+<p><strong>Problem framing:</strong> File upload is part of the compose action, not post-send. Users drag screenshots, PDFs, and zips expecting <strong>thumbnail preview</strong>, progress, cancel, and the ability to add a caption before hitting Enter — all without blocking the textarea or losing partial uploads on conversation switch.</p>
+<p><strong>Approach:</strong> Model attachments as <strong>upload jobs</strong> in composer state, separate from message text:</p>
+<pre><code>type UploadJob = {
+  clientFileId: string;
+  file: File;
+  status: &#x27;queued&#x27; | &#x27;uploading&#x27; | &#x27;processing&#x27; | &#x27;ready&#x27; | &#x27;failed&#x27; | &#x27;cancelled&#x27;;
+  progress: number; // 0–1
+  abortController: AbortController;
+  remote?: { fileId: string; mimetype: string; thumbUrl?: string };
+};</code></pre>
+<p><strong>Drop target:</strong> Composer shell registers <code>dragenter/dragover/drop</code> — highlight border on drag. On drop, <code>files.getFiles()</code> → create jobs → start upload pipeline.</p>
+<p><strong>Upload path:</strong> <code>files.getUploadURLExternal</code> → PUT bytes to URL with <strong><code>XMLHttpRequest</code> or fetch + ReadableStream</strong> for progress events → <code>files.completeUploadExternal</code> → optional <strong><code>files.info</code></strong> for thumb. Slack uses external upload URLs so large files bypass app servers.</p>
+<p><strong>UI:</strong> Horizontal <strong>attachment strip</strong> above textarea: image thumb (object URL until remote thumb ready), filename, progress bar, X to cancel. Cancel calls <code>abortController.abort()</code> and <code>files.revokePublicURL</code> if needed. Caption text lives in composer; send disabled until all jobs <code>ready</code> or user removes failed ones.</p>
+<p>On conversation switch, <strong>persist pending jobs</strong> in draft state — resume upload if same session, or re-queue from <code>File</code> blob stored in IDB (store blob reference, not just metadata).</p>
+<p><strong>Tradeoffs:</strong> <code>URL.createObjectURL</code> previews are instant but must be revoked to avoid memory leaks. Parallel uploads (max 3) balance speed vs browser connection limits. Snippet/image paste overlaps — unify into same <code>UploadJob</code> pipeline. Guest/file-retention policies may block upload early — surface policy errors on drop, not on send.</p>
+<hr>
+</article>
+<h2 class="section" id="deep">Deep</h2>
+<article class="qa" id="how-do-you-implement-link-unfurling-show-a-loading-skeleton-then-replace-with-a-rich-attachment-card">
+<h3 class="question">How do you implement link unfurling — show a loading skeleton, then replace with a rich attachment card?</h3>
+<p><strong>Problem framing:</strong> When a user posts a URL, Slack <strong>asynchronously unfurls</strong> metadata (title, description, image, provider). The message appears immediately with raw link text; a rich <strong>attachment card</strong> arrives later via <code>message_changed</code> or link_shared pipeline. The UI must avoid layout jump panic and handle unfurl failures gracefully.</p>
+<p><strong>Approach:</strong> On send, optimistically render the message with <strong>plain mrkdwn link</strong>. Client includes <code>unfurl_links: true, unfurl_media: true</code> in <code>chat.postMessage</code> (unless user toggled &quot;Do not unfurl&quot;).</p>
+<p><strong>Loading state:</strong> When message ACK includes <code>attachments: []</code> but URLs detected in text, render a <strong>skeleton attachment block</strong> (gray bars, fixed min-height ~72px) beneath the text — keyed by <code>message.ts</code>. Do not skeleton if user pref or <code>#channel</code> disables unfurl.</p>
+<p><strong>Update path:</strong> Server/bot completes unfurl → pushes <strong><code>message_changed</code></strong> with populated <code>attachments[]</code> or Block Kit <code>blocks</code>. Client merges by <code>message.ts</code>, replaces skeleton with <strong>AttachmentCard</strong> component: hero image (lazy), title, text, footer provider icon, optional actions. Remove skeleton in same React key to minimize layout shift; reserve max-width consistent with message column.</p>
+<p><strong>Link shared / preview API:</strong> Some flows use <strong><code>chat.unfurl</code></strong> with <code>url_private</code> for authenticated previews (Google Docs, internal tools) — client may pre-call for paste preview in composer before send (optional &quot;Link preview&quot; toggle).</p>
+<p>Handle <strong>unfurl denied</strong> (paywall, robots.txt, user setting): remove skeleton, keep bare link. <strong>Multiple URLs:</strong> Slack may unfurl first only — skeleton per attachment slot or single combined per server rules.</p>
+<div class="mermaid-wrap"><pre class="mermaid">sequenceDiagram
+  participant Client
+  participant API
+  participant UnfurlWorker
+  Client->>API: postMessage(text with URL)
+  API-->>Client: message ts, attachments=[]
+  Client->>Client: render skeleton
+  UnfurlWorker->>API: attach metadata
+  API-->>Client: message_changed
+  Client->>Client: replace skeleton with card</pre></div>
+<p><strong>Tradeoffs:</strong> Skeleton height guess wrong → still some jump when hero image aspect ratio unknown; use <code>aspect-ratio</code> container from oEmbed width/height when available. Prefetch unfurl on paste delays send — better UX for preview toggle, not default. Enterprise may strip external unfurls — respect <code>app_uninstalled</code> / DLP flags in attachment render.</p>
+<hr>
+</article>
+<article class="qa" id="how-do-you-handle-a-message-that-exceeds-the-character-limit-hard-block-warn-or-split">
+<h3 class="question">How do you handle a message that exceeds the character limit — hard block, warn, or split?</h3>
+<p><strong>Problem framing:</strong> Slack enforces a <strong>~40k character</strong> limit (varies by surface). Long paste (logs, stack traces) must fail predictably — silent truncation or broken sends destroy incident workflows.</p>
+<p><strong>Approach:</strong> Enforce at <strong>three layers</strong>:</p>
+<ol><li><strong>Composer (soft):</strong> Live character counter when &gt; 80% threshold; turn red at 100%. At limit, <strong>block Enter send</strong> and shake counter — do not truncate user input while typing.</li><li><strong>Client submit (hard):</strong> Before <code>chat.postMessage</code>, if <code>text.length &gt; MAX</code> → modal: &quot;Message too long — <strong>Upload as snippet</strong> / <strong>Trim</strong> / Cancel.&quot; Offer one-click <strong>convert to snippet file</strong> (<code>.txt</code> upload) with first 200 chars + &quot;…see file&quot; in message body.</li><li><strong>Server (authoritative):</strong> If API returns <code>msg_too_long</code>, revert optimistic message to failed state with retry affordances.</li></ol>
+<p><strong>Splitting</strong> is generally <strong>not</strong> automatic for chat messages — order guarantees and notification semantics break. Exception: internal <strong>import tools</strong> or bot pipelines may chunk with <code>(1/3)</code> prefixes — never default UX for humans.</p>
+<p>For <strong>Block Kit-only</strong> bot payloads, limit applies to <code>text</code> fallback and block JSON size separately — validate in builder UI.</p>
+<p><strong>Tradeoffs:</strong> Hard block frustrates power users; snippet conversion is the Slack-shaped escape hatch. Warning-only without block risks failed optimistic send. Thread replies share same limit — no special casing unless product requires.</p>
+<hr>
+</article>
+<article class="qa" id="how-do-you-implement-message-scheduling-send-later-with-optimistic-ui-and-timezone-display">
+<h3 class="question">How do you implement message scheduling (&quot;Send later&quot;) with optimistic UI and timezone display?</h3>
+<p><strong>Problem framing:</strong> Scheduled messages must feel <strong>immediate in the composer</strong> (clear that it won&#x27;t post now), show <strong>local timezone</strong>, survive client restart, and appear in channel history only at <strong><code>post_at</code></strong> — without duplicate sends or missing reminders.</p>
+<p><strong>Approach:</strong> Composer <strong>Schedule</strong> action opens datetime picker (native or custom) defaulting to next half-hour in <strong>user&#x27;s locale timezone</strong> (<code>user.profile.tz</code> or browser fallback). Display humanized label: &quot;Tomorrow at 9:00 AM IST&quot; via <code>Intl.DateTimeFormat</code> + <code>date-fns-tz</code>.</p>
+<p>On confirm, call <strong><code>chat.scheduleMessage</code></strong> with <code>post_at</code> unix timestamp (UTC on wire, local in UI). Do <strong>not</strong> insert into channel timeline — instead:</p>
+<ol><li>Show <strong>Scheduled tab / sidebar section</strong> listing pending messages <code>{ id, channel, text preview, postAt, status }</code>.</li><li>Optimistic row with <code>status: pending</code> until API returns <code>scheduled_message_id</code>.</li><li>Allow <strong>Edit / Cancel</strong> via <code>chat.deleteScheduledMessage</code> / update API.</li></ol>
+<p>At fire time, server posts message → client receives normal <code>message</code> event → remove from scheduled list. If user is offline at fire time, message still posts — no client action required.</p>
+<p><strong>Timezone display:</strong> Store UTC; render always in viewer&#x27;s TZ. For cross-TZ teams, optional tooltip shows &quot;9:00 AM for you · 5:30 PM PST for @alice&quot; when scheduling DM.</p>
+<div class="mermaid-wrap"><pre class="mermaid">flowchart LR
+  P[Picker local time] --> UTC[post_at UTC epoch]
+  UTC --> API[chat.scheduleMessage]
+  API --> List[Scheduled list UI]
+  API -->|at post_at| Channel[Channel timeline via socket]</pre></div>
+<p><strong>Tradeoffs:</strong> Optimistic timeline insert would require rollback — avoid. Reminder notifications (&quot;Your message was sent&quot;) are optional product noise. Scheduled messages in threads use <code>thread_ts</code> + same API — UI must clarify which surface.</p>
+<hr>
+</article>
+<article class="qa" id="how-do-you-render-block-kit-messages-sections-actions-context-blocks-from-bot-integrations">
+<h3 class="question">How do you render Block Kit messages (sections, actions, context blocks) from bot integrations?</h3>
+<p><strong>Problem framing:</strong> Bot and app messages often arrive as <strong><code>blocks[]</code></strong> JSON (Block Kit), not mrkdwn alone. The client must render a <strong>consistent design system</strong> — sections, dividers, accessory buttons, select menus, context footers — with interactive elements wired to <strong>action IDs</strong> and rate limits.</p>
+<p><strong>Approach:</strong> Implement a <strong><code>BlockRenderer</code></strong> that maps block <code>type</code> → React component:</p>
+<table>
+<thead><tr>
+<th>Block type</th>
+<th>Render</th>
+</tr></thead><tbody>
+<tr>
+<td><code>section</code></td>
+<td>mrkdwn <code>text</code> + optional <code>fields[]</code> grid + <code>accessory</code> (button, image, overflow, picker)</td>
+</tr>
+<tr>
+<td><code>context</code></td>
+<td>small muted mrkdwn/images row</td>
+</tr>
+<tr>
+<td><code>actions</code></td>
+<td>horizontal button/select group (max 5 elements)</td>
+</tr>
+<tr>
+<td><code>divider</code></td>
+<td><code>&lt;hr&gt;</code></td>
+</tr>
+<tr>
+<td><code>image</code></td>
+<td>titled image block</td>
+</tr>
+<tr>
+<td><code>header</code></td>
+<td>plain-text heading</td>
+</tr>
+<tr>
+<td><code>input</code></td>
+<td>only in modals — not inline feed</td>
+</tr>
+</tbody></table>
+<p>Reuse <strong>mrkdwn parser</strong> for <code>text</code> fields inside blocks. <strong><code>accessory</code> buttons</strong> dispatch <code>block_actions</code> payload to server via <strong><code>chat.postMessage</code> response URL</strong> or interactive endpoint — include <code>action_id</code>, <code>block_id</code>, <code>value</code>, <code>message_ts</code>.</p>
+<p><strong>Interactivity state:</strong> After click, show loading on button; apply <strong><code>replace_original</code></strong> / <code>response_url</code> updates when server returns new blocks. Disabled buttons when channel read-only or missing permissions.</p>
+<p><strong>Fallback:</strong> If <code>blocks</code> present but client too old, render <code>text</code> + <code>attachments</code> legacy. If block array empty, mrkdwn-only.</p>
+<p>Virtualized lists must measure <strong>variable block height</strong> — cache measured height per <code>message.ts + blocksHash</code> in layout cache.</p>
+<div class="mermaid-wrap"><pre class="mermaid">flowchart TD
+  MSG[Message payload] --> BK{blocks?}
+  BK -->|yes| BR[BlockRenderer tree]
+  BK -->|no| MD[mrkdwn renderer]
+  BR --> SEC[section]
+  BR --> ACT[actions → onAction]
+  ACT --> API[Interactivity API]</pre></div>
+<p><strong>Tradeoffs:</strong> Full Block Kit parity is large surface (modals, home tab, workflows) — message feed focuses on display + primary actions. Custom styling must not break app expectations — stay within Slack token spacing/colors. Over-nesting blocks hurts mobile — responsive rules collapse <code>fields</code> to single column.</p>
+<hr>
+</article>
+<article class="qa" id="how-do-you-implement-edit-message-with-inline-replacement-and-propagate-message-changed-to-all-open-views">
+<h3 class="question">How do you implement &quot;Edit message&quot; with inline replacement and propagate <code>message_changed</code> to all open views?</h3>
+<p><strong>Problem framing:</strong> Editing replaces message content in place while preserving <code>ts</code> identity. <strong><code>message_changed</code></strong> events must update the main channel feed, thread sidebar, search results, pinned messages, and <strong>quoted previews</strong> — without duplicate rows or stale mrkdwn.</p>
+<p><strong>Approach:</strong> <strong>Edit entry:</strong> long-press / ⋮ menu → <code>EditMessage</code>. Swap <code>MessageRow</code> into <strong>edit mode</strong>: composer pre-filled with raw mrkdwn (or deserialized doc model), same mention/emoji tooling as main composer. Save → <code>chat.update</code> with <code>text</code> + optional <code>blocks</code>; Cancel → restore read view.</p>
+<p><strong>Optimistic update:</strong> On save, patch local store <code>{ ...msg, text, edited: { user, ts } }</code> immediately; revert on API error.</p>
+<p><strong><code>message_changed</code> propagation:</strong> Central <strong>message store</strong> keyed by <code>channelId + ts</code> (threads: same <code>ts</code>, different <code>thread_ts</code> context). All surfaces subscribe to store selectors:</p>
+<ul><li>Channel virtualized list</li><li>Thread pane (if open on that <code>thread_ts</code>)</li><li>Pinned items panel</li><li>Search highlight snippets (re-fetch or patch if result open)</li></ul>
+<p>Event payload includes <code>message.text</code>, <code>message.blocks</code>, <code>previous_message</code> for audit. Merge with <strong>LWW on <code>event_ts</code></strong> to ignore stale edits during reconnect replay.</p>
+<p>Show <strong>(edited)</strong> label with hover tooltip of edit time. If edit removes thread parent text, thread replies remain — parent stub still shows.</p>
+<p><strong>Conflict:</strong> User editing while another admin deletes → <code>message_deleted</code> wins; close edit mode with toast.</p>
+<p><strong>Tradeoffs:</strong> Inline edit vs modal — inline preserves scroll context but cramped on mobile (modal wins). Storing both mrkdwn source and rendered AST doubles memory — cache AST lazily. Edit history is not shown to users by default — <code>previous_message</code> is for compliance/debug only.</p>
+<hr>
+</article>
+<article class="qa" id="how-do-you-handle-paste-from-clipboard-that-includes-both-text-and-an-image-in-one-composer-action">
+<h3 class="question">How do you handle paste-from-clipboard that includes both text and an image in one composer action?</h3>
+<p><strong>Problem framing:</strong> Screenshot paste (⌘V) often yields <strong><code>text/html</code> + <code>image/png</code></strong> together — e.g. copying from a doc with inline image. The composer must insert <strong>both</strong> caption text and attachment preview in one gesture without duplicate uploads or dropped content.</p>
+<p><strong>Approach:</strong> Single <strong><code>onPaste</code></strong> handler on composer with prioritized extraction:</p>
+<ol><li><strong><code>clipboardData.items</code> scan:</strong> For each item — if <code>kind === &#x27;file&#x27;</code> and <code>type.startsWith(&#x27;image/&#x27;)</code>, queue <code>UploadJob</code>; if <code>kind === &#x27;string&#x27;</code> &amp;&amp; <code>text/plain</code>, capture text (and optionally strip redundant HTML).</li><li><strong>Order:</strong> Insert plain text at caret first; append image jobs to attachment strip (Slack pattern: image below or above text depending on product — typically <strong>files after text</strong> in final message <code>files[]</code> order).</li><li><strong>Deduplicate:</strong> If HTML contains <code>&lt;img src=&quot;cid:...&quot;&gt;</code> *and* binary image item exists, prefer <strong>binary</strong> (full resolution) and skip CID placeholder text.</li><li><strong>Rich HTML paste:</strong> Optionally <code>pasteAndMatchStyle</code> — strip to plain mrkdwn unless WYSIWYG mode; convert <code>&lt;b&gt;</code> → <code>*bold*</code>, links → <code>&lt;url|label&gt;</code>.</li></ol>
+<p>For <strong>Excel/Slack-internal paste</strong>, may receive structured snippet — detect magic clipboard MIME and call <strong><code>files.uploadV2</code></strong> with generated CSV/HTML snippet instead of raw image.</p>
+<p>Do not auto-send on paste; user adds context and hits Enter.</p>
+<div class="mermaid-wrap"><pre class="mermaid">flowchart TD
+  Paste[clipboard paste] --> Scan[Scan items]
+  Scan --> Text[text/plain → insert at caret]
+  Scan --> Img[image/* → UploadJob]
+  Scan --> HTML{text/html?}
+  HTML -->|strip| Text
+  HTML -->|embedded img| Img
+  Text --> Composer
+  Img --> Strip[Attachment strip]</pre></div>
+<p><strong>Tradeoffs:</strong> Reading HTML is messy (Word bloat) — default to plain text unless user ⌘⇧V &quot;paste as plain&quot;. Multiple images in one paste queue parallel uploads with shared draft key. Security: never <code>eval</code> clipboard HTML; sanitize before any innerHTML preview. Browser support for <code>clipboardData.items</code> varies on Firefox — fallback to <code>files</code> from <code>clipboardData.files</code> only.</p>
+</article>
+  </main>
+  <footer class="page-footer">
+    <a href="index.html">← All sections</a> ·
+    <a href="../slack-frontend-architecture.html">Architecture map</a>
+  </footer>
+  <script src="assets/interactive.js" defer></script>
+</body>
+</html>
