@@ -272,3 +272,4 @@ Link notes here as you create them (`problems/NNN-slug.md`).
 | Product of Array Except Self | [006-product-of-array-except-self.md](./problems/006-product-of-array-except-self.md) |
 | Valid Sudoku | [007-valid-sudoku.md](./problems/007-valid-sudoku.md) |
 | Encode and Decode Strings | [008-encode-and-decode-strings.md](./problems/008-encode-and-decode-strings.md) |
+| Longest Consecutive Sequence | [009-longest-consecutive-sequence.md](./problems/009-longest-consecutive-sequence.md) |

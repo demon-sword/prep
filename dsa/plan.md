@@ -19,10 +19,10 @@ created: 2026-05-31
 - [x] problems/006-product-of-array-except-self.md — #6 Product of Array Except Self (Medium)
 - [x] problems/007-valid-sudoku.md — #7 Valid Sudoku (Medium)
 - [x] problems/008-encode-and-decode-strings.md — #8 Encode and Decode Strings (Medium)
+- [x] problems/009-longest-consecutive-sequence.md — #9 Longest Consecutive Sequence (Medium)
 
 ## Categories completed
 _none yet_
 
 ## Next
-- [ ] problems/009-longest-consecutive-sequence.md — #9 Longest Consecutive Sequence (Medium)
 - [ ] validate — run: bash ralph-dsa/validate.sh 01-arrays-hashing
