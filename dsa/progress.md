@@ -293,3 +293,4 @@ Link notes here as you create them (`problems/NNN-slug.md`).
 | Largest Rectangle in Histogram | [027-largest-rectangle-in-histogram.md](./problems/027-largest-rectangle-in-histogram.md) |
 | Binary Search | [028-binary-search.md](./problems/028-binary-search.md) |
 | Search a 2D Matrix | [029-search-a-2d-matrix.md](./problems/029-search-a-2d-matrix.md) |
+| Koko Eating Bananas | [030-koko-eating-bananas.md](./problems/030-koko-eating-bananas.md) |
