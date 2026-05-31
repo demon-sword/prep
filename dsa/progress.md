@@ -295,3 +295,4 @@ Link notes here as you create them (`problems/NNN-slug.md`).
 | Search a 2D Matrix | [029-search-a-2d-matrix.md](./problems/029-search-a-2d-matrix.md) |
 | Koko Eating Bananas | [030-koko-eating-bananas.md](./problems/030-koko-eating-bananas.md) |
 | Find Minimum in Rotated Sorted Array | [031-find-minimum-in-rotated-sorted-array.md](./problems/031-find-minimum-in-rotated-sorted-array.md) |
+| Search in Rotated Sorted Array | [032-search-in-rotated-sorted-array.md](./problems/032-search-in-rotated-sorted-array.md) |
