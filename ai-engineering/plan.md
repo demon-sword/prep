@@ -48,6 +48,7 @@ created: 2026-06-16
 - [x] answers/03-035-explain-agentic-systems-to-non-technical-stakeholders.md — Q35: Explain agentic systems to non-technical stakeholders?
 - [x] answers/03-036-agent-analyzing-support-tickets-drafting-responses-escalatin.md — Q36: Agent analyzing support tickets, drafting responses, escalating.
 - [x] answers/03-037-agents-collaborating-on-research-reports-with-citations.md — Q37: Agents collaborating on research reports with citations.
+- [x] answers/03-038-agent-reviewing-code-and-suggesting-improvements.md — Q38: Agent reviewing code and suggesting improvements.
 
 ## Categories completed
 - 08-safety-guardrails (switched on 2026-06-16)
@@ -55,5 +56,4 @@ created: 2026-06-16
 - 01-llm-fundamentals (switched on 2026-06-16)
 
 ## Next
-- [ ] answers/03-038-agent-reviewing-code-and-suggesting-improvements.md — Q38: Agent reviewing code and suggesting improvements.
 - [ ] validate — run: bash ralph-ai-engineering/validate.sh 03-agents-tool-use
