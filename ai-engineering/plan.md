@@ -41,6 +41,7 @@ created: 2026-06-16
 - [x] answers/02-028-optimize-rag-latency-in-production.md — Q28: Optimize RAG latency in production?
 - [x] answers/02-029-bad-chunking-fixed-size-vs-semantic.md — Q29: Bad chunking (fixed-size vs semantic)
 - [x] answers/02-030-vocabulary-mismatch-dense-only-failing-on-keywords.md — Q30: Vocabulary mismatch (dense-only failing on keywords)
+- [x] answers/02-031-lost-in-the-middle-context-pollution.md — Q31: Lost in the middle / context pollution
 
 ## Categories completed
 - 08-safety-guardrails (switched on 2026-06-16)
@@ -48,7 +49,6 @@ created: 2026-06-16
 - 01-llm-fundamentals (switched on 2026-06-16)
 
 ## Next
-- [ ] answers/02-031-lost-in-the-middle-context-pollution.md — Q31: Lost in the middle / context pollution
 - [ ] answers/02-032-hallucination-when-retrieved-context-is-irrelevant-or-absent.md — Q32: Hallucination when retrieved context is irrelevant or absent
 - [ ] answers/02-033-stale-indexes-embedding-drift.md — Q33: Stale indexes, embedding drift
 - [ ] answers/02-034-weak-evaluation-hiding-retrieval-failures.md — Q34: Weak evaluation hiding retrieval failures
