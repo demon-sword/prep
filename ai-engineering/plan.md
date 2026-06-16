@@ -32,6 +32,7 @@ created: 2026-06-16
 - [x] answers/03-019-version-and-roll-back-agent-behavior.md — Q19: Version and roll back agent behavior?
 - [x] answers/03-020-architect-an-agent-system-loop-tools-memory-orchestration-sa.md — Q20: Architect an agent system: loop, tools, memory, orchestration, safety.
 - [x] answers/03-021-how-agents-decide-which-tool-to-use.md — Q21: How agents decide which tool to use?
+- [x] answers/03-022-tool-schemas-that-reduce-hallucinated-actions.md — Q22: Tool schemas that reduce hallucinated actions?
 
 ## Categories completed
 - 08-safety-guardrails (switched on 2026-06-16)
@@ -39,7 +40,6 @@ created: 2026-06-16
 - 01-llm-fundamentals (switched on 2026-06-16)
 
 ## Next
-- [ ] answers/03-022-tool-schemas-that-reduce-hallucinated-actions.md — Q22: Tool schemas that reduce hallucinated actions?
 - [ ] answers/03-023-sandbox-tool-execution-safely.md — Q23: Sandbox tool execution safely?
 - [ ] answers/03-024-tool-failures-retries-idempotency.md — Q24: Tool failures, retries, idempotency?
 - [ ] answers/03-025-biggest-security-risks-with-tool-using-agents.md — Q25: Biggest security risks with tool-using agents?
