@@ -50,13 +50,13 @@ created: 2026-06-16
 - [x] answers/01-037-risks-of-general-purpose-tokenizers-on-legalmedical-domains.md — Q37: Risks of general-purpose tokenizers on legal/medical domains?
 - [x] answers/01-038-how-does-self-attention-work-in-a-transformer.md — Q38: How does self-attention work in a transformer?
 - [x] answers/01-039-what-is-tokenization-and-why-does-it-matter-for-cost-and-con.md — Q39: What is tokenization, and why does it matter for cost and context windows?
+- [x] answers/01-040-what-is-the-difference-between-prompt-engineering-rag-and-fi.md — Q40: What is the difference between prompt engineering, RAG, and fine-tuning?
 
 ## Categories completed
 - 08-safety-guardrails (switched on 2026-06-16)
 - 02-rag-systems (switched on 2026-06-16)
 
 ## Next
-- [ ] answers/01-040-what-is-the-difference-between-prompt-engineering-rag-and-fi.md — Q40: What is the difference between prompt engineering, RAG, and fine-tuning?
 - [ ] answers/01-041-what-are-embeddings-and-how-are-they-used-in-rag.md — Q41: What are embeddings, and how are they used in RAG?
 - [ ] answers/01-042-semantic-search-vs-keyword-search.md — Q42: Semantic search vs keyword search?
 - [ ] answers/01-043-how-do-you-reduce-hallucinations-in-llm-outputs.md — Q43: How do you reduce hallucinations in LLM outputs?
