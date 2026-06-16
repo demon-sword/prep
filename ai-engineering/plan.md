@@ -15,6 +15,7 @@ created: 2026-06-16
 - [x] answers/03-002-agent-vs-simple-llm-chain.md — Q2: Agent vs simple LLM chain? ⭐
 - [x] answers/03-003-what-makes-a-system-truly-agentic-what-does-not-qualify.md — Q3: What makes a system truly agentic? What does NOT qualify?
 - [x] answers/03-004-when-is-agentic-architecture-the-wrong-solution.md — Q4: When is agentic architecture the wrong solution?
+- [x] answers/03-005-how-define-and-enforce-agent-autonomy-boundaries.md — Q5: How define and enforce agent autonomy boundaries?
 
 ## Categories completed
 - 08-safety-guardrails (switched on 2026-06-16)
@@ -22,7 +23,6 @@ created: 2026-06-16
 - 01-llm-fundamentals (switched on 2026-06-16)
 
 ## Next
-- [ ] answers/03-005-how-define-and-enforce-agent-autonomy-boundaries.md — Q5: How define and enforce agent autonomy boundaries?
 - [ ] answers/03-006-essential-components-of-an-agent-beyond-an-llm.md — Q6: Essential components of an agent beyond an LLM?
 - [ ] answers/03-007-prevent-agents-from-over-reasoning-or-over-planning.md — Q7: Prevent agents from over-reasoning or over-planning?
 - [ ] answers/03-008-walk-through-a-production-ready-agent-architecture.md — Q8: Walk through a production-ready agent architecture.
