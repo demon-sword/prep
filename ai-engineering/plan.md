@@ -29,13 +29,13 @@ created: 2026-06-16
 - [x] answers/01-016-what-is-graph-rag-how-does-it-differ-from-standard-rag.md — Q16: What is graph RAG? How does it differ from standard RAG?
 - [x] answers/01-017-what-is-reflection-in-the-context-of-llm-agents.md — Q17: What is reflection in the context of LLM agents?
 - [x] answers/01-018-explain-kl-divergence.md — Q18: Explain KL divergence.
+- [x] answers/01-019-what-is-the-difference-between-symbolic-and-connectionist-ai.md — Q19: What is the difference between symbolic and connectionist AI?
 
 ## Categories completed
 - 08-safety-guardrails (switched on 2026-06-16)
 - 02-rag-systems (switched on 2026-06-16)
 
 ## Next
-- [ ] answers/01-019-what-is-the-difference-between-symbolic-and-connectionist-ai.md — Q19: What is the difference between symbolic and connectionist AI?
 - [ ] answers/01-020-describe-text-summarization-techniques-and-when-youd-use-eac.md — Q20: Describe text summarization techniques and when you'd use each.
 - [ ] answers/01-021-how-do-you-do-memory-management-and-context-management-with.md — Q21: How do you do memory management and context management with LLMs?
 - [ ] answers/01-022-what-is-self-attention-how-does-it-differ-from-multi-head-at.md — Q22: What is self-attention? How does it differ from multi-head attention?
