@@ -21,6 +21,7 @@ created: 2026-06-16
 - [x] answers/03-008-walk-through-a-production-ready-agent-architecture.md — Q8: Walk through a production-ready agent architecture.
 - [x] answers/03-009-what-logic-belongs-in-orchestrator-vs-llm.md — Q9: What logic belongs in orchestrator vs LLM?
 - [x] answers/03-010-design-a-safe-and-debuggable-agent-loop.md — Q10: Design a safe and debuggable agent loop.
+- [x] answers/03-011-termination-conditions-in-long-running-agents.md — Q11: Termination conditions in long-running agents?
 
 ## Categories completed
 - 08-safety-guardrails (switched on 2026-06-16)
@@ -28,7 +29,6 @@ created: 2026-06-16
 - 01-llm-fundamentals (switched on 2026-06-16)
 
 ## Next
-- [ ] answers/03-011-termination-conditions-in-long-running-agents.md — Q11: Termination conditions in long-running agents?
 - [ ] answers/03-012-how-decompose-high-level-goals-into-executable-steps.md — Q12: How decompose high-level goals into executable steps?
 - [ ] answers/03-013-chain-of-thought-vs-tree-of-thought-vs-graph-planning.md — Q13: Chain-of-thought vs tree-of-thought vs graph planning?
 - [ ] answers/03-014-detect-and-stop-infinite-planning-loops.md — Q14: Detect and stop infinite planning loops?
