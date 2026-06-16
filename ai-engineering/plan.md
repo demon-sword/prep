@@ -23,6 +23,7 @@ created: 2026-06-16
 - [x] answers/03-010-design-a-safe-and-debuggable-agent-loop.md — Q10: Design a safe and debuggable agent loop.
 - [x] answers/03-011-termination-conditions-in-long-running-agents.md — Q11: Termination conditions in long-running agents?
 - [x] answers/03-012-how-decompose-high-level-goals-into-executable-steps.md — Q12: How decompose high-level goals into executable steps?
+- [x] answers/03-013-chain-of-thought-vs-tree-of-thought-vs-graph-planning.md — Q13: Chain-of-thought vs tree-of-thought vs graph planning?
 
 ## Categories completed
 - 08-safety-guardrails (switched on 2026-06-16)
@@ -30,7 +31,6 @@ created: 2026-06-16
 - 01-llm-fundamentals (switched on 2026-06-16)
 
 ## Next
-- [ ] answers/03-013-chain-of-thought-vs-tree-of-thought-vs-graph-planning.md — Q13: Chain-of-thought vs tree-of-thought vs graph planning?
 - [ ] answers/03-014-detect-and-stop-infinite-planning-loops.md — Q14: Detect and stop infinite planning loops?
 - [ ] answers/03-015-partial-observability-or-missing-information.md — Q15: Partial observability or missing information?
 - [ ] answers/03-016-how-agents-decide-a-task-is-done.md — Q16: How agents decide a task is "done"?
