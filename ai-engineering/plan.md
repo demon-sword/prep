@@ -56,13 +56,13 @@ created: 2026-06-16
 - [x] answers/01-043-how-do-you-reduce-hallucinations-in-llm-outputs.md — Q43: How do you reduce hallucinations in LLM outputs?
 - [x] answers/01-044-what-is-the-lost-in-the-middle-problem.md — Q44: What is the "lost in the middle" problem?
 - [x] answers/01-045-when-set-temperature-to-0-vs-higher-values.md — Q45: When set temperature to 0 vs higher values?
+- [x] answers/01-046-bias-variance-tradeoff.md — Q46: Bias-variance tradeoff?
 
 ## Categories completed
 - 08-safety-guardrails (switched on 2026-06-16)
 - 02-rag-systems (switched on 2026-06-16)
 
 ## Next
-- [ ] answers/01-046-bias-variance-tradeoff.md — Q46: Bias-variance tradeoff?
 - [ ] answers/01-047-overfitting-how-prevent-it.md — Q47: Overfitting — how prevent it?
 - [ ] answers/01-048-imbalanced-datasets-how-handle.md — Q48: Imbalanced datasets — how handle?
 - [ ] validate — run: bash ralph-ai-engineering/validate.sh 01-llm-fundamentals
