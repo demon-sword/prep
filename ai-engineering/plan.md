@@ -65,4 +65,4 @@ created: 2026-06-16
 - 02-rag-systems (switched on 2026-06-16)
 
 ## Next
-- [ ] validate — run: bash ralph-ai-engineering/validate.sh 01-llm-fundamentals
+- [x] validate — run: bash ralph-ai-engineering/validate.sh 01-llm-fundamentals
