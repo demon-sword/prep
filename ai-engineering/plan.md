@@ -12,13 +12,14 @@ created: 2026-06-16
 - [x] 0 scaffold — category queue created
 - [x] categories/01-llm-fundamentals.md — category overview: LLM Fundamentals (48 questions)
 - [x] answers/01-001-how-do-llms-work.md — Q1: How do LLMs work?
+- [x] answers/01-002-how-do-transformers-work.md — Q2: How do transformers work?
 
 ## Categories completed
 - 08-safety-guardrails (switched on 2026-06-16)
 - 02-rag-systems (switched on 2026-06-16)
 
 ## Next
-- [ ] answers/01-002-how-do-transformers-work.md — Q2: How do transformers work?
+- [ ] answers/01-003-what-is-tokenization-and-how-does-it-affect-llm-performance.md — Q3: What is tokenization and how does it affect LLM performance?
 - [ ] answers/01-003-what-is-tokenization-and-how-does-it-affect-llm-performance.md — Q3: What is tokenization and how does it affect LLM performance?
 - [ ] answers/01-004-what-is-the-difference-between-pre-training-and-fine-tuning.md — Q4: What is the difference between pre-training and fine-tuning?
 - [ ] answers/01-005-explain-context-windows-and-their-limitations.md — Q5: Explain context windows and their limitations.
