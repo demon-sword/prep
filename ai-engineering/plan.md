@@ -36,13 +36,13 @@ created: 2026-06-16
 - [x] answers/01-023-what-is-grouped-query-attention-gqa-how-does-it-differ-from.md — Q23: What is grouped query attention (GQA)? How does it differ from standard multi-head attention?
 - [x] answers/01-024-bpe-vs-wordpiece-vs-character-level-tokenization-tradeoffs.md — Q24: BPE vs WordPiece vs character-level tokenization — tradeoffs?
 - [x] answers/01-025-encoder-only-vs-decoder-only-vs-encoder-decoder-when-use-eac.md — Q25: Encoder-only vs decoder-only vs encoder-decoder — when use each?
+- [x] answers/01-026-why-are-decoder-only-models-dominant-even-for-non-generation.md — Q26: Why are decoder-only models dominant even for non-generation tasks?
 
 ## Categories completed
 - 08-safety-guardrails (switched on 2026-06-16)
 - 02-rag-systems (switched on 2026-06-16)
 
 ## Next
-- [ ] answers/01-026-why-are-decoder-only-models-dominant-even-for-non-generation.md — Q26: Why are decoder-only models dominant even for non-generation tasks?
 - [ ] answers/01-027-what-is-positional-encoding-and-why-is-it-needed.md — Q27: What is positional encoding and why is it needed?
 - [ ] answers/01-028-mmlu-bigbench-humaneval-what-does-each-measure-limitations.md — Q28: MMLU, BigBench, HumanEval — what does each measure? Limitations?
 - [ ] answers/01-029-rlhf-vs-dpo-when-prefer-one-over-the-other.md — Q29: RLHF vs DPO — when prefer one over the other?
