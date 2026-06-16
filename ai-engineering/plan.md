@@ -11,6 +11,7 @@ created: 2026-06-16
 ## Done
 - [x] 0 scaffold — category queue created
 - [x] categories/02-rag-systems.md — category overview: RAG Systems (34 questions)
+- [x] answers/02-001-design-a-rag-system-for-a-customer-support-chatbot-how-do-yo.md — Q1: Design a RAG system for a customer support chatbot. How do you evaluate it? ⭐
 
 ## Categories completed
 - 08-safety-guardrails (switched on 2026-06-16)
@@ -18,7 +19,6 @@ created: 2026-06-16
 - 01-llm-fundamentals (switched on 2026-06-16)
 
 ## Next
-- [ ] answers/02-001-design-a-rag-system-for-a-customer-support-chatbot-how-do-yo.md — Q1: Design a RAG system for a customer support chatbot. How do you evaluate it? ⭐
 - [ ] answers/02-002-how-would-you-design-an-llm-powered-enterprise-search-system.md — Q2: How would you design an LLM-powered enterprise search system?
 - [ ] answers/02-003-design-a-genai-document-processing-pipeline-for-unstructured.md — Q3: Design a GenAI document-processing pipeline for unstructured data (emails, PDFs,
 - [ ] answers/02-004-how-would-you-use-gpt-4-to-generate-accurate-answers-from-pr.md — Q4: How would you use GPT-4 to generate accurate answers from proprietary documents?
