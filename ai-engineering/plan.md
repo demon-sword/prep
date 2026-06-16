@@ -37,6 +37,7 @@ created: 2026-06-16
 - [x] answers/02-024-where-do-embeddings-fail-negation-temporal-reasoning-precisi.md — Q24: Where do embeddings fail? Negation, temporal reasoning, precision requirements.
 - [x] answers/02-025-semantic-caching-reduce-cost-and-latency.md — Q25: Semantic caching — reduce cost and latency?
 - [x] answers/02-026-rag-with-multi-turn-conversation-context.md — Q26: RAG with multi-turn conversation context?
+- [x] answers/02-027-key-tradeoffs-latency-vs-accuracy-chunk-size-vs-context-cost.md — Q27: Key tradeoffs: latency vs accuracy, chunk size vs context, cost vs quality?
 
 ## Categories completed
 - 08-safety-guardrails (switched on 2026-06-16)
@@ -44,7 +45,6 @@ created: 2026-06-16
 - 01-llm-fundamentals (switched on 2026-06-16)
 
 ## Next
-- [ ] answers/02-027-key-tradeoffs-latency-vs-accuracy-chunk-size-vs-context-cost.md — Q27: Key tradeoffs: latency vs accuracy, chunk size vs context, cost vs quality?
 - [ ] answers/02-028-optimize-rag-latency-in-production.md — Q28: Optimize RAG latency in production?
 - [ ] answers/02-029-bad-chunking-fixed-size-vs-semantic.md — Q29: Bad chunking (fixed-size vs semantic)
 - [ ] answers/02-030-vocabulary-mismatch-dense-only-failing-on-keywords.md — Q30: Vocabulary mismatch (dense-only failing on keywords)
