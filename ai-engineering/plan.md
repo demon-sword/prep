@@ -20,13 +20,13 @@ created: 2026-06-16
 - [x] answers/01-007-what-is-temperature-and-top-p-sampling-how-do-they-affect-ou.md — Q7: What is temperature and top-p sampling? How do they affect outputs?
 - [x] answers/01-008-explain-few-shot-learning-and-chain-of-thought-prompting.md — Q8: Explain few-shot learning and chain-of-thought prompting.
 - [x] answers/01-009-what-is-kv-cache-how-does-it-help-in-llm-inference.md — Q9: What is KV cache? How does it help in LLM inference?
+- [x] answers/01-010-can-you-describe-the-difference-between-genai-and-traditiona.md — Q10: Can you describe the difference between GenAI and traditional programming for a real-world problem?
 
 ## Categories completed
 - 08-safety-guardrails (switched on 2026-06-16)
 - 02-rag-systems (switched on 2026-06-16)
 
 ## Next
-- [ ] answers/01-010-can-you-describe-the-difference-between-genai-and-traditiona.md — Q10: Can you describe the difference between GenAI and traditional programming for a 
 - [ ] answers/01-011-how-do-you-ensure-llm-outputs-are-consistent-and-accurate-in.md — Q11: How do you ensure LLM outputs are consistent and accurate in multi-step workflow
 - [ ] answers/01-012-whats-an-rag-model-explain-the-complete-process.md — Q12: What's an RAG model? Explain the complete process.
 - [ ] answers/01-013-what-are-embeddings.md — Q13: What are embeddings?
