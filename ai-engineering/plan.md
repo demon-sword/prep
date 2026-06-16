@@ -14,6 +14,7 @@ created: 2026-06-16
 - [x] answers/04-001-when-fine-tune-vs-prompt-engineering.md — Q1: When fine-tune vs prompt engineering? ⭐
 - [x] answers/04-002-what-is-peftlora-and-when-use-it.md — Q2: What is PEFT/LoRA and when use it?
 - [x] answers/04-003-qlora-vs-lora-when-choose-one.md — Q3: QLoRA vs LoRA — when choose one?
+- [x] answers/04-004-what-is-rlhf-and-why-important.md — Q4: What is RLHF and why important?
 
 ## Categories completed
 - 08-safety-guardrails (switched on 2026-06-16)
@@ -22,7 +23,6 @@ created: 2026-06-16
 - 03-agents-tool-use (switched on 2026-06-16)
 
 ## Next
-- [ ] answers/04-004-what-is-rlhf-and-why-important.md — Q4: What is RLHF and why important?
 - [ ] answers/04-005-fine-tune-or-prompt-engineered-rag.md — Q5: Fine-tune or prompt-engineered RAG?
 - [ ] answers/04-006-design-a-model-for-math-problems-data-sft-post-training-eval.md — Q6: Design a model for math problems — data, SFT, post-training, eval.
 - [ ] answers/04-007-scalable-efficient-llm-training-system-compute-and-data-cons.md — Q7: Scalable efficient LLM training system — compute and data constraints.
