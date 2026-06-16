@@ -12,6 +12,7 @@ created: 2026-06-16
 - [x] 0 scaffold — category queue created
 - [x] categories/04-fine-tuning-training.md — category overview: Fine-Tuning & Training (12 questions)
 - [x] answers/04-001-when-fine-tune-vs-prompt-engineering.md — Q1: When fine-tune vs prompt engineering? ⭐
+- [x] answers/04-002-what-is-peftlora-and-when-use-it.md — Q2: What is PEFT/LoRA and when use it?
 
 ## Categories completed
 - 08-safety-guardrails (switched on 2026-06-16)
@@ -20,7 +21,6 @@ created: 2026-06-16
 - 03-agents-tool-use (switched on 2026-06-16)
 
 ## Next
-- [ ] answers/04-002-what-is-peftlora-and-when-use-it.md — Q2: What is PEFT/LoRA and when use it?
 - [ ] answers/04-003-qlora-vs-lora-when-choose-one.md — Q3: QLoRA vs LoRA — when choose one?
 - [ ] answers/04-004-what-is-rlhf-and-why-important.md — Q4: What is RLHF and why important?
 - [ ] answers/04-005-fine-tune-or-prompt-engineered-rag.md — Q5: Fine-tune or prompt-engineered RAG?
