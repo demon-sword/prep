@@ -26,6 +26,7 @@ created: 2026-06-16
 - [x] answers/03-013-chain-of-thought-vs-tree-of-thought-vs-graph-planning.md — Q13: Chain-of-thought vs tree-of-thought vs graph planning?
 - [x] answers/03-014-detect-and-stop-infinite-planning-loops.md — Q14: Detect and stop infinite planning loops?
 - [x] answers/03-015-partial-observability-or-missing-information.md — Q15: Partial observability or missing information?
+- [x] answers/03-016-how-agents-decide-a-task-is-done.md — Q16: How agents decide a task is "done"?
 
 ## Categories completed
 - 08-safety-guardrails (switched on 2026-06-16)
@@ -33,7 +34,6 @@ created: 2026-06-16
 - 01-llm-fundamentals (switched on 2026-06-16)
 
 ## Next
-- [ ] answers/03-016-how-agents-decide-a-task-is-done.md — Q16: How agents decide a task is "done"?
 - [ ] answers/03-017-planning-failures-hardest-to-detect-in-production.md — Q17: Planning failures hardest to detect in production?
 - [ ] answers/03-018-stateless-vs-stateful-agents.md — Q18: Stateless vs stateful agents?
 - [ ] answers/03-019-version-and-roll-back-agent-behavior.md — Q19: Version and roll back agent behavior?
