@@ -18,6 +18,7 @@ created: 2026-06-16
 - [x] answers/02-005-design-a-generative-qa-assistant-for-your-companys-knowledge.md — Q5: Design a generative QA assistant for your company's knowledge base.
 - [x] answers/02-006-system-processing-huge-pdf-reports-how-handle-context-when-s.md — Q6: System processing huge PDF reports — how handle context when splitting documents
 - [x] answers/02-007-how-efficiently-generate-and-store-embeddings-for-products-a.md — Q7: How efficiently generate and store embeddings for products and queries?
+- [x] answers/02-008-how-handle-hallucination-when-no-information-is-found-in-con.md — Q8: How handle hallucination when no information is found in context?
 
 ## Categories completed
 - 08-safety-guardrails (switched on 2026-06-16)
@@ -25,7 +26,6 @@ created: 2026-06-16
 - 01-llm-fundamentals (switched on 2026-06-16)
 
 ## Next
-- [ ] answers/02-008-how-handle-hallucination-when-no-information-is-found-in-con.md — Q8: How handle hallucination when no information is found in context?
 - [ ] answers/02-009-what-rag-projects-have-you-worked-on.md — Q9: What RAG projects have you worked on?
 - [ ] answers/02-010-design-a-qa-system-over-internal-documentation.md — Q10: Design a Q&A system over internal documentation.
 - [ ] answers/02-011-how-ensure-quality-of-data-the-llm-interacts-with.md — Q11: How ensure quality of data the LLM interacts with?
