@@ -15,6 +15,7 @@ created: 2026-06-16
 - [x] answers/02-002-how-would-you-design-an-llm-powered-enterprise-search-system.md — Q2: How would you design an LLM-powered enterprise search system?
 - [x] answers/02-003-design-a-genai-document-processing-pipeline-for-unstructured.md — Q3: Design a GenAI document-processing pipeline for unstructured data (emails, PDFs, images)
 - [x] answers/02-004-how-would-you-use-gpt-4-to-generate-accurate-answers-from-pr.md — Q4: How would you use GPT-4 to generate accurate answers from proprietary documents?
+- [x] answers/02-005-design-a-generative-qa-assistant-for-your-companys-knowledge.md — Q5: Design a generative QA assistant for your company's knowledge base.
 
 ## Categories completed
 - 08-safety-guardrails (switched on 2026-06-16)
@@ -22,7 +23,6 @@ created: 2026-06-16
 - 01-llm-fundamentals (switched on 2026-06-16)
 
 ## Next
-- [ ] answers/02-005-design-a-generative-qa-assistant-for-your-companys-knowledge.md — Q5: Design a generative QA assistant for your company's knowledge base.
 - [ ] answers/02-006-system-processing-huge-pdf-reports-how-handle-context-when-s.md — Q6: System processing huge PDF reports — how handle context when splitting documents
 - [ ] answers/02-007-how-efficiently-generate-and-store-embeddings-for-products-a.md — Q7: How efficiently generate and store embeddings for products and queries?
 - [ ] answers/02-008-how-handle-hallucination-when-no-information-is-found-in-con.md — Q8: How handle hallucination when no information is found in context?
