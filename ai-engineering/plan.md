@@ -36,6 +36,7 @@ created: 2026-06-16
 - [x] answers/03-023-sandbox-tool-execution-safely.md — Q23: Sandbox tool execution safely?
 - [x] answers/03-024-tool-failures-retries-idempotency.md — Q24: Tool failures, retries, idempotency?
 - [x] answers/03-025-biggest-security-risks-with-tool-using-agents.md — Q25: Biggest security risks with tool-using agents?
+- [x] answers/03-026-control-cost-explosions-from-tool-calls.md — Q26: Control cost explosions from tool calls?
 
 ## Categories completed
 - 08-safety-guardrails (switched on 2026-06-16)
@@ -43,7 +44,6 @@ created: 2026-06-16
 - 01-llm-fundamentals (switched on 2026-06-16)
 
 ## Next
-- [ ] answers/03-026-control-cost-explosions-from-tool-calls.md — Q26: Control cost explosions from tool calls?
 - [ ] answers/03-027-types-of-memory-working-episodic-semantic-procedural.md — Q27: Types of memory: working, episodic, semantic, procedural?
 - [ ] answers/03-028-long-term-memory-without-polluting-it.md — Q28: Long-term memory without polluting it?
 - [ ] answers/03-029-human-in-the-loop-patterns-when-trigger-human-review.md — Q29: Human-in-the-loop patterns — when trigger human review?
