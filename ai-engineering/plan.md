@@ -44,6 +44,7 @@ created: 2026-06-16
 - [x] answers/03-031-agents-in-regulated-domains-financial-healthcare.md — Q31: Agents in regulated domains (financial, healthcare)?
 - [x] answers/03-032-orchestration-vs-choreography-for-multi-agent-systems.md — Q32: Orchestration vs choreography for multi-agent systems?
 - [x] answers/03-033-filter-pii-before-data-reaches-llm.md — Q33: Filter PII before data reaches LLM?
+- [x] answers/03-034-evaluate-agent-performance-tool-selection-action-advancement.md — Q34: Evaluate agent performance — tool selection, action advancement, context adherence
 
 ## Categories completed
 - 08-safety-guardrails (switched on 2026-06-16)
@@ -51,7 +52,6 @@ created: 2026-06-16
 - 01-llm-fundamentals (switched on 2026-06-16)
 
 ## Next
-- [ ] answers/03-034-evaluate-agent-performance-tool-selection-action-advancement.md — Q34: Evaluate agent performance — tool selection, action advancement, context adheren
 - [ ] answers/03-035-explain-agentic-systems-to-non-technical-stakeholders.md — Q35: Explain agentic systems to non-technical stakeholders?
 - [ ] answers/03-036-agent-analyzing-support-tickets-drafting-responses-escalatin.md — Q36: Agent analyzing support tickets, drafting responses, escalating.
 - [ ] answers/03-037-agents-collaborating-on-research-reports-with-citations.md — Q37: Agents collaborating on research reports with citations.
