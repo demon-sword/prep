@@ -19,6 +19,7 @@ created: 2026-06-16
 - [x] answers/03-006-essential-components-of-an-agent-beyond-an-llm.md — Q6: Essential components of an agent beyond an LLM?
 - [x] answers/03-007-prevent-agents-from-over-reasoning-or-over-planning.md — Q7: Prevent agents from over-reasoning or over-planning?
 - [x] answers/03-008-walk-through-a-production-ready-agent-architecture.md — Q8: Walk through a production-ready agent architecture.
+- [x] answers/03-009-what-logic-belongs-in-orchestrator-vs-llm.md — Q9: What logic belongs in orchestrator vs LLM?
 
 ## Categories completed
 - 08-safety-guardrails (switched on 2026-06-16)
@@ -26,7 +27,6 @@ created: 2026-06-16
 - 01-llm-fundamentals (switched on 2026-06-16)
 
 ## Next
-- [ ] answers/03-009-what-logic-belongs-in-orchestrator-vs-llm.md — Q9: What logic belongs in orchestrator vs LLM?
 - [ ] answers/03-010-design-a-safe-and-debuggable-agent-loop.md — Q10: Design a safe and debuggable agent loop.
 - [ ] answers/03-011-termination-conditions-in-long-running-agents.md — Q11: Termination conditions in long-running agents?
 - [ ] answers/03-012-how-decompose-high-level-goals-into-executable-steps.md — Q12: How decompose high-level goals into executable steps?
