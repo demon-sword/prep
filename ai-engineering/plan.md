@@ -30,6 +30,7 @@ created: 2026-06-16
 - [x] answers/03-017-planning-failures-hardest-to-detect-in-production.md — Q17: Planning failures hardest to detect in production?
 - [x] answers/03-018-stateless-vs-stateful-agents.md — Q18: Stateless vs stateful agents?
 - [x] answers/03-019-version-and-roll-back-agent-behavior.md — Q19: Version and roll back agent behavior?
+- [x] answers/03-020-architect-an-agent-system-loop-tools-memory-orchestration-sa.md — Q20: Architect an agent system: loop, tools, memory, orchestration, safety.
 
 ## Categories completed
 - 08-safety-guardrails (switched on 2026-06-16)
@@ -37,7 +38,6 @@ created: 2026-06-16
 - 01-llm-fundamentals (switched on 2026-06-16)
 
 ## Next
-- [ ] answers/03-020-architect-an-agent-system-loop-tools-memory-orchestration-sa.md — Q20: Architect an agent system: loop, tools, memory, orchestration, safety.
 - [ ] answers/03-021-how-agents-decide-which-tool-to-use.md — Q21: How agents decide which tool to use?
 - [ ] answers/03-022-tool-schemas-that-reduce-hallucinated-actions.md — Q22: Tool schemas that reduce hallucinated actions?
 - [ ] answers/03-023-sandbox-tool-execution-safely.md — Q23: Sandbox tool execution safely?
