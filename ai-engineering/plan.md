@@ -23,6 +23,7 @@ created: 2026-06-16
 - [x] answers/02-010-design-a-qa-system-over-internal-documentation.md — Q10: Design a Q&A system over internal documentation.
 - [x] answers/02-011-how-ensure-quality-of-data-the-llm-interacts-with.md — Q11: How ensure quality of data the LLM interacts with?
 - [x] answers/02-012-compare-sparse-vs-dense-retrieval-when-use-each.md — Q12: Compare sparse vs dense retrieval. When use each?
+- [x] answers/02-013-common-rag-failure-points-how-debug-them.md — Q13: Common RAG failure points — how debug them?
 
 ## Categories completed
 - 08-safety-guardrails (switched on 2026-06-16)
@@ -30,7 +31,6 @@ created: 2026-06-16
 - 01-llm-fundamentals (switched on 2026-06-16)
 
 ## Next
-- [ ] answers/02-013-common-rag-failure-points-how-debug-them.md — Q13: Common RAG failure points — how debug them?
 - [ ] answers/02-014-how-protect-sensitiveconfidential-data-in-a-rag-pipeline.md — Q14: How protect sensitive/confidential data in a RAG pipeline?
 - [ ] answers/02-015-what-vector-databases-have-you-used-which-and-why.md — Q15: What vector databases have you used? Which and why?
 - [ ] answers/02-016-financial-report-page-1-says-amounts-in-thousands-how-handle.md — Q16: Financial report: page 1 says "amounts in thousands" — how handle doc-wide conte
