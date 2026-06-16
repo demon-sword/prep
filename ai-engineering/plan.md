@@ -16,13 +16,13 @@ created: 2026-06-16
 - [x] answers/01-003-what-is-tokenization-and-how-does-it-affect-llm-performance.md — Q3: What is tokenization and how does it affect LLM performance?
 - [x] answers/01-004-what-is-the-difference-between-pre-training-and-fine-tuning.md — Q4: What is the difference between pre-training and fine-tuning?
 - [x] answers/01-005-explain-context-windows-and-their-limitations.md — Q5: Explain context windows and their limitations.
+- [x] answers/01-006-what-are-scaling-laws-and-why-do-they-matter.md — Q6: What are scaling laws and why do they matter?
 
 ## Categories completed
 - 08-safety-guardrails (switched on 2026-06-16)
 - 02-rag-systems (switched on 2026-06-16)
 
 ## Next
-- [ ] answers/01-006-what-are-scaling-laws-and-why-do-they-matter.md — Q6: What are scaling laws and why do they matter?
 - [ ] answers/01-007-what-is-temperature-and-top-p-sampling-how-do-they-affect-ou.md — Q7: What is temperature and top-p sampling? How do they affect outputs?
 - [ ] answers/01-008-explain-few-shot-learning-and-chain-of-thought-prompting.md — Q8: Explain few-shot learning and chain-of-thought prompting.
 - [ ] answers/01-009-what-is-kv-cache-how-does-it-help-in-llm-inference.md — Q9: What is KV cache? How does it help in LLM inference?
