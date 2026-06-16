@@ -48,13 +48,13 @@ created: 2026-06-16
 - [x] answers/01-035-how-do-stop-sequences-work.md — Q35: How do stop sequences work?
 - [x] answers/01-036-what-happens-when-you-exceed-the-context-window-how-handle-l.md — Q36: What happens when you exceed the context window? How handle long documents?
 - [x] answers/01-037-risks-of-general-purpose-tokenizers-on-legalmedical-domains.md — Q37: Risks of general-purpose tokenizers on legal/medical domains?
+- [x] answers/01-038-how-does-self-attention-work-in-a-transformer.md — Q38: How does self-attention work in a transformer?
 
 ## Categories completed
 - 08-safety-guardrails (switched on 2026-06-16)
 - 02-rag-systems (switched on 2026-06-16)
 
 ## Next
-- [ ] answers/01-038-how-does-self-attention-work-in-a-transformer.md — Q38: How does self-attention work in a transformer?
 - [ ] answers/01-039-what-is-tokenization-and-why-does-it-matter-for-cost-and-con.md — Q39: What is tokenization, and why does it matter for cost and context windows?
 - [ ] answers/01-040-what-is-the-difference-between-prompt-engineering-rag-and-fi.md — Q40: What is the difference between prompt engineering, RAG, and fine-tuning?
 - [ ] answers/01-041-what-are-embeddings-and-how-are-they-used-in-rag.md — Q41: What are embeddings, and how are they used in RAG?
