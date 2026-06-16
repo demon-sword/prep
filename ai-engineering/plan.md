@@ -44,13 +44,13 @@ created: 2026-06-16
 - [x] answers/01-031-how-do-llms-generate-text-autoregressive-decoding-process.md — Q31: How do LLMs generate text? Autoregressive decoding process.
 - [x] answers/01-032-beam-search-top-k-top-p-when-use-each.md — Q32: Beam search, top-k, top-p — when use each?
 - [x] answers/01-033-what-is-flashattention-and-how-does-it-work.md — Q33: What is FlashAttention and how does it work?
+- [x] answers/01-034-why-is-llm-inference-memory-bounded.md — Q34: Why is LLM inference memory-bounded?
 
 ## Categories completed
 - 08-safety-guardrails (switched on 2026-06-16)
 - 02-rag-systems (switched on 2026-06-16)
 
 ## Next
-- [ ] answers/01-034-why-is-llm-inference-memory-bounded.md — Q34: Why is LLM inference memory-bounded?
 - [ ] answers/01-035-how-do-stop-sequences-work.md — Q35: How do stop sequences work?
 - [ ] answers/01-036-what-happens-when-you-exceed-the-context-window-how-handle-l.md — Q36: What happens when you exceed the context window? How handle long documents?
 - [ ] answers/01-037-risks-of-general-purpose-tokenizers-on-legalmedical-domains.md — Q37: Risks of general-purpose tokenizers on legal/medical domains?
