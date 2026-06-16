@@ -1,59 +1,34 @@
 # Plan: AI Engineering Interview Prep
 
 ## Meta
-current_category: 03-agents-tool-use
-category_name: Agents & Tool Use
-category_num: 3
-question_range: 1–38
-task_count: 40
+current_category: 04-fine-tuning-training
+category_name: Fine-Tuning & Training
+category_num: 4
+question_range: 1–12
+task_count: 14
 created: 2026-06-16
 
 ## Done
 - [x] 0 scaffold — category queue created
-- [x] categories/03-agents-tool-use.md — category overview: Agents & Tool Use (38 questions)
-- [x] answers/03-001-what-is-an-ai-agent-and-its-role-in-a-broader-system.md — Q1: What is an AI agent and its role in a broader system?
-- [x] answers/03-002-agent-vs-simple-llm-chain.md — Q2: Agent vs simple LLM chain? ⭐
-- [x] answers/03-003-what-makes-a-system-truly-agentic-what-does-not-qualify.md — Q3: What makes a system truly agentic? What does NOT qualify?
-- [x] answers/03-004-when-is-agentic-architecture-the-wrong-solution.md — Q4: When is agentic architecture the wrong solution?
-- [x] answers/03-005-how-define-and-enforce-agent-autonomy-boundaries.md — Q5: How define and enforce agent autonomy boundaries?
-- [x] answers/03-006-essential-components-of-an-agent-beyond-an-llm.md — Q6: Essential components of an agent beyond an LLM?
-- [x] answers/03-007-prevent-agents-from-over-reasoning-or-over-planning.md — Q7: Prevent agents from over-reasoning or over-planning?
-- [x] answers/03-008-walk-through-a-production-ready-agent-architecture.md — Q8: Walk through a production-ready agent architecture.
-- [x] answers/03-009-what-logic-belongs-in-orchestrator-vs-llm.md — Q9: What logic belongs in orchestrator vs LLM?
-- [x] answers/03-010-design-a-safe-and-debuggable-agent-loop.md — Q10: Design a safe and debuggable agent loop.
-- [x] answers/03-011-termination-conditions-in-long-running-agents.md — Q11: Termination conditions in long-running agents?
-- [x] answers/03-012-how-decompose-high-level-goals-into-executable-steps.md — Q12: How decompose high-level goals into executable steps?
-- [x] answers/03-013-chain-of-thought-vs-tree-of-thought-vs-graph-planning.md — Q13: Chain-of-thought vs tree-of-thought vs graph planning?
-- [x] answers/03-014-detect-and-stop-infinite-planning-loops.md — Q14: Detect and stop infinite planning loops?
-- [x] answers/03-015-partial-observability-or-missing-information.md — Q15: Partial observability or missing information?
-- [x] answers/03-016-how-agents-decide-a-task-is-done.md — Q16: How agents decide a task is "done"?
-- [x] answers/03-017-planning-failures-hardest-to-detect-in-production.md — Q17: Planning failures hardest to detect in production?
-- [x] answers/03-018-stateless-vs-stateful-agents.md — Q18: Stateless vs stateful agents?
-- [x] answers/03-019-version-and-roll-back-agent-behavior.md — Q19: Version and roll back agent behavior?
-- [x] answers/03-020-architect-an-agent-system-loop-tools-memory-orchestration-sa.md — Q20: Architect an agent system: loop, tools, memory, orchestration, safety.
-- [x] answers/03-021-how-agents-decide-which-tool-to-use.md — Q21: How agents decide which tool to use?
-- [x] answers/03-022-tool-schemas-that-reduce-hallucinated-actions.md — Q22: Tool schemas that reduce hallucinated actions?
-- [x] answers/03-023-sandbox-tool-execution-safely.md — Q23: Sandbox tool execution safely?
-- [x] answers/03-024-tool-failures-retries-idempotency.md — Q24: Tool failures, retries, idempotency?
-- [x] answers/03-025-biggest-security-risks-with-tool-using-agents.md — Q25: Biggest security risks with tool-using agents?
-- [x] answers/03-026-control-cost-explosions-from-tool-calls.md — Q26: Control cost explosions from tool calls?
-- [x] answers/03-027-types-of-memory-working-episodic-semantic-procedural.md — Q27: Types of memory: working, episodic, semantic, procedural?
-- [x] answers/03-028-long-term-memory-without-polluting-it.md — Q28: Long-term memory without polluting it?
-- [x] answers/03-029-human-in-the-loop-patterns-when-trigger-human-review.md — Q29: Human-in-the-loop patterns — when trigger human review?
-- [x] answers/03-030-monitor-autonomous-agent-behavior-in-production.md — Q30: Monitor autonomous agent behavior in production?
-- [x] answers/03-031-agents-in-regulated-domains-financial-healthcare.md — Q31: Agents in regulated domains (financial, healthcare)?
-- [x] answers/03-032-orchestration-vs-choreography-for-multi-agent-systems.md — Q32: Orchestration vs choreography for multi-agent systems?
-- [x] answers/03-033-filter-pii-before-data-reaches-llm.md — Q33: Filter PII before data reaches LLM?
-- [x] answers/03-034-evaluate-agent-performance-tool-selection-action-advancement.md — Q34: Evaluate agent performance — tool selection, action advancement, context adherence
-- [x] answers/03-035-explain-agentic-systems-to-non-technical-stakeholders.md — Q35: Explain agentic systems to non-technical stakeholders?
-- [x] answers/03-036-agent-analyzing-support-tickets-drafting-responses-escalatin.md — Q36: Agent analyzing support tickets, drafting responses, escalating.
-- [x] answers/03-037-agents-collaborating-on-research-reports-with-citations.md — Q37: Agents collaborating on research reports with citations.
-- [x] answers/03-038-agent-reviewing-code-and-suggesting-improvements.md — Q38: Agent reviewing code and suggesting improvements.
+- [x] categories/04-fine-tuning-training.md — category overview: Fine-Tuning & Training (12 questions)
 
 ## Categories completed
 - 08-safety-guardrails (switched on 2026-06-16)
 - 02-rag-systems (switched on 2026-06-16)
 - 01-llm-fundamentals (switched on 2026-06-16)
+- 03-agents-tool-use (switched on 2026-06-16)
 
 ## Next
-- [ ] validate — run: bash ralph-ai-engineering/validate.sh 03-agents-tool-use
+- [ ] answers/04-001-when-fine-tune-vs-prompt-engineering.md — Q1: When fine-tune vs prompt engineering? ⭐
+- [ ] answers/04-002-what-is-peftlora-and-when-use-it.md — Q2: What is PEFT/LoRA and when use it?
+- [ ] answers/04-003-qlora-vs-lora-when-choose-one.md — Q3: QLoRA vs LoRA — when choose one?
+- [ ] answers/04-004-what-is-rlhf-and-why-important.md — Q4: What is RLHF and why important?
+- [ ] answers/04-005-fine-tune-or-prompt-engineered-rag.md — Q5: Fine-tune or prompt-engineered RAG?
+- [ ] answers/04-006-design-a-model-for-math-problems-data-sft-post-training-eval.md — Q6: Design a model for math problems — data, SFT, post-training, eval.
+- [ ] answers/04-007-scalable-efficient-llm-training-system-compute-and-data-cons.md — Q7: Scalable efficient LLM training system — compute and data constraints.
+- [ ] answers/04-008-rlhf-pipeline-sft-reward-model-ppo-how-does-dpo-simplify.md — Q8: RLHF pipeline: SFT, reward model, PPO. How does DPO simplify?
+- [ ] answers/04-009-instruction-tuning-vs-pre-training.md — Q9: Instruction tuning vs pre-training?
+- [ ] answers/04-010-speculative-decoding-speed-up-inference.md — Q10: Speculative decoding — speed up inference?
+- [ ] answers/04-011-convert-implicit-user-behavior-edits-acceptance-into-trainin.md — Q11: Convert implicit user behavior (edits, acceptance) into training signals?
+- [ ] answers/04-012-quantization-tradeoffs-between-size-speed-accuracy.md — Q12: Quantization — tradeoffs between size, speed, accuracy?
+- [ ] validate — run: bash ralph-ai-engineering/validate.sh 04-fine-tuning-training
