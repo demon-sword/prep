@@ -28,6 +28,7 @@ created: 2026-06-16
 - [x] answers/02-015-what-vector-databases-have-you-used-which-and-why.md — Q15: What vector databases have you used? Which and why?
 - [x] answers/02-016-financial-report-page-1-says-amounts-in-thousands-how-handle.md — Q16: Financial report: page 1 says "amounts in thousands" — how handle doc-wide context when chunking
 - [x] answers/02-017-what-is-hybrid-search-when-combine-vector-bm25.md — Q17: What is hybrid search? When combine vector + BM25?
+- [x] answers/02-018-what-is-re-ranking-cross-encoder-vs-bi-encoder.md — Q18: What is re-ranking? Cross-encoder vs bi-encoder?
 
 ## Categories completed
 - 08-safety-guardrails (switched on 2026-06-16)
@@ -35,7 +36,6 @@ created: 2026-06-16
 - 01-llm-fundamentals (switched on 2026-06-16)
 
 ## Next
-- [ ] answers/02-018-what-is-re-ranking-cross-encoder-vs-bi-encoder.md — Q18: What is re-ranking? Cross-encoder vs bi-encoder?
 - [ ] answers/02-019-scale-rag-to-10m-articles-sharding-caching-retrieval-optimiz.md — Q19: Scale RAG to 10M+ articles — sharding, caching, retrieval optimization.
 - [ ] answers/02-020-rag-returns-relevant-docs-but-users-cant-find-the-answer-sea.md — Q20: RAG returns relevant docs but users can't find the answer — search engine vs ans
 - [ ] answers/02-021-how-evaluate-a-rag-pipeline-ndcg-mrr-precisionk-recall.md — Q21: How evaluate a RAG pipeline? NDCG, MRR, precision@k, recall?
