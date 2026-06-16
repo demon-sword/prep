@@ -25,13 +25,13 @@ created: 2026-06-16
 - [x] answers/01-012-whats-an-rag-model-explain-the-complete-process.md — Q12: What's an RAG model? Explain the complete process.
 - [x] answers/01-013-what-are-embeddings.md — Q13: What are embeddings?
 - [x] answers/01-014-how-does-chunking-happen.md — Q14: How does chunking happen?
+- [x] answers/01-015-what-is-the-difference-between-discriminative-and-generative.md — Q15: What is the difference between discriminative and generative models?
 
 ## Categories completed
 - 08-safety-guardrails (switched on 2026-06-16)
 - 02-rag-systems (switched on 2026-06-16)
 
 ## Next
-- [ ] answers/01-015-what-is-the-difference-between-discriminative-and-generative.md — Q15: What is the difference between discriminative and generative models?
 - [ ] answers/01-016-what-is-graph-rag-how-does-it-differ-from-standard-rag.md — Q16: What is graph RAG? How does it differ from standard RAG?
 - [ ] answers/01-017-what-is-reflection-in-the-context-of-llm-agents.md — Q17: What is reflection in the context of LLM agents?
 - [ ] answers/01-018-explain-kl-divergence.md — Q18: Explain KL divergence.
