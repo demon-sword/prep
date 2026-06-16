@@ -53,13 +53,13 @@ created: 2026-06-16
 - [x] answers/01-040-what-is-the-difference-between-prompt-engineering-rag-and-fi.md — Q40: What is the difference between prompt engineering, RAG, and fine-tuning?
 - [x] answers/01-041-what-are-embeddings-and-how-are-they-used-in-rag.md — Q41: What are embeddings, and how are they used in RAG?
 - [x] answers/01-042-semantic-search-vs-keyword-search.md — Q42: Semantic search vs keyword search?
+- [x] answers/01-043-how-do-you-reduce-hallucinations-in-llm-outputs.md — Q43: How do you reduce hallucinations in LLM outputs?
 
 ## Categories completed
 - 08-safety-guardrails (switched on 2026-06-16)
 - 02-rag-systems (switched on 2026-06-16)
 
 ## Next
-- [ ] answers/01-043-how-do-you-reduce-hallucinations-in-llm-outputs.md — Q43: How do you reduce hallucinations in LLM outputs?
 - [ ] answers/01-044-what-is-the-lost-in-the-middle-problem.md — Q44: What is the "lost in the middle" problem?
 - [ ] answers/01-045-when-set-temperature-to-0-vs-higher-values.md — Q45: When set temperature to 0 vs higher values?
 - [ ] answers/01-046-bias-variance-tradeoff.md — Q46: Bias-variance tradeoff?
