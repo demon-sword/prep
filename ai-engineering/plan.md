@@ -23,12 +23,14 @@ created: 2026-06-16
 - [x] answers/04-010-speculative-decoding-speed-up-inference.md — Q10: Speculative decoding — speed up inference?
 - [x] answers/04-011-convert-implicit-user-behavior-edits-acceptance-into-trainin.md — Q11: Convert implicit user behavior (edits, acceptance) into training signals?
 - [x] answers/04-012-quantization-tradeoffs-between-size-speed-accuracy.md — Q12: Quantization — tradeoffs between size, speed, accuracy?
+- [x] validate — run: bash ralph-ai-engineering/validate.sh 04-fine-tuning-training — PASSED (13/13 files OK)
 
 ## Categories completed
 - 08-safety-guardrails (switched on 2026-06-16)
 - 02-rag-systems (switched on 2026-06-16)
 - 01-llm-fundamentals (switched on 2026-06-16)
 - 03-agents-tool-use (switched on 2026-06-16)
+- 04-fine-tuning-training (completed 2026-06-17)
 
 ## Next
-- [ ] validate — run: bash ralph-ai-engineering/validate.sh 04-fine-tuning-training
+<!-- all done -->
