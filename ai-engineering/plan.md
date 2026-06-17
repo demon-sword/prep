@@ -21,6 +21,7 @@ created: 2026-06-16
 - [x] answers/04-008-rlhf-pipeline-sft-reward-model-ppo-how-does-dpo-simplify.md — Q8: RLHF pipeline: SFT, reward model, PPO. How does DPO simplify?
 - [x] answers/04-009-instruction-tuning-vs-pre-training.md — Q9: Instruction tuning vs pre-training?
 - [x] answers/04-010-speculative-decoding-speed-up-inference.md — Q10: Speculative decoding — speed up inference?
+- [x] answers/04-011-convert-implicit-user-behavior-edits-acceptance-into-trainin.md — Q11: Convert implicit user behavior (edits, acceptance) into training signals?
 
 ## Categories completed
 - 08-safety-guardrails (switched on 2026-06-16)
@@ -29,6 +30,5 @@ created: 2026-06-16
 - 03-agents-tool-use (switched on 2026-06-16)
 
 ## Next
-- [ ] answers/04-011-convert-implicit-user-behavior-edits-acceptance-into-trainin.md — Q11: Convert implicit user behavior (edits, acceptance) into training signals?
 - [ ] answers/04-012-quantization-tradeoffs-between-size-speed-accuracy.md — Q12: Quantization — tradeoffs between size, speed, accuracy?
 - [ ] validate — run: bash ralph-ai-engineering/validate.sh 04-fine-tuning-training
