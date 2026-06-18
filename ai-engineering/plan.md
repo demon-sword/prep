@@ -24,6 +24,7 @@ created: 2026-06-18
 - [x] answers/05-011-measure-accuracy-in-generative-systems.md — Q11: Measure accuracy in generative systems?
 - [x] answers/05-012-operationalbusiness-metrics-win-rate-deflection-rate-p95-lat.md — Q12: Operational/business metrics: win rate, deflection rate, p95 latency?
 - [x] answers/05-013-evaluate-and-monitor-model-in-production-not-just-offline.md — Q13: Evaluate and monitor model in production, not just offline?
+- [x] answers/05-014-biasfairness-tradeoffs-example.md — Q14: Bias/fairness tradeoffs — example?
 
 ## Categories completed
 - 08-safety-guardrails (switched on 2026-06-16)
@@ -34,7 +35,6 @@ created: 2026-06-18
 - 04-fine-tuning-training (switched on 2026-06-18)
 
 ## Next
-- [ ] answers/05-014-biasfairness-tradeoffs-example.md — Q14: Bias/fairness tradeoffs — example?
 - [ ] answers/05-015-time-to-first-token-why-matter-for-ux.md — Q15: Time to first token — why matter for UX?
 - [ ] answers/05-016-vibes-based-eval-vs-formal-eval-framework.md — Q16: "Vibes-based" eval vs formal eval framework?
 - [ ] answers/05-017-golden-dataset-for-evaluation-and-regression-testing.md — Q17: Golden dataset for evaluation and regression testing?
