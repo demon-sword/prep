@@ -27,6 +27,7 @@ created: 2026-06-18
 - [x] answers/05-014-biasfairness-tradeoffs-example.md — Q14: Bias/fairness tradeoffs — example?
 - [x] answers/05-015-time-to-first-token-why-matter-for-ux.md — Q15: Time to first token — why matter for UX?
 - [x] answers/05-016-vibes-based-eval-vs-formal-eval-framework.md — Q16: "Vibes-based" eval vs formal eval framework?
+- [x] answers/05-017-golden-dataset-for-evaluation-and-regression-testing.md — Q17: Golden dataset for evaluation and regression testing?
 
 ## Categories completed
 - 08-safety-guardrails (switched on 2026-06-16)
@@ -37,7 +38,6 @@ created: 2026-06-18
 - 04-fine-tuning-training (switched on 2026-06-18)
 
 ## Next
-- [ ] answers/05-017-golden-dataset-for-evaluation-and-regression-testing.md — Q17: Golden dataset for evaluation and regression testing?
 - [ ] answers/05-018-feedback-and-reinforcement-loops-system-gets-better-over-tim.md — Q18: Feedback and reinforcement loops — system gets better over time?
 - [ ] answers/05-019-success-metrics-for-an-ml-model.md — Q19: Success metrics for an ML model?
 - [ ] answers/05-020-ab-testing-for-prompt-variations.md — Q20: A/B testing for prompt variations?
