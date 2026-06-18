@@ -17,6 +17,7 @@ created: 2026-06-18
 - [x] answers/05-004-prevent-factual-errors-in-summarization.md — Q4: Prevent factual errors in summarization?
 - [x] answers/05-005-reduce-hallucinations-in-a-medical-chatbot.md — Q5: Reduce hallucinations in a medical chatbot?
 - [x] answers/05-006-llm-confidently-wrong-debug-rag-giving-confident-wrong-answe.md — Q6: LLM confidently wrong — debug RAG giving confident wrong answers?
+- [x] answers/05-007-shap-lime-model-interpretability.md — Q7: SHAP, LIME, model interpretability?
 
 ## Categories completed
 - 08-safety-guardrails (switched on 2026-06-16)
@@ -27,7 +28,6 @@ created: 2026-06-18
 - 04-fine-tuning-training (switched on 2026-06-18)
 
 ## Next
-- [ ] answers/05-007-shap-lime-model-interpretability.md — Q7: SHAP, LIME, model interpretability?
 - [ ] answers/05-008-measure-hallucination-rate-in-production.md — Q8: Measure hallucination rate in production?
 - [ ] answers/05-009-perplexity-rouge-bleu-pitfalls-of-n-gram-metrics.md — Q9: Perplexity, ROUGE, BLEU — pitfalls of n-gram metrics?
 - [ ] answers/05-010-testing-strategies-for-non-deterministic-outputs.md — Q10: Testing strategies for non-deterministic outputs?
