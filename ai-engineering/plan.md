@@ -32,6 +32,7 @@ created: 2026-06-18
 - [x] answers/05-019-success-metrics-for-an-ml-model.md — Q19: Success metrics for an ML model?
 - [x] answers/05-020-ab-testing-for-prompt-variations.md — Q20: A/B testing for prompt variations?
 - [x] answers/05-021-test-new-model-before-full-deployment-canary-interleaved-sha.md — Q21: Test new model before full deployment — canary, interleaved, shadow?
+- [x] answers/05-022-two-models-same-accuracy-different-confidence-which-choose-c.md — Q22: Two models, same accuracy, different confidence — which choose? Calibration?
 
 ## Categories completed
 - 08-safety-guardrails (switched on 2026-06-16)
@@ -42,6 +43,5 @@ created: 2026-06-18
 - 04-fine-tuning-training (switched on 2026-06-18)
 
 ## Next
-- [ ] answers/05-022-two-models-same-accuracy-different-confidence-which-choose-c.md — Q22: Two models, same accuracy, different confidence — which choose? Calibration?
 - [ ] answers/05-023-chatbot-accuracy-dropped-95-80-in-six-weeks-diagnose-before.md — Q23: Chatbot accuracy dropped 95% → 80% in six weeks — diagnose before retraining?
 - [ ] validate — run: bash ralph-ai-engineering/validate.sh 05-evaluation-metrics
