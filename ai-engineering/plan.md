@@ -12,6 +12,7 @@ created: 2026-06-18
 - [x] 0 scaffold — category queue created
 - [x] categories/05-evaluation-metrics.md — category overview: Evaluation & Metrics (23 questions)
 - [x] answers/05-001-what-metrics-for-benchmarking-llm-performance.md — Q1: What metrics for benchmarking LLM performance?
+- [x] answers/05-002-how-evaluate-a-chatbot.md — Q2: How evaluate a chatbot?
 
 ## Categories completed
 - 08-safety-guardrails (switched on 2026-06-16)
@@ -22,7 +23,6 @@ created: 2026-06-18
 - 04-fine-tuning-training (switched on 2026-06-18)
 
 ## Next
-- [ ] answers/05-002-how-evaluate-a-chatbot.md — Q2: How evaluate a chatbot?
 - [ ] answers/05-003-detect-and-mitigate-hallucinations-in-production.md — Q3: Detect and mitigate hallucinations in production? ⭐
 - [ ] answers/05-004-prevent-factual-errors-in-summarization.md — Q4: Prevent factual errors in summarization?
 - [ ] answers/05-005-reduce-hallucinations-in-a-medical-chatbot.md — Q5: Reduce hallucinations in a medical chatbot?
