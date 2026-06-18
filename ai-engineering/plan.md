@@ -1,29 +1,16 @@
 # Plan: AI Engineering Interview Prep
 
 ## Meta
-current_category: 04-fine-tuning-training
-category_name: Fine-Tuning & Training
-category_num: 4
-question_range: 1–12
-task_count: 14
-created: 2026-06-16
+current_category: 05-evaluation-metrics
+category_name: Evaluation & Metrics
+category_num: 5
+question_range: 1–23
+task_count: 25
+created: 2026-06-18
 
 ## Done
 - [x] 0 scaffold — category queue created
-- [x] categories/04-fine-tuning-training.md — category overview: Fine-Tuning & Training (12 questions)
-- [x] answers/04-001-when-fine-tune-vs-prompt-engineering.md — Q1: When fine-tune vs prompt engineering? ⭐
-- [x] answers/04-002-what-is-peftlora-and-when-use-it.md — Q2: What is PEFT/LoRA and when use it?
-- [x] answers/04-003-qlora-vs-lora-when-choose-one.md — Q3: QLoRA vs LoRA — when choose one?
-- [x] answers/04-004-what-is-rlhf-and-why-important.md — Q4: What is RLHF and why important?
-- [x] answers/04-005-fine-tune-or-prompt-engineered-rag.md — Q5: Fine-tune or prompt-engineered RAG?
-- [x] answers/04-006-design-a-model-for-math-problems-data-sft-post-training-eval.md — Q6: Design a model for math problems — data, SFT, post-training, eval.
-- [x] answers/04-007-scalable-efficient-llm-training-system-compute-and-data-cons.md — Q7: Scalable efficient LLM training system — compute and data constraints.
-- [x] answers/04-008-rlhf-pipeline-sft-reward-model-ppo-how-does-dpo-simplify.md — Q8: RLHF pipeline: SFT, reward model, PPO. How does DPO simplify?
-- [x] answers/04-009-instruction-tuning-vs-pre-training.md — Q9: Instruction tuning vs pre-training?
-- [x] answers/04-010-speculative-decoding-speed-up-inference.md — Q10: Speculative decoding — speed up inference?
-- [x] answers/04-011-convert-implicit-user-behavior-edits-acceptance-into-trainin.md — Q11: Convert implicit user behavior (edits, acceptance) into training signals?
-- [x] answers/04-012-quantization-tradeoffs-between-size-speed-accuracy.md — Q12: Quantization — tradeoffs between size, speed, accuracy?
-- [x] validate — run: bash ralph-ai-engineering/validate.sh 04-fine-tuning-training — PASSED (13/13 files OK)
+- [x] categories/05-evaluation-metrics.md — category overview: Evaluation & Metrics (23 questions)
 
 ## Categories completed
 - 08-safety-guardrails (switched on 2026-06-16)
@@ -31,6 +18,30 @@ created: 2026-06-16
 - 01-llm-fundamentals (switched on 2026-06-16)
 - 03-agents-tool-use (switched on 2026-06-16)
 - 04-fine-tuning-training (completed 2026-06-17)
+- 04-fine-tuning-training (switched on 2026-06-18)
 
 ## Next
-<!-- all done -->
+- [ ] answers/05-001-what-metrics-for-benchmarking-llm-performance.md — Q1: What metrics for benchmarking LLM performance?
+- [ ] answers/05-002-how-evaluate-a-chatbot.md — Q2: How evaluate a chatbot?
+- [ ] answers/05-003-detect-and-mitigate-hallucinations-in-production.md — Q3: Detect and mitigate hallucinations in production? ⭐
+- [ ] answers/05-004-prevent-factual-errors-in-summarization.md — Q4: Prevent factual errors in summarization?
+- [ ] answers/05-005-reduce-hallucinations-in-a-medical-chatbot.md — Q5: Reduce hallucinations in a medical chatbot?
+- [ ] answers/05-006-llm-confidently-wrong-debug-rag-giving-confident-wrong-answe.md — Q6: LLM confidently wrong — debug RAG giving confident wrong answers?
+- [ ] answers/05-007-shap-lime-model-interpretability.md — Q7: SHAP, LIME, model interpretability?
+- [ ] answers/05-008-measure-hallucination-rate-in-production.md — Q8: Measure hallucination rate in production?
+- [ ] answers/05-009-perplexity-rouge-bleu-pitfalls-of-n-gram-metrics.md — Q9: Perplexity, ROUGE, BLEU — pitfalls of n-gram metrics?
+- [ ] answers/05-010-testing-strategies-for-non-deterministic-outputs.md — Q10: Testing strategies for non-deterministic outputs?
+- [ ] answers/05-011-measure-accuracy-in-generative-systems.md — Q11: Measure accuracy in generative systems?
+- [ ] answers/05-012-operationalbusiness-metrics-win-rate-deflection-rate-p95-lat.md — Q12: Operational/business metrics: win rate, deflection rate, p95 latency?
+- [ ] answers/05-013-evaluate-and-monitor-model-in-production-not-just-offline.md — Q13: Evaluate and monitor model in production, not just offline?
+- [ ] answers/05-014-biasfairness-tradeoffs-example.md — Q14: Bias/fairness tradeoffs — example?
+- [ ] answers/05-015-time-to-first-token-why-matter-for-ux.md — Q15: Time to first token — why matter for UX?
+- [ ] answers/05-016-vibes-based-eval-vs-formal-eval-framework.md — Q16: "Vibes-based" eval vs formal eval framework?
+- [ ] answers/05-017-golden-dataset-for-evaluation-and-regression-testing.md — Q17: Golden dataset for evaluation and regression testing?
+- [ ] answers/05-018-feedback-and-reinforcement-loops-system-gets-better-over-tim.md — Q18: Feedback and reinforcement loops — system gets better over time?
+- [ ] answers/05-019-success-metrics-for-an-ml-model.md — Q19: Success metrics for an ML model?
+- [ ] answers/05-020-ab-testing-for-prompt-variations.md — Q20: A/B testing for prompt variations?
+- [ ] answers/05-021-test-new-model-before-full-deployment-canary-interleaved-sha.md — Q21: Test new model before full deployment — canary, interleaved, shadow?
+- [ ] answers/05-022-two-models-same-accuracy-different-confidence-which-choose-c.md — Q22: Two models, same accuracy, different confidence — which choose? Calibration?
+- [ ] answers/05-023-chatbot-accuracy-dropped-95-80-in-six-weeks-diagnose-before.md — Q23: Chatbot accuracy dropped 95% → 80% in six weeks — diagnose before retraining?
+- [ ] validate — run: bash ralph-ai-engineering/validate.sh 05-evaluation-metrics
