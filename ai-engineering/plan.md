@@ -35,6 +35,7 @@ created: 2026-06-19
 - [x] answers/06-022-gradient-descent.md — Q22: Gradient descent?
 - [x] answers/06-023-classification-algorithms.md — Q23: Classification algorithms?
 - [x] answers/06-024-gans-basic-principles.md — Q24: GANs basic principles?
+- [x] answers/06-025-cnn-architecture.md — Q25: CNN architecture?
 
 ## Categories completed
 - 08-safety-guardrails (switched on 2026-06-16)
@@ -46,6 +47,5 @@ created: 2026-06-19
 - 05-evaluation-metrics (switched on 2026-06-19)
 
 ## Next
-- [ ] answers/06-025-cnn-architecture.md — Q25: CNN architecture?
 - [ ] answers/06-026-bert-architecture.md — Q26: BERT architecture?
 - [ ] validate — run: bash ralph-ai-engineering/validate.sh 06-ml-fundamentals
