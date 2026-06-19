@@ -19,6 +19,7 @@ created: 2026-06-19
 - [x] answers/06-006-transformers-why-foundational.md — Q6: Transformers — why foundational? ⭐
 - [x] answers/06-007-real-time-vs-batch-processing-for-data-updates.md — Q7: Real-time vs batch processing for data updates?
 - [x] answers/06-008-ingest-structured-unstructured-event-data.md — Q8: Ingest structured, unstructured, event data?
+- [x] answers/06-009-bias-variance-tradeoff.md — Q9: Bias-variance tradeoff?
 
 ## Categories completed
 - 08-safety-guardrails (switched on 2026-06-16)
@@ -30,7 +31,6 @@ created: 2026-06-19
 - 05-evaluation-metrics (switched on 2026-06-19)
 
 ## Next
-- [ ] answers/06-009-bias-variance-tradeoff.md — Q9: Bias-variance tradeoff?
 - [ ] answers/06-010-why-neural-networks-not-first-choice-for-tabular-data.md — Q10: Why neural networks not first choice for tabular data?
 - [ ] answers/06-011-imbalanced-datasets-in-real-projects.md — Q11: Imbalanced datasets in real projects?
 - [ ] answers/06-012-rnn-vs-lstm.md — Q12: RNN vs LSTM?
