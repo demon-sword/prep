@@ -20,6 +20,7 @@ created: 2026-06-19
 - [x] answers/06-007-real-time-vs-batch-processing-for-data-updates.md — Q7: Real-time vs batch processing for data updates?
 - [x] answers/06-008-ingest-structured-unstructured-event-data.md — Q8: Ingest structured, unstructured, event data?
 - [x] answers/06-009-bias-variance-tradeoff.md — Q9: Bias-variance tradeoff?
+- [x] answers/06-010-why-neural-networks-not-first-choice-for-tabular-data.md — Q10: Why neural networks not first choice for tabular data?
 
 ## Categories completed
 - 08-safety-guardrails (switched on 2026-06-16)
@@ -31,7 +32,6 @@ created: 2026-06-19
 - 05-evaluation-metrics (switched on 2026-06-19)
 
 ## Next
-- [ ] answers/06-010-why-neural-networks-not-first-choice-for-tabular-data.md — Q10: Why neural networks not first choice for tabular data?
 - [ ] answers/06-011-imbalanced-datasets-in-real-projects.md — Q11: Imbalanced datasets in real projects?
 - [ ] answers/06-012-rnn-vs-lstm.md — Q12: RNN vs LSTM?
 - [ ] answers/06-013-debug-model-that-runs-but-doesnt-learn-broadcasting-dimensio.md — Q13: Debug model that runs but doesn't learn — broadcasting, dimension mismatches?
