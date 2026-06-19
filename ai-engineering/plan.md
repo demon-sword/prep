@@ -17,6 +17,7 @@ created: 2026-06-19
 - [x] answers/06-004-optimize-for-latency-or-throughput-personal-assistant-one-re.md — Q4: Optimize for latency or throughput? (personal assistant, one request)
 - [x] answers/06-005-data-parallelism-for-single-request-assistant.md — Q5: Data parallelism for single-request assistant?
 - [x] answers/06-006-transformers-why-foundational.md — Q6: Transformers — why foundational? ⭐
+- [x] answers/06-007-real-time-vs-batch-processing-for-data-updates.md — Q7: Real-time vs batch processing for data updates?
 
 ## Categories completed
 - 08-safety-guardrails (switched on 2026-06-16)
@@ -28,7 +29,6 @@ created: 2026-06-19
 - 05-evaluation-metrics (switched on 2026-06-19)
 
 ## Next
-- [ ] answers/06-007-real-time-vs-batch-processing-for-data-updates.md — Q7: Real-time vs batch processing for data updates?
 - [ ] answers/06-008-ingest-structured-unstructured-event-data.md — Q8: Ingest structured, unstructured, event data?
 - [ ] answers/06-009-bias-variance-tradeoff.md — Q9: Bias-variance tradeoff?
 - [ ] answers/06-010-why-neural-networks-not-first-choice-for-tabular-data.md — Q10: Why neural networks not first choice for tabular data?
