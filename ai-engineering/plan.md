@@ -12,6 +12,7 @@ created: 2026-06-19
 - [x] 0 scaffold — category queue created
 - [x] categories/06-ml-fundamentals.md — category overview: ML Fundamentals (26 questions)
 - [x] answers/06-001-data-pre-processing-and-feature-engineering.md — Q1: Data pre-processing and feature engineering?
+- [x] answers/06-002-sql-vs-nosql-for-ai-workloads.md — Q2: SQL vs NoSQL for AI workloads?
 
 ## Categories completed
 - 08-safety-guardrails (switched on 2026-06-16)
@@ -23,7 +24,6 @@ created: 2026-06-19
 - 05-evaluation-metrics (switched on 2026-06-19)
 
 ## Next
-- [ ] answers/06-002-sql-vs-nosql-for-ai-workloads.md — Q2: SQL vs NoSQL for AI workloads?
 - [ ] answers/06-003-diagnose-performance-bugs-in-a-model.md — Q3: Diagnose performance bugs in a model?
 - [ ] answers/06-004-optimize-for-latency-or-throughput-personal-assistant-one-re.md — Q4: Optimize for latency or throughput? (personal assistant, one request)
 - [ ] answers/06-005-data-parallelism-for-single-request-assistant.md — Q5: Data parallelism for single-request assistant?
