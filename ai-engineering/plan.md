@@ -14,6 +14,7 @@ created: 2026-06-19
 - [x] answers/06-001-data-pre-processing-and-feature-engineering.md — Q1: Data pre-processing and feature engineering?
 - [x] answers/06-002-sql-vs-nosql-for-ai-workloads.md — Q2: SQL vs NoSQL for AI workloads?
 - [x] answers/06-003-diagnose-performance-bugs-in-a-model.md — Q3: Diagnose performance bugs in a model?
+- [x] answers/06-004-optimize-for-latency-or-throughput-personal-assistant-one-re.md — Q4: Optimize for latency or throughput? (personal assistant, one request)
 
 ## Categories completed
 - 08-safety-guardrails (switched on 2026-06-16)
@@ -25,7 +26,6 @@ created: 2026-06-19
 - 05-evaluation-metrics (switched on 2026-06-19)
 
 ## Next
-- [ ] answers/06-004-optimize-for-latency-or-throughput-personal-assistant-one-re.md — Q4: Optimize for latency or throughput? (personal assistant, one request)
 - [ ] answers/06-005-data-parallelism-for-single-request-assistant.md — Q5: Data parallelism for single-request assistant?
 - [ ] answers/06-006-transformers-why-foundational.md — Q6: Transformers — why foundational? ⭐
 - [ ] answers/06-007-real-time-vs-batch-processing-for-data-updates.md — Q7: Real-time vs batch processing for data updates?
