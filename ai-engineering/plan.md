@@ -33,6 +33,7 @@ created: 2026-06-19
 - [x] answers/06-020-f1-score-roc-curve.md — Q20: F1 score, ROC curve?
 - [x] answers/06-021-linear-vs-logistic-regression.md — Q21: Linear vs logistic regression?
 - [x] answers/06-022-gradient-descent.md — Q22: Gradient descent?
+- [x] answers/06-023-classification-algorithms.md — Q23: Classification algorithms?
 
 ## Categories completed
 - 08-safety-guardrails (switched on 2026-06-16)
@@ -44,7 +45,6 @@ created: 2026-06-19
 - 05-evaluation-metrics (switched on 2026-06-19)
 
 ## Next
-- [ ] answers/06-023-classification-algorithms.md — Q23: Classification algorithms?
 - [ ] answers/06-024-gans-basic-principles.md — Q24: GANs basic principles?
 - [ ] answers/06-025-cnn-architecture.md — Q25: CNN architecture?
 - [ ] answers/06-026-bert-architecture.md — Q26: BERT architecture?
