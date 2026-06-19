@@ -25,6 +25,7 @@ created: 2026-06-19
 - [x] answers/06-012-rnn-vs-lstm.md — Q12: RNN vs LSTM?
 - [x] answers/06-013-debug-model-that-runs-but-doesnt-learn-broadcasting-dimensio.md — Q13: Debug model that runs but doesn't learn — broadcasting, dimension mismatches?
 - [x] answers/06-014-statistics-probability-distributions-regression-bayesian-hyp.md — Q14: Statistics: probability, distributions, regression, Bayesian, hypothesis testing
+- [x] answers/06-015-supervised-vs-unsupervised-learning.md — Q15: Supervised vs unsupervised learning?
 
 ## Categories completed
 - 08-safety-guardrails (switched on 2026-06-16)
@@ -36,7 +37,6 @@ created: 2026-06-19
 - 05-evaluation-metrics (switched on 2026-06-19)
 
 ## Next
-- [ ] answers/06-015-supervised-vs-unsupervised-learning.md — Q15: Supervised vs unsupervised learning?
 - [ ] answers/06-016-regularization-l1-l2-dropout.md — Q16: Regularization — L1, L2, dropout?
 - [ ] answers/06-017-feature-scaling-normalization-vs-standardization.md — Q17: Feature scaling — normalization vs standardization?
 - [ ] answers/06-018-implement-cosine-similarity-in-numpy-amazon.md — Q18: Implement cosine similarity in NumPy (Amazon)
