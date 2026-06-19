@@ -31,6 +31,7 @@ created: 2026-06-19
 - [x] answers/06-018-implement-cosine-similarity-in-numpy-amazon.md — Q18: Implement cosine similarity in NumPy (Amazon)
 - [x] answers/06-019-precision-vs-recall-fraud-detection.md — Q19: Precision vs recall — fraud detection?
 - [x] answers/06-020-f1-score-roc-curve.md — Q20: F1 score, ROC curve?
+- [x] answers/06-021-linear-vs-logistic-regression.md — Q21: Linear vs logistic regression?
 
 ## Categories completed
 - 08-safety-guardrails (switched on 2026-06-16)
@@ -42,7 +43,6 @@ created: 2026-06-19
 - 05-evaluation-metrics (switched on 2026-06-19)
 
 ## Next
-- [ ] answers/06-021-linear-vs-logistic-regression.md — Q21: Linear vs logistic regression?
 - [ ] answers/06-022-gradient-descent.md — Q22: Gradient descent?
 - [ ] answers/06-023-classification-algorithms.md — Q23: Classification algorithms?
 - [ ] answers/06-024-gans-basic-principles.md — Q24: GANs basic principles?
