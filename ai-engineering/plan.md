@@ -23,6 +23,7 @@ created: 2026-06-19
 - [x] answers/06-010-why-neural-networks-not-first-choice-for-tabular-data.md — Q10: Why neural networks not first choice for tabular data?
 - [x] answers/06-011-imbalanced-datasets-in-real-projects.md — Q11: Imbalanced datasets in real projects?
 - [x] answers/06-012-rnn-vs-lstm.md — Q12: RNN vs LSTM?
+- [x] answers/06-013-debug-model-that-runs-but-doesnt-learn-broadcasting-dimensio.md — Q13: Debug model that runs but doesn't learn — broadcasting, dimension mismatches?
 
 ## Categories completed
 - 08-safety-guardrails (switched on 2026-06-16)
@@ -34,7 +35,6 @@ created: 2026-06-19
 - 05-evaluation-metrics (switched on 2026-06-19)
 
 ## Next
-- [ ] answers/06-013-debug-model-that-runs-but-doesnt-learn-broadcasting-dimensio.md — Q13: Debug model that runs but doesn't learn — broadcasting, dimension mismatches?
 - [ ] answers/06-014-statistics-probability-distributions-regression-bayesian-hyp.md — Q14: Statistics: probability, distributions, regression, Bayesian, hypothesis testing
 - [ ] answers/06-015-supervised-vs-unsupervised-learning.md — Q15: Supervised vs unsupervised learning?
 - [ ] answers/06-016-regularization-l1-l2-dropout.md — Q16: Regularization — L1, L2, dropout?
