@@ -14,11 +14,12 @@ created: 2026-06-20
 - [x] answers/04-real-time-updates-webhooks.md — section 04: Real-Time Updates & Webhooks
 - [x] answers/05-performance-core-web-vitals.md — section 05: Performance & Core Web Vitals
 - [x] answers/06-error-handling-resilience.md — section 06: Error Handling & Resilience
+- [x] answers/07-internationalization-localization.md — section 07: Internationalization & Localization
 
 ## Next
 
 
-- [ ] answers/07-internationalization-localization.md — section 07: Internationalization & Localization
+- [ ] answers/08-observability-analytics.md — section 08: Observability & Analytics
 - [ ] answers/08-observability-analytics.md — section 08: Observability & Analytics
 - [ ] answers/09-architecture-provider-abstraction.md — section 09: Architecture & Provider Abstraction
 - [ ] md-to-html — run: python3 ralph-system-design/scripts/md_to_html.py payments-system
