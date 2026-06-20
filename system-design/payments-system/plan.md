@@ -16,11 +16,9 @@ created: 2026-06-20
 - [x] answers/06-error-handling-resilience.md — section 06: Error Handling & Resilience
 - [x] answers/07-internationalization-localization.md — section 07: Internationalization & Localization
 - [x] answers/08-observability-analytics.md — section 08: Observability & Analytics
+- [x] answers/09-architecture-provider-abstraction.md — section 09: Architecture & Provider Abstraction
 
 ## Next
-
-- [ ] answers/09-architecture-provider-abstraction.md — section 09: Architecture & Provider Abstraction
-- [ ] answers/09-architecture-provider-abstraction.md — section 09: Architecture & Provider Abstraction
 - [ ] md-to-html — run: python3 ralph-system-design/scripts/md_to_html.py payments-system
 - [ ] architecture-map — write payments-system-frontend-architecture.html
 - [ ] interview-template — write payments-system-system-design-interview.html
