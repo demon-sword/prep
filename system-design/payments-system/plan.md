@@ -9,10 +9,9 @@ created: 2026-06-20
 - [x] design-doc — write payments-system-design-doc.md
 - [x] gen-plan — sections parsed from design doc
 - [x] answers/01-checkout-flow-form-ux.md — section 01: Checkout Flow & Form UX
+- [x] answers/02-payment-security-pci-compliance.md — section 02: Payment Security & PCI Compliance
 
 ## Next
-- [ ] answers/02-payment-security-pci-compliance.md — section 02: Payment Security & PCI Compliance
-- [ ] answers/02-payment-security-pci-compliance.md — section 02: Payment Security & PCI Compliance
 - [ ] answers/03-state-management-transaction-lifecycle.md — section 03: State Management & Transaction Lifecycle
 - [ ] answers/04-real-time-updates-webhooks.md — section 04: Real-Time Updates & Webhooks
 - [ ] answers/05-performance-core-web-vitals.md — section 05: Performance & Core Web Vitals
