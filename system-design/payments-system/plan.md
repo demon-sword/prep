@@ -13,11 +13,11 @@ created: 2026-06-20
 - [x] answers/03-state-management-transaction-lifecycle.md — section 03: State Management & Transaction Lifecycle
 - [x] answers/04-real-time-updates-webhooks.md — section 04: Real-Time Updates & Webhooks
 - [x] answers/05-performance-core-web-vitals.md — section 05: Performance & Core Web Vitals
+- [x] answers/06-error-handling-resilience.md — section 06: Error Handling & Resilience
 
 ## Next
 
 
-- [ ] answers/06-error-handling-resilience.md — section 06: Error Handling & Resilience
 - [ ] answers/07-internationalization-localization.md — section 07: Internationalization & Localization
 - [ ] answers/08-observability-analytics.md — section 08: Observability & Analytics
 - [ ] answers/09-architecture-provider-abstraction.md — section 09: Architecture & Provider Abstraction
