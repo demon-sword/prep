@@ -1,0 +1,794 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Payments / Checkout Frontend — System Design Interview</title>
+  <meta name="description" content="Full payments/checkout frontend system design answer in interview format: Requirements → Architecture → Data Model → API/BFF → Deep Dive (Security, Performance, Resilience, Observability, i18n).">
+  <style>
+    :root {
+      --bg: #f4f2ef;
+      --surface: #fff;
+      --surface2: #faf8f5;
+      --text: #1a1d26;
+      --muted: #5c6370;
+      --border: #e2e6ed;
+      --accent: #b85c28;
+      --accent-soft: rgba(184, 92, 40, 0.1);
+      --req: #2e86ab;
+      --arch: #6a994e;
+      --data: #bc4749;
+      --api: #7b5ea7;
+      --deep: #495057;
+      --shadow: 0 2px 12px rgba(0,0,0,.06);
+      --nav-h: 3.25rem;
+    }
+    @media (prefers-color-scheme: dark) {
+      :root {
+        --bg: #0f1219;
+        --surface: #171c28;
+        --surface2: #1e2536;
+        --text: #e8ecf4;
+        --muted: #8b95a8;
+        --border: #2d3548;
+        --accent: #c97840;
+        --accent-soft: rgba(201, 120, 64, 0.15);
+        --shadow: 0 4px 20px rgba(0,0,0,.3);
+      }
+    }
+    *, *::before, *::after { box-sizing: border-box; }
+    html { scroll-behavior: smooth; scroll-padding-top: calc(var(--nav-h) + 1rem); }
+    body {
+      margin: 0;
+      font-family: "Segoe UI", system-ui, -apple-system, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      line-height: 1.6;
+    }
+    .top-nav {
+      position: sticky;
+      top: 0;
+      z-index: 100;
+      height: var(--nav-h);
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      padding: 0 1rem;
+      background: rgba(var(--surface-rgb, 255,255,255), .92);
+      backdrop-filter: blur(10px);
+      border-bottom: 1px solid var(--border);
+      overflow-x: auto;
+    }
+    @media (prefers-color-scheme: dark) {
+      .top-nav { background: rgba(23, 28, 40, .94); }
+    }
+    .top-nav a {
+      font-size: 0.8125rem;
+      white-space: nowrap;
+      padding: 0.35rem 0.65rem;
+      border-radius: 999px;
+      text-decoration: none;
+      color: var(--muted);
+      border: 1px solid transparent;
+    }
+    .top-nav a:hover { color: var(--text); border-color: var(--border); }
+    .top-nav a.active { background: var(--accent-soft); color: var(--accent); border-color: var(--accent); font-weight: 600; }
+    .nav-title { font-weight: 700; font-size: 0.875rem; margin-right: 0.5rem; white-space: nowrap; }
+    .nav-links { margin-left: auto; display: flex; gap: 0.5rem; font-size: 0.8125rem; }
+    .nav-links a { color: var(--accent); text-decoration: none; white-space: nowrap; }
+    .wrap { max-width: 920px; margin: 0 auto; padding: 2rem 1.25rem 4rem; }
+    .hero { margin-bottom: 2rem; }
+    .hero h1 { font-size: 1.75rem; margin: 0 0 0.5rem; letter-spacing: -0.02em; }
+    .hero p { color: var(--muted); margin: 0; max-width: 640px; }
+    .timer-bar {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.5rem;
+      margin: 1.25rem 0 0;
+    }
+    .timer-chip {
+      font-size: 0.75rem;
+      padding: 0.3rem 0.65rem;
+      border-radius: 6px;
+      border: 1px solid var(--border);
+      background: var(--surface);
+    }
+    .timer-chip strong { color: var(--accent); }
+
+    .section-block {
+      margin-bottom: 2.5rem;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      box-shadow: var(--shadow);
+      overflow: hidden;
+    }
+    .section-head {
+      display: flex;
+      align-items: flex-start;
+      gap: 1rem;
+      padding: 1.25rem 1.5rem;
+      border-bottom: 1px solid var(--border);
+      cursor: pointer;
+      user-select: none;
+    }
+    .section-head:hover { background: var(--surface2); }
+    .section-num {
+      flex-shrink: 0;
+      width: 2.5rem;
+      height: 2.5rem;
+      border-radius: 8px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-weight: 800;
+      font-size: 0.875rem;
+      color: #fff;
+    }
+    .section-num.req { background: var(--req); }
+    .section-num.arch { background: var(--arch); }
+    .section-num.data { background: var(--data); }
+    .section-num.api { background: var(--api); }
+    .section-num.deep { background: var(--deep); }
+    .section-head h2 { margin: 0; font-size: 1.2rem; }
+    .section-meta { font-size: 0.8125rem; color: var(--muted); margin-top: 0.15rem; }
+    .chevron { margin-left: auto; color: var(--muted); transition: transform 0.2s; }
+    .section-block.collapsed .chevron { transform: rotate(-90deg); }
+    .section-block.collapsed .section-body { display: none; }
+    .section-body { padding: 1.25rem 1.5rem 1.5rem; }
+
+    h3 {
+      font-size: 0.9375rem;
+      margin: 1.25rem 0 0.5rem;
+      color: var(--accent);
+    }
+    h3:first-child { margin-top: 0; }
+    p, li { font-size: 0.9375rem; }
+    ul { padding-left: 1.25rem; }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 0.875rem;
+      margin: 0.75rem 0;
+    }
+    th, td {
+      border: 1px solid var(--border);
+      padding: 0.55rem 0.75rem;
+      text-align: left;
+      vertical-align: top;
+    }
+    th { background: var(--surface2); font-weight: 600; }
+    .callout {
+      padding: 0.85rem 1rem;
+      border-left: 3px solid var(--accent);
+      background: var(--accent-soft);
+      border-radius: 0 8px 8px 0;
+      font-size: 0.875rem;
+      margin: 1rem 0;
+    }
+    .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; }
+    @media (max-width: 700px) { .grid-2 { grid-template-columns: 1fr; } }
+
+    .card {
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 1rem;
+      background: var(--surface2);
+    }
+    .card h4 { margin: 0 0 0.35rem; font-size: 0.875rem; }
+    .card p { margin: 0; font-size: 0.8125rem; color: var(--muted); }
+
+    .entity {
+      font-family: ui-monospace, Menlo, Consolas, monospace;
+      font-size: 0.8125rem;
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 1rem;
+      margin: 0.75rem 0;
+      white-space: pre-wrap;
+      line-height: 1.5;
+    }
+    .entity .kw { color: var(--accent); font-weight: 600; }
+
+    .component-tree {
+      font-family: ui-monospace, Menlo, Consolas, monospace;
+      font-size: 0.8125rem;
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 1rem 1.25rem;
+      line-height: 1.55;
+    }
+    .component-tree .hl { color: var(--accent); font-weight: 600; }
+
+    .state-ladder {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.5rem;
+      margin: 0.75rem 0;
+    }
+    .state-step {
+      flex: 1;
+      min-width: 120px;
+      padding: 0.65rem;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      text-align: center;
+      font-size: 0.8125rem;
+    }
+    .state-step strong { display: block; font-size: 0.75rem; color: var(--accent); margin-bottom: 0.25rem; }
+
+    .deep-tabs {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.35rem;
+      margin-bottom: 1rem;
+    }
+    .deep-tab {
+      font: inherit;
+      font-size: 0.8125rem;
+      padding: 0.4rem 0.75rem;
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      background: var(--surface2);
+      color: var(--muted);
+      cursor: pointer;
+    }
+    .deep-tab.active { background: var(--accent); border-color: var(--accent); color: #fff; font-weight: 600; }
+    .deep-panel { display: none; }
+    .deep-panel.active { display: block; }
+
+    .mermaid-wrap {
+      margin: 1rem 0;
+      padding: 1rem;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      overflow-x: auto;
+    }
+    .mermaid-wrap pre.mermaid:not([data-mermaid-rendered]) {
+      background: transparent;
+      color: var(--muted);
+      font-size: 0.75rem;
+      margin: 0;
+    }
+
+    .checklist { list-style: none; padding: 0; margin: 0; }
+    .checklist li {
+      display: flex;
+      align-items: flex-start;
+      gap: 0.5rem;
+      padding: 0.4rem 0;
+      border-bottom: 1px dashed var(--border);
+      font-size: 0.875rem;
+    }
+    .checklist input { margin-top: 0.25rem; accent-color: var(--accent); }
+    .section-links { display: flex; flex-wrap: wrap; gap: 0.35rem; margin-top: 1rem; }
+    .section-links a {
+      font-size: 0.75rem;
+      padding: 0.25rem 0.5rem;
+      border-radius: 4px;
+      background: var(--accent-soft);
+      color: var(--accent);
+      text-decoration: none;
+    }
+    footer {
+      text-align: center;
+      font-size: 0.8125rem;
+      color: var(--muted);
+      padding: 2rem 0;
+    }
+    footer a { color: var(--accent); }
+  </style>
+</head>
+<body>
+  <nav class="top-nav" id="topNav">
+    <span class="nav-title">Payments SD — Interview</span>
+    <a href="#requirements" data-section="requirements">① Requirements</a>
+    <a href="#architecture" data-section="architecture">② Architecture</a>
+    <a href="#data-model" data-section="data-model">③ Data Model</a>
+    <a href="#api-design" data-section="api-design">④ API / BFF</a>
+    <a href="#deep-dive" data-section="deep-dive">⑤ Deep Dive</a>
+    <div class="nav-links">
+      <a href="../payments-system-frontend-architecture.html">Architecture map</a>
+      <a href="answers-html/index.html">All answers</a>
+    </div>
+  </nav>
+
+  <div class="wrap">
+    <header class="hero">
+      <h1>Design a Payments / Checkout Frontend</h1>
+      <p>Complete system design answer in interview format (~45–60 min). Covers Stripe Elements, PCI SAQ-A scope, PaymentIntent FSM, idempotency, 3DS handling, and webhook ground truth.</p>
+      <div class="timer-bar">
+        <span class="timer-chip"><strong>5–10m</strong> Requirements</span>
+        <span class="timer-chip"><strong>10–15m</strong> Architecture</span>
+        <span class="timer-chip"><strong>5m</strong> Data Model</span>
+        <span class="timer-chip"><strong>10m</strong> API / BFF</span>
+        <span class="timer-chip"><strong>10m</strong> Deep Dive</span>
+      </div>
+    </header>
+
+    <!-- ① REQUIREMENTS -->
+    <article class="section-block" id="requirements" data-section="requirements">
+      <div class="section-head">
+        <div class="section-num req">①</div>
+        <div>
+          <h2>Requirements</h2>
+          <div class="section-meta">5–10 min · Clarify with interviewer · Scope before designing</div>
+        </div>
+        <span class="chevron">▼</span>
+      </div>
+      <div class="section-body">
+        <div class="callout"><strong>Opening line:</strong> "Before I draw boxes, let me confirm what we're building and what we're NOT building in v1."</div>
+
+        <h3>Functional Requirements</h3>
+        <table>
+          <thead><tr><th>Area</th><th>Must have (v1)</th><th>Nice to have</th></tr></thead>
+          <tbody>
+            <tr>
+              <td>Checkout Form</td>
+              <td>Multi-step flow (cart → shipping → payment → confirmation), card input with masking/BIN detection, address autocomplete</td>
+              <td>Saved payment methods, buy-now-pay-later</td>
+            </tr>
+            <tr>
+              <td>Security</td>
+              <td>Stripe Elements hosted fields, PCI SAQ-A scope</td>
+              <td>Custom card form (SAQ-D — out of scope)</td>
+            </tr>
+            <tr>
+              <td>Payment Methods</td>
+              <td>Card (Visa/MC/Amex), basic wallets (Apple Pay / Google Pay)</td>
+              <td>iDEAL, BLIK, Pix, UPI, BNPL</td>
+            </tr>
+            <tr>
+              <td>Real-time</td>
+              <td>Payment status polling / SSE after confirmation</td>
+              <td>Live transaction dashboard</td>
+            </tr>
+            <tr>
+              <td>Errors</td>
+              <td>Decline handling, 3DS challenge, retry UX</td>
+              <td>Full circuit breaker / provider failover</td>
+            </tr>
+          </tbody>
+        </table>
+
+        <h3>Non-Functional Requirements</h3>
+        <div class="grid-2">
+          <div class="card">
+            <h4>Latency</h4>
+            <p>Checkout page LCP &lt; 2.5s; form TTI &lt; 3s on 4G; confirmCardPayment TTFB &lt; 1s</p>
+          </div>
+          <div class="card">
+            <h4>Scale</h4>
+            <p>Handle 10k concurrent checkout sessions; multi-tab same cart conflict detection</p>
+          </div>
+          <div class="card">
+            <h4>Reliability</h4>
+            <p>Idempotency for all payment mutations; offline queue for pre-auth steps; webhook-to-UI reconciliation</p>
+          </div>
+          <div class="card">
+            <h4>Security</h4>
+            <p>PCI SAQ-A via hosted fields; CSP with Stripe allowlist; no raw PAN/CVV in browser memory</p>
+          </div>
+        </div>
+
+        <h3>Metrics · Constraints · Assumptions</h3>
+        <ul>
+          <li><strong>Metrics:</strong> Checkout conversion rate, payment success rate by decline code, 3DS completion rate, Stripe.js load time p95</li>
+          <li><strong>Constraints:</strong> Raw card data NEVER touches our DOM/server (only Stripe iframe); Stripe.js must load on every page; mobile Safari SSE limits</li>
+          <li><strong>Assumptions:</strong> Stripe as primary PSP; single-currency v1; authenticated sessions; BFF owns Stripe secret key</li>
+        </ul>
+
+        <h3>Scoping questions to ask</h3>
+        <ul class="checklist" data-store="pay-req">
+          <li><label><input type="checkbox"> Multi-PSP routing needed in v1?</label></li>
+          <li><label><input type="checkbox"> Saved payment methods (returning user flow)?</label></li>
+          <li><label><input type="checkbox"> Local payment methods (iDEAL, BLIK, etc.)?</label></li>
+          <li><label><input type="checkbox"> Offline resilience required?</label></li>
+          <li><label><input type="checkbox"> Multi-currency marketplace?</label></li>
+        </ul>
+
+        <div class="section-links">
+          <a href="answers-html/01-checkout-flow-form-ux.html">§01 Checkout flow &amp; form UX</a>
+          <a href="answers-html/02-payment-security-pci-compliance.html">§02 Payment security &amp; PCI</a>
+        </div>
+      </div>
+    </article>
+
+    <!-- ② ARCHITECTURE -->
+    <article class="section-block" id="architecture" data-section="architecture">
+      <div class="section-head">
+        <div class="section-num arch">②</div>
+        <div>
+          <h2>Architecture</h2>
+          <div class="section-meta">10–15 min · Framework · Component tree · State management</div>
+        </div>
+        <span class="chevron">▼</span>
+      </div>
+      <div class="section-body">
+        <h3>Framework + High-Level Architecture</h3>
+        <p><strong>Stack:</strong> React 18 + TypeScript · XState for payment FSM · React Query for cart/session · Vite build · SSE for payment status · Stripe Elements for card input</p>
+
+        <div class="mermaid-wrap">
+          <pre class="mermaid">flowchart TB
+  subgraph UI["UI Layer"]
+    CS[CheckoutShell]
+    SR[StepRouter]
+    CF[CardForm - Stripe Elements]
+    OS[OrderSummary]
+    CP[ConfirmationPage]
+  end
+  subgraph Client["Client State"]
+    FSM[PaymentFSM - XState]
+    CART[CartStore]
+    SS[SessionStore - idempotency keys]
+    OL[OptimisticLayer]
+  end
+  subgraph Transport["Transport"]
+    REST[REST/HTTPS control plane]
+    SSE[SSE payment status]
+    PM[postMessage - Stripe iframe]
+  end
+  subgraph BFF["BFF / API"]
+    CAPI[Checkout API]
+    PIS[PaymentIntent Service]
+    WR[Webhook Receiver]
+    PSP[PSP Adapter]
+  end
+  subgraph External["External"]
+    SAPI[Stripe API]
+    SJSCDN[Stripe.js CDN]
+    WALLETS[Apple Pay / Google Pay]
+  end
+  subgraph Persist["Persistence"]
+    PG[(Postgres - orders/users)]
+    RD[(Redis - session/idempotency)]
+    SSTO[(sessionStorage - form draft)]
+  end
+  CF --postMessage--> SJSCDN
+  UI --REST--> BFF
+  SSE --status push--> FSM
+  WR --verified--> PG
+  BFF --idempotency--> RD
+  PSP --> SAPI
+  CAPI --> PG
+  FSM --> OL --> REST</pre>
+        </div>
+
+        <h3>Component Tree</h3>
+        <div class="mermaid-wrap">
+          <pre class="mermaid">flowchart TB
+  AppShell["AppShell"]
+  AppShell --> CL["CheckoutLayout"]
+  AppShell --> GP["GlobalProviders"]
+
+  subgraph CL["CheckoutLayout"]
+    SR["StepRouter"]
+    OSS["OrderSummarySidebar"]
+    PI["ProgressIndicator"]
+  end
+
+  subgraph SR["StepRouter"]
+    CART["CartStep"]
+    SHIP["ShippingStep"]
+    PAY["PaymentStep"]
+    CONF["ConfirmationStep"]
+  end
+
+  subgraph PAY["PaymentStep"]
+    SEP["StripeElementsProvider"]
+    PMS["PaymentMethodSelector"]
+    WB["WalletButtons - Apple/Google Pay"]
+    PNB["PayNowButton"]
+    ED["ErrorDisplay"]
+    TDS["ThreeDSModal"]
+  end
+
+  subgraph SEP["StripeElementsProvider"]
+    CNE["CardNumberElement"]
+    CEE["CardExpiryElement"]
+    CCVE["CardCvcElement"]
+  end
+
+  subgraph GP["GlobalProviders"]
+    AUTH["AuthProvider"]
+    SP["StripeProvider"]
+    QCP["QueryClientProvider"]
+    BC["BroadcastChannel"]
+  end</pre>
+        </div>
+
+        <h3>State Management — Where State Lives</h3>
+        <div class="state-ladder">
+          <div class="state-step"><strong>Ephemeral (JS)</strong>Card input state (inside Stripe iframe — never in our JS), rAF animation queue, BIN detection result</div>
+          <div class="state-step"><strong>sessionStorage</strong>Multi-step form progress, idempotency key per attempt, cart snapshot for recovery</div>
+          <div class="state-step"><strong>React Query cache</strong>Cart data, user session, order summary</div>
+          <div class="state-step"><strong>XState FSM</strong>PaymentIntent status: requires_payment_method → requires_action → processing → succeeded</div>
+          <div class="state-step"><strong>Server SoT</strong>PaymentIntent object, Order record, Webhook event log</div>
+        </div>
+
+        <div class="callout"><strong>Key rule:</strong> Card data NEVER enters our React state or memory — it lives exclusively in the Stripe cross-origin iframe. Our state machine only tracks PaymentIntent status strings.</div>
+
+        <div class="section-links">
+          <a href="answers-html/03-state-management-transaction-lifecycle.html">§03 State &amp; transaction lifecycle</a>
+          <a href="answers-html/09-architecture-provider-abstraction.html">§09 Architecture &amp; provider abstraction</a>
+        </div>
+      </div>
+    </article>
+
+    <!-- ③ DATA MODEL -->
+    <article class="section-block" id="data-model" data-section="data-model">
+      <div class="section-head">
+        <div class="section-num data">③</div>
+        <div>
+          <h2>Data Model</h2>
+          <div class="section-meta">~5 min · Entities · Relationships · PaymentIntent FSM</div>
+        </div>
+        <span class="chevron">▼</span>
+      </div>
+      <div class="section-body">
+        <p>Frontend operates on three core entities: the <strong>Cart</strong> (ephemeral), the <strong>CheckoutSession</strong> (server-persisted), and the <strong>PaymentIntent</strong> (Stripe-owned). We never model raw card data.</p>
+
+        <div class="entity"><span class="kw">Cart</span> {
+  id, items: LineItem[], subtotal, currency,
+  appliedCoupons: Coupon[],
+  expiresAt  <span style="color:var(--muted)">// server-side cart TTL</span>
+}
+
+<span class="kw">CheckoutSession</span> {
+  id, cartId, userId?,
+  step: 'cart' | 'shipping' | 'payment' | 'confirmation',
+  shippingAddress: Address,
+  selectedPaymentMethodId?,
+  idempotencyKey,    <span style="color:var(--muted)">// per-attempt, rotated on each "Pay" click</span>
+  createdAt, updatedAt
+}
+
+<span class="kw">PaymentIntent</span> {               <span style="color:var(--muted)">// Stripe-owned, mirrored to our DB</span>
+  id: 'pi_xxx',
+  amount, currency,
+  status: PIStatus,           <span style="color:var(--muted)">// FSM state</span>
+  clientSecret,               <span style="color:var(--muted)">// short-lived, never stored in localStorage</span>
+  paymentMethodId?,
+  lastPaymentError?: StripeError,
+  nextAction?: NextAction     <span style="color:var(--muted)">// 3DS redirect / iframe challenge</span>
+}
+
+<span class="kw">Order</span> {
+  id, paymentIntentId, userId, items,
+  status: 'pending' | 'paid' | 'failed' | 'refunded',
+  paidAt?, webhookVerifiedAt
+}
+
+<span class="kw">type</span> PIStatus =
+  | 'requires_payment_method'
+  | 'requires_confirmation'
+  | 'requires_action'
+  | 'processing'
+  | 'succeeded'
+  | 'canceled'</div>
+
+        <h3>Key relationships</h3>
+        <table>
+          <thead><tr><th>Operation</th><th>Behavior</th></tr></thead>
+          <tbody>
+            <tr><td>User clicks Pay</td><td>POST /payment-intents/confirm → Stripe confirmCardPayment → PI status → processing</td></tr>
+            <tr><td>3DS required</td><td>PI nextAction triggers ThreeDSModal mount; on complete → PI → succeeded</td></tr>
+            <tr><td>Webhook arrives</td><td>DB Order.status = 'paid'; SSE pushes to active frontend session</td></tr>
+            <tr><td>Tab re-entry after close</td><td>GET /checkout-session → restore step + PI status; re-render correct UI</td></tr>
+            <tr><td>Card decline</td><td>PI.lastPaymentError populated; FSM → requires_payment_method; user can retry</td></tr>
+          </tbody>
+        </table>
+
+        <div class="section-links">
+          <a href="answers-html/03-state-management-transaction-lifecycle.html">§03 State &amp; lifecycle</a>
+          <a href="answers-html/04-real-time-updates-webhooks.html">§04 Real-time &amp; webhooks</a>
+        </div>
+      </div>
+    </article>
+
+    <!-- ④ API DESIGN -->
+    <article class="section-block" id="api-design" data-section="api-design">
+      <div class="section-head">
+        <div class="section-num api">④</div>
+        <div>
+          <h2>API Design / BFF</h2>
+          <div class="section-meta">~10 min · Protocols · Endpoints · Streaming lifecycle · Idempotency</div>
+        </div>
+        <span class="chevron">▼</span>
+      </div>
+      <div class="section-body">
+        <h3>Protocol choice</h3>
+        <table>
+          <thead><tr><th>Pattern</th><th>Use in payments</th><th>Why</th></tr></thead>
+          <tbody>
+            <tr><td><strong>REST/HTTPS</strong></td><td>Cart CRUD, session management, PaymentIntent confirm, order fetch</td><td>Idempotency-Key header; standard error taxonomy; caching for GET</td></tr>
+            <tr><td><strong>SSE</strong></td><td>Payment status push after confirmation</td><td>Server→client push; no polling; AbortController cancel; works with standard auth cookies</td></tr>
+            <tr><td><strong>postMessage</strong></td><td>Stripe Elements iframe → parent page</td><td>Cross-origin card data isolation — PCI requirement</td></tr>
+            <tr><td><strong>WebSocket</strong></td><td>Live dashboard (multi-concurrent payments)</td><td>Full-duplex for high-frequency event push; not needed for single-session checkout</td></tr>
+            <tr><td><strong>Polling (fallback)</strong></td><td>Payment status if SSE unavailable</td><td>Exponential backoff; safe fallback for restrictive network proxies</td></tr>
+          </tbody>
+        </table>
+
+        <h3>Core endpoints (BFF)</h3>
+        <table>
+          <thead><tr><th>Method</th><th>Endpoint</th><th>Purpose</th></tr></thead>
+          <tbody>
+            <tr><td>POST</td><td><code>/checkout/session</code></td><td>Create or resume CheckoutSession; returns sessionId + step</td></tr>
+            <tr><td>PATCH</td><td><code>/checkout/session/:id/step</code></td><td>Advance to next step (validates current step server-side)</td></tr>
+            <tr><td>POST</td><td><code>/payment-intents</code></td><td>Create PI server-side; returns clientSecret (never stored, used once)</td></tr>
+            <tr><td>POST</td><td><code>/payment-intents/:id/confirm</code></td><td>Trigger confirmCardPayment; idempotent via Idempotency-Key</td></tr>
+            <tr><td>GET</td><td><code>/payment-intents/:id/status</code></td><td>Poll fallback for PI status</td></tr>
+            <tr><td>GET</td><td><code>/payment-status-stream?piId=:id</code></td><td>SSE stream for real-time PI status updates</td></tr>
+            <tr><td>POST</td><td><code>/webhooks/stripe</code></td><td>Verify Stripe-Signature; update Order; push to SSE clients</td></tr>
+            <tr><td>GET</td><td><code>/orders/:id</code></td><td>Confirmation page data fetch</td></tr>
+          </tbody>
+        </table>
+
+        <h3>Streaming / async payment lifecycle</h3>
+        <div class="entity">User clicks Pay →
+  [1] POST /payment-intents/confirm  (Idempotency-Key: session.idempotencyKey)
+  [2] BFF calls stripe.paymentIntents.confirm()
+  [3] If 3DS required: return nextAction to frontend → render ThreeDSModal
+  [4] After 3DS: PI status = processing → SSE pushes update
+  [5] Stripe webhook → BFF verifies sig → updates Order
+      → SSE broadcast → UI → ConfirmationPage</div>
+
+        <h3>Network lifecycle notes</h3>
+        <ul>
+          <li><strong>Idempotency:</strong> rotate key per attempt; safe to retry POST on timeout without double-charge</li>
+          <li><strong>Cancel:</strong> if user navigates away during processing, Order status resolved by webhook (frontend re-reads on return)</li>
+          <li><strong>3DS redirect recovery:</strong> store PI id in sessionStorage before redirect; restore on return to correct UI state</li>
+          <li><strong>Backoff:</strong> poll fallback at 1s, 2s, 4s, 8s (cap 30s); show "still processing…" after 10s</li>
+        </ul>
+
+        <div class="section-links">
+          <a href="answers-html/04-real-time-updates-webhooks.html">§04 Real-time &amp; webhooks</a>
+          <a href="answers-html/06-error-handling-resilience.html">§06 Error handling &amp; resilience</a>
+        </div>
+      </div>
+    </article>
+
+    <!-- ⑤ DEEP DIVE -->
+    <article class="section-block" id="deep-dive" data-section="deep-dive">
+      <div class="section-head">
+        <div class="section-num deep">⑤</div>
+        <div>
+          <h2>Deep Dive</h2>
+          <div class="section-meta">~10 min · Pick 1–2 areas the interviewer cares about</div>
+        </div>
+        <span class="chevron">▼</span>
+      </div>
+      <div class="section-body">
+        <p>I'll lead with <strong>Security</strong> (PCI/iframe model) and <strong>Resilience</strong> — happy to switch to Performance or i18n if you prefer.</p>
+
+        <div class="deep-tabs" id="deepTabs">
+          <button type="button" class="deep-tab active" data-panel="sec">Security</button>
+          <button type="button" class="deep-tab" data-panel="perf">Performance</button>
+          <button type="button" class="deep-tab" data-panel="res">Resilience</button>
+          <button type="button" class="deep-tab" data-panel="obs">Observability</button>
+          <button type="button" class="deep-tab" data-panel="i18n">i18n</button>
+        </div>
+
+        <!-- Security -->
+        <div class="deep-panel active" id="panel-sec">
+          <ul>
+            <li><strong>PCI scope:</strong> Stripe Elements = SAQ-A; card data never in our DOM, memory, or server logs</li>
+            <li><strong>iframe isolation:</strong> Stripe renders CardNumberElement in cross-origin iframe on js.stripe.com; postMessage only exchanges tokens (pm_xxx), never PANs</li>
+            <li><strong>CSP:</strong> <code>frame-src https://js.stripe.com https://hooks.stripe.com; script-src 'self' https://js.stripe.com; connect-src 'self' https://api.stripe.com</code></li>
+            <li><strong>clientSecret:</strong> keep in memory only (not localStorage, not URL params); expires after PI use; rotate idempotency key per attempt</li>
+            <li><strong>Clickjacking:</strong> X-Frame-Options DENY on checkout page + <code>frame-ancestors 'none'</code> in CSP; Stripe iframe is explicitly allowed via frame-src, not by weakening our own page framing policy</li>
+            <li><strong>3DS:</strong> iframe modal challenge or redirect; validate redirect return params server-side via webhook; never trust client-side redirect_status alone</li>
+          </ul>
+        </div>
+
+        <!-- Performance -->
+        <div class="deep-panel" id="panel-perf">
+          <ul>
+            <li><strong>Stripe.js:</strong> load on every page (Stripe recommends this for fraud signals); use <code>&lt;script async&gt;</code> + preconnect to js.stripe.com</li>
+            <li><strong>CLS prevention:</strong> reserve fixed height (e.g. 48px) for Elements iframe mount container; don't let it reflow surrounding content</li>
+            <li><strong>Bundle split:</strong> core checkout critical path is &lt;60KB; defer Stripe.js (already async); lazy-load Apple/Google Pay button SDKs only when available</li>
+            <li><strong>TBT / INP:</strong> move heavy Stripe SDK work off main thread by loading async; INP-safe by debouncing BIN detection to 300ms</li>
+            <li><strong>One-click checkout:</strong> preload PI on product page hover/intent; preconnect Stripe on page load; so that "Pay" click triggers confirm only, not create + confirm</li>
+            <li><strong>LCP:</strong> inline critical CSS; preload hero product image; SSR order summary so content is above-fold on first byte</li>
+          </ul>
+        </div>
+
+        <!-- Resilience -->
+        <div class="deep-panel" id="panel-res">
+          <ul>
+            <li><strong>Idempotency:</strong> every POST /payment-intents/confirm carries Idempotency-Key from sessionStorage; safe to retry on network timeout without double-charge</li>
+            <li><strong>3DS redirect recovery:</strong> stash PI id + step in sessionStorage before redirect; restore on return to correct UI state</li>
+            <li><strong>Offline detection:</strong> navigator.onLine + online/offline events; show "you're offline, your cart is saved" banner; queue retry on reconnect</li>
+            <li><strong>Webhook ground truth:</strong> never trust only client-side PI status; always wait for webhook-confirmed Order.status before showing success</li>
+            <li><strong>Circuit breaker:</strong> after 3 consecutive 5xx from /payment-intents/confirm in 60s, show "payment system temporarily unavailable" with retry-after countdown; don't let user hammer degraded backend</li>
+            <li><strong>Tab re-entry:</strong> GET /checkout-session on tab focus to reconcile FSM state with server PI status; BroadcastChannel for multi-tab same cart conflict detection</li>
+          </ul>
+        </div>
+
+        <!-- Observability -->
+        <div class="deep-panel" id="panel-obs">
+          <ul>
+            <li><strong>Funnel events:</strong> checkout_started, step_completed (step, duration_ms), payment_form_engaged, pay_button_clicked, payment_succeeded / payment_failed (decline_code, attempt_number)</li>
+            <li><strong>PCI-safe sanitization:</strong> Sentry beforeSend strips card_number, cvv, full_name from breadcrumbs; analytics allowlist only (pi_id hashed, decline_code, country)</li>
+            <li><strong>Performance marks:</strong> <code>performance.mark('stripe-js-start')</code> before script inject → <code>performance.mark('stripe-js-ready')</code> in Stripe onReady callback; <code>performance.mark('elements-mounted')</code> in Elements onChange</li>
+            <li><strong>Real-time dashboard:</strong> payment_success_rate (1m rolling window), decline_rate by code, 3DS completion %, Stripe.js p95 load time; alert if success_rate &lt; 90% for 5 min</li>
+            <li><strong>Deploy regression:</strong> correlate deploy timestamp with Sentry error spike and Datadog payment_failed rate; cross-check Stripe Dashboard for PSP-side failures vs. our API errors</li>
+          </ul>
+        </div>
+
+        <!-- i18n -->
+        <div class="deep-panel" id="panel-i18n">
+          <ul>
+            <li><strong>Currency formatting:</strong> <code>Intl.NumberFormat(locale, {style:'currency', currency})</code> for display; always store/transmit in minor units (integer cents); special-case JPY (0 decimals), KWD (3 decimals)</li>
+            <li><strong>Tax display:</strong> server provides <code>{amount, taxIncluded: boolean, taxAmount}</code>; component renders "incl. VAT" or "+ tax" based on flag; never derive tax on frontend</li>
+            <li><strong>RTL:</strong> CSS logical properties (margin-inline-start not margin-left); card number field kept LTR via <code>dir="ltr"</code> on the input; CVV icon flips position; error messages align-start</li>
+            <li><strong>Local payment methods:</strong> server returns ranked <code>PaymentMethod[]</code> for locale; frontend renders in server order; each method has <code>{type, displayName, logoUrl, flow: 'redirect'|'iframe'|'async'}</code>; iDEAL/BLIK are redirect; Pix/UPI are async (polling for QR scan); konbini is async + shows convenience store selector</li>
+            <li><strong>Server error translation:</strong> decline codes mapped to i18n key in frontend dictionary; fallback to generic "payment_failed" if code unknown; never show raw PSP error strings to users</li>
+          </ul>
+        </div>
+
+        <h3>Interview close (30 sec)</h3>
+        <div class="callout">Three patterns I'd repeat: <strong>(1)</strong> card data stays in Stripe's iframe — scope our PCI to SAQ-A and never touch raw PANs; <strong>(2)</strong> idempotency keys + webhook ground truth — rotate per attempt, never trust client-side confirmCardPayment alone; <strong>(3)</strong> PaymentIntent as FSM — model status transitions explicitly so every UI state is deterministic and recoverable.</div>
+
+        <div class="section-links">
+          <a href="answers-html/06-error-handling-resilience.html">§06 Error handling &amp; resilience</a>
+          <a href="answers-html/02-payment-security-pci-compliance.html">§02 Security &amp; PCI</a>
+          <a href="answers-html/08-observability-analytics.html">§08 Observability &amp; analytics</a>
+        </div>
+      </div>
+    </article>
+
+    <footer>
+      <a href="answers-html/index.html">Section answers</a> ·
+      <a href="../payments-system-frontend-architecture.html">Architecture map</a> ·
+      <a href="payments-system-design-doc.md">Design doc</a>
+    </footer>
+  </div>
+
+  <script type="module">
+    import mermaid from 'https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.esm.min.mjs';
+    const dark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+    mermaid.initialize({ startOnLoad: false, theme: dark ? 'dark' : 'neutral', securityLevel: 'loose', flowchart: { useMaxWidth: true } });
+
+    document.querySelectorAll('.section-block .section-head').forEach(head => {
+      head.addEventListener('click', () => head.parentElement.classList.toggle('collapsed'));
+    });
+
+    document.querySelectorAll('#deepTabs .deep-tab').forEach(tab => {
+      tab.addEventListener('click', () => {
+        document.querySelectorAll('#deepTabs .deep-tab').forEach(t => t.classList.remove('active'));
+        document.querySelectorAll('.deep-panel').forEach(p => p.classList.remove('active'));
+        tab.classList.add('active');
+        document.getElementById('panel-' + tab.dataset.panel).classList.add('active');
+      });
+    });
+
+    const navLinks = document.querySelectorAll('#topNav a[data-section]');
+    const sections = document.querySelectorAll('[data-section]');
+    const observer = new IntersectionObserver(entries => {
+      entries.forEach(entry => {
+        if (entry.isIntersecting) {
+          navLinks.forEach(a => a.classList.toggle('active', a.dataset.section === entry.target.dataset.section));
+        }
+      });
+    }, { rootMargin: '-40% 0px -50% 0px' });
+    sections.forEach(s => observer.observe(s));
+
+    document.querySelectorAll('ul.checklist[data-store]').forEach(list => {
+      const key = 'sd-interview-' + list.dataset.store;
+      list.querySelectorAll('input').forEach((cb, i) => {
+        const saved = JSON.parse(localStorage.getItem(key) || '[]');
+        cb.checked = saved.includes(i);
+        cb.addEventListener('change', () => {
+          const checked = [...list.querySelectorAll('input')].map((c, j) => c.checked ? j : null).filter(x => x !== null);
+          localStorage.setItem(key, JSON.stringify(checked));
+        });
+      });
+    });
+
+    await mermaid.run({ querySelector: '.mermaid' });
+  </script>
+</body>
+</html>

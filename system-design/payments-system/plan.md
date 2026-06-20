@@ -21,6 +21,6 @@ created: 2026-06-20
 ## Next
 - [x] md-to-html — generated section HTML
 - [x] architecture-map — write payments-system-frontend-architecture.html
-- [ ] interview-template — write payments-system-system-design-interview.html
+- [x] interview-template — write payments-system-system-design-interview.html
 - [ ] index-html — write answers-html/index.html
 - [ ] validate — run: bash ralph-system-design/validate.sh payments-system
