@@ -19,8 +19,8 @@ created: 2026-06-20
 - [x] answers/09-architecture-provider-abstraction.md — section 09: Architecture & Provider Abstraction
 
 ## Next
-- [ ] md-to-html — run: python3 ralph-system-design/scripts/md_to_html.py payments-system
-- [ ] architecture-map — write payments-system-frontend-architecture.html
+- [x] md-to-html — generated section HTML
+- [x] architecture-map — write payments-system-frontend-architecture.html
 - [ ] interview-template — write payments-system-system-design-interview.html
 - [ ] index-html — write answers-html/index.html
 - [ ] validate — run: bash ralph-system-design/validate.sh payments-system

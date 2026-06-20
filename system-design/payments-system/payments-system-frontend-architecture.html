@@ -1,0 +1,1186 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Payments System Frontend Architecture</title>
+  <meta name="description" content="Interactive architecture map covering all 9 payments system frontend design prep sections (Stripe/Adyen/Braintree style).">
+  <style>
+    :root {
+      --bg: #0f1219;
+      --surface: #171c28;
+      --surface2: #1e2536;
+      --text: #e8ecf4;
+      --muted: #8b95a8;
+      --border: #2d3548;
+      --accent: #c97840;
+      --accent-soft: rgba(201, 120, 64, 0.15);
+      --ui: #5b9bd5;
+      --client: #70ad47;
+      --transport: #ffc000;
+      --api: #9966cc;
+      --provider: #ed7d31;
+      --data: #4472c4;
+      --security: #e74c3c;
+      --shadow: 0 8px 32px rgba(0,0,0,.35);
+    }
+    @media (prefers-color-scheme: light) {
+      :root {
+        --bg: #f4f2ef;
+        --surface: #fff;
+        --surface2: #faf8f5;
+        --text: #1a1d26;
+        --muted: #5c6370;
+        --border: #e2e6ed;
+        --accent: #b85c28;
+        --accent-soft: rgba(184, 92, 40, 0.1);
+        --shadow: 0 4px 20px rgba(0,0,0,.08);
+      }
+    }
+    *, *::before, *::after { box-sizing: border-box; }
+    html, body { height: 100%; margin: 0; }
+    body {
+      font-family: "Segoe UI", system-ui, -apple-system, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      overflow: hidden;
+    }
+    .app {
+      display: grid;
+      grid-template-columns: 280px 1fr 340px;
+      grid-template-rows: auto 1fr;
+      height: 100vh;
+    }
+    header {
+      grid-column: 1 / -1;
+      display: flex;
+      align-items: center;
+      gap: 1rem;
+      padding: 0.75rem 1.25rem;
+      border-bottom: 1px solid var(--border);
+      background: var(--surface);
+    }
+    header h1 {
+      font-size: 1rem;
+      font-weight: 700;
+      margin: 0;
+      letter-spacing: -0.02em;
+    }
+    header p { margin: 0; font-size: 0.8125rem; color: var(--muted); }
+    .header-links { margin-left: auto; display: flex; gap: 0.75rem; font-size: 0.8125rem; }
+    .header-links a { color: var(--accent); text-decoration: none; }
+    .header-links a:hover { text-decoration: underline; }
+
+    .sidebar {
+      border-right: 1px solid var(--border);
+      background: var(--surface);
+      overflow-y: auto;
+      padding: 1rem;
+    }
+    .sidebar h2 {
+      font-size: 0.6875rem;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      color: var(--muted);
+      margin: 0 0 0.5rem;
+    }
+    .sidebar section { margin-bottom: 1.25rem; }
+    .filter-group { display: flex; flex-wrap: wrap; gap: 0.35rem; }
+    .chip {
+      font-size: 0.75rem;
+      padding: 0.25rem 0.55rem;
+      border-radius: 999px;
+      border: 1px solid var(--border);
+      background: var(--surface2);
+      color: var(--muted);
+      cursor: pointer;
+      user-select: none;
+      transition: all 0.15s;
+    }
+    .chip:hover { border-color: var(--accent); color: var(--text); }
+    .chip.active { background: var(--accent-soft); border-color: var(--accent); color: var(--accent); font-weight: 600; }
+    .chip.layer-ui.active { border-color: var(--ui); color: var(--ui); background: rgba(91,155,213,.12); }
+    .chip.layer-client.active { border-color: var(--client); color: var(--client); background: rgba(112,173,71,.12); }
+    .chip.layer-transport.active { border-color: var(--transport); color: #b8860b; background: rgba(255,192,0,.12); }
+    .chip.layer-api.active { border-color: var(--api); color: var(--api); background: rgba(153,102,204,.12); }
+    .chip.layer-provider.active { border-color: var(--provider); color: var(--provider); background: rgba(237,125,49,.12); }
+    .chip.layer-data.active { border-color: var(--data); color: var(--data); background: rgba(68,114,196,.12); }
+    .chip.layer-security.active { border-color: var(--security); color: var(--security); background: rgba(231,76,60,.12); }
+
+    select, input[type="search"] {
+      width: 100%;
+      font: inherit;
+      font-size: 0.8125rem;
+      padding: 0.45rem 0.65rem;
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      background: var(--surface2);
+      color: var(--text);
+    }
+    .flow-btn {
+      display: block;
+      width: 100%;
+      text-align: left;
+      font: inherit;
+      font-size: 0.8125rem;
+      padding: 0.5rem 0.65rem;
+      margin-bottom: 0.35rem;
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      background: var(--surface2);
+      color: var(--text);
+      cursor: pointer;
+    }
+    .flow-btn:hover, .flow-btn.active { border-color: var(--accent); background: var(--accent-soft); }
+    .legend { font-size: 0.75rem; color: var(--muted); line-height: 1.5; }
+    .legend span { display: inline-block; width: 10px; height: 10px; border-radius: 2px; margin-right: 4px; vertical-align: middle; }
+
+    .canvas-wrap {
+      position: relative;
+      overflow: hidden;
+      background:
+        radial-gradient(circle at 50% 0%, rgba(201,120,64,.06), transparent 50%),
+        var(--bg);
+    }
+    .canvas-toolbar {
+      position: absolute;
+      top: 0.75rem;
+      left: 0.75rem;
+      z-index: 5;
+      display: flex;
+      gap: 0.35rem;
+    }
+    .canvas-toolbar button {
+      font: inherit;
+      font-size: 0.75rem;
+      padding: 0.35rem 0.6rem;
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      background: var(--surface);
+      color: var(--text);
+      cursor: pointer;
+    }
+    .canvas {
+      width: 100%;
+      height: 100%;
+      cursor: grab;
+      touch-action: none;
+    }
+    .canvas.dragging { cursor: grabbing; }
+    .diagram-inner {
+      position: absolute;
+      width: 1200px;
+      height: 920px;
+      transform-origin: 0 0;
+    }
+    svg.connections {
+      position: absolute;
+      inset: 0;
+      width: 100%;
+      height: 100%;
+      pointer-events: none;
+    }
+    svg.connections line, svg.connections path {
+      stroke: var(--border);
+      stroke-width: 1.5;
+      fill: none;
+      transition: stroke 0.2s, stroke-width 0.2s;
+    }
+    svg.connections .flow-active {
+      stroke: var(--accent);
+      stroke-width: 2.5;
+      stroke-dasharray: 8 4;
+      animation: flowDash 0.6s linear infinite;
+    }
+    @keyframes flowDash { to { stroke-dashoffset: -12; } }
+
+    .lane {
+      position: absolute;
+      left: 12px;
+      right: 12px;
+      border: 1px dashed var(--border);
+      border-radius: 10px;
+      background: rgba(255,255,255,.02);
+    }
+    .lane-label {
+      position: absolute;
+      left: 12px;
+      top: 6px;
+      font-size: 0.6875rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      color: var(--muted);
+    }
+    .node {
+      position: absolute;
+      width: 148px;
+      padding: 0.55rem 0.65rem;
+      border-radius: 8px;
+      border: 2px solid var(--border);
+      background: var(--surface);
+      font-size: 0.75rem;
+      line-height: 1.35;
+      cursor: pointer;
+      transition: transform 0.15s, box-shadow 0.15s, opacity 0.2s, border-color 0.15s;
+      box-shadow: var(--shadow);
+    }
+    .node:hover { transform: translateY(-2px); z-index: 10; }
+    .node.selected { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); z-index: 11; }
+    .node.dimmed { opacity: 0.2; pointer-events: none; }
+    .node.highlight { border-color: var(--accent); animation: pulse 1s ease infinite; }
+    @keyframes pulse { 50% { box-shadow: 0 0 0 6px var(--accent-soft); } }
+    .node-title { font-weight: 700; margin-bottom: 0.15rem; }
+    .node-sub { font-size: 0.6875rem; color: var(--muted); }
+    .node-tags { display: flex; flex-wrap: wrap; gap: 2px; margin-top: 0.35rem; }
+    .node-tag {
+      font-size: 0.5625rem;
+      padding: 1px 4px;
+      border-radius: 3px;
+      background: var(--surface2);
+      color: var(--muted);
+    }
+    .node[data-layer="ui"] { border-left: 4px solid var(--ui); }
+    .node[data-layer="client"] { border-left: 4px solid var(--client); }
+    .node[data-layer="transport"] { border-left: 4px solid var(--transport); }
+    .node[data-layer="api"] { border-left: 4px solid var(--api); }
+    .node[data-layer="provider"] { border-left: 4px solid var(--provider); }
+    .node[data-layer="data"] { border-left: 4px solid var(--data); }
+    .node[data-layer="security"] { border-left: 4px solid var(--security); }
+
+    .detail {
+      border-left: 1px solid var(--border);
+      background: var(--surface);
+      overflow-y: auto;
+      padding: 1.25rem;
+    }
+    .detail-empty { color: var(--muted); font-size: 0.9375rem; margin-top: 2rem; text-align: center; }
+    .detail h2 { font-size: 1.125rem; margin: 0 0 0.35rem; }
+    .detail .layer-badge {
+      display: inline-block;
+      font-size: 0.6875rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      padding: 0.2rem 0.5rem;
+      border-radius: 4px;
+      margin-bottom: 0.75rem;
+    }
+    .detail p { font-size: 0.875rem; line-height: 1.6; color: var(--muted); margin: 0 0 0.75rem; }
+    .detail h3 { font-size: 0.8125rem; text-transform: uppercase; letter-spacing: 0.04em; color: var(--accent); margin: 1rem 0 0.4rem; }
+    .detail ul { margin: 0; padding-left: 1.1rem; font-size: 0.8125rem; line-height: 1.55; }
+    .detail li { margin-bottom: 0.3rem; }
+    .section-links { display: flex; flex-wrap: wrap; gap: 0.35rem; margin-top: 0.5rem; }
+    .section-links a {
+      font-size: 0.75rem;
+      padding: 0.25rem 0.5rem;
+      border-radius: 4px;
+      background: var(--accent-soft);
+      color: var(--accent);
+      text-decoration: none;
+    }
+    .section-links a:hover { text-decoration: underline; }
+    .flow-step {
+      font-size: 0.8125rem;
+      padding: 0.5rem 0.65rem;
+      margin-bottom: 0.35rem;
+      border-left: 3px solid var(--border);
+      background: var(--surface2);
+      border-radius: 0 6px 6px 0;
+    }
+    .flow-step.active { border-left-color: var(--accent); background: var(--accent-soft); }
+
+    @media (max-width: 1100px) {
+      .app { grid-template-columns: 1fr; grid-template-rows: auto auto 1fr auto; overflow-y: auto; height: auto; min-height: 100vh; }
+      body { overflow: auto; }
+      .sidebar { border-right: none; border-bottom: 1px solid var(--border); max-height: none; }
+      .canvas-wrap { min-height: 520px; }
+      .detail { border-left: none; border-top: 1px solid var(--border); max-height: none; }
+    }
+  </style>
+</head>
+<body>
+  <div class="app">
+    <header>
+      <div>
+        <h1>Payments System Frontend Architecture</h1>
+        <p>Interactive map · all 9 prep sections</p>
+      </div>
+      <div class="header-links">
+        <a href="answers-html/index.html">Answer pages</a>
+        <a href="payments-system-design-doc.md">Design doc</a>
+      </div>
+    </header>
+
+    <aside class="sidebar">
+      <section>
+        <h2>Search</h2>
+        <input type="search" id="search" placeholder="Filter nodes…" autocomplete="off">
+      </section>
+      <section>
+        <h2>Layer filter</h2>
+        <div class="filter-group" id="layerFilters"></div>
+      </section>
+      <section>
+        <h2>Section filter</h2>
+        <div class="filter-group" id="sectionFilters"></div>
+      </section>
+      <section>
+        <h2>Walk a flow</h2>
+        <div id="flowButtons"></div>
+      </section>
+      <section>
+        <h2>Legend</h2>
+        <div class="legend" id="legend"></div>
+      </section>
+    </aside>
+
+    <main class="canvas-wrap">
+      <div class="canvas-toolbar">
+        <button type="button" id="zoomIn">+</button>
+        <button type="button" id="zoomOut">−</button>
+        <button type="button" id="resetView">Reset view</button>
+      </div>
+      <div class="canvas" id="canvas">
+        <div class="diagram-inner" id="diagram">
+          <svg class="connections" id="connections"></svg>
+        </div>
+      </div>
+    </main>
+
+    <aside class="detail" id="detailPanel">
+      <div class="detail-empty" id="detailEmpty">
+        Click a node or run a flow walkthrough to see details, interview angles, and links to answer sections.
+      </div>
+      <div id="detailContent" hidden></div>
+    </aside>
+  </div>
+
+  <script>
+    const LAYERS = {
+      ui:        { label: 'UI Surfaces',           color: 'var(--ui)' },
+      client:    { label: 'Client State',          color: 'var(--client)' },
+      transport: { label: 'Transport',             color: 'var(--transport)' },
+      api:       { label: 'API / BFF',             color: 'var(--api)' },
+      provider:  { label: 'PSP Providers',         color: 'var(--provider)' },
+      data:      { label: 'Data',                  color: 'var(--data)' },
+      security:  { label: 'Security / PCI',        color: 'var(--security)' }
+    };
+
+    const SECTIONS = [
+      { id: '01', name: 'Checkout UX',    file: 'answers-html/01-checkout-flow-form-ux.html' },
+      { id: '02', name: 'PCI/Security',   file: 'answers-html/02-payment-security-pci-compliance.html' },
+      { id: '03', name: 'State/Lifecycle',file: 'answers-html/03-state-management-transaction-lifecycle.html' },
+      { id: '04', name: 'Real-Time',      file: 'answers-html/04-real-time-updates-webhooks.html' },
+      { id: '05', name: 'Performance',    file: 'answers-html/05-performance-core-web-vitals.html' },
+      { id: '06', name: 'Error Handling', file: 'answers-html/06-error-handling-resilience.html' },
+      { id: '07', name: 'i18n/l10n',      file: 'answers-html/07-internationalization-localization.html' },
+      { id: '08', name: 'Observability',  file: 'answers-html/08-observability-analytics.html' },
+      { id: '09', name: 'PSP Abstraction',file: 'answers-html/09-architecture-provider-abstraction.html' },
+    ];
+
+    const NODES = [
+      // ── UI Layer ──────────────────────────────────────────────────────────
+      {
+        id: 'checkoutForm', layer: 'ui', x: 40, y: 48,
+        title: 'Checkout Form', sub: 'Multi-step · card input · CTA',
+        sections: ['01','03','06'],
+        desc: 'Multi-step shell: cart → shipping → payment → confirmation. State machine drives step visibility and back-nav guards. Never allows step-skipping.',
+        bullets: [
+          'Step machine: pending|shipping|payment|processing|done',
+          'Hosted Fields or Elements injected in payment step',
+          'Back nav flushes sensitive field refs, not values',
+          'Disabled CTA + spinner on submission to prevent double-submit'
+        ],
+        questions: ['Multi-step state machine', 'Prevent step skipping', 'Back navigation + data preservation']
+      },
+      {
+        id: 'cardFields', layer: 'ui', x: 220, y: 48,
+        title: 'Card Input Fields', sub: 'Stripe Elements · iframe',
+        sections: ['01','02','05'],
+        desc: 'Cross-origin iframe from PSP. Parent page never touches raw PAN/CVV. BIN detection for card type icon. Appearance API for styling. CLS prevention via fixed-height placeholder.',
+        bullets: [
+          'postMessage bridge: parent ↔ iframe',
+          'CardNumberElement + ExpiryElement + CVCElement',
+          'Stripe appearance API — no direct CSS cross-origin',
+          'Fixed 48px container prevents layout shift (CLS)'
+        ],
+        questions: ['Cross-origin card field isolation', 'CLS prevention on iframe mount', 'BIN detection for card type']
+      },
+      {
+        id: 'orderSummary', layer: 'ui', x: 400, y: 48,
+        title: 'Order Summary', sub: 'Cart · tax · coupon sync',
+        sections: ['01','07'],
+        desc: 'Live-synced panel showing item totals, tax (inclusive/exclusive by locale), coupon discounts, and final charge amount. Never shows stale data during cart mutations.',
+        bullets: [
+          'Derived from server cart state — no client-side tax calculation',
+          'Tax-inclusive display for EU/AU locales',
+          'Coupon applied → revalidates server-side → re-renders',
+          'Currency formatted via Intl.NumberFormat with minor-unit conversion'
+        ],
+        questions: ['Tax-inclusive vs exclusive display', 'Cart sync without full-page reload', 'Currency formatting minor units']
+      },
+      {
+        id: 'paymentMethodSelector', layer: 'ui', x: 580, y: 48,
+        title: 'Payment Method Selector', sub: 'Card · wallet · BNPL · local',
+        sections: ['01','07','09'],
+        desc: 'Data-driven list of available payment methods filtered by country, currency, and cart value. Ranked by local preference (iDEAL first in NL). Each method mounts its own SDK component.',
+        bullets: [
+          'Config from server: [{type, psp, rank, logoUrl}]',
+          'Lazy-loads PSP SDK only when method selected',
+          'Hides methods incompatible with cart currency',
+          'Fallback to card-only if config unavailable'
+        ],
+        questions: ['Data-driven payment method ranking', 'Lazy PSP SDK loading', 'Hide incompatible methods']
+      },
+      {
+        id: 'confirmationScreen', layer: 'ui', x: 760, y: 48,
+        title: 'Confirmation Screen', sub: 'Success · pending · failed',
+        sections: ['03','04','06'],
+        desc: 'Terminal checkout UI. Three states: succeeded (immediate), processing (async — bank transfer/konbini), failed (retry or abandon). Must handle re-entry after navigation.',
+        bullets: [
+          'Reads payment_intent status on mount — not only redirect param',
+          'Processing state: polling or SSE until terminal',
+          'Re-entry: server re-fetches PaymentIntent and re-derives UI state',
+          'Beacon API logs abandonment if tab closes in processing'
+        ],
+        questions: ['Processing vs succeeded vs failed UI', 'Re-entry after browser close', 'Async payment method pending screen']
+      },
+      {
+        id: 'errorDisplay', layer: 'ui', x: 940, y: 48,
+        title: 'Error Display', sub: 'Decline · 3DS · network',
+        sections: ['06','03'],
+        desc: 'Hierarchical error surface: field-level inline errors, form-level decline banners, global network error toasts. Decline code allowlist maps to specific messaging; remainder → generic.',
+        bullets: [
+          "insufficient_funds → 'Check available balance'",
+          'stolen_card → generic (anti-enumeration)',
+          '3DS cancel → retry prompt, same PaymentIntent',
+          'Network timeout → ambiguous state banner'
+        ],
+        questions: ['Decline code allowlist vs generic messages', 'Anti-enumeration for fraud codes', 'Ambiguous timeout UX']
+      },
+
+      // ── Client Layer ──────────────────────────────────────────────────────
+      {
+        id: 'paymentIntentFSM', layer: 'client', x: 80, y: 200,
+        title: 'PaymentIntent FSM', sub: 'State machine · transitions',
+        sections: ['03','06'],
+        desc: 'Client-side mirror of PaymentIntent status. XState or equivalent drives UI rendering at each state. Guards prevent illegal transitions. Side effects trigger API calls or UI changes.',
+        bullets: [
+          'States: idle|submitting|requires_action|processing|succeeded|failed',
+          'Guards: no re-submit if processing',
+          'Entry actions: disable form, show spinner',
+          'Final states trigger analytics + redirect'
+        ],
+        questions: ['XState payment machine definition', 'Guard illegal transitions', 'Optimistic UI limits for payments']
+      },
+      {
+        id: 'idempotencyLayer', layer: 'client', x: 280, y: 200,
+        title: 'Idempotency Layer', sub: 'Keys · retry-safe',
+        sections: ['03','06'],
+        desc: 'Per-submission UUID keyed to (sessionId, cartId). Stored in sessionStorage. Passed as header on every payment confirm request. Server deduplicates on this key — safe to retry on timeout.',
+        bullets: [
+          'Key generated once per checkout session',
+          'Rotated only on explicit user retry action',
+          'sessionStorage prevents cross-tab key collision',
+          'Server: 409 if same key + different amount'
+        ],
+        questions: ['Idempotency key lifecycle', 'Safe retry on network timeout', 'Double-click prevention']
+      },
+      {
+        id: 'formStateCache', layer: 'client', x: 480, y: 200,
+        title: 'Form State Cache', sub: 'sessionStorage · no card data',
+        sections: ['01','03','07'],
+        desc: 'Non-sensitive form fields persisted to sessionStorage for refresh recovery: email, shipping address, selected payment method type. Raw card numbers NEVER persisted.',
+        bullets: [
+          'Stores: email, address, method type, step index',
+          'Never stores: PAN, expiry, CVV, client_secret',
+          'Restored on mount if cart session still valid',
+          'Cleared on successful payment or explicit abandon'
+        ],
+        questions: ['What to persist across refresh', 'Security boundary for sessionStorage', 'Multi-step re-entry recovery']
+      },
+      {
+        id: 'pspAdapterClient', layer: 'client', x: 680, y: 200,
+        title: 'PSP Adapter (Client)', sub: 'IPaymentProvider interface',
+        sections: ['09','02'],
+        desc: 'Client-side adapter pattern normalizing Stripe.js, Adyen Web Components, and Braintree Drop-in into a single IPaymentProvider interface. Checkout component never calls Stripe APIs directly.',
+        bullets: [
+          'mount(container) → returns cleanup fn',
+          'confirm(params) → Promise<{status, error}>',
+          'on(event, handler) → normalized events',
+          'CapabilityResolver: does provider support BNPL?'
+        ],
+        questions: ['IPaymentProvider adapter pattern', 'Normalize cross-PSP APIs', 'Capability resolution without UI conditionals']
+      },
+      {
+        id: 'analyticsLayer', layer: 'client', x: 880, y: 200,
+        title: 'Analytics Layer', sub: 'Funnel events · RUM',
+        sections: ['08','05'],
+        desc: 'Typed event bus for funnel instrumentation. PII/PAN sanitizer runs before every dispatch. Custom performance.mark for Stripe.js init and Elements mount. Beacon API for abandonment events.',
+        bullets: [
+          'checkout_step_viewed, payment_submitted, payment_succeeded',
+          'beforeSend hook strips card-shaped strings',
+          "performance.mark('stripe-elements-mounted')",
+          'Beacon API: checkout_abandoned on beforeunload'
+        ],
+        questions: ['Funnel event taxonomy', 'PAN sanitization before Sentry/GA', 'RUM marks for Elements load']
+      },
+
+      // ── Transport Layer ───────────────────────────────────────────────────
+      {
+        id: 'httpClient', layer: 'transport', x: 200, y: 352,
+        title: 'HTTP / REST', sub: 'PaymentIntent · cart · session',
+        sections: ['03','05','09'],
+        desc: 'Core API transport: create/confirm PaymentIntent, cart mutations, session management. Idempotency-Key header on all payment mutations. AbortController for in-flight request cancellation.',
+        bullets: [
+          'POST /payment-intents with idempotency key',
+          'Idempotency-Key: <uuid> on confirm requests',
+          'AbortController on tab close / step back',
+          'parseApiError → typed FrontendPaymentError'
+        ],
+        questions: ['AbortController for payment cancellation', 'Error taxonomy from API responses', 'Retry-safe HTTP methods']
+      },
+      {
+        id: 'sseTransport', layer: 'transport', x: 450, y: 352,
+        title: 'SSE / Polling', sub: 'Payment status push',
+        sections: ['04','06'],
+        desc: 'Server-Sent Events for real-time payment status delivery. Fallback to exponential-backoff polling when SSE is blocked (corporate proxies). Last-Event-ID for reconnection without missed events.',
+        bullets: [
+          'EventSource with Last-Event-ID on reconnect',
+          'Fallback: poll /payment-intents/:id every 2→4→8→16s',
+          "Max 90s polling window then show 'check email' UI",
+          'Dedup events by payment_intent_id + status'
+        ],
+        questions: ['SSE vs polling vs WebSocket for payment status', 'Reconnection with Last-Event-ID', 'Fallback polling backoff']
+      },
+      {
+        id: 'webhookBridge', layer: 'transport', x: 720, y: 352,
+        title: 'Webhook→Push Bridge', sub: 'Stripe → server → client',
+        sections: ['04','08'],
+        desc: 'Server-side bridge: Stripe webhook → verified → stored → pushed to frontend via SSE/WS. Ensures frontend update is consistent with DB state. Deduplicates on Stripe event ID.',
+        bullets: [
+          'Stripe-Signature verification before processing',
+          'payment_intent.succeeded → DB update → SSE push',
+          'Dedup on stripe_event_id (idempotent handler)',
+          'Stale UI correction: server always wins on conflict'
+        ],
+        questions: ['Webhook-to-frontend push architecture', 'Stripe-Signature verification', 'Frontend-server status conflict resolution']
+      },
+
+      // ── API / BFF Layer ───────────────────────────────────────────────────
+      {
+        id: 'checkoutBFF', layer: 'api', x: 80, y: 504,
+        title: 'Checkout BFF', sub: 'Cart · session · intent',
+        sections: ['03','05','09'],
+        desc: 'Backend-for-frontend: creates PaymentIntents, validates cart totals server-side, issues client_secret, and manages checkout sessions. Never exposed to raw card data.',
+        bullets: [
+          'POST /checkout/session → {clientSecret, cartSnapshot}',
+          'Cart total re-validated server-side before intent creation',
+          'client_secret scoped to session — never in DB unencrypted',
+          'Session cookie stores cart_id + user_id, not card data'
+        ],
+        questions: ['Client secret lifecycle and scoping', 'Server-side cart total validation', 'BFF vs direct Stripe API from frontend']
+      },
+      {
+        id: 'paymentIntentAPI', layer: 'api', x: 280, y: 504,
+        title: 'PaymentIntent API', sub: 'Create · confirm · capture',
+        sections: ['03','04','06'],
+        desc: 'Stripe PaymentIntent lifecycle management. Server creates with idempotency_key. Frontend confirms via Stripe.js (never sends raw card to your server). Webhook updates DB state on async events.',
+        bullets: [
+          'Idempotency key = (user_id, cart_id, attempt_number)',
+          'capture_method: manual for auth-only flows',
+          'status transitions: requires_payment_method → succeeded',
+          'Webhook handler: payment_intent.succeeded, .payment_failed'
+        ],
+        questions: ['PaymentIntent vs Charge API', 'Manual capture flow', 'Idempotency on server-side intent creation']
+      },
+      {
+        id: 'webhookReceiver', layer: 'api', x: 480, y: 504,
+        title: 'Webhook Receiver', sub: 'Stripe events · verify · dispatch',
+        sections: ['04','08'],
+        desc: 'Receives Stripe webhook events. Verifies Stripe-Signature with webhook signing secret. Idempotent handler keyed on event ID. Dispatches to domain handlers and triggers SSE push.',
+        bullets: [
+          'stripe.webhooks.constructEvent() verification',
+          'Idempotent: processed_events table with stripe_event_id',
+          'Dispatches: payment_intent.succeeded → order fulfillment',
+          'SSE push to connected frontend sessions after DB commit'
+        ],
+        questions: ['Stripe-Signature verification', 'Idempotent webhook processing', 'Order of operations: DB commit before SSE push']
+      },
+      {
+        id: 'pspRouter', layer: 'api', x: 680, y: 504,
+        title: 'PSP Router', sub: 'Stripe · Adyen · Braintree',
+        sections: ['09','06'],
+        desc: 'Server-side routing logic: selects PSP based on user country, payment method, cart value, and provider health. Returns provider-specific client token to frontend adapter. Handles provider failover.',
+        bullets: [
+          'Rules: EU cards → Adyen, US cards → Stripe, BNPL → Klarna',
+          'Health check: 5xx rate circuit breaker per provider',
+          'Failover: server creates new token on backup provider',
+          'Frontend never knows which PSP was switched to'
+        ],
+        questions: ['PSP routing rules', 'Provider failover architecture', 'Client token abstraction per PSP']
+      },
+      {
+        id: 'fraudRiskAPI', layer: 'api', x: 880, y: 504,
+        title: 'Fraud / Risk API', sub: 'Device signals · velocity',
+        sections: ['02','08'],
+        desc: 'Collects device fingerprint signals from frontend (Stripe Radar, own signals). Server-side velocity checks. Risk score influences 3DS trigger threshold and decline handling.',
+        bullets: [
+          'Stripe Radar rules: block if risk_score > threshold',
+          'Device signals: IP, user-agent, interaction timing',
+          'Velocity: 3+ failed attempts → require 3DS',
+          'Never expose raw risk score to frontend'
+        ],
+        questions: ['Device fingerprinting for fraud', '3DS trigger threshold', 'Risk signal collection without PCI scope expansion']
+      },
+
+      // ── Provider Layer ────────────────────────────────────────────────────
+      {
+        id: 'pciScope', layer: 'security', x: 40, y: 656,
+        title: 'PCI Scope Boundary', sub: 'SAQ A · hosted fields',
+        sections: ['02'],
+        desc: "Hosted field iframe isolates raw card data in PSP's origin. Your page never handles PAN/CVV. Reduces compliance to PCI SAQ A (self-assessment). Any direct card handling = SAQ D.",
+        bullets: [
+          'SAQ A: only if PSP hosts all card input fields',
+          'SAQ D: if any card data transits your server',
+          'CSP: script-src must allow js.stripe.com',
+          'No card data in network requests to your server'
+        ],
+        questions: ['PCI DSS scope reduction via hosted fields', 'SAQ A vs SAQ D', 'What CSP directives Stripe requires']
+      },
+      {
+        id: 'stripeSDK', layer: 'provider', x: 160, y: 656,
+        title: 'Stripe.js / Elements', sub: 'Card fields · confirmPayment',
+        sections: ['02','05','09'],
+        desc: 'Primary PSP SDK. Loads from js.stripe.com on every page (Stripe recommends this for fraud signals). Mounts card fields in cross-origin iframes. confirmCardPayment handles 3DS automatically.',
+        bullets: [
+          'Load on every page for Radar fraud signals',
+          'stripe.confirmCardPayment() → handles 3DS inline',
+          'Appearance API for cross-origin field styling',
+          'PaymentElement: unified UI for all Stripe methods'
+        ],
+        questions: ['Why load Stripe.js on every page', 'confirmCardPayment 3DS handling', 'Stripe vs manual card collection PCI scope']
+      },
+      {
+        id: 'adyenSDK', layer: 'provider', x: 380, y: 656,
+        title: 'Adyen Web Components', sub: 'Drop-in · redirect flows',
+        sections: ['09','06'],
+        desc: 'Alternative PSP SDK. Drop-in component or individual components. Some payment methods (SOFORT, some bank redirects) require full-page redirect rather than iframe. Requires server-side session token.',
+        bullets: [
+          'AdyenCheckout({session: serverToken})',
+          'Drop-in vs individual components',
+          '3DS handled via redirect or iframe per card issuer',
+          'resultCode normalization: Authorised/Refused/Error'
+        ],
+        questions: ['Adyen resultCode normalization', 'Full-page redirect vs iframe 3DS', 'Session token vs client key']
+      },
+      {
+        id: 'localPSPs', layer: 'provider', x: 600, y: 656,
+        title: 'Local Payment Methods', sub: 'iDEAL · Pix · BNPL · konbini',
+        sections: ['07','09','04'],
+        desc: 'Async local payment methods. iDEAL: bank redirect returns to success URL. Pix: QR code display with polling. Konbini: voucher code + async confirmation. BNPL: separate SDK flow.',
+        bullets: [
+          'iDEAL: redirect → webhook → SSE → confirmation',
+          'Pix: QR code + 30-min TTL polling',
+          'Konbini: voucher issued → async bank confirmation',
+          'Klarna/Afterpay: hosted page redirect'
+        ],
+        questions: ['Async payment method UX (processing state)', 'QR code polling lifecycle', 'Konbini voucher flow architecture']
+      },
+      {
+        id: 'walletAPIs', layer: 'provider', x: 820, y: 656,
+        title: 'Wallet APIs', sub: 'Apple Pay · Google Pay · Link',
+        sections: ['01','05','09'],
+        desc: 'Browser-native wallet APIs. PaymentRequest API unifies Apple Pay and Google Pay. Stripe Link for saved cross-merchant credentials. One-click checkout optimization.',
+        bullets: [
+          'canMakePayment() capability check before showing button',
+          'PaymentRequestButton mounts Stripe-hosted button',
+          'Apple Pay: merchant validation via server endpoint',
+          'Link: auto-fill returning users, expired method handling'
+        ],
+        questions: ['PaymentRequest API capability detection', 'Apple Pay merchant validation', 'Saved payment method UX handoff']
+      },
+
+      // ── Data Layer ────────────────────────────────────────────────────────
+      {
+        id: 'cartSessionDB', layer: 'data', x: 100, y: 808,
+        title: 'Cart / Session DB', sub: 'PostgreSQL · server-side cart',
+        sections: ['03','01'],
+        desc: 'Authoritative cart and checkout session state. Cart totals always re-validated here before PaymentIntent creation. Session stores non-sensitive checkout progress. RLS enforces user isolation.',
+        bullets: [
+          'cart_items: {product_id, quantity, price_snapshot}',
+          'checkout_sessions: {cart_id, user_id, step, expires_at}',
+          'Price snapshot at session creation — immutable',
+          'RLS: user can only read own cart and session'
+        ],
+        questions: ['Server-side cart total validation', 'Session expiry handling', 'Price snapshot immutability']
+      },
+      {
+        id: 'paymentRecordsDB', layer: 'data', x: 320, y: 808,
+        title: 'Payment Records DB', sub: 'PaymentIntents · orders · audit',
+        sections: ['03','04','08'],
+        desc: 'Stores PaymentIntent IDs, statuses, idempotency keys, and fulfilled orders. Source of truth for payment status. Processed_events table for webhook idempotency.',
+        bullets: [
+          'payment_intents: {id, stripe_pi_id, status, idempotency_key}',
+          'processed_events: {stripe_event_id} for dedup',
+          'orders: created only after succeeded status',
+          'Audit log: all status transitions timestamped'
+        ],
+        questions: ['Payment status source of truth', 'Idempotent webhook storage', 'Order creation timing (webhook vs confirmPayment return)']
+      },
+      {
+        id: 'sseEventBus', layer: 'data', x: 540, y: 808,
+        title: 'SSE Event Bus', sub: 'Redis pub/sub · replay',
+        sections: ['04','06'],
+        desc: 'Redis pub/sub for broadcasting payment events to connected SSE clients. Short-TTL event buffer for Last-Event-ID replay on reconnect. Keyed by user_id + payment_intent_id.',
+        bullets: [
+          'Publish after DB commit — not before',
+          'event_id: stripe_event_id for client dedup',
+          'Replay buffer: last 20 events per user, 5min TTL',
+          'SSE connections subscribe to user-scoped channel'
+        ],
+        questions: ['SSE event replay on reconnect', 'Ordering: DB commit before SSE push', 'Multi-tab SSE fan-out']
+      },
+      {
+        id: 'clientStorage', layer: 'data', x: 760, y: 808,
+        title: 'Client Storage', sub: 'sessionStorage · no card data',
+        sections: ['03','05'],
+        desc: 'Browser-side: sessionStorage for non-sensitive form state (step, email, address type). No localStorage for payment data (tab-persistent is risky). client_secret in memory variable only.',
+        bullets: [
+          'sessionStorage: step_index, email, shipping_address',
+          'In-memory only: client_secret, card element refs',
+          'Never persist: PAN, CVV, expiry in any browser storage',
+          'Clear all on payment success or session expiry'
+        ],
+        questions: ['client_secret storage security', 'sessionStorage vs localStorage for checkout', 'Clearing sensitive state after payment']
+      },
+
+      // ── Security (overlaid) ───────────────────────────────────────────────
+      {
+        id: 'cspLayer', layer: 'security', x: 1040, y: 504,
+        title: 'CSP / Clickjacking', sub: 'Content-Security-Policy',
+        sections: ['02','08'],
+        desc: "CSP configured to allow Stripe domains. X-Frame-Options + frame-ancestors CSP prevents clickjacking of checkout page while allowing legitimate Stripe iframes to function.",
+        bullets: [
+          "script-src: 'self' https://js.stripe.com",
+          'frame-src: https://js.stripe.com (for Elements iframes)',
+          "frame-ancestors 'none': prevents your page being framed",
+          'report-uri for CSP violation monitoring'
+        ],
+        questions: ['CSP for Stripe.js checkout page', 'X-Frame-Options vs frame-ancestors', 'CSP violation reporting']
+      }
+    ];
+
+    const EDGES = [
+      ['checkoutForm',          'cardFields',            'mounts iframe'],
+      ['checkoutForm',          'orderSummary',          'cart sync'],
+      ['checkoutForm',          'paymentMethodSelector', 'method selection'],
+      ['checkoutForm',          'confirmationScreen',    'on success'],
+      ['checkoutForm',          'errorDisplay',          'decline/error'],
+      ['cardFields',            'stripeSDK',             'Stripe Elements'],
+      ['paymentMethodSelector', 'pspAdapterClient',      'selected provider'],
+      ['paymentMethodSelector', 'localPSPs',             'iDEAL/Pix/konbini'],
+      ['paymentMethodSelector', 'walletAPIs',            'Apple/Google Pay'],
+      ['paymentIntentFSM',      'checkoutForm',          'drive UI state'],
+      ['paymentIntentFSM',      'idempotencyLayer',      'key on submit'],
+      ['formStateCache',        'checkoutForm',          'restore on mount'],
+      ['pspAdapterClient',      'stripeSDK',             'Stripe adapter'],
+      ['pspAdapterClient',      'adyenSDK',              'Adyen adapter'],
+      ['analyticsLayer',        'checkoutForm',          'funnel events'],
+      ['analyticsLayer',        'paymentIntentFSM',      'state transitions'],
+      ['httpClient',            'checkoutBFF',           'REST'],
+      ['httpClient',            'paymentIntentAPI',      'confirm intent'],
+      ['sseTransport',          'webhookBridge',         'status push'],
+      ['sseTransport',          'confirmationScreen',    'status update'],
+      ['webhookBridge',         'webhookReceiver',       'verified event'],
+      ['checkoutBFF',           'paymentIntentAPI',      'create intent'],
+      ['checkoutBFF',           'cartSessionDB',         'validate totals'],
+      ['paymentIntentAPI',      'pspRouter',             'route to PSP'],
+      ['pspRouter',             'stripeSDK',             'Stripe token'],
+      ['pspRouter',             'adyenSDK',              'Adyen session'],
+      ['webhookReceiver',       'paymentRecordsDB',      'update status'],
+      ['webhookReceiver',       'sseEventBus',           'publish event'],
+      ['fraudRiskAPI',          'paymentIntentAPI',      'risk score'],
+      ['stripeSDK',             'cardFields',            'iframe mount'],
+      ['sseEventBus',           'sseTransport',          'SSE push'],
+      ['paymentRecordsDB',      'paymentIntentAPI',      'status read'],
+      ['cartSessionDB',         'clientStorage',         'session ref'],
+      ['pciScope',              'cardFields',            'PCI boundary'],
+      ['cspLayer',              'checkoutBFF',           'header policy'],
+      ['idempotencyLayer',      'httpClient',            'header'],
+      ['formStateCache',        'clientStorage',         'sessionStorage'],
+      ['analyticsLayer',        'cspLayer',              'CSP report-uri'],
+    ];
+
+    const FLOWS = {
+      checkout: {
+        title: 'User submits payment → success',
+        steps: [
+          { nodes: ['checkoutForm', 'cardFields', 'paymentMethodSelector'], text: 'User fills card fields in Stripe iframe, selects method' },
+          { nodes: ['paymentIntentFSM', 'idempotencyLayer', 'httpClient'],  text: 'FSM transitions to submitting; idempotency key set; POST to BFF' },
+          { nodes: ['checkoutBFF', 'cartSessionDB', 'paymentIntentAPI'],    text: 'BFF re-validates cart; creates/retrieves PaymentIntent; returns client_secret' },
+          { nodes: ['pspAdapterClient', 'stripeSDK'],                       text: 'Adapter calls stripe.confirmCardPayment(clientSecret); Stripe handles 3DS if needed' },
+          { nodes: ['webhookReceiver', 'paymentRecordsDB', 'sseEventBus'],  text: 'Stripe webhook arrives; verified; DB updated; SSE event published' },
+          { nodes: ['sseTransport', 'confirmationScreen'],                   text: 'SSE push received; PaymentIntent FSM → succeeded; confirmation rendered' }
+        ],
+        sections: ['01','03','04']
+      },
+      decline: {
+        title: 'Card decline → smart retry UX',
+        steps: [
+          { nodes: ['stripeSDK', 'pspAdapterClient'],              text: 'confirmCardPayment returns error: card_declined, insufficient_funds' },
+          { nodes: ['paymentIntentFSM', 'idempotencyLayer'],        text: 'FSM transitions to failed; idempotency key rotated for retry' },
+          { nodes: ['errorDisplay', 'checkoutForm'],                text: 'Specific decline message shown; card fields cleared (not raw data — just focus reset)' },
+          { nodes: ['httpClient', 'paymentIntentAPI'],              text: 'Same PaymentIntent reused (not new one); PATCH to update payment method' },
+          { nodes: ['analyticsLayer'],                              text: 'payment_failed event with decline_code and attempt_number tracked' }
+        ],
+        sections: ['06','03','08']
+      },
+      threeds: {
+        title: '3DS authentication challenge',
+        steps: [
+          { nodes: ['stripeSDK', 'checkoutBFF'],                         text: 'Card requires 3DS; confirmCardPayment detects requires_action status' },
+          { nodes: ['cardFields', 'checkoutForm'],                        text: '3DS modal or redirect opens automatically via Stripe.js' },
+          { nodes: ['paymentIntentFSM'],                                  text: 'FSM in requires_action state; submit button remains disabled' },
+          { nodes: ['webhookReceiver', 'sseEventBus', 'sseTransport'],    text: 'Bank authenticates; Stripe fires webhook; SSE push to frontend' },
+          { nodes: ['confirmationScreen', 'paymentRecordsDB'],            text: 'FSM → succeeded; server DB source of truth; confirmation rendered' }
+        ],
+        sections: ['06','03','04']
+      },
+      asyncPayment: {
+        title: 'Async payment (iDEAL / Pix / konbini)',
+        steps: [
+          { nodes: ['paymentMethodSelector', 'localPSPs'],           text: 'User selects local payment method; SDK loads for that method' },
+          { nodes: ['checkoutBFF', 'paymentIntentAPI'],               text: 'PaymentIntent created with payment_method_types including local method' },
+          { nodes: ['localPSPs', 'checkoutForm'],                     text: 'Redirect to bank (iDEAL) or QR code displayed (Pix) or voucher issued (konbini)' },
+          { nodes: ['paymentIntentFSM', 'confirmationScreen'],        text: 'Frontend shows "processing" screen; polling or SSE waits for webhook' },
+          { nodes: ['webhookReceiver', 'sseTransport', 'confirmationScreen'], text: 'Webhook fires on bank confirmation (minutes to days); SSE updates UI' }
+        ],
+        sections: ['07','04','03']
+      },
+      pspFailover: {
+        title: 'PSP failover (Stripe 5xx → Adyen)',
+        steps: [
+          { nodes: ['stripeSDK', 'pspAdapterClient'],              text: 'stripe.confirmCardPayment() returns 5xx; adapter detects provider error' },
+          { nodes: ['pspRouter', 'checkoutBFF'],                   text: 'Server-side: create new Adyen session token for same cart' },
+          { nodes: ['adyenSDK', 'pspAdapterClient'],               text: 'Adapter switches to Adyen provider; loads Adyen SDK; re-mounts card fields' },
+          { nodes: ['paymentIntentFSM', 'idempotencyLayer'],       text: 'New idempotency key issued; FSM resets to submitting' },
+          { nodes: ['analyticsLayer'],                             text: 'psp_failover event tracked; user sees no provider change' }
+        ],
+        sections: ['09','06']
+      }
+    };
+
+    const LANES = [
+      { y: 28,  h: 130, label: 'UI Surfaces',             layer: 'ui' },
+      { y: 178, h: 130, label: 'Client State & Adapters', layer: 'client' },
+      { y: 330, h: 110, label: 'Transport',               layer: 'transport' },
+      { y: 482, h: 130, label: 'API / BFF',               layer: 'api' },
+      { y: 634, h: 110, label: 'PSP Providers',           layer: 'provider' },
+      { y: 786, h: 110, label: 'Data',                    layer: 'data' },
+    ];
+
+    // ── State ────────────────────────────────────────────────────────────────
+    let scale = 0.82;
+    let panX = 20;
+    let panY = 10;
+    let activeLayers   = new Set(Object.keys(LAYERS));
+    let activeSections = new Set(SECTIONS.map(s => s.id));
+    let selectedNode   = null;
+    let activeFlow     = null;
+    let flowStepIndex  = -1;
+    let searchQuery    = '';
+
+    const diagram     = document.getElementById('diagram');
+    const connections = document.getElementById('connections');
+    const canvas      = document.getElementById('canvas');
+
+    // ── Helpers ──────────────────────────────────────────────────────────────
+    function nodeCenter(id) {
+      const n = NODES.find(x => x.id === id);
+      return { x: n.x + 74, y: n.y + 28 };
+    }
+
+    function nodeMatchesFilters(n) {
+      const q = searchQuery.toLowerCase();
+      const matchSearch  = !q || n.title.toLowerCase().includes(q) || n.sub.toLowerCase().includes(q) || n.desc.toLowerCase().includes(q);
+      const matchLayer   = activeLayers.has(n.layer);
+      const matchSection = n.sections.some(s => activeSections.has(s));
+      return matchSearch && matchLayer && matchSection;
+    }
+
+    function getActiveFlowStep() {
+      if (!activeFlow || flowStepIndex < 0) return null;
+      return FLOWS[activeFlow]?.steps[flowStepIndex] || null;
+    }
+
+    function getFlowHighlightEdges(stepNodes) {
+      const inStep = new Set(stepNodes);
+      return EDGES.filter(([from, to]) => inStep.has(from) && inStep.has(to));
+    }
+
+    // ── Render: Lanes ────────────────────────────────────────────────────────
+    function renderLanes() {
+      diagram.querySelectorAll('.lane').forEach(el => el.remove());
+      LANES.forEach(lane => {
+        if (!activeLayers.has(lane.layer) && lane.layer !== 'security') return;
+        const el = document.createElement('div');
+        el.className = 'lane';
+        el.style.top    = lane.y + 'px';
+        el.style.height = lane.h + 'px';
+        el.innerHTML = `<span class="lane-label">${lane.label}</span>`;
+        diagram.insertBefore(el, connections);
+      });
+    }
+
+    // ── Render: Nodes ────────────────────────────────────────────────────────
+    function renderNodes() {
+      diagram.querySelectorAll('.node').forEach(el => el.remove());
+      const flowStep    = getActiveFlowStep();
+      const flowNodeIds = flowStep ? new Set(flowStep.nodes) : null;
+
+      NODES.forEach(n => {
+        const el = document.createElement('div');
+        el.className    = 'node';
+        el.dataset.id   = n.id;
+        el.dataset.layer = n.layer;
+        el.style.left   = n.x + 'px';
+        el.style.top    = n.y + 'px';
+
+        const visible = nodeMatchesFilters(n);
+        if (!visible) {
+          el.classList.add('dimmed');
+        } else if (flowNodeIds && !flowNodeIds.has(n.id)) {
+          el.classList.add('dimmed');
+        }
+
+        if (flowNodeIds && flowNodeIds.has(n.id) && visible) el.classList.add('highlight');
+        if (selectedNode === n.id) el.classList.add('selected');
+
+        el.innerHTML = `
+          <div class="node-title">${n.title}</div>
+          <div class="node-sub">${n.sub}</div>
+          <div class="node-tags">${n.sections.map(s => `<span class="node-tag">${s}</span>`).join('')}</div>
+        `;
+        el.addEventListener('click', () => selectNode(n.id));
+        diagram.appendChild(el);
+      });
+    }
+
+    // ── Render: Edges ────────────────────────────────────────────────────────
+    function renderEdges(highlightPairs) {
+      const hl = new Set((highlightPairs || []).map(p => p.join('|')));
+      connections.innerHTML = '';
+      EDGES.forEach(([from, to, label]) => {
+        const a    = nodeCenter(from);
+        const b    = nodeCenter(to);
+        const line = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+        line.setAttribute('x1', a.x);
+        line.setAttribute('y1', a.y);
+        line.setAttribute('x2', b.x);
+        line.setAttribute('y2', b.y);
+        if (hl.has(from + '|' + to) || hl.has(to + '|' + from)) line.classList.add('flow-active');
+        const nf = NODES.find(n => n.id === from);
+        const nt = NODES.find(n => n.id === to);
+        const visible = nf && nt &&
+          activeLayers.has(nf.layer) && activeLayers.has(nt.layer) &&
+          nf.sections.some(s => activeSections.has(s)) &&
+          nt.sections.some(s => activeSections.has(s));
+        if (!visible) line.style.opacity = '0.15';
+        connections.appendChild(line);
+      });
+    }
+
+    // ── Pan / Zoom ───────────────────────────────────────────────────────────
+    function applyTransform() {
+      diagram.style.transform = `translate(${panX}px, ${panY}px) scale(${scale})`;
+    }
+
+    // ── Selection ────────────────────────────────────────────────────────────
+    function selectNode(id) {
+      selectedNode  = id;
+      activeFlow    = null;
+      flowStepIndex = -1;
+      document.querySelectorAll('.flow-btn').forEach(b => b.classList.remove('active'));
+      renderNodes();
+      renderEdges();
+      showNodeDetail(id);
+    }
+
+    function showNodeDetail(id) {
+      const n = NODES.find(x => x.id === id);
+      if (!n) return;
+      document.getElementById('detailEmpty').hidden = true;
+      const content = document.getElementById('detailContent');
+      content.hidden = false;
+      const layer = LAYERS[n.layer];
+      content.innerHTML = `
+        <span class="layer-badge" style="background:${layer.color}22;color:${layer.color}">${layer.label}</span>
+        <h2>${n.title}</h2>
+        <p>${n.desc}</p>
+        <h3>Key mechanisms</h3>
+        <ul>${n.bullets.map(b => `<li>${b}</li>`).join('')}</ul>
+        <h3>Interview questions</h3>
+        <ul>${n.questions.map(q => `<li>${q}</li>`).join('')}</ul>
+        <h3>Prep sections</h3>
+        <div class="section-links">${n.sections.map(s => {
+          const sec = SECTIONS.find(x => x.id === s);
+          return sec ? `<a href="${sec.file}">§${s} ${sec.name}</a>` : '';
+        }).join('')}</div>
+      `;
+    }
+
+    // ── Flow walkthroughs ────────────────────────────────────────────────────
+    function showFlowDetail(flowKey) {
+      const flow = FLOWS[flowKey];
+      document.getElementById('detailEmpty').hidden = true;
+      const content = document.getElementById('detailContent');
+      content.hidden = false;
+      content.innerHTML = `
+        <h2>${flow.title}</h2>
+        <p>Click steps to highlight nodes on the diagram.</p>
+        <h3>Steps</h3>
+        ${flow.steps.map((step, i) => `
+          <div class="flow-step${i === flowStepIndex ? ' active' : ''}" data-step="${i}">
+            <strong>${i + 1}.</strong> ${step.text}
+          </div>
+        `).join('')}
+        <h3>Related sections</h3>
+        <div class="section-links">${flow.sections.map(s => {
+          const sec = SECTIONS.find(x => x.id === s);
+          return sec ? `<a href="${sec.file}">§${s} ${sec.name}</a>` : '';
+        }).join('')}</div>
+      `;
+      content.querySelectorAll('.flow-step').forEach(el => {
+        el.addEventListener('click', () => {
+          const idx = Number(el.dataset.step);
+          highlightFlowStep(flowKey, idx);
+          showFlowDetail(flowKey);
+        });
+      });
+    }
+
+    function highlightFlowStep(flowKey, stepIndex) {
+      const flow = FLOWS[flowKey];
+      const step = flow?.steps[stepIndex];
+      if (!step) return;
+      activeFlow    = flowKey;
+      flowStepIndex = stepIndex;
+      renderNodes();
+      renderEdges(getFlowHighlightEdges(step.nodes));
+    }
+
+    function startFlow(flowKey) {
+      activeFlow    = flowKey;
+      flowStepIndex = 0;
+      selectedNode  = null;
+      document.querySelectorAll('.flow-btn').forEach(b => b.classList.toggle('active', b.dataset.flow === flowKey));
+      renderNodes();
+      highlightFlowStep(flowKey, 0);
+      showFlowDetail(flowKey);
+    }
+
+    // ── Build sidebar controls ───────────────────────────────────────────────
+    function buildFilters() {
+      // Layer chips
+      const lf = document.getElementById('layerFilters');
+      Object.entries(LAYERS).forEach(([key, val]) => {
+        const chip = document.createElement('button');
+        chip.type      = 'button';
+        chip.className = `chip layer-${key} active`;
+        chip.textContent = val.label;
+        chip.addEventListener('click', () => {
+          if (activeLayers.has(key)) { activeLayers.delete(key); chip.classList.remove('active'); }
+          else                       { activeLayers.add(key);    chip.classList.add('active'); }
+          refresh();
+        });
+        lf.appendChild(chip);
+      });
+
+      // Section chips
+      const sf = document.getElementById('sectionFilters');
+      SECTIONS.forEach(sec => {
+        const chip = document.createElement('button');
+        chip.type      = 'button';
+        chip.className = 'chip active';
+        chip.textContent = sec.id + ' ' + sec.name;
+        chip.addEventListener('click', () => {
+          if (activeSections.has(sec.id)) { activeSections.delete(sec.id); chip.classList.remove('active'); }
+          else                            { activeSections.add(sec.id);    chip.classList.add('active'); }
+          refresh();
+        });
+        sf.appendChild(chip);
+      });
+
+      // Flow buttons
+      const fb = document.getElementById('flowButtons');
+      Object.entries(FLOWS).forEach(([key, flow]) => {
+        const btn = document.createElement('button');
+        btn.type         = 'button';
+        btn.className    = 'flow-btn';
+        btn.dataset.flow = key;
+        btn.textContent  = flow.title;
+        btn.addEventListener('click', () => startFlow(key));
+        fb.appendChild(btn);
+      });
+
+      // Legend
+      const legend = document.getElementById('legend');
+      Object.entries(LAYERS).forEach(([key, val]) => {
+        legend.innerHTML += `<div><span style="background:${val.color}"></span>${val.label}</div>`;
+      });
+    }
+
+    // ── Full refresh ─────────────────────────────────────────────────────────
+    function refresh() {
+      renderLanes();
+      renderNodes();
+      if (activeFlow && flowStepIndex >= 0) {
+        const step = FLOWS[activeFlow]?.steps[flowStepIndex];
+        renderEdges(step ? getFlowHighlightEdges(step.nodes) : []);
+      } else {
+        renderEdges();
+      }
+    }
+
+    // ── Search ───────────────────────────────────────────────────────────────
+    document.getElementById('search').addEventListener('input', e => {
+      searchQuery = e.target.value;
+      refresh();
+    });
+
+    // ── Zoom buttons ─────────────────────────────────────────────────────────
+    document.getElementById('zoomIn').addEventListener('click',    () => { scale = Math.min(1.4, scale + 0.1);  applyTransform(); });
+    document.getElementById('zoomOut').addEventListener('click',   () => { scale = Math.max(0.45, scale - 0.1); applyTransform(); });
+    document.getElementById('resetView').addEventListener('click', () => { scale = 0.82; panX = 20; panY = 10;  applyTransform(); });
+
+    // ── Pan (pointer drag) ───────────────────────────────────────────────────
+    let dragging = false;
+    let lastX = 0, lastY = 0;
+    canvas.addEventListener('pointerdown', e => {
+      if (e.target.closest('.node')) return;
+      dragging = true;
+      lastX = e.clientX;
+      lastY = e.clientY;
+      canvas.classList.add('dragging');
+      canvas.setPointerCapture(e.pointerId);
+    });
+    canvas.addEventListener('pointermove', e => {
+      if (!dragging) return;
+      panX += e.clientX - lastX;
+      panY += e.clientY - lastY;
+      lastX = e.clientX;
+      lastY = e.clientY;
+      applyTransform();
+    });
+    canvas.addEventListener('pointerup', () => { dragging = false; canvas.classList.remove('dragging'); });
+
+    // ── Init ─────────────────────────────────────────────────────────────────
+    buildFilters();
+    renderLanes();
+    renderNodes();
+    renderEdges();
+    applyTransform();
+  </script>
+</body>
+</html>
