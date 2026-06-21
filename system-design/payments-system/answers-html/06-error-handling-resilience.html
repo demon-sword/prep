@@ -1,0 +1,1093 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>06 — Error Handling &amp; Resilience | System Design Answers</title>
+  <meta name="description" content="Interview-depth answers for Payments-System frontend system design.">
+  <style>
+    :root {
+      --bg: #f8f9fb; --surface: #ffffff; --text: #1a1d26; --text-muted: #5c6370;
+      --border: #e2e6ed; --accent: #3d5a80; --accent-soft: #eef2f7;
+      --code-bg: #f0f2f6; --pre-bg: #1e2433; --pre-text: #e8ecf4;
+      --nav-bg: rgba(248, 249, 251, 0.92); --shadow: 0 1px 3px rgba(0, 0, 0, 0.06);
+    }
+    @media (prefers-color-scheme: dark) {
+      :root {
+        --bg: #12151c; --surface: #1a1f2a; --text: #e8ecf4; --text-muted: #9aa3b2;
+        --border: #2d3548; --accent: #8cb4d9; --accent-soft: #232a38;
+        --code-bg: #252d3d; --pre-bg: #0d1017; --pre-text: #d4dae6;
+        --nav-bg: rgba(18, 21, 28, 0.94); --shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
+      }
+    }
+    *, *::before, *::after { box-sizing: border-box; }
+    html { scroll-behavior: smooth; scroll-padding-top: 5.5rem; }
+    body { margin: 0; font-family: "Segoe UI", system-ui, sans-serif; font-size: 1.0625rem;
+      line-height: 1.65; color: var(--text); background: var(--bg); }
+    .site-nav { position: sticky; top: 0; z-index: 100; background: var(--nav-bg);
+      backdrop-filter: blur(10px); border-bottom: 1px solid var(--border); box-shadow: var(--shadow); }
+    .site-nav-inner { max-width: 900px; margin: 0 auto; padding: 0.75rem 1.5rem; }
+    .site-nav-title { font-size: 0.8125rem; font-weight: 600; text-transform: uppercase;
+      letter-spacing: 0.04em; color: var(--text-muted); margin: 0 0 0.5rem; }
+    .toc { display: flex; flex-wrap: wrap; gap: 0.35rem 0.75rem; margin: 0; padding: 0;
+      list-style: none; font-size: 0.8125rem; }
+    .toc a { color: var(--accent); text-decoration: none; white-space: nowrap; }
+    .toc a:hover { text-decoration: underline; }
+    .page { max-width: 900px; margin: 0 auto; padding: 2rem 1.5rem 4rem; }
+    header.page-header { margin-bottom: 2.5rem; padding-bottom: 1.5rem; border-bottom: 1px solid var(--border); }
+    h1 { font-size: 1.75rem; font-weight: 700; margin: 0 0 0.75rem; }
+    .lead { margin: 0; color: var(--text-muted); font-size: 1.05rem; }
+    h2.section { font-size: 1.35rem; font-weight: 700; margin: 2.5rem 0 1.25rem;
+      color: var(--accent); border-bottom: 2px solid var(--accent-soft); padding-bottom: 0.35rem; }
+    article.qa { margin-bottom: 2.75rem; background: var(--surface); border: 1px solid var(--border);
+      border-radius: 10px; padding: 1.5rem 1.75rem; box-shadow: var(--shadow); }
+    h3.question { font-size: 1.2rem; font-weight: 600; margin: 0 0 1rem; }
+    article.qa p { margin: 0 0 1rem; }
+    ol, ul { margin: 0 0 1rem; padding-left: 1.35rem; }
+    table { width: 100%; border-collapse: collapse; margin: 0 0 1rem; font-size: 0.95rem; }
+    th, td { border: 1px solid var(--border); padding: 0.55rem 0.75rem; text-align: left; }
+    th { background: var(--accent-soft); font-weight: 600; }
+    code { font-family: ui-monospace, Menlo, Consolas, monospace; font-size: 0.88em;
+      background: var(--code-bg); padding: 0.15em 0.4em; border-radius: 4px; }
+    pre { margin: 0 0 1rem; padding: 1rem; background: var(--pre-bg); color: var(--pre-text);
+      border-radius: 8px; overflow-x: auto; font-size: 0.875rem; }
+    pre code { background: none; padding: 0; color: inherit; }
+    .mermaid-wrap { margin: 0 0 1rem; padding: 1rem; background: var(--surface);
+      border: 1px solid var(--border); border-radius: 8px; overflow-x: auto; }
+    footer.page-footer { max-width: 900px; margin: 0 auto; padding: 1.5rem;
+      border-top: 1px solid var(--border); font-size: 0.9375rem; }
+    footer.page-footer a { color: var(--accent); text-decoration: none; font-weight: 500; }
+  </style>
+  <link rel="stylesheet" href="assets/interactive.css">
+</head>
+<body>
+  <nav class="site-nav" aria-label="Table of contents">
+    <div class="site-nav-inner">
+      <p class="site-nav-title">On this page</p>
+      <ol class="toc"><li><a href="#q-enumerate-the-categories-of-errors-that-can-occur-in-a-frontend-payment-flow-network-errors-card-declines-validation-errors-authentication-failures-fraud-blocks-rate-limits-and-describe-how-the-error-handling-strategy-differs-for-each-category">Q: Enumerate the categories of error</a></li><li><a href="#q-a-users-card-is-declined-with-stripe-error-code-card-declined-and-decline-code-insufficient-funds-what-do-you-show-the-user-what-do-you-show-the-user-if-the-decline-code-is-stolen-card-how-does-your-error-message-component-know-which-codes-warrant-specific-messaging-vs-a-generic-payment-failed-message">Q: A user&#x27;s card is declined with St</a></li><li><a href="#q-what-is-3d-secure-3ds-authentication-when-is-it-triggered-and-how-does-stripeconfirmcardpayment-handle-the-3ds-challenge-flow-what-does-the-user-experience-look-like-and-what-are-the-failure-modes-user-cancels-3ds-times-out-banks-3ds-page-is-down">Q: What is 3D Secure (3DS) authentic</a></li><li><a href="#q-how-do-you-distinguish-between-a-network-timeout-where-the-payment-may-or-may-not-have-processed-and-a-definitive-payment-failure-where-you-know-the-charge-was-rejected-how-does-each-case-change-your-frontend-error-recovery-strategy">Q: How do you distinguish between a </a></li><li><a href="#q-describe-your-strategy-for-handling-the-case-where-stripejs-itself-fails-to-load-cdn-outage-network-error-ad-blocker-do-you-have-a-fallback-or-do-you-fail-gracefully-what-does-the-user-see-and-what-do-you-log">Q: Describe your strategy for handli</a></li><li><a href="#q-how-do-you-implement-a-circuit-breaker-pattern-on-the-frontend-for-payment-requests-if-your-payment-api-endpoint-is-returning-503s-how-do-you-detect-this-condition-and-prevent-the-user-from-hammering-a-degraded-backend">Q: How do you implement a circuit br</a></li><li><a href="#q-what-is-the-ux-strategy-for-a-payment-that-fails-at-the-very-last-step-after-the-user-has-entered-all-their-details-and-clicked-pay-but-due-to-a-server-side-error-rather-than-a-card-decline-how-do-you-preserve-their-form-state-and-communicate-the-error-without-inducing-panic">Q: What is the UX strategy for a pay</a></li><li><a href="#q-walk-me-through-the-full-3ds2-authentication-flow-from-a-frontend-architecture-standpoint-specifically-how-does-stripejs-detect-that-3ds-is-required-after-confirmcardpayment-how-is-the-challenge-rendered-in-an-iframe-a-redirect-a-modal-how-do-you-handle-the-case-where-the-device-fingerprinting-step-triggers-a-full-redirect-rather-than-a-seamless-iframe-challenge-and-what-happens-to-your-react-component-state-across-that-redirect-boundary">Q: Walk me through the full 3DS2 aut</a></li><li><a href="#q-you-are-building-a-checkout-that-must-work-in-environments-with-extremely-poor-connectivity-rural-mobile-flaky-wifi-design-a-resilience-strategy-that-includes-detecting-offline-state-before-submission-queuing-the-payment-attempt-for-retry-when-connectivity-returns-preventing-duplicate-charges-and-communicating-uncertainty-to-the-user-without-causing-them-to-abandon-what-apis-do-you-use-and-what-are-the-limits-of-what-you-can-guarantee-on-the-frontend">Q: You are building a checkout that </a></li><li><a href="#q-your-monitoring-alerts-that-8-of-users-who-click-pay-are-seeing-an-unhandled-javascript-exception-in-the-stripe-elements-payment-confirmation-step-you-have-sentry-traces-showing-the-error-originates-inside-the-cross-origin-stripe-iframe-what-do-you-know-and-what-dont-you-know-from-that-error-report-how-do-you-diagnose-the-root-cause-given-that-you-cannot-inspect-stripes-iframe-code-and-what-mitigations-do-you-ship-while-the-investigation-is-ongoing">Q: Your monitoring alerts that 8% of</a></li></ol>
+    </div>
+  </nav>
+  <main class="page">
+    <header class="page-header">
+      <h1>06 — Error Handling &amp; Resilience</h1>
+      <p class="lead">Interview-depth answers for Payments-System frontend system design.</p>
+    </header>
+    <h1 id="06-error-handling-resilience">06 — Error Handling &amp; Resilience</h1>
+<p>&gt; Payments errors are high-stakes and high-frequency. These answers cover error taxonomy, Stripe-specific decline handling, 3DS authentication, network resilience, and offline-first patterns.</p>
+<hr>
+<h2 class="section" id="core-questions">Core Questions</h2>
+<article class="qa" id="q-enumerate-the-categories-of-errors-that-can-occur-in-a-frontend-payment-flow-network-errors-card-declines-validation-errors-authentication-failures-fraud-blocks-rate-limits-and-describe-how-the-error-handling-strategy-differs-for-each-category">
+<h3 class="question">Q: Enumerate the categories of errors that can occur in a frontend payment flow (network errors, card declines, validation errors, authentication failures, fraud blocks, rate limits) and describe how the error handling strategy differs for each category.</h3>
+<p><strong>Problem framing:</strong> The interviewer is testing whether you treat &quot;payment failed&quot; as a monolith or whether you have a nuanced mental model. Each error category has different recoverability, different disclosure obligations, and different UX affordances. Blurring them leads to confusing copy, frustrated users, and missed recovery opportunities.</p>
+<p><strong>Approach:</strong></p>
+<p>There are six distinct error categories, each demanding a different response:</p>
+<table>
+<thead><tr>
+<th>Category</th>
+<th>Source</th>
+<th>Recoverability</th>
+<th>User action</th>
+</tr></thead><tbody>
+<tr>
+<td>Validation errors</td>
+<td>Client-side / Stripe.js</td>
+<td>Immediate</td>
+<td>Correct field</td>
+</tr>
+<tr>
+<td>Network errors</td>
+<td>Transport layer</td>
+<td>Ambiguous</td>
+<td>Retry or wait</td>
+</tr>
+<tr>
+<td>Card declines</td>
+<td>Issuer bank</td>
+<td>Varies by code</td>
+<td>New card / contact bank</td>
+</tr>
+<tr>
+<td>Authentication failures</td>
+<td>3DS / auth layer</td>
+<td>Often recoverable</td>
+<td>Complete challenge</td>
+</tr>
+<tr>
+<td>Fraud blocks</td>
+<td>Stripe Radar / issuer</td>
+<td>Usually not</td>
+<td>Call bank</td>
+</tr>
+<tr>
+<td>Rate limits</td>
+<td>Your API / Stripe</td>
+<td>Temporary</td>
+<td>Wait + retry</td>
+</tr>
+</tbody></table>
+<p><strong>1. Validation errors</strong> — caught by Stripe Elements <code>onChange</code> events before any network call. Show inline field-level errors immediately; never surface these as a toast or modal. The form is the context.</p>
+<pre><code>// Stripe Elements onChange handler
+elements.getElement(&#x27;card&#x27;)?.on(&#x27;change&#x27;, (event) =&gt; {
+  if (event.error) {
+    setFieldError(event.error.message); // inline, beneath the field
+  } else {
+    setFieldError(null);
+  }
+});</code></pre>
+<p><strong>2. Network errors</strong> — the ambiguous category. The request may have reached the server (charge may have fired) or may not have. Strategy: never show &quot;payment failed&quot; — show &quot;we couldn&#x27;t confirm your payment.&quot; Provide a status-check path (order history, email confirmation). Log the full request context for idempotency key recovery.</p>
+<p><strong>3. Card declines</strong> — issuer-side rejections returned synchronously by Stripe. The <code>PaymentIntent</code> returns to <code>requires_payment_method</code> status. Strategy: be specific where safe (insufficient funds → &quot;check your balance&quot;), be vague where security demands it (stolen card → generic decline message). Never retry automatically.</p>
+<p><strong>4. Authentication failures</strong> — 3DS challenge was shown but failed or was cancelled. The <code>PaymentIntent</code> enters <code>requires_action</code> or stays in <code>requires_payment_method</code>. Strategy: offer to retry the authentication challenge; the card itself isn&#x27;t necessarily bad.</p>
+<p><strong>5. Fraud blocks</strong> — Stripe Radar rules or issuer fraud systems block the charge. Decline code <code>do_not_honor</code> or <code>transaction_not_allowed</code>. Strategy: generic messaging (&quot;your bank declined this transaction&quot;). Do not tell the user *why*; fraud systems are gamed if you&#x27;re too specific. Log aggressively server-side.</p>
+<p><strong>6. Rate limits</strong> — HTTP 429 from your backend or Stripe. Strategy: exponential backoff with jitter, surface a non-alarming &quot;we&#x27;re busy, trying again&quot; message, implement the circuit breaker (Q6) to stop hammering.</p>
+<pre><code>type ErrorCategory =
+  | &#x27;validation&#x27;
+  | &#x27;network&#x27;
+  | &#x27;card_decline&#x27;
+  | &#x27;authentication&#x27;
+  | &#x27;fraud&#x27;
+  | &#x27;rate_limit&#x27;;
+
+function classifyStripeError(error: Stripe.StripeError): ErrorCategory {
+  if (error.type === &#x27;validation_error&#x27;) return &#x27;validation&#x27;;
+  if (error.type === &#x27;card_error&#x27;) {
+    const fraudCodes = [&#x27;do_not_honor&#x27;, &#x27;stolen_card&#x27;, &#x27;pickup_card&#x27;, &#x27;lost_card&#x27;, &#x27;restricted_card&#x27;];
+    return fraudCodes.includes(error.decline_code ?? &#x27;&#x27;) ? &#x27;fraud&#x27; : &#x27;card_decline&#x27;;
+  }
+  if (error.code === &#x27;authentication_required&#x27;) return &#x27;authentication&#x27;;
+  if (error.type === &#x27;api_connection_error&#x27;) return &#x27;network&#x27;;
+  if (error.status === 429) return &#x27;rate_limit&#x27;;
+  return &#x27;network&#x27;; // fail safe
+}</code></pre>
+<p><strong>Tradeoffs:</strong></p>
+<ul><li><strong>Alternative: single generic error message</strong> — simpler to build, but converts poorly. Users with fixable issues (insufficient funds, wrong billing address) abandon instead of correcting.</li><li><strong>Alternative: exposing raw Stripe error messages</strong> — Stripe&#x27;s messages are terse and technical; they&#x27;re designed for developers, not cardholders. Pass them through a copy layer.</li><li><strong>Not discussed here but critical</strong>: server-side logging must capture the full Stripe error object (including <code>charge</code> ID) before the frontend ever sees the error, because the frontend&#x27;s error context is lossy.</li></ul>
+<hr>
+</article>
+<article class="qa" id="q-a-users-card-is-declined-with-stripe-error-code-card-declined-and-decline-code-insufficient-funds-what-do-you-show-the-user-what-do-you-show-the-user-if-the-decline-code-is-stolen-card-how-does-your-error-message-component-know-which-codes-warrant-specific-messaging-vs-a-generic-payment-failed-message">
+<h3 class="question">Q: A user&#x27;s card is declined with Stripe error code <code>card_declined</code> and decline code <code>insufficient_funds</code>. What do you show the user? What do you show the user if the decline code is <code>stolen_card</code>? How does your error message component know which codes warrant specific messaging vs. a generic &quot;payment failed&quot; message?</h3>
+<p><strong>Problem framing:</strong> This question tests security awareness alongside UX judgment. Oversharing decline reasons enables card testing attacks (attackers probe which cards are &quot;almost valid&quot;). Under-sharing frustrates legitimate users with fixable problems.</p>
+<p><strong>Approach:</strong></p>
+<p>Maintain an explicit allowlist of decline codes that get specific messaging. Everything else falls through to a safe generic.</p>
+<pre><code>// decline-messages.ts
+const SPECIFIC_DECLINE_MESSAGES: Record&lt;string, string&gt; = {
+  insufficient_funds:
+    &#x27;Your card has insufficient funds. Please use a different card or contact your bank.&#x27;,
+  expired_card:
+    &#x27;Your card has expired. Please update your card details or use a different card.&#x27;,
+  incorrect_cvc:
+    &#x27;The security code (CVC) you entered is incorrect. Please check and try again.&#x27;,
+  incorrect_zip:
+    &#x27;The billing zip code doesn\&#x27;t match your card records. Please verify and retry.&#x27;,
+  card_velocity_exceeded:
+    &#x27;Too many payment attempts. Please wait a few minutes before trying again.&#x27;,
+  currency_not_supported:
+    &#x27;This card doesn\&#x27;t support payments in this currency. Please use a different card.&#x27;,
+};
+
+// Codes that get ONLY generic messaging — never expose these
+const SILENT_DECLINE_CODES = new Set([
+  &#x27;stolen_card&#x27;,
+  &#x27;lost_card&#x27;,
+  &#x27;pickup_card&#x27;,
+  &#x27;fraudulent&#x27;,
+  &#x27;do_not_honor&#x27;,
+  &#x27;transaction_not_allowed&#x27;,
+  &#x27;restricted_card&#x27;,
+  &#x27;security_violation&#x27;,
+]);
+
+const GENERIC_DECLINE_MESSAGE =
+  &#x27;Your payment was declined. Please contact your bank or use a different payment method.&#x27;;
+
+export function getDeclineMessage(declineCode: string | undefined): string {
+  if (!declineCode) return GENERIC_DECLINE_MESSAGE;
+  if (SILENT_DECLINE_CODES.has(declineCode)) return GENERIC_DECLINE_MESSAGE;
+  return SPECIFIC_DECLINE_MESSAGES[declineCode] ?? GENERIC_DECLINE_MESSAGE;
+}</code></pre>
+<p>For <code>insufficient_funds</code>: show the specific message above. The user can take a clear action — top up or switch cards.</p>
+<p>For <code>stolen_card</code>: show the <strong>exact same generic message</strong> as any unknown decline. Do not hint that the card is flagged. Why? Three reasons:</p>
+<ol><li>If a fraudster is testing a stolen card, you&#x27;ve just confirmed the card number is valid but flagged.</li><li>If a legitimate user&#x27;s card was incorrectly flagged, they need to call their bank anyway — the message is the same.</li><li>Legal/compliance teams often require this.</li></ol>
+<p>Server-side, log the full decline code with the user ID, attempt count, and IP for fraud review. The frontend&#x27;s copy layer is the only place you scrub this.</p>
+<p><strong>Component architecture:</strong></p>
+<pre><code>// PaymentErrorAlert.tsx
+interface PaymentErrorAlertProps {
+  stripeError: Stripe.StripeError | null;
+}
+
+export function PaymentErrorAlert({ stripeError }: PaymentErrorAlertProps) {
+  if (!stripeError) return null;
+
+  const isCardDecline = stripeError.type === &#x27;card_error&#x27;;
+  const message = isCardDecline
+    ? getDeclineMessage(stripeError.decline_code)
+    : &#x27;Something went wrong processing your payment. Please try again.&#x27;;
+
+  // Always offer a path forward
+  const showContactSupport = stripeError.decline_code
+    ? SILENT_DECLINE_CODES.has(stripeError.decline_code)
+    : false;
+
+  return (
+    &lt;Alert role=&quot;alert&quot; aria-live=&quot;assertive&quot; variant=&quot;error&quot;&gt;
+      &lt;p&gt;{message}&lt;/p&gt;
+      {showContactSupport &amp;&amp; (
+        &lt;a href=&quot;/support&quot;&gt;Contact support if this persists&lt;/a&gt;
+      )}
+    &lt;/Alert&gt;
+  );
+}</code></pre>
+<p><strong>Tradeoffs:</strong></p>
+<ul><li><strong>Alternative: pass Stripe&#x27;s raw <code>error.message</code> to the user</strong> — Stripe&#x27;s messages for <code>stolen_card</code> are &quot;Your card was declined.&quot; — accidentally safe in this case, but not consistently safe across all codes, and not localization-friendly.</li><li><strong>Alternative: look up decline code at runtime from an API</strong> — adds a round-trip to show an error message, creating a loading state inside an error state — poor UX.</li><li><strong>The allowlist approach</strong> is the safest default: you consciously decide what to reveal rather than consciously deciding what to hide.</li></ul>
+<hr>
+</article>
+<article class="qa" id="q-what-is-3d-secure-3ds-authentication-when-is-it-triggered-and-how-does-stripeconfirmcardpayment-handle-the-3ds-challenge-flow-what-does-the-user-experience-look-like-and-what-are-the-failure-modes-user-cancels-3ds-times-out-banks-3ds-page-is-down">
+<h3 class="question">Q: What is 3D Secure (3DS) authentication, when is it triggered, and how does <code>stripe.confirmCardPayment()</code> handle the 3DS challenge flow? What does the user experience look like, and what are the failure modes (user cancels, 3DS times out, bank&#x27;s 3DS page is down)?</h3>
+<p><strong>Problem framing:</strong> 3DS is the most complex UX branch in a card payment flow. Interviewers want to see that you understand the full state machine — not just the happy path — and that you&#x27;ve thought about failure modes that are genuinely outside your control.</p>
+<p><strong>Approach:</strong></p>
+<p><strong>What is 3DS?</strong> 3D Secure is an authentication protocol (EMV 3DS2 is the current version) where the card issuer challenges the cardholder to prove identity — via a one-time code, biometric, or push notification to their banking app. It shifts fraud liability from merchant to issuer when completed successfully.</p>
+<p><strong>When is it triggered?</strong></p>
+<ul><li>The issuer&#x27;s risk engine flags the transaction (high amount, new device, unusual location)</li><li>The merchant explicitly requests it (<code>request_three_d_secure: &#x27;any&#x27;</code> on the PaymentIntent)</li><li>EU regulatory requirement (PSD2 Strong Customer Authentication for European cards)</li><li>Stripe Radar rules requiring it</li></ul>
+<p><strong>How <code>confirmCardPayment()</code> handles 3DS:</strong></p>
+<pre><code>const { paymentIntent, error } = await stripe.confirmCardPayment(clientSecret, {
+  payment_method: {
+    card: cardElement,
+    billing_details: { name: &#x27;Jane Doe&#x27; },
+  },
+});
+
+// Stripe.js handles the 3DS redirect/iframe internally
+// This promise only resolves after the full challenge is complete
+if (error) {
+  // 3DS failed, cancelled, or timed out — error.code === &#x27;payment_intent_authentication_failure&#x27;
+} else if (paymentIntent.status === &#x27;succeeded&#x27;) {
+  // Fully authenticated and charged
+}</code></pre>
+<p>The key insight: <strong><code>confirmCardPayment()</code> is a long-running promise.</strong> Stripe.js orchestrates the entire challenge flow — opening an iframe or redirect, waiting for the user to complete authentication, receiving the result — before the promise resolves. Your UI just needs to show a loading/waiting state during this time.</p>
+<p><strong>User experience flow:</strong></p>
+<div class="mermaid-wrap"><pre class="mermaid">sequenceDiagram
+    participant User
+    participant YourPage
+    participant StripeJS
+    participant IssuerBank
+
+    User->>YourPage: Clicks "Pay"
+    YourPage->>StripeJS: confirmCardPayment(clientSecret)
+    StripeJS->>IssuerBank: Initiate 3DS2 challenge
+    IssuerBank-->>StripeJS: Challenge required (iframe URL)
+    StripeJS->>YourPage: Opens modal/iframe (managed by Stripe)
+    User->>IssuerBank: Completes OTP / biometric
+    IssuerBank-->>StripeJS: Authentication result
+    StripeJS-->>YourPage: Promise resolves with PaymentIntent
+    YourPage->>User: Success or error screen</pre></div>
+<p>Your page shows a &quot;Verifying with your bank…&quot; loading state while the modal is open. Stripe renders the bank&#x27;s 3DS challenge UI inside its own iframe overlay — you don&#x27;t control this UI.</p>
+<p><strong>Failure modes:</strong></p>
+<table>
+<thead><tr>
+<th>Failure</th>
+<th>What Stripe returns</th>
+<th>Your response</th>
+</tr></thead><tbody>
+<tr>
+<td>User cancels challenge</td>
+<td><code>error.code: &#x27;payment_intent_authentication_failure&#x27;</code></td>
+<td>Offer to retry or use different card</td>
+</tr>
+<tr>
+<td>3DS times out (issuer slow)</td>
+<td>Same error code</td>
+<td>Same — offer retry</td>
+</tr>
+<tr>
+<td>Bank&#x27;s 3DS page is down</td>
+<td>Same error code</td>
+<td>Same — but also offer alternative payment methods</td>
+</tr>
+<tr>
+<td>User closes browser mid-challenge</td>
+<td>PaymentIntent stays <code>requires_action</code></td>
+<td>On next page load, check PI status and resume</td>
+</tr>
+</tbody></table>
+<p>For the &quot;user closes browser&quot; case, you must poll or webhook-receive the PaymentIntent status on return:</p>
+<pre><code>// On checkout page mount, resume an in-progress payment
+useEffect(() =&gt; {
+  const pendingClientSecret = sessionStorage.getItem(&#x27;pending_client_secret&#x27;);
+  if (pendingClientSecret) {
+    stripe.retrievePaymentIntent(pendingClientSecret).then(({ paymentIntent }) =&gt; {
+      if (paymentIntent?.status === &#x27;requires_action&#x27;) {
+        // Resume the 3DS challenge
+        stripe.confirmCardPayment(pendingClientSecret);
+      }
+    });
+  }
+}, []);</code></pre>
+<p><strong>Tradeoffs:</strong></p>
+<ul><li><strong>Alternative: redirect-based 3DS</strong> (return_url approach) — simpler to implement, no iframe state management, but causes a full page navigation which loses React state. Must serialize form state to server or sessionStorage before redirect.</li><li><strong>Alternative: <code>confirmCardPayment</code> with <code>return_url</code> only</strong> — some banks fall back to redirect even with the iframe flow; you must always handle both paths regardless.</li></ul>
+<hr>
+</article>
+<article class="qa" id="q-how-do-you-distinguish-between-a-network-timeout-where-the-payment-may-or-may-not-have-processed-and-a-definitive-payment-failure-where-you-know-the-charge-was-rejected-how-does-each-case-change-your-frontend-error-recovery-strategy">
+<h3 class="question">Q: How do you distinguish between a network timeout (where the payment may or may not have processed) and a definitive payment failure (where you know the charge was rejected)? How does each case change your frontend error recovery strategy?</h3>
+<p><strong>Problem framing:</strong> This is the most dangerous error category in payments. Showing &quot;payment failed&quot; when the charge actually succeeded causes duplicate charges (user retries). Showing &quot;payment succeeded&quot; when it failed causes unfulfilled orders. The interviewer wants to see that you understand the ambiguity and have a concrete resolution strategy.</p>
+<p><strong>Approach:</strong></p>
+<p>The key is the <strong>idempotency key</strong> and <strong>PaymentIntent status</strong>.</p>
+<p><strong>Definitive failure</strong> (synchronous rejection): Stripe returns an error response with HTTP 402 and <code>type: &#x27;card_error&#x27;</code>. The charge was attempted and rejected. You <strong>know</strong> the money didn&#x27;t move. Safe to show &quot;payment failed&quot; and prompt retry.</p>
+<p><strong>Network timeout / ambiguous failure</strong>: The request never got a response (fetch promise rejected with <code>TypeError: Failed to fetch</code>, or a 504 gateway timeout). You don&#x27;t know if Stripe received the request.</p>
+<p><strong>Resolution strategy:</strong></p>
+<p>Before any payment attempt, store the idempotency key:</p>
+<pre><code>// Generate once, persist before the request
+const idempotencyKey = `pay_${userId}_${orderId}_${Date.now()}`;
+sessionStorage.setItem(&#x27;payment_idempotency_key&#x27;, idempotencyKey);
+sessionStorage.setItem(&#x27;pending_payment_intent_id&#x27;, paymentIntentId);</code></pre>
+<p>On network error, do NOT show &quot;payment failed.&quot; Instead:</p>
+<pre><code>async function handlePaymentError(error: unknown) {
+  if (isNetworkError(error)) {
+    // Ambiguous — check PaymentIntent status directly
+    const piId = sessionStorage.getItem(&#x27;pending_payment_intent_id&#x27;);
+    if (piId) {
+      const { paymentIntent } = await stripe.retrievePaymentIntent(clientSecret);
+      if (paymentIntent?.status === &#x27;succeeded&#x27;) {
+        // Charge went through! Navigate to success.
+        router.push(&#x27;/order-confirmation&#x27;);
+        return;
+      }
+      if (paymentIntent?.status === &#x27;requires_payment_method&#x27;) {
+        // Definitive failure after all — safe to retry
+        setError(&#x27;Payment failed. Please try again.&#x27;);
+        return;
+      }
+    }
+    // Can&#x27;t determine status — show uncertainty message
+    setError(
+      &#x27;We couldn\&#x27;t confirm your payment. Please check your email for a confirmation, &#x27; +
+      &#x27;or visit your order history before trying again.&#x27;
+    );
+    return;
+  }
+  // Definitive failure
+  setError(getDeclineMessage((error as Stripe.StripeError).decline_code));
+}
+
+function isNetworkError(error: unknown): boolean {
+  if (error instanceof TypeError &amp;&amp; error.message === &#x27;Failed to fetch&#x27;) return true;
+  if ((error as any)?.status &gt;= 500) return true;
+  if ((error as any)?.status === 504) return true;
+  return false;
+}</code></pre>
+<p>The <code>retrievePaymentIntent</code> call uses the <code>client_secret</code> which is already in your app state — it doesn&#x27;t require another server call. It queries Stripe directly via Stripe.js.</p>
+<p><strong>Flow diagram:</strong></p>
+<div class="mermaid-wrap"><pre class="mermaid">flowchart TD
+    A[Payment request sent] --> B{Response received?}
+    B -->|Yes, error 4xx| C[Definitive failure\nShow specific error]
+    B -->|Yes, success| D[Navigate to confirmation]
+    B -->|No / 5xx / timeout| E[Retrieve PaymentIntent status]
+    E --> F{PI status?}
+    F -->|succeeded| D
+    F -->|requires_payment_method| C
+    F -->|requires_action| G[Resume 3DS challenge]
+    F -->|processing| H[Poll + show 'processing' state]
+    F -->|Unknown / fetch fails| I[Show uncertainty message\nDon't offer retry yet]</pre></div>
+<p><strong>Tradeoffs:</strong></p>
+<ul><li><strong>Alternative: always retry on network error</strong> — causes duplicate charges if the first attempt went through. Catastrophic for perceived reliability and customer trust.</li><li><strong>Alternative: server-side idempotency check via your own API</strong> — more robust than relying on <code>retrievePaymentIntent</code>, because it can also check your DB for the order record. The downside is you need a working server connection — which you may not have if it&#x27;s a network partition. Use both: try Stripe directly first, fall back to your server.</li></ul>
+<hr>
+</article>
+<article class="qa" id="q-describe-your-strategy-for-handling-the-case-where-stripejs-itself-fails-to-load-cdn-outage-network-error-ad-blocker-do-you-have-a-fallback-or-do-you-fail-gracefully-what-does-the-user-see-and-what-do-you-log">
+<h3 class="question">Q: Describe your strategy for handling the case where Stripe.js itself fails to load (CDN outage, network error, ad blocker). Do you have a fallback, or do you fail gracefully? What does the user see, and what do you log?</h3>
+<p><strong>Problem framing:</strong> Stripe.js is a cross-origin script that must be loaded from <code>js.stripe.com</code> — you cannot self-host it (PCI requirement). This makes it uniquely vulnerable to CDN outages, aggressive ad blockers (uBlock Origin blocks Stripe.js by default in some configurations), and corporate proxies. Handling this gracefully is often overlooked.</p>
+<p><strong>Approach:</strong></p>
+<p><strong>Detection:</strong> Load Stripe.js asynchronously and detect failure explicitly:</p>
+<pre><code>// stripe-loader.ts
+let stripeLoadPromise: Promise&lt;Stripe | null&gt; | null = null;
+
+export function loadStripeWithTimeout(publishableKey: string): Promise&lt;Stripe | null&gt; {
+  if (stripeLoadPromise) return stripeLoadPromise;
+
+  stripeLoadPromise = Promise.race([
+    loadStripe(publishableKey), // from @stripe/stripe-js
+    new Promise&lt;null&gt;((resolve) =&gt;
+      setTimeout(() =&gt; resolve(null), 5000) // 5s timeout
+    ),
+  ]).catch(() =&gt; null); // loadStripe rejects on network error
+
+  return stripeLoadPromise;
+}</code></pre>
+<pre><code>// CheckoutPage.tsx
+function CheckoutPage() {
+  const [stripeLoadState, setStripeLoadState] = useState&lt;
+    &#x27;loading&#x27; | &#x27;ready&#x27; | &#x27;failed&#x27;
+  &gt;(&#x27;loading&#x27;);
+  const stripeRef = useRef&lt;Stripe | null&gt;(null);
+
+  useEffect(() =&gt; {
+    loadStripeWithTimeout(STRIPE_PUBLISHABLE_KEY).then((stripe) =&gt; {
+      if (stripe) {
+        stripeRef.current = stripe;
+        setStripeLoadState(&#x27;ready&#x27;);
+      } else {
+        setStripeLoadState(&#x27;failed&#x27;);
+        logger.error(&#x27;stripe_js_load_failed&#x27;, {
+          // Diagnose the cause
+          isAdBlockerSuspected: !navigator.onLine ? false : true,
+          userAgent: navigator.userAgent,
+          timestamp: Date.now(),
+        });
+      }
+    });
+  }, []);
+
+  if (stripeLoadState === &#x27;failed&#x27;) {
+    return &lt;StripeLoadFailureFallback /&gt;;
+  }
+  // ...
+}</code></pre>
+<p><strong>Fallback UI — StripeLoadFailureFallback:</strong></p>
+<pre><code>function StripeLoadFailureFallback() {
+  return (
+    &lt;div role=&quot;alert&quot;&gt;
+      &lt;h2&gt;Secure payment form unavailable&lt;/h2&gt;
+      &lt;p&gt;
+        We couldn&#x27;t load our payment processor. This can happen if a browser
+        extension is blocking payment scripts.
+      &lt;/p&gt;
+      &lt;ul&gt;
+        &lt;li&gt;Try disabling your ad blocker for this page&lt;/li&gt;
+        &lt;li&gt;Or pay via{&#x27; &#x27;}
+          &lt;a href=&quot;/checkout/paypal&quot;&gt;PayPal&lt;/a&gt; or{&#x27; &#x27;}
+          &lt;a href=&quot;/checkout/bank-transfer&quot;&gt;bank transfer&lt;/a&gt;
+        &lt;/li&gt;
+      &lt;/ul&gt;
+      &lt;p&gt;
+        If the problem persists, &lt;a href=&quot;/support&quot;&gt;contact support&lt;/a&gt;.
+      &lt;/p&gt;
+    &lt;/div&gt;
+  );
+}</code></pre>
+<p><strong>What you log:</strong></p>
+<ul><li><code>stripe_js_load_failed</code> event with: timestamp, navigator.onLine, connection type (if available via <code>navigator.connection</code>), userAgent, page URL</li><li>Do NOT try to infer &quot;ad blocker vs CDN outage&quot; definitively on the client — log the signals and let your analytics team correlate with Stripe status page events</li></ul>
+<p><strong>What you never do:</strong></p>
+<ul><li>Self-host Stripe.js (PCI DSS violation — Stripe explicitly prohibits it)</li><li>Proceed to show a raw <code>&lt;input type=&quot;text&quot;&gt;</code> for card numbers as a &quot;fallback&quot; (PCI DSS violation)</li><li>Show a blank page or an unhandled <code>stripe is not defined</code> exception</li></ul>
+<p><strong>Tradeoffs:</strong></p>
+<ul><li><strong>Alternative: subresource integrity (SRI) hash on the Stripe.js <code>&lt;script&gt;</code> tag</strong> — cannot do this because Stripe updates the script continuously without version pinning, so any hash would immediately invalidate.</li><li><strong>Alternative: loading Stripe.js earlier (in <code>_document.tsx</code> / <code>&lt;head&gt;</code>)</strong> — reduces the failure window (script starts loading before React hydrates) but doesn&#x27;t eliminate it. Still need the detection and fallback.</li><li><strong>Alternative: no fallback, just block checkout</strong> — if you have no alternative payment methods, this may be unavoidable. But you should still surface a clear explanation rather than a broken UI.</li></ul>
+<hr>
+</article>
+<article class="qa" id="q-how-do-you-implement-a-circuit-breaker-pattern-on-the-frontend-for-payment-requests-if-your-payment-api-endpoint-is-returning-503s-how-do-you-detect-this-condition-and-prevent-the-user-from-hammering-a-degraded-backend">
+<h3 class="question">Q: How do you implement a circuit breaker pattern on the frontend for payment requests? If your payment API endpoint is returning 503s, how do you detect this condition and prevent the user from hammering a degraded backend?</h3>
+<p><strong>Problem framing:</strong> The circuit breaker pattern is typically discussed in backend/microservices contexts. The interviewer is testing whether you can apply it thoughtfully to the frontend, where &quot;requests&quot; are user-initiated and there&#x27;s no service mesh. This matters because a degraded payment API that receives 10x normal traffic from retrying users will take longer to recover.</p>
+<p><strong>Approach:</strong></p>
+<p>Implement a client-side circuit breaker as a singleton that tracks consecutive failures and opens/half-opens on a timer:</p>
+<pre><code>// circuit-breaker.ts
+type CircuitState = &#x27;closed&#x27; | &#x27;open&#x27; | &#x27;half-open&#x27;;
+
+interface CircuitBreakerConfig {
+  failureThreshold: number;   // failures before opening
+  successThreshold: number;   // successes to close from half-open
+  timeout: number;            // ms to wait before half-open
+}
+
+class CircuitBreaker {
+  private state: CircuitState = &#x27;closed&#x27;;
+  private failureCount = 0;
+  private successCount = 0;
+  private lastFailureTime = 0;
+  private config: CircuitBreakerConfig;
+
+  constructor(config: CircuitBreakerConfig) {
+    this.config = config;
+  }
+
+  isOpen(): boolean {
+    if (this.state === &#x27;open&#x27;) {
+      const elapsed = Date.now() - this.lastFailureTime;
+      if (elapsed &gt; this.config.timeout) {
+        this.state = &#x27;half-open&#x27;;
+        this.successCount = 0;
+        return false; // Allow one probe request through
+      }
+      return true;
+    }
+    return false;
+  }
+
+  recordSuccess(): void {
+    this.failureCount = 0;
+    if (this.state === &#x27;half-open&#x27;) {
+      this.successCount++;
+      if (this.successCount &gt;= this.config.successThreshold) {
+        this.state = &#x27;closed&#x27;;
+      }
+    }
+  }
+
+  recordFailure(): void {
+    this.lastFailureTime = Date.now();
+    this.failureCount++;
+    if (this.failureCount &gt;= this.config.failureThreshold) {
+      this.state = &#x27;open&#x27;;
+    }
+  }
+
+  getState(): CircuitState {
+    return this.state;
+  }
+}
+
+export const paymentCircuitBreaker = new CircuitBreaker({
+  failureThreshold: 3,   // 3 consecutive 503s → open
+  successThreshold: 1,   // 1 success → close from half-open
+  timeout: 30_000,       // 30s before probing again
+});</code></pre>
+<p>Integration in the payment submission hook:</p>
+<pre><code>async function submitPayment(payload: PaymentPayload) {
+  if (paymentCircuitBreaker.isOpen()) {
+    // Don&#x27;t even attempt the request
+    setError(
+      &#x27;Our payment service is temporarily unavailable. &#x27; +
+      &#x27;Please try again in a few minutes.&#x27;
+    );
+    // Disable the submit button, show estimated recovery time
+    setCircuitOpen(true);
+    return;
+  }
+
+  try {
+    const result = await createPaymentIntent(payload);
+    paymentCircuitBreaker.recordSuccess();
+    return result;
+  } catch (error) {
+    if (isServiceUnavailable(error)) { // 503, 502, 504
+      paymentCircuitBreaker.recordFailure();
+      logger.warn(&#x27;payment_api_degraded&#x27;, {
+        state: paymentCircuitBreaker.getState(),
+        failureCount: /* ... */,
+      });
+    }
+    throw error;
+  }
+}</code></pre>
+<p><strong>UX when circuit is open:</strong></p>
+<div class="mermaid-wrap"><pre class="mermaid">stateDiagram-v2
+    [*] --> Closed: Initial state
+    Closed --> Open: 3 consecutive 503s
+    Open --> HalfOpen: After 30s timeout
+    HalfOpen --> Closed: Probe request succeeds
+    HalfOpen --> Open: Probe request fails
+    Open --> DisplayBanner: Show degraded state to user
+    DisplayBanner --> CountdownTimer: 30s remaining</pre></div>
+<p>Show a non-alarming banner: *&quot;Payment processing is experiencing delays. We&#x27;ll try again automatically — your card hasn&#x27;t been charged.&quot;*</p>
+<p>Persist circuit state to <code>sessionStorage</code> so a page refresh doesn&#x27;t reset it (a refreshing user isn&#x27;t new demand, it&#x27;s the same user retrying):</p>
+<pre><code>// Hydrate from sessionStorage on init
+const persisted = sessionStorage.getItem(&#x27;circuit_state&#x27;);
+if (persisted) {
+  const { state, lastFailureTime } = JSON.parse(persisted);
+  // Restore state
+}</code></pre>
+<p><strong>Tradeoffs:</strong></p>
+<ul><li><strong>Alternative: server-sent circuit breaker signal</strong> — your API returns a <code>Retry-After</code> header on 503, and the frontend respects it. More accurate than client-side counting, but requires backend coordination and doesn&#x27;t handle the case where the API is unreachable at all.</li><li><strong>Alternative: exponential backoff without a circuit breaker</strong> — backoff reduces retry frequency but doesn&#x27;t stop determined users from clicking &quot;Pay&quot; repeatedly. The circuit breaker&#x27;s open state disables the button entirely.</li><li><strong>Threshold tuning</strong>: 3 failures / 30s is conservative for a low-volume checkout. High-volume checkouts might need 10 failures / 10s to avoid false positives on transient spikes.</li></ul>
+<hr>
+</article>
+<article class="qa" id="q-what-is-the-ux-strategy-for-a-payment-that-fails-at-the-very-last-step-after-the-user-has-entered-all-their-details-and-clicked-pay-but-due-to-a-server-side-error-rather-than-a-card-decline-how-do-you-preserve-their-form-state-and-communicate-the-error-without-inducing-panic">
+<h3 class="question">Q: What is the UX strategy for a payment that fails at the very last step — after the user has entered all their details and clicked &quot;Pay&quot; — but due to a server-side error rather than a card decline? How do you preserve their form state and communicate the error without inducing panic?</h3>
+<p><strong>Problem framing:</strong> This is an empathy + engineering question. The user has completed the highest-friction step of your product. A bad error state causes abandonment. The interviewer wants to see that you distinguish server errors from card errors in both copy and in form state management.</p>
+<p><strong>Approach:</strong></p>
+<p><strong>Preserve form state absolutely.</strong> Stripe Elements card fields are controlled by Stripe&#x27;s iframe — you cannot read or restore their values. But you CAN:</p>
+<ol><li>Keep the <code>PaymentElement</code> or <code>CardElement</code> mounted (don&#x27;t unmount on error)</li><li>Preserve all non-sensitive fields (name, billing address, email) in React state</li><li>Keep the <code>clientSecret</code> valid — a server error doesn&#x27;t invalidate the PaymentIntent</li></ol>
+<pre><code>function CheckoutForm() {
+  const [submitState, setSubmitState] = useState&lt;
+    &#x27;idle&#x27; | &#x27;loading&#x27; | &#x27;server_error&#x27; | &#x27;card_error&#x27; | &#x27;success&#x27;
+  &gt;(&#x27;idle&#x27;);
+  const [serverError, setServerError] = useState&lt;string | null&gt;(null);
+
+  // Form state preserved across errors
+  const [billingName, setBillingName] = useState(&#x27;&#x27;);
+  const [email, setEmail] = useState(&#x27;&#x27;);
+
+  async function handleSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    setSubmitState(&#x27;loading&#x27;);
+    setServerError(null);
+
+    try {
+      const { error } = await stripe.confirmPayment({ elements, confirmParams: {
+        return_url: `${window.location.origin}/order-confirmation`,
+        payment_method_data: {
+          billing_details: { name: billingName, email },
+        },
+      }});
+
+      if (error?.type === &#x27;card_error&#x27; || error?.type === &#x27;validation_error&#x27;) {
+        setSubmitState(&#x27;card_error&#x27;);
+        // Card element stays mounted with its current state
+      } else if (error) {
+        // Server-side or unexpected error
+        setSubmitState(&#x27;server_error&#x27;);
+        setServerError(
+          &#x27;Something went wrong on our end. Your card has not been charged. &#x27; +
+          &#x27;Please try again — your payment details are still saved.&#x27;
+        );
+        logger.error(&#x27;payment_server_error&#x27;, {
+          errorType: error.type,
+          errorCode: error.code,
+          paymentIntentId: clientSecret.split(&#x27;_secret&#x27;)[0],
+        });
+      }
+    } catch (networkError) {
+      setSubmitState(&#x27;server_error&#x27;);
+      setServerError(
+        &#x27;We lost connection while processing. Please check your internet and try again.&#x27;
+      );
+    }
+  }
+
+  return (
+    &lt;form onSubmit={handleSubmit}&gt;
+      {/* Form fields preserved across errors */}
+      &lt;NameField value={billingName} onChange={setBillingName} /&gt;
+      &lt;EmailField value={email} onChange={setEmail} /&gt;
+
+      {/* Stripe Elements STAY MOUNTED — don&#x27;t conditionally render */}
+      &lt;PaymentElement /&gt;
+
+      {submitState === &#x27;server_error&#x27; &amp;&amp; (
+        &lt;Alert variant=&quot;warning&quot; role=&quot;alert&quot; aria-live=&quot;assertive&quot;&gt;
+          &lt;strong&gt;Payment not completed&lt;/strong&gt;
+          &lt;p&gt;{serverError}&lt;/p&gt;
+          &lt;p&gt;Your card has not been charged.&lt;/p&gt;
+        &lt;/Alert&gt;
+      )}
+
+      &lt;Button
+        type=&quot;submit&quot;
+        disabled={submitState === &#x27;loading&#x27;}
+        aria-busy={submitState === &#x27;loading&#x27;}
+      &gt;
+        {submitState === &#x27;loading&#x27; ? &#x27;Processing…&#x27; : &#x27;Pay now&#x27;}
+      &lt;/Button&gt;
+    &lt;/form&gt;
+  );
+}</code></pre>
+<p><strong>Critical UX details:</strong></p>
+<ol><li><strong>&quot;Your card has not been charged&quot;</strong> — say this explicitly for server errors. Users&#x27; #1 fear is being charged and getting nothing.</li><li><strong>Don&#x27;t reset the form</strong> — the user shouldn&#x27;t have to re-enter their name, address, or email.</li><li><strong>Don&#x27;t show a modal or navigate away</strong> — the error is in the context of the form; keep them there.</li><li><strong>Aria live region</strong> — screen reader users need the error announced immediately.</li><li><strong>Re-enable the submit button</strong> — they should be able to try again without refreshing.</li><li><strong>Log the <code>paymentIntentId</code></strong> — your support team will need it to investigate.</li></ol>
+<p><strong>Tradeoffs:</strong></p>
+<ul><li><strong>Alternative: redirect to an error page</strong> — loses all form state, requires the user to start over. Only appropriate for truly unrecoverable states (e.g., session expired).</li><li><strong>Alternative: auto-retry on server error</strong> — increases charge risk if the first request actually processed. Don&#x27;t auto-retry payment requests; only the user should initiate a retry.</li><li><strong>Alternative: toast notification</strong> — toasts dismiss themselves. Payment errors must persist until the user acknowledges them.</li></ul>
+<hr>
+</article>
+<h2 class="section" id="deep-questions">Deep Questions</h2>
+<article class="qa" id="q-walk-me-through-the-full-3ds2-authentication-flow-from-a-frontend-architecture-standpoint-specifically-how-does-stripejs-detect-that-3ds-is-required-after-confirmcardpayment-how-is-the-challenge-rendered-in-an-iframe-a-redirect-a-modal-how-do-you-handle-the-case-where-the-device-fingerprinting-step-triggers-a-full-redirect-rather-than-a-seamless-iframe-challenge-and-what-happens-to-your-react-component-state-across-that-redirect-boundary">
+<h3 class="question">Q: Walk me through the full 3DS2 authentication flow from a frontend architecture standpoint. Specifically: how does Stripe.js detect that 3DS is required after <code>confirmCardPayment</code>, how is the challenge rendered (in an iframe? a redirect? a modal?), how do you handle the case where the device fingerprinting step triggers a full redirect rather than a seamless iframe challenge, and what happens to your React component state across that redirect boundary?</h3>
+<p><strong>Problem framing:</strong> This question is separating engineers who&#x27;ve read the Stripe docs from engineers who&#x27;ve debugged 3DS in production. The redirect boundary is where most implementations break. The interviewer wants a complete architecture answer, not a happy-path walkthrough.</p>
+<p><strong>Approach:</strong></p>
+<p><strong>Phase 1: Device Fingerprinting (Frictionless Flow)</strong></p>
+<p>Before the cardholder challenge, 3DS2 runs a silent device fingerprinting step. Stripe.js embeds a hidden iframe pointing to the issuer&#x27;s ACS (Access Control Server). The ACS collects browser data (screen size, timezone, plugins) and makes a risk decision:</p>
+<ul><li><strong>Frictionless</strong>: risk is low enough, no challenge needed → <code>PaymentIntent.status = &#x27;succeeded&#x27;</code></li><li><strong>Challenge required</strong>: risk too high → proceed to Phase 2</li></ul>
+<p>This fingerprinting happens automatically inside <code>stripe.confirmCardPayment()</code> before the promise resolves or the challenge UI appears.</p>
+<p><strong>Phase 2: Challenge Rendering</strong></p>
+<p>3DS2 supports two challenge modes:</p>
+<p><strong>Mode A: Iframe challenge (seamless)</strong> — Stripe.js renders its own modal overlay containing the issuer&#x27;s challenge UI in an iframe. The promise stays pending. Your page shows a loading state. This is the common case on desktop and modern mobile browsers.</p>
+<p><strong>Mode B: Full redirect challenge</strong> — The issuer&#x27;s ACS doesn&#x27;t support the iframe flow, or the browser blocks cross-origin iframes (some Samsung Browser configs, certain corporate proxies). In this case, Stripe redirects the entire page to the issuer&#x27;s 3DS page.</p>
+<p><strong>The redirect boundary is the hard part.</strong> When a full redirect happens:</p>
+<pre><code>Your checkout → issuer 3DS page → [return_url you specified]</code></pre>
+<p>Your React state is <strong>completely destroyed</strong>. <code>useState</code>, <code>useRef</code>, Zustand store — all gone. Stripe reconstructs the <code>PaymentIntent</code> result at the <code>return_url</code> via a URL parameter: <code>?payment_intent=pi_xxx&amp;payment_intent_client_secret=pi_xxx_secret_yyy&amp;redirect_status=succeeded</code>.</p>
+<p><strong>Handling the redirect boundary:</strong></p>
+<p><strong>Before the payment attempt</strong> — serialize essential state:</p>
+<pre><code>function CheckoutForm() {
+  const serializedState = {
+    orderId,
+    cartItems: cartItems.map(i =&gt; i.id), // IDs only, not full objects
+    billingName,
+    email,
+    returnPath: window.location.pathname,
+  };
+
+  // Before initiating payment
+  sessionStorage.setItem(&#x27;checkout_state&#x27;, JSON.stringify(serializedState));
+
+  const handleSubmit = async () =&gt; {
+    await stripe.confirmCardPayment(clientSecret, {
+      payment_method: { card: cardElement },
+      return_url: `${window.location.origin}/order-confirmation`,
+      // return_url is where Stripe sends the user after redirect-based 3DS
+    });
+  };
+}</code></pre>
+<p><strong>At the return_url</strong> — detect and handle redirect result:</p>
+<pre><code>// order-confirmation.tsx or a dedicated return URL handler
+function OrderConfirmation() {
+  useEffect(() =&gt; {
+    const searchParams = new URLSearchParams(window.location.search);
+    const clientSecret = searchParams.get(&#x27;payment_intent_client_secret&#x27;);
+    const redirectStatus = searchParams.get(&#x27;redirect_status&#x27;);
+
+    if (clientSecret) {
+      // We came back from a 3DS redirect — verify the result
+      stripe.retrievePaymentIntent(clientSecret).then(({ paymentIntent }) =&gt; {
+        switch (paymentIntent?.status) {
+          case &#x27;succeeded&#x27;:
+            // Recover order context from sessionStorage
+            const savedState = JSON.parse(
+              sessionStorage.getItem(&#x27;checkout_state&#x27;) ?? &#x27;{}&#x27;
+            );
+            sessionStorage.removeItem(&#x27;checkout_state&#x27;);
+            showOrderConfirmation(paymentIntent, savedState);
+            break;
+          case &#x27;requires_payment_method&#x27;:
+            // 3DS failed — redirect back to checkout with error
+            router.push(`/checkout?error=authentication_failed&amp;pi=${paymentIntent.id}`);
+            break;
+          case &#x27;requires_action&#x27;:
+            // Unusual: still needs action (shouldn&#x27;t happen at return_url)
+            logger.error(&#x27;unexpected_pi_status_at_return_url&#x27;, paymentIntent.status);
+            break;
+        }
+      });
+    }
+  }, []);
+}</code></pre>
+<p><strong>Full architectural flow:</strong></p>
+<div class="mermaid-wrap"><pre class="mermaid">sequenceDiagram
+    participant User
+    participant CheckoutPage
+    participant StripeJS
+    participant ACS as Issuer ACS
+    participant ReturnURL as /order-confirmation
+
+    User->>CheckoutPage: Clicks Pay
+    CheckoutPage->>SessionStorage: Serialize state
+    CheckoutPage->>StripeJS: confirmCardPayment(clientSecret, { return_url })
+    StripeJS->>ACS: Hidden iframe fingerprint
+    ACS-->>StripeJS: Challenge required
+
+    alt Iframe challenge (seamless)
+        StripeJS->>User: Show modal overlay with ACS challenge
+        User->>ACS: Complete OTP
+        ACS-->>StripeJS: Auth result
+        StripeJS-->>CheckoutPage: Promise resolves { paymentIntent }
+        CheckoutPage->>User: Navigate to confirmation
+    else Redirect challenge
+        StripeJS->>User: Full page redirect → ACS page
+        User->>ACS: Complete OTP on issuer's site
+        ACS->>ReturnURL: Redirect with ?payment_intent_client_secret=...
+        ReturnURL->>StripeJS: retrievePaymentIntent(clientSecret)
+        StripeJS-->>ReturnURL: PaymentIntent status
+        ReturnURL->>SessionStorage: Recover serialized state
+        ReturnURL->>User: Show confirmation or error
+    end</pre></div>
+<p><strong>What you cannot do:</strong></p>
+<ul><li>Detect in advance whether the redirect path will be taken — Stripe doesn&#x27;t expose this before <code>confirmCardPayment</code> runs</li><li>Maintain React context across the redirect — it&#x27;s a full navigation</li><li>Store sensitive data in sessionStorage — only store IDs and non-sensitive metadata</li></ul>
+<p><strong>Tradeoffs:</strong></p>
+<ul><li><strong>Alternative: always use <code>return_url</code>-only flow (avoid <code>confirmCardPayment</code> modal)</strong> — simplifies architecture (always redirect), but degrades UX for the 90%+ of users who get seamless iframe challenges.</li><li><strong>Alternative: serialize full cart to sessionStorage</strong> — tempting, but sessionStorage has a 5MB limit and storing PII (addresses, emails) in sessionStorage creates a data hygiene problem. Store IDs, fetch fresh data from your API at the return URL.</li><li><strong>Alternative: server-side session for redirect state</strong> — more robust (survives sessionStorage clear), requires an authenticated session, and adds server round-trip. Worth it for high-value checkouts.</li></ul>
+<hr>
+</article>
+<article class="qa" id="q-you-are-building-a-checkout-that-must-work-in-environments-with-extremely-poor-connectivity-rural-mobile-flaky-wifi-design-a-resilience-strategy-that-includes-detecting-offline-state-before-submission-queuing-the-payment-attempt-for-retry-when-connectivity-returns-preventing-duplicate-charges-and-communicating-uncertainty-to-the-user-without-causing-them-to-abandon-what-apis-do-you-use-and-what-are-the-limits-of-what-you-can-guarantee-on-the-frontend">
+<h3 class="question">Q: You are building a checkout that must work in environments with extremely poor connectivity (rural mobile, flaky WiFi). Design a resilience strategy that includes: detecting offline state before submission, queuing the payment attempt for retry when connectivity returns, preventing duplicate charges, and communicating uncertainty to the user without causing them to abandon. What APIs do you use, and what are the limits of what you can guarantee on the frontend?</h3>
+<p><strong>Problem framing:</strong> This question is genuinely hard because payments and offline-first are almost philosophically opposed — payments require confirmed server-side state, offline-first defers it. The interviewer wants to see that you understand both the technical tools available and the fundamental limits of what a frontend can safely guarantee.</p>
+<p><strong>Approach:</strong></p>
+<p><strong>Layer 1: Pre-submission offline detection</strong></p>
+<pre><code>// connectivity.ts
+function useConnectivity() {
+  const [isOnline, setIsOnline] = useState(navigator.onLine);
+  const [connectionQuality, setConnectionQuality] = useState&lt;
+    &#x27;good&#x27; | &#x27;poor&#x27; | &#x27;offline&#x27;
+  &gt;(&#x27;good&#x27;);
+
+  useEffect(() =&gt; {
+    const updateOnline = () =&gt; setIsOnline(true);
+    const updateOffline = () =&gt; setIsOnline(false);
+
+    window.addEventListener(&#x27;online&#x27;, updateOnline);
+    window.addEventListener(&#x27;offline&#x27;, updateOffline);
+
+    // Network Information API (Chrome/Android only)
+    const connection = (navigator as any).connection;
+    if (connection) {
+      const assess = () =&gt; {
+        const { effectiveType, downlink } = connection;
+        if (!navigator.onLine) setConnectionQuality(&#x27;offline&#x27;);
+        else if (effectiveType === &#x27;2g&#x27; || downlink &lt; 0.5) setConnectionQuality(&#x27;poor&#x27;);
+        else setConnectionQuality(&#x27;good&#x27;);
+      };
+      connection.addEventListener(&#x27;change&#x27;, assess);
+      assess();
+    }
+
+    return () =&gt; {
+      window.removeEventListener(&#x27;online&#x27;, updateOnline);
+      window.removeEventListener(&#x27;offline&#x27;, updateOffline);
+    };
+  }, []);
+
+  return { isOnline, connectionQuality };
+}</code></pre>
+<p>Before allowing form submission:</p>
+<pre><code>const { isOnline, connectionQuality } = useConnectivity();
+
+// Proactive warning for poor connectivity
+{connectionQuality === &#x27;poor&#x27; &amp;&amp; (
+  &lt;Banner variant=&quot;warning&quot;&gt;
+    Your connection is slow. Payment may take longer than usual.
+  &lt;/Banner&gt;
+)}
+
+// Hard block for offline
+&lt;Button
+  type=&quot;submit&quot;
+  disabled={!isOnline}
+  title={!isOnline ? &#x27;You appear to be offline&#x27; : undefined}
+&gt;
+  Pay now
+&lt;/Button&gt;</code></pre>
+<p><strong>Layer 2: Idempotency-key-first submission</strong></p>
+<p>The core primitive for preventing duplicate charges:</p>
+<pre><code>// payment-queue.ts
+interface PendingPayment {
+  idempotencyKey: string;
+  paymentIntentId: string;
+  clientSecret: string;
+  createdAt: number;
+  attempts: number;
+}
+
+const PAYMENT_TTL_MS = 5 * 60 * 1000; // 5 minutes — beyond this, PI may be stale
+
+function persistPendingPayment(payment: PendingPayment) {
+  sessionStorage.setItem(&#x27;pending_payment&#x27;, JSON.stringify(payment));
+}
+
+function clearPendingPayment() {
+  sessionStorage.removeItem(&#x27;pending_payment&#x27;);
+}
+
+function getPendingPayment(): PendingPayment | null {
+  const raw = sessionStorage.getItem(&#x27;pending_payment&#x27;);
+  if (!raw) return null;
+  const parsed: PendingPayment = JSON.parse(raw);
+  // Expire stale pending payments
+  if (Date.now() - parsed.createdAt &gt; PAYMENT_TTL_MS) {
+    clearPendingPayment();
+    return null;
+  }
+  return parsed;
+}</code></pre>
+<p><strong>Layer 3: Retry on connectivity restoration</strong></p>
+<pre><code>function usePaymentRetry(stripe: Stripe) {
+  const { isOnline } = useConnectivity();
+
+  useEffect(() =&gt; {
+    if (!isOnline) return;
+
+    const pending = getPendingPayment();
+    if (!pending) return;
+
+    // Connectivity restored — check if payment went through
+    stripe.retrievePaymentIntent(pending.clientSecret).then(({ paymentIntent }) =&gt; {
+      if (paymentIntent?.status === &#x27;succeeded&#x27;) {
+        clearPendingPayment();
+        router.push(&#x27;/order-confirmation?recovered=true&#x27;);
+        return;
+      }
+
+      if (paymentIntent?.status === &#x27;requires_payment_method&#x27;) {
+        // Definitively failed — clear and let user retry manually
+        clearPendingPayment();
+        setError(&#x27;Your previous payment attempt was declined. Please try again.&#x27;);
+        return;
+      }
+
+      if (
+        paymentIntent?.status === &#x27;requires_confirmation&#x27; ||
+        paymentIntent?.status === &#x27;requires_action&#x27;
+      ) {
+        // Attempt to complete the payment
+        // Only retry if the PI is still actionable
+        if (pending.attempts &lt; 3) {
+          updatePendingPayment({ ...pending, attempts: pending.attempts + 1 });
+          stripe.confirmCardPayment(pending.clientSecret);
+        }
+      }
+    });
+  }, [isOnline]); // Re-run when connectivity changes
+}</code></pre>
+<p><strong>Layer 4: User communication during uncertainty</strong></p>
+<div class="mermaid-wrap"><pre class="mermaid">stateDiagram-v2
+    [*] --> Idle
+    Idle --> Submitting: User clicks Pay
+    Submitting --> Offline: Network drops mid-submit
+    Offline --> WaitingForConnection: Show uncertainty banner
+    WaitingForConnection --> Checking: Connectivity restored
+    Checking --> Success: PI status = succeeded
+    Checking --> Failed: PI status = requires_payment_method
+    Checking --> WaitingForConnection: PI status ambiguous
+    Submitting --> Success: Request succeeds
+    Submitting --> Failed: Definitive decline</pre></div>
+<p>The uncertainty banner copy:</p>
+<pre><code>function OfflinePaymentBanner({ pendingPayment }: { pendingPayment: PendingPayment }) {
+  return (
+    &lt;Banner variant=&quot;info&quot; persistent&gt;
+      &lt;strong&gt;Your payment is pending.&lt;/strong&gt;
+      &lt;p&gt;
+        We lost connection while processing your payment. Your card has not been
+        charged yet. We&#x27;ll automatically complete your payment when your
+        connection returns — or you can{&#x27; &#x27;}
+        &lt;button onClick={checkPaymentStatus}&gt;check status now&lt;/button&gt;.
+      &lt;/p&gt;
+      &lt;p&gt;
+        Reference: &lt;code&gt;{pendingPayment.idempotencyKey}&lt;/code&gt;
+      &lt;/p&gt;
+    &lt;/Banner&gt;
+  );
+}</code></pre>
+<p><strong>The limits of what you can guarantee:</strong></p>
+<p>This is the most important part of the answer. Be explicit in an interview:</p>
+<ol><li><strong>You cannot guarantee the idempotency key reaches the server</strong> — if connectivity drops before the request is transmitted, the key was never sent. There&#x27;s no in-flight retry at the HTTP layer from the browser.</li><li><strong><code>navigator.onLine</code> lies</strong> — it detects local network connectivity, not internet connectivity. A user on a WiFi network with no internet is reported as &quot;online.&quot;</li><li><strong>Service Workers can intercept requests but cannot sign payment requests</strong> — you cannot queue a payment for later and replay it, because the <code>confirmCardPayment</code> call requires the user&#x27;s browser to be active (3DS may trigger).</li><li><strong>PaymentIntents expire</strong> — after 24 hours, a PI is cancelled. If the user is offline for days, their pending payment is stale.</li><li><strong>The only safe &quot;retry&quot; is <code>retrievePaymentIntent</code> first</strong> — always check status before retrying, never blindly resend.</li></ol>
+<p><strong>Tradeoffs:</strong></p>
+<ul><li><strong>Alternative: Service Worker with Background Sync API</strong> — can queue POST requests and replay when online. Fatal flaw: cannot handle 3DS challenges from a service worker (no UI context). Also, <code>confirmCardPayment</code> is a Stripe.js call, not a simple fetch — not replayable.</li><li><strong>Alternative: server-side payment recovery</strong> — your server polls Stripe for incomplete PaymentIntents and handles recovery. Much more robust, but the user experience is async (they&#x27;d get an email, not a real-time update). Combine both: frontend tries, server catches what falls through.</li><li><strong>Alternative: pre-authorize, confirm when online</strong> — create the PaymentMethod before connectivity issues, so at least card data is tokenized. But <code>confirmCardPayment</code> still requires connectivity to complete the charge.</li></ul>
+<hr>
+</article>
+<article class="qa" id="q-your-monitoring-alerts-that-8-of-users-who-click-pay-are-seeing-an-unhandled-javascript-exception-in-the-stripe-elements-payment-confirmation-step-you-have-sentry-traces-showing-the-error-originates-inside-the-cross-origin-stripe-iframe-what-do-you-know-and-what-dont-you-know-from-that-error-report-how-do-you-diagnose-the-root-cause-given-that-you-cannot-inspect-stripes-iframe-code-and-what-mitigations-do-you-ship-while-the-investigation-is-ongoing">
+<h3 class="question">Q: Your monitoring alerts that 8% of users who click &quot;Pay&quot; are seeing an unhandled JavaScript exception in the Stripe Elements payment confirmation step. You have Sentry traces showing the error originates inside the cross-origin Stripe iframe. What do you know, and what don&#x27;t you know, from that error report? How do you diagnose the root cause given that you cannot inspect Stripe&#x27;s iframe code, and what mitigations do you ship while the investigation is ongoing?</h3>
+<p><strong>Problem framing:</strong> This is an incident response and debugging methodology question. The cross-origin iframe constraint is the crux — it fundamentally limits your observability. The interviewer wants to see systematic diagnosis under constraints, not pattern-matching to a solution.</p>
+<p><strong>Approach:</strong></p>
+<p><strong>What you know from the Sentry report:</strong></p>
+<ul><li>The exception was thrown in JavaScript that Sentry detected</li><li>It was attributed to the Stripe iframe&#x27;s origin (Sentry&#x27;s cross-origin source mapping limitation)</li><li>8% of users clicking &quot;Pay&quot; are affected (not 100%, so it&#x27;s not a hard crash for all inputs)</li><li>The error is &quot;unhandled&quot; — meaning it surfaced as an uncaught exception rather than being returned via the Stripe.js promise API</li></ul>
+<p><strong>What you do NOT know:</strong></p>
+<ul><li>The actual error message (cross-origin iframes don&#x27;t expose error details — you get <code>&quot;Script error.&quot;</code> with no stack)</li><li>Whether it correlates to a specific card type, browser, device, or user segment</li><li>Whether the <code>confirmCardPayment</code> promise rejected cleanly (Stripe caught it) or whether the exception bypassed Stripe&#x27;s error handling entirely</li><li>Whether Stripe is aware of this issue on their end</li><li>Whether affected users were actually charged (most dangerous unknown)</li></ul>
+<pre><code>// What Sentry actually sees from a cross-origin iframe error:
+{
+  message: &quot;Script error.&quot;,
+  filename: &quot;&quot;,
+  lineno: 0,
+  colno: 0,
+  stack: null
+  // No stack, no message, no source — this is the browser Same-Origin Policy
+}</code></pre>
+<p><strong>Diagnosis strategy — instrument your frame, not Stripe&#x27;s:</strong></p>
+<p>Since you can&#x27;t see into the iframe, instrument everything around it:</p>
+<pre><code>// Step 1: Wrap confirmCardPayment with detailed telemetry
+async function instrumentedConfirmPayment(
+  stripe: Stripe,
+  clientSecret: string,
+  options: ConfirmCardPaymentData
+) {
+  const startTime = performance.now();
+  const context = {
+    browser: navigator.userAgent,
+    viewport: `${window.innerWidth}x${window.innerHeight}`,
+    connectionType: (navigator as any).connection?.effectiveType ?? &#x27;unknown&#x27;,
+    paymentIntentId: clientSecret.split(&#x27;_secret&#x27;)[0],
+    timestamp: new Date().toISOString(),
+  };
+
+  Sentry.addBreadcrumb({
+    category: &#x27;payment&#x27;,
+    message: &#x27;confirmCardPayment started&#x27;,
+    data: context,
+  });
+
+  try {
+    const result = await stripe.confirmCardPayment(clientSecret, options);
+    const duration = performance.now() - startTime;
+
+    Sentry.addBreadcrumb({
+      category: &#x27;payment&#x27;,
+      message: result.error ? &#x27;confirmCardPayment errored&#x27; : &#x27;confirmCardPayment succeeded&#x27;,
+      data: {
+        ...context,
+        duration,
+        errorType: result.error?.type,
+        errorCode: result.error?.code,
+        piStatus: result.paymentIntent?.status,
+      },
+    });
+
+    return result;
+  } catch (caughtException) {
+    // This is the 8% case — an exception escaped Stripe&#x27;s error handling
+    const duration = performance.now() - startTime;
+
+    Sentry.captureException(caughtException, {
+      extra: {
+        ...context,
+        duration,
+        caughtAt: &#x27;confirmCardPayment&#x27;,
+        // Was the PI created? Check server-side.
+        piId: clientSecret.split(&#x27;_secret&#x27;)[0],
+      },
+      tags: {
+        payment_flow: &#x27;confirmation&#x27;,
+        is_stripe_exception: &#x27;true&#x27;,
+      },
+    });
+
+    throw caughtException;
+  }
+}</code></pre>
+<p><strong>Segmentation analysis — what to cut the data by:</strong></p>
+<pre><code>// Log everything you can measure about the user/session at payment time
+analytics.track(&#x27;payment_confirmation_attempted&#x27;, {
+  // Browser
+  userAgent: navigator.userAgent,
+  browserName: parseBrowser(navigator.userAgent),
+  // Device
+  isMobile: /Mobi/.test(navigator.userAgent),
+  screenWidth: screen.width,
+  // Network
+  connectionEffectiveType: (navigator as any).connection?.effectiveType,
+  // Stripe Elements state
+  elementsVersion: stripe.version ?? &#x27;unknown&#x27;, // if exposed
+  // Your app
+  checkoutVersion: APP_VERSION,
+  // Timing
+  timeToConfirm: Date.now() - formOpenedAt,
+  // Page
+  url: window.location.href,
+  referrer: document.referrer,
+});</code></pre>
+<p>Run this through your analytics to find correlations: Is it 100% of Safari users? A specific Stripe.js version deployed yesterday? Users on slow connections where the iframe times out? 8% is oddly specific — that suggests it&#x27;s correlated with a particular browser/device/OS combination.</p>
+<p><strong>Immediate mitigations to ship while investigating:</strong></p>
+<ol><li><strong>Catch and don&#x27;t rethrow — show a safe error state:</strong></li></ol>
+<pre><code>try {
+  const { error } = await stripe.confirmCardPayment(clientSecret, options);
+  // handle error normally
+} catch (e) {
+  // The 8% case
+  logger.error(&#x27;stripe_confirm_uncaught_exception&#x27;, e);
+
+  // CRITICAL: Check the PI status before showing any error
+  const { paymentIntent } = await stripe.retrievePaymentIntent(clientSecret);
+  if (paymentIntent?.status === &#x27;succeeded&#x27;) {
+    // Exception was thrown but payment succeeded — navigate to confirmation
+    router.push(&#x27;/order-confirmation&#x27;);
+    return;
+  }
+
+  // Payment did not succeed — safe to show error
+  setError(
+    &#x27;A technical error occurred. Your card has not been charged. &#x27; +
+    &#x27;Please try again or contact support.&#x27;
+  );
+}</code></pre>
+<ol><li><strong>Add a Stripe status page monitor:</strong></li></ol>
+<pre><code>// Check Stripe&#x27;s status API on page load
+useEffect(() =&gt; {
+  fetch(&#x27;https://status.stripe.com/api/v2/status.json&#x27;)
+    .then(r =&gt; r.json())
+    .then(status =&gt; {
+      if (status.status.indicator !== &#x27;none&#x27;) {
+        setStripeIncident(status.status.description);
+        Sentry.setTag(&#x27;stripe_incident&#x27;, status.status.indicator);
+      }
+    })
+    .catch(() =&gt; {}); // Don&#x27;t block checkout if status page is unreachable
+}, []);</code></pre>
+<ol><li><strong>Contact Stripe support with your PaymentIntent IDs</strong> — Stripe support can look at the server-side error for the specific PIs involved. The 8 character error in the browser is opaque to you, but Stripe&#x27;s backend has the full exception.</li></ol>
+<ol><li><strong>Version pin investigation</strong> — check if this started correlating with a specific Stripe.js release by cross-referencing your Sentry error volume spike with Stripe.js changelog.</li></ol>
+<p><strong>What you cannot do:</strong></p>
+<ul><li>Inspect the iframe&#x27;s JavaScript — Same-Origin Policy is a hard browser security constraint</li><li>Instrument Stripe&#x27;s error handlers — they&#x27;re in the cross-origin context</li><li>Catch errors thrown from a <code>window.addEventListener(&#x27;error&#x27;)</code> with cross-origin source — browsers suppress the details</li></ul>
+<p><strong>Tradeoffs:</strong></p>
+<ul><li><strong>Alternative: switch to a server-side Stripe integration</strong> (e.g., direct API calls, bypassing Stripe.js for card confirmation) — eliminates the iframe opacity problem but immediately violates PCI SAQ-A compliance, pulling you into SAQ-D scope.</li><li><strong>Alternative: add a <code>window.addEventListener(&#x27;error&#x27;)</code> global handler</strong> — catches the exception signature but gets only <code>&quot;Script error.&quot;</code> per the Same-Origin Policy. Still useful for counting occurrences and correlating with other breadcrumbs.</li><li><strong>The retrievePaymentIntent safety check is non-negotiable</strong>: until you understand the root cause, every caught exception from <code>confirmCardPayment</code> must verify PI status before showing an error — otherwise you risk showing &quot;payment failed&quot; to users who were actually charged.</li></ul>
+</article>
+  </main>
+  <footer class="page-footer">
+    <a href="index.html">← All sections</a> ·
+    <a href="../payments-system-frontend-architecture.html">Architecture map</a>
+  </footer>
+  <script src="assets/interactive.js" defer></script>
+</body>
+</html>

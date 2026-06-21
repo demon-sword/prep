@@ -1,0 +1,136 @@
+<div class="answer-header reveal">
+  <div class="answer-meta">
+    <span class="meta-badge meta-category">02-rag-systems</span>
+    <span class="meta-badge meta-num">Q029</span>
+    <span class="meta-badge meta-status-review">review</span>
+  </div>
+  <h1 class="answer-title">Bad chunking (fixed-size vs semantic)</h1>
+</div>
+
+<div class="answer-section reveal">
+  <div class="accordion">
+    <div class="accordion-header">
+      <span class="accordion-title">⟁ Framing — Why this is asked</span>
+      <span class="accordion-chevron">▾</span>
+    </div>
+    <div class="accordion-body">
+      <div class="framing-grid">
+        <div><div class="framing-card">
+          <div class="framing-card-title">Why asked</div>
+          <p style="font-size:13.5px;line-height:1.7;color:var(--text-dim)">Interviewers ask this to probe whether a candidate understands that chunking is the <strong>first and most consequential design decision</strong> in a RAG pipeline — bad chunking degrades retrieval recall before any model runs, and no amount of reranking or prompt engineering rescues it. It tests practical production experience: have they actually debugged retrieval failures caused by chunk boundaries?</p>
+        </div></div>
+        <div><div class="framing-card">
+          <div class="framing-card-title">Trigger phrases</div>
+          <div class="trigger-list">
+              <div class="trigger-phrase">Walk me through your chunking strategy — why did you choose that approach?</div>
+              <div class="trigger-phrase">Your RAG retrieval is returning partially relevant chunks — what would you investigate?</div>
+              <div class="trigger-phrase">Fixed-size vs semantic chunking — when does each fail?</div>
+          </div>
+        </div></div>
+      </div>
+      <div class="tests-block">
+        <span style="font-family:var(--mono);font-size:10px;letter-spacing:0.1em;text-transform:uppercase;color:var(--purple);margin-right:8px">Tests:</span>Whether the candidate can diagnose chunking as a retrieval failure root cause and select the right strategy (fixed-size, recursive, semantic, parent-child) for a given document type and query distribution.
+
+---
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="section-label">Concept</div>
+  <div class="concept-block"><p>Chunking is the process of splitting source documents into retrievable units before embedding. The strategy determines <strong>what semantic unit the embedding represents</strong> — and therefore whether the retrieved chunk will actually contain the answer. Bad chunking manifests as high embedding similarity at retrieval time but low answer quality at generation time: the chunk is "about" the right topic but the actual answer text is split across a boundary.</p></div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="section-label">Mechanism</div>
+  <div class="card"><p>There are four main chunking strategies, each with distinct failure modes:</p>
+<div class="table-wrap"><table class="data-table"><tr><th>Strategy</th><th>How it works</th><th>Failure mode</th></tr><tr><td><strong>Fixed-size</strong></td><td>Split every N tokens with optional overlap</td><td>Cuts mid-sentence, mid-table, mid-code block — destroys semantic units</td></tr><tr><td><strong>Recursive character</strong></td><td>Split on paragraph → sentence → word boundaries hierarchically (LangChain default)</td><td>Better than fixed-size but still boundary-agnostic for structured content</td></tr><tr><td><strong>Semantic / structure-aware</strong></td><td>Split at detected section boundaries (headers, blank lines, code fences)</td><td>Requires document structure to be parseable; fails on scanned PDFs</td></tr><tr><td><strong>Parent-child</strong></td><td>Index small child chunks (128–256 tokens) for precise retrieval; return larger parent (512–1024 tokens) for context</td><td>Extra complexity; parent boundary still needs human-defined or structure-aware logic</td></tr></table></div>
+<p><strong>Fixed-size chunking failures in practice:</strong></p>
+<ol class="mechanism-steps"><li><strong>Table splitting</strong> — a financial table with header row on chunk N and data rows on chunk N+1 returns a chunk with data but no column labels → LLM produces nonsense.</li><li><strong>Cross-paragraph context</strong> — a conclusion sentence that references a definition from three paragraphs up is retrieved without the definition.</li><li><strong>List continuation</strong> — a bulleted list split mid-way means retrieved chunk has "…, and 4) foo" with no items 1–3.</li><li><strong>Code blocks</strong> — a function split mid-body returns syntactically invalid code.</li></ol>
+<p><strong>Semantic chunking advantages:</strong></p>
+<ul class="styled-list"><li>Respects document structure; each chunk corresponds to a coherent thought unit.</li><li>Reduces context pollution at generation time (no orphaned fragments).</li><li>Especially important for: legal contracts (clause-level), annual reports (section-level), API docs (function-level), Markdown docs (heading-level).</li></ul>
+<p><strong>Overlap as a partial fix:</strong> Adding 10–20% token overlap between fixed-size chunks helps recover boundary context but inflates index size by 10–20% and increases cost without solving the semantic unit problem.</p>
+<p><strong>Benchmarking chunk strategy:</strong> Build a golden set of 50–100 Q&A pairs with known source passages. Measure <code>Recall@5</code> and <code>MRR</code> at each chunk size/strategy. A real production example: switching from fixed-size 512-token chunks to parent-child (256 child / 1024 parent) on a 200K-article knowledge base improved Recall@5 from 61% to 74% and deflection rate from 58% to 71%.</p></div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="section-label">Example / Tradeoff</div>
+  <div class="card card-accent"><div class="rich-text"><p><strong>Tool stack:</strong> LangChain <code>RecursiveCharacterTextSplitter</code> (recursive), Unstructured.io (structure-aware for PDFs/HTML), custom header-split for Markdown, PyMuPDF for PDF text extraction.</p>
+<p><strong>Chunk size tradeoff:</strong></p>
+<ul class="styled-list"><li>Smaller chunks (128–256 tokens): higher retrieval precision, but LLM often lacks enough context to answer — answer fragments need parent-context retrieval.</li><li>Larger chunks (512–1024 tokens): more context per chunk, but lower retrieval precision (chunk may be "about" the right topic but answer is diluted).</li><li><strong>Production sweet spot:</strong> 256–512 token children with 1024 parent for most prose documents; adjust based on golden-set recall benchmarks.</li></ul>
+<p><strong>Overlap tradeoff:</strong> 10% overlap recovers ~60% of boundary failures for fixed-size chunking at a 10% storage cost. Better than nothing; not a substitute for semantic chunking.</p></div></div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="accordion">
+    <div class="accordion-header">
+      <span class="accordion-title">🎙 Verbal Script (3–5 min)</span>
+      <span class="accordion-chevron">▾</span>
+    </div>
+    <div class="accordion-body">
+      <div class="script-block"><div class="script-label">Opening (30s)</div><p>"Bad chunking is the most common root cause of RAG retrieval failures I've seen in production — and it's insidious because it's invisible at the embedding level. The chunk returns with high cosine similarity, but the actual answer text was cut off at a boundary. Let me walk you through the failure modes and when each strategy helps."</p></div>
+      <div class="script-block"><div class="script-label">Core explanation (2–3 min)</div><p>"There are basically four strategies on a spectrum. Fixed-size — split every N tokens — is the default but has serious problems: it'll split a financial table mid-row, cut a conclusion sentence away from its premise, or break a code block mid-function. The embedding still scores high because the topic is right, but the answer is gone.</p>
+<p>Recursive character splitting — what LangChain uses by default — is better because it tries to split on paragraph then sentence then word boundaries, so you're less likely to break mid-sentence. But it's still structure-blind for formatted documents.</p>
+<p>Semantic or structure-aware chunking uses document structure signals — markdown headers, HTML tags, section titles, code fences — to split at meaningful boundaries. For anything with rich structure — API docs, legal contracts, annual reports — this is the right approach.</p>
+<p>Parent-child chunking is the production pattern I reach for most: you index small 256-token child chunks so the retrieval embedding is tight and precise, but when a child chunk is retrieved you return its parent 1024-token section to the LLM for full context. This separates the precision of retrieval from the context richness of generation.</p>
+<p>The way to validate any of these is a golden dataset: 50–100 Q&A pairs with known source passages. I measure Recall@5 and MRR at each strategy. When I switched a 200K-article knowledge base from fixed-size 512 to parent-child 256/1024, Recall@5 jumped from 61% to 74%."</p></div>
+      <div class="script-block"><div class="script-label">Tradeoff / production angle (1 min)</div><p>"The tradeoffs are chunk size vs. context richness vs. index size. Smaller chunks give better retrieval precision but the LLM may not have enough context — hence the parent-child pattern. Larger chunks give more context but introduce noise (lower precision). Overlap — say 10% — is a cheap partial fix for boundary failures but inflates your index by 10–20% and doesn't solve the semantic unit problem.</p>
+<p>One thing I always flag: bad chunking is upstream of everything. You can't fix it with a better reranker or a smarter prompt — if the answer text doesn't appear in any retrieved chunk, the model has nothing to work with."</p></div>
+      <div class="script-block"><div class="script-label">Wrap-up (30s)</div><p>"Bottom line: default to recursive character splitting with 10% overlap for prose; add structure-aware splitting for formatted content; use parent-child for precision-plus-context needs. Always validate with a golden recall benchmark — chunk strategy is one of the highest-leverage decisions you'll make in a RAG system."</p></div>
+    </div>
+  </div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="section-label">Pitfalls</div>
+  <div class="pitfall-card">
+    <div class="pitfall-mistake"><strong>✗ Mistake</strong> Choosing chunk size by intuition (&quot;I used 512 tokens because that&#x27;s the default&quot;) without benchmarking</div>
+    <div class="pitfall-better"><strong>✓ Better</strong> &quot;I always validate chunk size and strategy with a golden Q&amp;A set measuring Recall@5; the optimal depends on document structure and query length distribution.&quot;</div>
+  </div>
+  <div class="pitfall-card">
+    <div class="pitfall-mistake"><strong>✗ Mistake</strong> Proposing &quot;just add more overlap&quot; as the fix for bad chunking</div>
+    <div class="pitfall-better"><strong>✓ Better</strong> &quot;Overlap recovers some boundary failures but inflates index size and doesn&#x27;t solve the semantic unit problem — for structured documents I switch to structure-aware or parent-child chunking.&quot;</div>
+  </div>
+  <div class="pitfall-card">
+    <div class="pitfall-mistake"><strong>✗ Mistake</strong> Using fixed-size chunking on tables or code without acknowledging the failure mode</div>
+    <div class="pitfall-better"><strong>✓ Better</strong> &quot;Fixed-size chunking splits tables mid-row and code blocks mid-function; for those I use structure-aware extraction that treats a table or function as a single chunk regardless of token count.&quot;
+
+---</div>
+  </div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="section-label">Related Questions</div>
+  <div class="related-pills">
+    <div class="related-pill" data-slug="02-013">
+      <span class="related-pill-icon">→</span>
+      <div class="related-pill-text">
+        <div class="related-pill-q">Q13: Common RAG failure points — how debug them?</div>
+        <div class="related-pill-rel">Parent taxonomy — bad chunking is one of the six failure modes</div>
+      </div>
+    </div>
+    <div class="related-pill" data-slug="02-006">
+      <span class="related-pill-icon">→</span>
+      <div class="related-pill-text">
+        <div class="related-pill-q">Q6: System processing huge PDF reports — how handle context when splitting?</div>
+        <div class="related-pill-rel">Same concept applied to cross-page document context</div>
+      </div>
+    </div>
+    <div class="related-pill" data-slug="02-021">
+      <span class="related-pill-icon">→</span>
+      <div class="related-pill-text">
+        <div class="related-pill-q">Q21: How evaluate a RAG pipeline? NDCG, MRR, precision@k, recall?</div>
+        <div class="related-pill-rel">Validation methodology for chunking strategy selection</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="section-label">One-liner recall</div>
+  <div class="oneliner-box">
+    <div class="oneliner-label">▸ Reconstruct from memory</div>
+    <div class="oneliner-text" data-text="Fixed-size chunking silently destroys semantic units (tables, code, cross-paragraph context) — use recursive character splitting for prose, structure-aware splitting for formatted docs, and parent-child (small child for retrieval, large parent for context) for precision-plus-richness; always validate with Recall@5 on a golden set.">Fixed-size chunking silently destroys semantic units (tables, code, cross-paragraph context) — use recursive character splitting for prose, structure-aware splitting for formatted docs, and parent-child (small child for retrieval, large parent for context) for precision-plus-richness; always validate with Recall@5 on a golden set.</div>
+  </div>
+</div>

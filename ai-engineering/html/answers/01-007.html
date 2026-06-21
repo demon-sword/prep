@@ -1,0 +1,131 @@
+<div class="answer-header reveal">
+  <div class="answer-meta">
+    <span class="meta-badge meta-category">01-llm-fundamentals</span>
+    <span class="meta-badge meta-num">Q007</span>
+    <span class="meta-badge meta-status-review">review</span>
+  </div>
+  <h1 class="answer-title">What is temperature and top-p sampling? How do they affect outputs?</h1>
+</div>
+
+<div class="answer-section reveal">
+  <div class="accordion">
+    <div class="accordion-header">
+      <span class="accordion-title">⟁ Framing — Why this is asked</span>
+      <span class="accordion-chevron">▾</span>
+    </div>
+    <div class="accordion-body">
+      <div class="framing-grid">
+        <div><div class="framing-card">
+          <div class="framing-card-title">Why asked</div>
+          <p style="font-size:13.5px;line-height:1.7;color:var(--text-dim)">The interviewer is probing whether you understand how LLM inference works beyond just calling an API. Temperature and top-p are the two most commonly mis-set parameters in production — getting them wrong causes hallucinations, repetitive outputs, or outputs that are too random for the task. A strong candidate knows not just what these parameters do but when to set each one and why, with concrete examples from real use cases.</p>
+        </div></div>
+        <div><div class="framing-card">
+          <div class="framing-card-title">Trigger phrases</div>
+          <div class="trigger-list">
+              <div class="trigger-phrase">How do you control randomness in LLM outputs?</div>
+              <div class="trigger-phrase">When would you set temperature to 0 vs a higher value?</div>
+              <div class="trigger-phrase">What sampling strategy would you use for a coding assistant vs a creative writing tool?</div>
+              <div class="trigger-phrase">Why does your chatbot sometimes give wildly different answers to the same question?</div>
+          </div>
+        </div></div>
+      </div>
+      <div class="tests-block">
+        <span style="font-family:var(--mono);font-size:10px;letter-spacing:0.1em;text-transform:uppercase;color:var(--purple);margin-right:8px">Tests:</span>Understanding of autoregressive decoding mechanics and ability to map sampling parameters to production requirements (determinism vs creativity, hallucination risk, cost implications).
+
+---
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="section-label">Concept</div>
+  <div class="concept-block"><p>Temperature and top-p (nucleus sampling) are two hyperparameters that control how an LLM selects the next token from the probability distribution computed by the softmax layer. Temperature controls the sharpness of that distribution; top-p controls how many tokens are even considered as candidates. Together they govern the creativity/randomness vs determinism/safety tradeoff.</p></div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="section-label">Mechanism</div>
+  <div class="card"><p><strong>Temperature (<code>T</code>):</strong></p>
+<ul class="styled-list"><li>The raw logits from the model are divided by <code>T</code> before softmax: <code>softmax(logits / T)</code></li><li><code>T = 1.0</code> → unchanged distribution (model's default)</li><li><code>T < 1.0</code> (e.g., 0.1–0.3) → sharpens distribution; high-probability tokens become even more dominant; output is more deterministic and repetitive</li><li><code>T = 0</code> → greedy decoding; always pick the argmax token; fully deterministic</li><li><code>T > 1.0</code> (e.g., 1.5–2.0) → flattens distribution; lower-probability tokens get more weight; output is more diverse but risks incoherence</li></ul>
+<p><strong>Top-p (nucleus sampling):</strong></p>
+<ul class="styled-list"><li>Sort all tokens by probability descending; take the smallest set whose cumulative probability ≥ <code>p</code>; sample from that nucleus only</li><li><code>top_p = 1.0</code> → consider all tokens (no filtering)</li><li><code>top_p = 0.9</code> → take the top tokens summing to 90% probability mass; cut the long tail of unlikely tokens</li><li>Dynamically adjusts the candidate pool: when the model is confident (one token has 0.95 prob), nucleus is tiny; when uncertain, nucleus is wider</li></ul>
+<p><strong>Interaction:</strong> Both parameters are usually applied together. A typical production config: <code>temperature=0.7, top_p=0.9</code>. Setting <code>temperature=0</code> makes <code>top_p</code> irrelevant (greedy wins).</p>
+<p><strong>Top-k (related):</strong> A simpler alternative — sample from the top-k tokens only. Less adaptive than top-p because k is fixed regardless of the model's confidence.</p></div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="section-label">Example / Tradeoff</div>
+  <div class="card card-accent"><div class="rich-text"><div class="table-wrap"><table class="data-table"><tr><th>Use case</th><th>Temperature</th><th>Top-p</th><th>Rationale</th></tr><tr><td>SQL generation / code</td><td>0 or 0.1</td><td>1.0</td><td>Correctness critical; determinism preferred</td></tr><tr><td>Customer support FAQ</td><td>0.2–0.4</td><td>0.9</td><td>Consistent, factual, low hallucination risk</td></tr><tr><td>General chat assistant</td><td>0.7</td><td>0.9</td><td>Natural variation without wild outputs</td></tr><tr><td>Creative writing / brainstorming</td><td>1.0–1.2</td><td>0.95</td><td>Diversity and surprise valued</td></tr><tr><td>Embedding generation</td><td>N/A</td><td>N/A</td><td>Embeddings don't use sampling</td></tr></table></div>
+<p><strong>Production gotcha:</strong> Setting <code>temperature=0</code> in a RAG pipeline dramatically reduces hallucination risk but can cause the model to get "stuck" in repetitive loops on edge cases. A small temperature like 0.1 is often safer than exactly 0 for long-form generation.</p>
+<p>In frameworks like vLLM, sampling parameters are per-request — you can serve different temperature profiles for different endpoint paths (e.g., <code>/api/code</code> vs <code>/api/chat</code>) from the same model instance.</p></div></div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="accordion">
+    <div class="accordion-header">
+      <span class="accordion-title">🎙 Verbal Script (3–5 min)</span>
+      <span class="accordion-chevron">▾</span>
+    </div>
+    <div class="accordion-body">
+      <div class="script-block"><div class="script-label">Opening (30s)</div><p>"Temperature and top-p are the two main knobs for controlling randomness in LLM outputs. I think of them as operating at different levels: temperature reshapes the entire probability distribution, while top-p acts as a filter on which tokens are even eligible before sampling. Let me walk through each one and then talk about how I'd choose settings for different production use cases."</p></div>
+      <div class="script-block"><div class="script-label">Core explanation (2–3 min)</div><p>"Starting with temperature — when the model computes its next-token probabilities via softmax, it divides the underlying logits by the temperature value first. At temperature 1, you get the model's natural distribution. Drop it below 1 — say to 0.2 — and you're effectively squeezing the distribution: the already-high-probability tokens get even more weight, so outputs become more deterministic and repetitive. Temperature 0 is pure greedy decoding — always pick the single most likely token. Go above 1 and you're flattening the distribution, giving unlikely tokens more of a chance, which creates more diverse or surprising outputs, but at the cost of coherence and factual accuracy.</p>
+<p>Top-p, or nucleus sampling, works differently. You sort all tokens by probability, high to low, and keep adding them until their cumulative probability reaches your threshold — say 0.9 or 90%. You sample only from that nucleus. The key insight is that this is dynamic: if the model is very confident about the next word — like 'Paris' after 'The capital of France is' — the nucleus might be just 2–3 tokens. If the model is uncertain, the nucleus expands to hundreds of tokens. This is more adaptive than top-k, which always uses a fixed number of candidates regardless of model confidence.</p>
+<p>In practice I'll set both together. For a coding assistant at my last company, we ran temperature 0.1, top-p 0.95 — we wanted near-deterministic output for code correctness but a tiny bit of variance to avoid infinite loops on degenerate inputs. For a creative marketing copy tool, we used temperature 1.0 to get real variety."</p></div>
+      <div class="script-block"><div class="script-label">Tradeoff / production angle (1 min)</div><p>"The key production tension is determinism vs quality. Temperature 0 sounds ideal for factual tasks, but it can cause repetition loops in long-form generation, and it makes A/B testing harder because all outputs are identical. A small temperature like 0.1 often gives most of the determinism benefits while avoiding edge cases. Also, higher temperatures increase token count and therefore cost — a temperature-1.5 response can be 30–40% longer than a temperature-0.3 response for the same prompt. In vLLM or TGI, you can configure different sampling profiles per request, so your coding endpoint and chat endpoint can use different settings from the same serving instance."</p></div>
+      <div class="script-block"><div class="script-label">Wrap-up (30s)</div><p>"The bottom line: temperature reshapes the distribution, top-p prunes the candidate set. For factual/code tasks, low temperature (0–0.3). For conversational tasks, moderate temperature (0.5–0.8). For creative tasks, higher temperature (0.9–1.2) with a top-p safety net around 0.9–0.95. Happy to go deeper into how these interact with beam search or how they affect hallucination rates."</p></div>
+    </div>
+  </div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="section-label">Pitfalls</div>
+  <div class="pitfall-card">
+    <div class="pitfall-mistake"><strong>✗ Mistake</strong> Saying &quot;just set temperature to 0 for accuracy&quot; without noting that deterministic outputs can still hallucinate if the model&#x27;s top token is wrong, and that exact-zero can cause repetition loops</div>
+    <div class="pitfall-better"><strong>✓ Better</strong> Explain that temperature 0 reduces variance but doesn&#x27;t eliminate hallucination; the fix for hallucination is RAG or faithfulness checking, not just low temperature.</div>
+  </div>
+  <div class="pitfall-card">
+    <div class="pitfall-mistake"><strong>✗ Mistake</strong> Conflating top-p and top-k, or saying &quot;top-p keeps the top 90% of tokens&quot; (implying a fixed count)</div>
+    <div class="pitfall-better"><strong>✓ Better</strong> Explain that top-p is dynamic: it keeps the smallest set of tokens whose cumulative probability reaches the threshold, so the actual number of candidates varies with model confidence.</div>
+  </div>
+  <div class="pitfall-card">
+    <div class="pitfall-mistake"><strong>✗ Mistake</strong> Not knowing what temperature &gt; 1.0 does, or saying &quot;you can&#x27;t go above 1&quot;</div>
+    <div class="pitfall-better"><strong>✓ Better</strong> Explain that temperature &gt; 1 is valid and useful for creative tasks; it flattens the distribution, giving low-probability tokens more relative weight, increasing output diversity at the cost of coherence.
+
+---</div>
+  </div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="section-label">Related Questions</div>
+  <div class="related-pills">
+    <div class="related-pill" data-slug="01-032">
+      <span class="related-pill-icon">→</span>
+      <div class="related-pill-text">
+        <div class="related-pill-q">Q32: Beam search, top-k, top-p — when use each?</div>
+        <div class="related-pill-rel">Deeper dive into all decoding strategies including beam search</div>
+      </div>
+    </div>
+    <div class="related-pill" data-slug="01-045">
+      <span class="related-pill-icon">→</span>
+      <div class="related-pill-text">
+        <div class="related-pill-q">Q45: When set temperature to 0 vs higher values?</div>
+        <div class="related-pill-rel">Same concept, decision-framework framing</div>
+      </div>
+    </div>
+    <div class="related-pill" data-slug="01-031">
+      <span class="related-pill-icon">→</span>
+      <div class="related-pill-text">
+        <div class="related-pill-q">Q31: How do LLMs generate text? Autoregressive decoding process.</div>
+        <div class="related-pill-rel">Prerequisite — the autoregressive loop that temperature/top-p plug into</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="section-label">One-liner recall</div>
+  <div class="oneliner-box">
+    <div class="oneliner-label">▸ Reconstruct from memory</div>
+    <div class="oneliner-text" data-text="Temperature scales the softmax logits to sharpen or flatten the token distribution (0 = greedy, &gt;1 = creative); top-p dynamically prunes the candidate set to the smallest nucleus summing to probability p — together they trade off determinism against diversity, and in production you pick low temperature for code/facts and moderate-to-high for creative or conversational tasks.">Temperature scales the softmax logits to sharpen or flatten the token distribution (0 = greedy, &gt;1 = creative); top-p dynamically prunes the candidate set to the smallest nucleus summing to probability p — together they trade off determinism against diversity, and in production you pick low temperature for code/facts and moderate-to-high for creative or conversational tasks.</div>
+  </div>
+</div>

@@ -1,0 +1,134 @@
+<div class="answer-header reveal">
+  <div class="answer-meta">
+    <span class="meta-badge meta-category">01-llm-fundamentals</span>
+    <span class="meta-badge meta-num">Q040</span>
+    <span class="meta-badge meta-status-review">review</span>
+  </div>
+  <h1 class="answer-title">What is the difference between prompt engineering, RAG, and fine-tuning?</h1>
+</div>
+
+<div class="answer-section reveal">
+  <div class="accordion">
+    <div class="accordion-header">
+      <span class="accordion-title">⟁ Framing — Why this is asked</span>
+      <span class="accordion-chevron">▾</span>
+    </div>
+    <div class="accordion-body">
+      <div class="framing-grid">
+        <div><div class="framing-card">
+          <div class="framing-card-title">Why asked</div>
+          <p style="font-size:13.5px;line-height:1.7;color:var(--text-dim)">This is one of the highest-signal questions in the entire interview bank — it appears at every level from recruiter screen to senior system design. The interviewer wants to see that you have a structured mental model for <em>when to reach for each tool</em>, not just that you know what they are. Strong candidates present a decision tree with concrete cost/latency/complexity tradeoffs. Weak candidates list definitions and stop there.</p>
+        </div></div>
+        <div><div class="framing-card">
+          <div class="framing-card-title">Trigger phrases</div>
+          <div class="trigger-list">
+              <div class="trigger-phrase">When would you use RAG vs fine-tuning?</div>
+              <div class="trigger-phrase">What&#x27;s the difference between prompt engineering, RAG, and fine-tuning?</div>
+              <div class="trigger-phrase">Walk me through how you&#x27;d decide whether to fine-tune or use RAG.</div>
+              <div class="trigger-phrase">Why not just fine-tune the model on our domain data?</div>
+          </div>
+        </div></div>
+      </div>
+      <div class="tests-block">
+        <span style="font-family:var(--mono);font-size:10px;letter-spacing:0.1em;text-transform:uppercase;color:var(--purple);margin-right:8px">Tests:</span>The ability to apply a cost-ordered decision framework and articulate concrete tradeoffs across all three approaches — not just define them.
+
+---
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="section-label">Concept</div>
+  <div class="concept-block"><p>Prompt engineering, RAG, and fine-tuning are three complementary strategies for adapting a base LLM to a specific task — ordered by cost, complexity, and the kind of gap they close. Prompt engineering changes <em>what the model sees at inference time</em>; RAG changes <em>what knowledge is available at inference time</em>; fine-tuning changes <em>the model weights themselves</em>.</p></div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="section-label">Mechanism</div>
+  <div class="card"><p><strong>1. Prompt engineering</strong> — zero cost to deploy, immediate iteration:</p>
+<ul class="styled-list"><li>Modify the system prompt, user message, or few-shot examples.</li><li>Techniques: zero-shot, few-shot, chain-of-thought (CoT), self-consistency, structured output constraints (<code>response_format: json_object</code>).</li><li>Limits: bounded by the model's existing knowledge and instruction-following ability; doesn't add proprietary knowledge; prompt tokens cost money at scale.</li></ul>
+<p><strong>2. RAG (Retrieval-Augmented Generation)</strong> — moderate engineering cost, no GPU:</p>
+<ul class="styled-list"><li>Retrieve relevant chunks from an external knowledge store at query time; inject them into the context window before generation.</li><li>Pipeline: embed query → ANN search (HNSW via FAISS / Pinecone / Weaviate) → optional BM25 hybrid + cross-encoder reranking → inject top-k chunks → generate.</li><li>Closes the <em>knowledge gap</em>: proprietary docs, real-time data, or content past the model's training cutoff.</li><li>Does <strong>not</strong> change model behavior/style; hallucinations can still occur if retrieved context is absent or contradictory.</li></ul>
+<p><strong>3. Fine-tuning</strong> — highest cost, weeks of iteration:</p>
+<ul class="styled-list"><li>Update model weights via supervised fine-tuning (SFT) on domain data, or alignment via RLHF / DPO.</li><li>PEFT approaches (LoRA, QLoRA) make this tractable on a single A100/H100 with 4-bit quantization.</li><li>Closes the <em>behavior gap</em>: custom output format, domain tone, consistent persona, task-specific reasoning patterns.</li><li>Does <strong>not</strong> reliably inject new factual knowledge (models can hallucinate fine-tuned facts with false confidence); combine with RAG for knowledge + behavior.</li></ul></div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="section-label">Example / Tradeoff</div>
+  <div class="card card-accent"><div class="rich-text"><p><strong>Decision tree in practice:</strong></p>
+<div class="table-wrap"><table class="data-table"><tr><th>Question</th><th>Answer → Do this</th></tr><tr><td>Does the model already know the domain?</td><td>Yes → start with prompt engineering</td></tr><tr><td>Is the knowledge proprietary / frequently updated?</td><td>Yes → add RAG</td></tr><tr><td>Is the behavior (style, format, reasoning) wrong even with good context?</td><td>Yes → fine-tune</td></tr><tr><td>Is fine-tune data < 1K high-quality examples?</td><td>Probably → few-shot prompting instead</td></tr><tr><td>Budget / latency critical?</td><td>Yes → defer fine-tuning, optimize prompts + RAG</td></tr></table></div>
+<p><strong>Concrete case:</strong> A legal Q&A assistant at a Fortune 500.</p>
+<ul class="styled-list"><li><em>Prompt only</em>: GPT-4 already reads contracts well, but hallucinations on specific clause numbers.</li><li><em>+ RAG</em>: Embed 300K contracts into Pinecone; HNSW retrieval; faithfulness score (RAGAS) goes 0.61 → 0.89.</li><li><em>+ LoRA fine-tune</em>: After 6 months, lawyers want a specific citation format and hedging style. Fine-tune on 2K lawyer-reviewed (question, answer) pairs with LoRA rank-16 on Llama 3 70B. Training: ~8 hrs on 4× A100s with QLoRA. Output style now consistent without prompt hacks.</li></ul>
+<p><strong>Cost summary:</strong></p>
+<div class="table-wrap"><table class="data-table"><tr><th>Approach</th><th>Upfront</th><th>Per-query</th><th>Iteration speed</th></tr><tr><td>Prompt engineering</td><td>~hours</td><td>+0 (token cost)</td><td>Minutes</td></tr><tr><td>RAG</td><td>Days–weeks (pipeline)</td><td>+embedding + retrieval</td><td>Days</td></tr></table></div>| Fine-tuning | Weeks + GPU cost | Smaller model possible | Weeks |</div></div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="accordion">
+    <div class="accordion-header">
+      <span class="accordion-title">🎙 Verbal Script (3–5 min)</span>
+      <span class="accordion-chevron">▾</span>
+    </div>
+    <div class="accordion-body">
+      <div class="script-block"><div class="script-label">Opening (30s)</div><p>"These three form a cost-ordered ladder that I always evaluate in sequence. Prompt engineering is the cheapest and fastest — start there. RAG solves a different problem: missing or stale knowledge. Fine-tuning solves a third problem: wrong <em>behavior</em>, even when the knowledge is present. Let me walk through each and when I'd reach for it."</p></div>
+      <div class="script-block"><div class="script-label">Core explanation (2–3 min)</div><p>"Prompt engineering is just structuring what the model sees — system prompt, few-shot examples, chain-of-thought instructions. It costs nothing to deploy, iterates in minutes, and solves maybe 60–70% of problems. The limit is that you're bounded by the model's existing knowledge and behavior.</p>
+<p>When users need answers grounded in proprietary or up-to-date documents — internal wikis, legal contracts, support tickets — that's the RAG signal. I'd build a standard pipeline: chunk the docs, embed with a model like text-embedding-3-large, index with FAISS or Pinecone using HNSW, then at query time retrieve top-20 by cosine similarity, rerank with a cross-encoder down to top-5, and inject into context. RAGAS gives me faithfulness and context precision metrics to track quality. RAG is engineering effort — maybe two to four weeks for a production system — but no GPU training.</p>
+<p>Fine-tuning is for the behavioral gap. If the model gives technically correct answers but in the wrong format, wrong tone, or with inconsistent reasoning patterns — even when given perfect context — that's when I'd consider it. I'd use LoRA or QLoRA to keep cost manageable. The key caution: fine-tuning does not reliably bake in new facts. Models often confabulate fine-tuned knowledge with false confidence. So in production I combine RAG + fine-tuning: RAG handles the knowledge, fine-tuning handles the behavior."</p></div>
+      <div class="script-block"><div class="script-label">Tradeoff / production angle (1 min)</div><p>"The failure mode I see most often is teams jumping to fine-tuning too early. Someone sees the model output is wrong, assumes it needs training, spends three weeks on a fine-tuning pipeline, and then realizes the real problem was the retrieval was returning irrelevant chunks. I always fix the retrieval layer first. Another pattern: underestimating the data requirement — if you have fewer than a few hundred high-quality examples, few-shot prompting almost always beats fine-tuning. Fine-tuning really shines at 1K–10K carefully curated pairs."</p></div>
+      <div class="script-block"><div class="script-label">Wrap-up (30s)</div><p>"So the decision sequence: prompt engineering first, RAG when there's a knowledge gap, fine-tuning when there's a behavioral gap that RAG can't fix — and often you end up combining all three in production. Happy to go deeper on any of the three, or talk through the RAGAS eval metrics I'd use to validate the RAG layer."</p></div>
+    </div>
+  </div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="section-label">Pitfalls</div>
+  <div class="pitfall-card">
+    <div class="pitfall-mistake"><strong>✗ Mistake</strong> Treating the three as mutually exclusive alternatives — &quot;RAG <em>or</em> fine-tuning&quot;</div>
+    <div class="pitfall-better"><strong>✓ Better</strong> Explain that production systems commonly combine all three: prompt engineering sets the frame, RAG grounds the knowledge, fine-tuning tunes the behavior — each closes a different gap.</div>
+  </div>
+  <div class="pitfall-card">
+    <div class="pitfall-mistake"><strong>✗ Mistake</strong> Saying &quot;fine-tune when you have domain data&quot; without qualifying how much data is needed or what fine-tuning actually changes</div>
+    <div class="pitfall-better"><strong>✓ Better</strong> Specify that fine-tuning changes model <em>behavior</em>, not reliably <em>knowledge</em>, and that you need 500–10K high-quality labeled examples for SFT to outperform few-shot prompting; also mention LoRA/QLoRA for cost efficiency.</div>
+  </div>
+  <div class="pitfall-card">
+    <div class="pitfall-mistake"><strong>✗ Mistake</strong> Presenting the decision as purely technical without mentioning cost, latency, or iteration speed</div>
+    <div class="pitfall-better"><strong>✓ Better</strong> Show the cost ladder (prompting = hours/free, RAG = days/engineering, fine-tuning = weeks/GPU) and say you always start cheapest.
+
+---</div>
+  </div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="section-label">Related Questions</div>
+  <div class="related-pills">
+    <div class="related-pill" data-slug="01-007">
+      <span class="related-pill-icon">→</span>
+      <div class="related-pill-text">
+        <div class="related-pill-q">Q7: When fine-tune vs prompt engineering?</div>
+        <div class="related-pill-rel">Detailed fine-tuning decision criteria</div>
+      </div>
+    </div>
+    <div class="related-pill" data-slug="01-012">
+      <span class="related-pill-icon">→</span>
+      <div class="related-pill-text">
+        <div class="related-pill-q">Q12: What&#x27;s an RAG model? Explain the complete process.</div>
+        <div class="related-pill-rel">Deep dive on the RAG pipeline referenced here</div>
+      </div>
+    </div>
+    <div class="related-pill" data-slug="01-004">
+      <span class="related-pill-icon">→</span>
+      <div class="related-pill-text">
+        <div class="related-pill-q">Q4: What is the difference between pre-training and fine-tuning?</div>
+        <div class="related-pill-rel">Prerequisite — clarifies what fine-tuning changes</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="section-label">One-liner recall</div>
+  <div class="oneliner-box">
+    <div class="oneliner-label">▸ Reconstruct from memory</div>
+    <div class="oneliner-text" data-text="Prompt engineering → RAG → fine-tuning is a cost-ordered ladder: prompting is free and fast; RAG closes knowledge gaps without training; fine-tuning changes model behavior when context alone isn&#x27;t enough — and production systems often need all three together.">Prompt engineering → RAG → fine-tuning is a cost-ordered ladder: prompting is free and fast; RAG closes knowledge gaps without training; fine-tuning changes model behavior when context alone isn&#x27;t enough — and production systems often need all three together.</div>
+  </div>
+</div>

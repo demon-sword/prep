@@ -1,0 +1,138 @@
+<div class="answer-header reveal">
+  <div class="answer-meta">
+    <span class="meta-badge meta-category">06-ml-fundamentals</span>
+    <span class="meta-badge meta-num">Q011</span>
+    <span class="meta-badge meta-status-review">review</span>
+  </div>
+  <h1 class="answer-title">Imbalanced datasets in real projects?</h1>
+</div>
+
+<div class="answer-section reveal">
+  <div class="accordion">
+    <div class="accordion-header">
+      <span class="accordion-title">⟁ Framing — Why this is asked</span>
+      <span class="accordion-chevron">▾</span>
+    </div>
+    <div class="accordion-body">
+      <div class="framing-grid">
+        <div><div class="framing-card">
+          <div class="framing-card-title">Why asked</div>
+          <p style="font-size:13.5px;line-height:1.7;color:var(--text-dim)">The interviewer is probing whether you&#x27;ve dealt with the practical reality that real-world data is almost never balanced — fraud is 0.1% of transactions, cancer is 1% of scans, churn is 5% of users. They want to see that you don&#x27;t naively optimize accuracy (a model predicting &quot;not fraud&quot; 100% of the time is 99.9% accurate but useless), and that you know the full toolkit: metric selection, algorithm-level fixes, data-level fixes, and threshold tuning — and can pick the right lever for the situation.</p>
+        </div></div>
+        <div><div class="framing-card">
+          <div class="framing-card-title">Trigger phrases</div>
+          <div class="trigger-list">
+              <div class="trigger-phrase">How have you handled imbalanced datasets in real projects?</div>
+              <div class="trigger-phrase">Our fraud data is 99% legitimate, 1% fraudulent — how do you approach that?</div>
+              <div class="trigger-phrase">What do you do when one class is much rarer than the other?</div>
+              <div class="trigger-phrase">How do you deal with class imbalance in classification?</div>
+          </div>
+        </div></div>
+      </div>
+      <div class="tests-block">
+        <span style="font-family:var(--mono);font-size:10px;letter-spacing:0.1em;text-transform:uppercase;color:var(--purple);margin-right:8px">Tests:</span>Ability to select appropriate metrics and apply the right combination of data-level, algorithm-level, and threshold-level fixes for imbalanced classification — without the naive accuracy trap.
+
+---
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="section-label">Concept</div>
+  <div class="concept-block"><p>Class imbalance occurs when one class is substantially rarer than others (e.g., 1:100 or 1:1000 ratio), causing standard classifiers to become biased toward the majority class. The core danger is <strong>metric blindness</strong>: accuracy looks great while the minority class (the one you actually care about) is nearly ignored. The solution is a three-layer toolkit: choose the right metric, fix at the algorithm/data level, and tune the decision threshold separately.</p></div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="section-label">Mechanism</div>
+  <div class="card"><p><strong>Layer 1 — Metric: ditch accuracy</strong></p>
+<ul class="styled-list"><li><strong>PR-AUC (Precision-Recall AUC):</strong> primary metric for severe imbalance (fraud, medical). Measures precision and recall across all thresholds; unaffected by true-negative count.</li><li><strong>F1 / F-beta score:</strong> harmonic mean of P and R. F-beta (β > 1) when recall matters more (missed cancer worse than false alarm).</li><li><strong>ROC-AUC:</strong> OK for moderate imbalance, but misleading at 100:1+ ratios because the large TN pool inflates the curve.</li><li><strong>Avoid:</strong> raw accuracy.</li></ul>
+<p><strong>Layer 2 — Algorithm-level fixes</strong></p>
+<div class="table-wrap"><table class="data-table"><tr><th>Technique</th><th>How it works</th><th>When to use</th></tr><tr><td><code>class_weight='balanced'</code> (sklearn)</td><td>Re-weights minority class loss by <code>n_samples / (n_classes × count)</code></td><td>Any sklearn classifier; zero data overhead; good default</td></tr><tr><td>Focal loss</td><td>Down-weights easy majority examples dynamically via <code>(1−p_t)^γ</code></td><td>Neural networks, severe imbalance</td></tr><tr><td>Threshold-aware ensembles (BalancedRandomForest)</td><td>Under-samples majority in each tree's bootstrap</td><td>Tree models with extreme imbalance</td></tr></table></div>
+<p><strong>Layer 3 — Data-level fixes (when algorithm fixes aren't enough)</strong></p>
+<div class="table-wrap"><table class="data-table"><tr><th>Technique</th><th>Mechanism</th><th>Risk</th></tr><tr><td><strong>SMOTE</strong> (Synthetic Minority Over-sampling)</td><td>Interpolates new minority samples between k-nearest neighbors</td><td>Can create unrealistic samples in sparse regions</td></tr><tr><td>Random under-sampling</td><td>Drop majority examples</td><td>Discards real signal</td></tr><tr><td>LLM augmentation (2026)</td><td>GPT-4o generates synthetic minority examples for NLP tasks</td><td>Distribution shift if generations are OOD</td></tr></table></div>
+<p><strong>Layer 4 — Threshold tuning</strong> The default 0.5 decision threshold is rarely optimal under imbalance. Plot the <strong>PR curve</strong> and find the threshold that maximizes F-beta for your business objective. In fraud detection, you might set threshold at 0.2 to capture 90% recall (few missed frauds) at the cost of more false positives (extra reviews).</p></div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="section-label">Example / Tradeoff</div>
+  <div class="card card-accent"><div class="rich-text"><p><strong>Fraud detection project (1% positive rate):</strong></p>
+<ul class="styled-list"><li>Baseline XGBoost with default settings: <strong>accuracy 99.1%, recall 0.18</strong> — model predicts "not fraud" almost always.</li><li>Fix 1: Add <code>scale_pos_weight=99</code> (XGBoost's class weight equivalent) → recall jumps to 0.71, PR-AUC 0.81.</li><li>Fix 2: SMOTE minority oversampling to 10:1 ratio → recall 0.78, PR-AUC 0.84.</li><li>Fix 3: Threshold tuned to 0.23 on PR curve to hit recall ≥ 0.90 → operational decision: accept precision 0.42 (58% false positive review queue, acceptable to fraud ops).</li><li><strong>Monitoring:</strong> deployed with PR-AUC dashboard; alert if recall drops >5% over rolling 7-day window (imbalance can shift if fraud patterns change).</li></ul>
+<p><strong>LLM/AI context:</strong> When fine-tuning a classifier on imbalanced NLP data (e.g., toxicity detection), focal loss in the cross-entropy head outperforms SMOTE because SMOTE doesn't handle high-dimensional text embeddings well. LLM augmentation for minority class examples is effective when the minority class is well-defined (specific violation type), but needs RAGAS-style or human review gating to avoid distribution shift.</p></div></div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="accordion">
+    <div class="accordion-header">
+      <span class="accordion-title">🎙 Verbal Script (3–5 min)</span>
+      <span class="accordion-chevron">▾</span>
+    </div>
+    <div class="accordion-body">
+      <div class="script-block"><div class="script-label">Opening (30s)</div><p>"Imbalanced datasets are the norm in production AI — fraud is 0.1% of transactions, rare disease is 1% of scans. The first mistake most candidates make is optimizing accuracy, which makes the problem invisible. I think of the solution in three layers: fix the metric, fix the algorithm, and tune the threshold. Let me walk through each."</p></div>
+      <div class="script-block"><div class="script-label">Core explanation (2–3 min)</div><p>"I'd start with the metric. Accuracy is meaningless when 99% of examples are the majority class — a model predicting 'not fraud' always is 99% accurate. Instead I use PR-AUC as the primary metric for severe imbalance, or F-beta if I know the relative cost of false negatives vs false positives.</p>
+<p>On the algorithm side, the cheapest and usually most effective fix is class weighting — <code>class_weight='balanced'</code> in sklearn, or <code>scale_pos_weight</code> in XGBoost. This re-weights the loss function so each minority example counts proportionally more. For neural networks I use focal loss, which dynamically downweights easy majority examples.</p>
+<p>If algorithm fixes aren't enough, I go to data-level remediation. SMOTE synthesizes new minority examples by interpolating between k-nearest minority neighbors — it's effective for tabular data but can create unrealistic samples in sparse regions. For NLP tasks in 2026, I've used GPT-4o to generate synthetic minority examples and then filter them with a human or automated quality gate.</p>
+<p>The last layer is threshold tuning, which is often overlooked. The default 0.5 threshold is wrong under imbalance. I plot the PR curve and pick the threshold that hits the business SLO — for fraud, that might be 'recall ≥ 0.90' even if it means precision of 0.40 and a larger review queue."</p></div>
+      <div class="script-block"><div class="script-label">Tradeoff / production angle (1 min)</div><p>"The tradeoff is cost: SMOTE adds training complexity and can overfit. Class weighting is nearly free. Lowering the threshold increases false positives, which has a real ops cost — more fraud analysts reviewing benign transactions. The right answer depends on the asymmetric cost of each error type. In medical imaging, a missed cancer (false negative) is catastrophic, so I'd bias heavily toward recall; in spam detection, a false positive (legit email flagged) is the bigger UX problem.</p>
+<p>One production gotcha: imbalance ratios can shift over time. If the real fraud rate drops from 1% to 0.3% because a fraud ring was caught, your calibrated threshold is now wrong. I monitor recall and PR-AUC on a rolling window and set SLO alerts."</p></div>
+      <div class="script-block"><div class="script-label">Wrap-up (30s)</div><p>"So: swap accuracy for PR-AUC as the primary metric, apply class weights as the default first fix, layer in SMOTE or augmentation only if needed, and tune the decision threshold explicitly against the business cost ratio. Happy to go deeper on focal loss, SMOTE internals, or how I'd handle this in the LLM fine-tuning context."</p></div>
+    </div>
+  </div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="section-label">Pitfalls</div>
+  <div class="pitfall-card">
+    <div class="pitfall-mistake"><strong>✗ Mistake</strong> Saying &quot;I&#x27;d use SMOTE to fix imbalance&quot; as the first and only answer</div>
+    <div class="pitfall-better"><strong>✓ Better</strong> Lead with metric change (PR-AUC over accuracy) and class weighting, then mention SMOTE as a data-level fallback with its caveats (unrealistic interpolation in sparse regions, not suitable for high-dimensional text).</div>
+  </div>
+  <div class="pitfall-card">
+    <div class="pitfall-mistake"><strong>✗ Mistake</strong> Treating ROC-AUC as the gold standard for imbalanced data</div>
+    <div class="pitfall-better"><strong>✓ Better</strong> Explain that ROC-AUC is inflated by the large true-negative pool at extreme ratios (100:1+); PR-AUC is the correct metric because it ignores true negatives.</div>
+  </div>
+  <div class="pitfall-card">
+    <div class="pitfall-mistake"><strong>✗ Mistake</strong> Using a fixed 0.5 decision threshold after training</div>
+    <div class="pitfall-better"><strong>✓ Better</strong> Tune the threshold on the PR curve to hit the business SLO (e.g., recall ≥ 0.90 for fraud), and monitor it over time as class distributions shift.</div>
+  </div>
+  <div class="pitfall-card">
+    <div class="pitfall-mistake"><strong>✗ Mistake</strong> Conflating &quot;balanced accuracy&quot; with solving the underlying problem</div>
+    <div class="pitfall-better"><strong>✓ Better</strong> Balanced accuracy is a diagnostic metric; the real production fix requires re-weighting, augmentation, or threshold tuning depending on the use case.
+
+---</div>
+  </div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="section-label">Related Questions</div>
+  <div class="related-pills">
+    <div class="related-pill" data-slug="06-019">
+      <span class="related-pill-icon">→</span>
+      <div class="related-pill-text">
+        <div class="related-pill-q">Q19: Precision vs recall — fraud detection?</div>
+        <div class="related-pill-rel">Direct application — precision/recall tradeoff is the core imbalance metric</div>
+      </div>
+    </div>
+    <div class="related-pill" data-slug="06-020">
+      <span class="related-pill-icon">→</span>
+      <div class="related-pill-text">
+        <div class="related-pill-q">Q20: F1 score, ROC curve?</div>
+        <div class="related-pill-rel">Follow-up — when to use F1 vs ROC-AUC under imbalance</div>
+      </div>
+    </div>
+    <div class="related-pill" data-slug="06-001">
+      <span class="related-pill-icon">→</span>
+      <div class="related-pill-text">
+        <div class="related-pill-q">Q1: Data pre-processing and feature engineering?</div>
+        <div class="related-pill-rel">Prerequisite — data-level fixes (SMOTE, augmentation) sit in the preprocessing pipeline</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="section-label">One-liner recall</div>
+  <div class="oneliner-box">
+    <div class="oneliner-label">▸ Reconstruct from memory</div>
+    <div class="oneliner-text" data-text="Imbalanced data: swap accuracy for PR-AUC, apply `class_weight=&#x27;balanced&#x27;` first, add SMOTE for tabular/focal loss for NNs if needed, then tune the decision threshold on the PR curve to match the business cost ratio — and monitor recall drift in production.">Imbalanced data: swap accuracy for PR-AUC, apply `class_weight=&#x27;balanced&#x27;` first, add SMOTE for tabular/focal loss for NNs if needed, then tune the decision threshold on the PR curve to match the business cost ratio — and monitor recall drift in production.</div>
+  </div>
+</div>

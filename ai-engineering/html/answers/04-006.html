@@ -1,0 +1,134 @@
+<div class="answer-header reveal">
+  <div class="answer-meta">
+    <span class="meta-badge meta-category">04-fine-tuning-training</span>
+    <span class="meta-badge meta-num">Q006</span>
+    <span class="meta-badge meta-status-review">review</span>
+  </div>
+  <h1 class="answer-title">Design a model for math problems — data, SFT, post-training, eval</h1>
+</div>
+
+<div class="answer-section reveal">
+  <div class="accordion">
+    <div class="accordion-header">
+      <span class="accordion-title">⟁ Framing — Why this is asked</span>
+      <span class="accordion-chevron">▾</span>
+    </div>
+    <div class="accordion-body">
+      <div class="framing-grid">
+        <div><div class="framing-card">
+          <div class="framing-card-title">Why asked</div>
+          <p style="font-size:13.5px;line-height:1.7;color:var(--text-dim)">Interviewers ask this to probe whether you understand the full model-development lifecycle for a specialized domain—not just &quot;call GPT-4.&quot; Math is a canonical hard case because it requires exact symbolic reasoning, step-by-step correctness, and verifiable answers, which exposes gaps in data curation, training-objective design, and evaluation strategy that generic approaches can&#x27;t paper over.</p>
+        </div></div>
+        <div><div class="framing-card">
+          <div class="framing-card-title">Trigger phrases</div>
+          <div class="trigger-list">
+              <div class="trigger-phrase">How would you build a model to solve math word problems?</div>
+              <div class="trigger-phrase">Design the training pipeline for a math reasoning assistant.</div>
+              <div class="trigger-phrase">Walk me through data, SFT, post-training, and eval for a domain-specific model.</div>
+          </div>
+        </div></div>
+      </div>
+      <div class="tests-block">
+        <span style="font-family:var(--mono);font-size:10px;letter-spacing:0.1em;text-transform:uppercase;color:var(--purple);margin-right:8px">Tests:</span>End-to-end ML development judgment: data quality strategy, supervised fine-tuning mechanics (SFT), preference alignment (RLHF/DPO/process-reward models), and rigorous eval with verifiable correctness metrics.
+
+---
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="section-label">Concept</div>
+  <div class="concept-block"><p>Building a math-capable model requires four sequential phases: (1) curating high-quality chain-of-thought training data, (2) supervised fine-tuning (SFT) to establish the base reasoning format, (3) post-training alignment via process reward models (PRMs) or DPO to reinforce correct reasoning paths over incorrect ones, and (4) evaluation on held-out benchmarks with exact-match and step-level correctness metrics. The key insight is that math has <em>verifiable ground truth</em>, which unlocks outcome-based RL that language tasks cannot use.</p></div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="section-label">Mechanism</div>
+  <div class="card"><p><strong>Phase 1 — Data curation:</strong></p>
+<ul class="styled-list"><li><strong>Sources:</strong> GSM8K (8.5K grade-school word problems), MATH (12.5K competition problems), NuminaMath, AoPS forum posts, synthetic data from a stronger teacher model (GPT-4o generating scratchpad solutions).</li><li><strong>Format:</strong> Every example is a <code>(problem, chain-of-thought scratchpad, final answer)</code> triple. The CoT must be step-by-step, not shortcut. Use <code>\boxed{}</code> delimiters so answer extraction is deterministic.</li><li><strong>Quality gates:</strong> Filter by: (a) answer verifiability (LaTeX <code>\boxed{}</code> parseable), (b) scratchpad plausibility (does the reasoning reach the stated answer?), (c) difficulty distribution (easy 40% / medium 40% / hard 20% to prevent mode collapse on easy problems).</li><li><strong>Synthetic augmentation:</strong> Rejection sampling — generate N solutions from a weaker model, keep only correct ones (verified by symbolic solver or strong oracle LLM); this is how DeepSeek-Math and Qwen-Math scale their datasets cheaply.</li></ul>
+<p><strong>Phase 2 — Supervised Fine-Tuning (SFT):</strong></p>
+<ul class="styled-list"><li>Start from a strong base: Llama 3 8B / Qwen2.5-Math-7B / Mistral 7B.</li><li>Use LoRA (rank 32–64, α=64, target <code>q_proj</code>, <code>v_proj</code>, <code>gate_proj</code>) or full fine-tune if you have >4 A100s.</li><li>Training objective: standard next-token cross-entropy over the <em>full</em> response (problem + scratchpad + answer) — not just the answer token. This teaches the scratchpad format.</li><li>Hyperparameters: 2–3 epochs, LR 2e-5 (cosine decay), batch size 32–128, gradient checkpointing.</li><li>Milestone: SFT alone on GSM8K should get you from ~55% (base) to ~75–80% pass@1.</li></ul>
+<p><strong>Phase 3 — Post-training (alignment):</strong></p>
+<ul class="styled-list"><li><strong>Option A — Outcome Reward Model (ORM) + RL:</strong> Binary reward (correct final answer = +1, incorrect = 0). Use PPO or GRPO (Group Relative Policy Optimization, DeepSeek-R1 style) to optimize policy. Simple to implement; reward hacking risk if scratchpad is ignored.</li><li><strong>Option B — Process Reward Model (PRM):</strong> Train a step-level verifier (e.g., PRM800K dataset from OpenAI). Each reasoning step gets a score; RL optimizes <em>step quality</em>, not just final answer. More robust, harder to reward hack; used in o1/o3 and DeepSeek-R1.</li><li><strong>Option C — DPO on preference pairs:</strong> Generate K solutions per problem, label correct/incorrect, train DPO. Simpler than RL; no online rollout needed. Works well when correctness signal is clean.</li><li><strong>In practice (2025–2026):</strong> GRPO/STaR-style self-improvement (fine-tune on correct self-generated solutions iteratively) has shown strong results for models like DeepSeek-R1-Zero without labeled preference data.</li></ul>
+<p><strong>Phase 4 — Evaluation:</strong></p>
+<ul class="styled-list"><li><strong>Offline benchmarks:</strong> GSM8K (grade school, easy bar), MATH Level 3–5 (competition math, hard), AIME 2024 (frontier bar, pass@1 and majority@32).</li><li><strong>Metrics:</strong> pass@1 (greedy), maj@k (majority vote over k samples), pass@k (any of k correct).</li><li><strong>Step-level eval:</strong> PRM-scored solution quality; useful even when final answer is wrong.</li><li><strong>Held-out regression set:</strong> Custom problem set drawn from your actual use case (tutoring platform, SAT prep, etc.) — never contaminate with training data.</li><li><strong>Failure mode analysis:</strong> Track category breakdowns — algebra vs geometry vs combinatorics vs number theory. Models often collapse on specific sub-domains.</li></ul></div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="section-label">Example / Tradeoff</div>
+  <div class="card card-accent"><div class="rich-text"><p><strong>Qwen2.5-Math-7B-Instruct (2024):</strong> SFT on synthetic NuminaMath CoT → ORM-guided MCTS for solution selection → DPO on correct vs incorrect pairs → achieves 95.2% on GSM8K and 83.6% on MATH, rivaling GPT-4o on math despite being 7B parameters. Key: high-quality synthetic CoT data + step-level verification outweighs raw scale.</p>
+<p><strong>Tradeoff table:</strong></p>
+<div class="table-wrap"><table class="data-table"><tr><th>Phase</th><th>Cheap path</th><th>Better path</th><th>When to invest</th></tr><tr><td>Data</td><td>GSM8K + MATH public data</td><td>Synthetic CoT via GPT-4o + rejection sampling</td><td>Domain-specific problems exist</td></tr><tr><td>SFT</td><td>LoRA on 1× A100</td><td>Full fine-tune multi-GPU</td><td>If base model is weak at format</td></tr><tr><td>Post-training</td><td>DPO on correct/incorrect pairs</td><td>PRM + GRPO online RL</td><td>MATH Level 5 / competition bar</td></tr><tr><td>Eval</td><td>pass@1 on GSM8K</td><td>Held-out domain set + step-level PRM score</td><td>Production deployment</td></tr></table></div>
+<p><strong>Cost example:</strong> LoRA fine-tune Llama 3 8B on 50K examples ≈ 4 hours on 2× A100 80GB ≈ $80 on Lambda Cloud. PRM training adds another ~$200. Serving: vLLM with 4-bit GPTQ, 8K context, ~4ms/token on A10G.</p></div></div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="accordion">
+    <div class="accordion-header">
+      <span class="accordion-title">🎙 Verbal Script (3–5 min)</span>
+      <span class="accordion-chevron">▾</span>
+    </div>
+    <div class="accordion-body">
+      <div class="script-block"><div class="script-label">Opening (30s)</div><p>"I'd structure this as four phases: data curation, supervised fine-tuning, post-training alignment, and evaluation. The key insight for math specifically is that answers are verifiable — we know ground truth — so we can use stronger training signals than language tasks typically allow."</p></div>
+      <div class="script-block"><div class="script-label">Core explanation (2–3 min)</div><p>"For data, I'd start with public datasets like GSM8K and the MATH benchmark, but the real leverage is synthetic CoT generation — use GPT-4o to produce step-by-step scratchpad solutions, then filter by correctness with a symbolic verifier or oracle LLM. Rejection sampling is how DeepSeek-Math and Qwen-Math scaled without massive human annotation. Every example needs a <code>(problem, scratchpad, \\boxed{answer})</code> triple — the scratchpad format teaches the model to reason, not just pattern-match.</p>
+<p>"For SFT, I'd start from a strong base like Qwen2.5-Math-7B or Llama 3 8B and fine-tune with LoRA (rank 32–64) using cross-entropy over the full response — not just the answer token. This is important: you need the model to learn the scratchpad format, not shortcut to the answer. Two to three epochs, LR 2e-5, gets you from ~55% to ~75–80% on GSM8K.</p>
+<p>"For post-training, the decision is between DPO and process reward models. DPO is simpler — generate K solutions, label correct vs incorrect, train on preference pairs. But for harder competition math, a step-level Process Reward Model like PRM800K plus GRPO-style RL is more robust because it can't reward-hack by producing wrong scratchpads with correct answers. DeepSeek-R1 used GRPO self-improvement with almost no labeled data.</p>
+<p>"For eval, I'd run GSM8K for the easy bar, MATH Level 3–5 for the hard bar, and a custom held-out set from the actual domain — SAT math, tutoring curriculum, whatever the product targets. I'd report pass@1 and maj@8, and break down by sub-domain — models often have 90%+ on algebra but collapse on combinatorics."</p></div>
+      <div class="script-block"><div class="script-label">Tradeoff / production angle (1 min)</div><p>"The main production tension is between online RL (which requires rollout infrastructure) and offline DPO (simpler but stale). For most teams, I'd start with DPO — generate correct/incorrect pairs offline, ship fast, instrument real usage, then invest in a PRM if you have a high-quality step-level dataset. Also: don't use GSM8K as your only eval signal — it saturates quickly, and a model at 95% on GSM8K can still fail on real student problems with unusual phrasing."</p></div>
+      <div class="script-block"><div class="script-label">Wrap-up (30s)</div><p>"So: curate verifiable CoT data, SFT with full-response loss, post-train with DPO or PRM+RL depending on your bar, and evaluate on a held-out domain set beyond GSM8K. Happy to go deeper on any phase — PRM architecture, GRPO mechanics, or the synthetic data pipeline."</p></div>
+    </div>
+  </div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="section-label">Pitfalls</div>
+  <div class="pitfall-card">
+    <div class="pitfall-mistake"><strong>✗ Mistake</strong> Saying &quot;I&#x27;d fine-tune on GSM8K&quot; without mentioning scratchpad/CoT format</div>
+    <div class="pitfall-better"><strong>✓ Better</strong> Explain that the training data must include step-by-step reasoning traces, not just (problem, answer) pairs; next-token loss on the scratchpad teaches the reasoning format, not just final answer memorization.</div>
+  </div>
+  <div class="pitfall-card">
+    <div class="pitfall-mistake"><strong>✗ Mistake</strong> Treating math eval as just GSM8K pass@1 and calling it done</div>
+    <div class="pitfall-better"><strong>✓ Better</strong> GSM8K saturates quickly (95%+ for modern models); serious eval uses MATH Level 3–5, domain-specific held-out sets, and step-level PRM scoring; report maj@8 not just greedy pass@1 for a realistic estimate.</div>
+  </div>
+  <div class="pitfall-card">
+    <div class="pitfall-mistake"><strong>✗ Mistake</strong> Jumping straight to RLHF/PPO without explaining why math enables verifiable reward signals</div>
+    <div class="pitfall-better"><strong>✓ Better</strong> Highlight that math&#x27;s ground-truth verifiability is the key advantage; outcome-based RL (correct/incorrect) or PRM-based RL is only possible because we can check answers symbolically; this is fundamentally different from preference-based alignment for subjective tasks.
+
+---</div>
+  </div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="section-label">Related Questions</div>
+  <div class="related-pills">
+    <div class="related-pill" data-slug="04-004">
+      <span class="related-pill-icon">→</span>
+      <div class="related-pill-text">
+        <div class="related-pill-q">Q4: What is RLHF and why important?</div>
+        <div class="related-pill-rel">RLHF/PPO and DPO are the post-training alignment methods referenced here</div>
+      </div>
+    </div>
+    <div class="related-pill" data-slug="04-002">
+      <span class="related-pill-icon">→</span>
+      <div class="related-pill-text">
+        <div class="related-pill-q">Q2: What is PEFT/LoRA and when use it?</div>
+        <div class="related-pill-rel">LoRA mechanics used in the SFT phase</div>
+      </div>
+    </div>
+    <div class="related-pill" data-slug="04-008">
+      <span class="related-pill-icon">→</span>
+      <div class="related-pill-text">
+        <div class="related-pill-q">Q8: RLHF pipeline: SFT, reward model, PPO. How does DPO simplify?</div>
+        <div class="related-pill-rel">Deep dive on the post-training pipeline choices</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="section-label">One-liner recall</div>
+  <div class="oneliner-box">
+    <div class="oneliner-label">▸ Reconstruct from memory</div>
+    <div class="oneliner-text" data-text="Design a math model via four phases: curate verifiable CoT data (GSM8K + synthetic rejection-sampling), SFT with full-response cross-entropy loss to teach the scratchpad format, post-train with DPO (simple) or PRM+GRPO (competition bar), and evaluate on held-out domain sets with pass@1 + maj@8 broken down by sub-domain.">Design a math model via four phases: curate verifiable CoT data (GSM8K + synthetic rejection-sampling), SFT with full-response cross-entropy loss to teach the scratchpad format, post-train with DPO (simple) or PRM+GRPO (competition bar), and evaluate on held-out domain sets with pass@1 + maj@8 broken down by sub-domain.</div>
+  </div>
+</div>

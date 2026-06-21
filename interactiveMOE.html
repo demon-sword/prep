@@ -1,0 +1,424 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Mixture of Experts (MoE) Interactive Simulator</title>
+    <style>
+        :root {
+            --bg-color: #0f172a;
+            --card-bg: #1e293b;
+            --accent-color: #38bdf8;
+            --text-color: #f8fafc;
+            --text-muted: #94a3b8;
+            --border-color: #334155;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: var(--bg-color);
+            color: var(--text-color);
+            margin: 0;
+            padding: 20px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+
+        .container {
+            max-width: 1000px;
+            width: 100%;
+            background: var(--card-bg);
+            border-radius: 12px;
+            padding: 24px;
+            box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.3);
+            border: 1px solid var(--border-color);
+        }
+
+        h1 {
+            color: var(--accent-color);
+            margin-top: 0;
+            font-size: 24px;
+            border-bottom: 1px solid var(--border-color);
+            padding-bottom: 12px;
+        }
+
+        .controls {
+            display: flex;
+            gap: 12px;
+            margin-bottom: 24px;
+            flex-wrap: wrap;
+        }
+
+        button {
+            background-color: #2563eb;
+            color: white;
+            border: none;
+            padding: 10px 16px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-weight: 600;
+            transition: background 0.2s;
+        }
+
+        button:hover {
+            background-color: #1d4ed8;
+        }
+
+        button.secondary {
+            background-color: var(--border-color);
+            color: var(--text-color);
+        }
+
+        button.secondary:hover {
+            background-color: #475569;
+        }
+
+        /* MoE Architecture Grid Layout */
+        .moe-grid {
+            display: grid;
+            grid-template-columns: 1fr 1.5fr 3fr;
+            gap: 20px;
+            align-items: center;
+            position: relative;
+            min-height: 400px;
+            background: #0b0f19;
+            padding: 20px;
+            border-radius: 8px;
+            border: 1px solid var(--border-color);
+        }
+
+        /* Columns */
+        .column {
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+            align-items: center;
+            z-index: 2;
+        }
+
+        /* Tokens */
+        .token-box {
+            background: #334155;
+            padding: 10px 16px;
+            border-radius: 6px;
+            font-weight: bold;
+            width: 80px;
+            text-align: center;
+            border: 2px solid transparent;
+            transition: all 0.3s;
+        }
+
+        .token-box.active {
+            border-color: var(--accent-color);
+            background: #1e3a8a;
+            box-shadow: 0 0 12px rgba(56, 189, 248, 0.4);
+        }
+
+        /* Router */
+        .router-box {
+            background: #1e1b4b;
+            border: 2px solid #6366f1;
+            padding: 20px;
+            border-radius: 8px;
+            text-align: center;
+            width: 120px;
+        }
+
+        .router-title {
+            font-size: 14px;
+            font-weight: bold;
+            color: #a5b4fc;
+            margin-bottom: 5px;
+        }
+
+        .router-meta {
+            font-size: 11px;
+            color: var(--text-muted);
+        }
+
+        /* Experts Group */
+        .experts-group {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 10px;
+            width: 100%;
+        }
+
+        .expert-card {
+            background: #1e293b;
+            border: 1px solid var(--border-color);
+            padding: 12px;
+            border-radius: 6px;
+            font-size: 12px;
+            transition: all 0.3s ease;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .expert-card.active {
+            border-color: #22c55e;
+            background: #064e3b;
+            box-shadow: 0 0 10px rgba(34, 197, 94, 0.2);
+            transform: scale(1.02);
+        }
+
+        .expert-name {
+            font-weight: bold;
+            color: var(--text-color);
+            margin-bottom: 4px;
+        }
+
+        .expert-specialty {
+            color: var(--text-muted);
+            font-size: 11px;
+        }
+
+        .weight-badge {
+            position: absolute;
+            top: 4px;
+            right: 4px;
+            background: #22c55e;
+            color: white;
+            font-size: 10px;
+            padding: 2px 5px;
+            border-radius: 4px;
+            display: none;
+        }
+
+        .expert-card.active .weight-badge {
+            display: block;
+        }
+
+        /* Dynamic Canvas Layer for connecting lines */
+        canvas {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            z-index: 1;
+            pointer-events: none;
+        }
+
+        /* Metrics Display */
+        .metrics {
+            margin-top: 20px;
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 16px;
+        }
+
+        .metric-card {
+            background: var(--bg-color);
+            padding: 14px;
+            border-radius: 8px;
+            border: 1px solid var(--border-color);
+        }
+
+        .metric-val {
+            font-size: 20px;
+            font-weight: bold;
+            color: var(--accent-color);
+        }
+
+        .metric-label {
+            font-size: 12px;
+            color: var(--text-muted);
+            margin-top: 4px;
+        }
+
+        .explainer {
+            margin-top: 20px;
+            font-size: 14px;
+            line-height: 1.6;
+            color: var(--text-muted);
+            background: #131b2e;
+            padding: 15px;
+            border-left: 4px solid var(--accent-color);
+            border-radius: 0 8px 8px 0;
+        }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <h1>Dynamic Mixture of Experts (Top-2 Routing)</h1>
+    
+    <div class="controls">
+        <button id="btn-physics" onclick="processToken('Physics', [0, 1])">Token: "Quantum"</button>
+        <button id="btn-code" onclick="processToken('Code', [4, 5])">Token: "async/await"</button>
+        <button id="btn-creative" onclick="processToken('Creative', [2, 3])">Token: "Metaphor"</button>
+        <button id="btn-math" onclick="processToken('Math', [1, 7])">Token: "Matrix"</button>
+        <button id="btn-ambiguous" class="secondary" onclick="processToken('Ambiguous', [3, 6])">Token: "Python (Snake vs Code)"</button>
+    </div>
+
+    <div class="moe-grid" id="moeGrid">
+        <canvas id="connectionsCanvas"></canvas>
+
+        <div class="column">
+            <h3 style="font-size:14px; margin-bottom:5px;">Input Token</h3>
+            <div id="token-display" class="token-box">---</div>
+        </div>
+
+        <div class="column">
+            <div class="router-box" id="router">
+                <div class="router-title">Gating Router</div>
+                <div class="router-meta" id="router-status">Awaiting input...</div>
+            </div>
+        </div>
+
+        <div class="column">
+            <h3 style="font-size:14px; margin-bottom:5px;">Expert Sub-Networks (FFN Blocks)</h3>
+            <div class="experts-group">
+                <div class="expert-card" id="expert-0">
+                    <span class="weight-badge" id="w-0">w=0.65</span>
+                    <div class="expert-name">Expert 1</div>
+                    <div class="expert-specialty">Hard Sciences & Physics</div>
+                </div>
+                <div class="expert-card" id="expert-1">
+                    <span class="weight-badge" id="w-1">w=0.35</span>
+                    <div class="expert-name">Expert 2</div>
+                    <div class="expert-specialty">Advanced Math & Linear Algebra</div>
+                </div>
+                <div class="expert-card" id="expert-2">
+                    <span class="weight-badge" id="w-2">w=0.70</span>
+                    <div class="expert-name">Expert 3</div>
+                    <div class="expert-specialty">Creative Writing & Nuance</div>
+                </div>
+                <div class="expert-card" id="expert-3">
+                    <span class="weight-badge" id="w-3">w=0.30</span>
+                    <div class="expert-name">Expert 4</div>
+                    <div class="expert-specialty">Linguistics & Grammar</div>
+                </div>
+                <div class="expert-card" id="expert-4">
+                    <span class="weight-badge" id="w-4">w=0.88</span>
+                    <div class="expert-name">Expert 5</div>
+                    <div class="expert-specialty">Code Generation (Python/C++)</div>
+                </div>
+                <div class="expert-card" id="expert-5">
+                    <span class="weight-badge" id="w-5">w=0.12</span>
+                    <div class="expert-name">Expert 6</div>
+                    <div class="expert-specialty">System Architecture & Logic</div>
+                </div>
+                <div class="expert-card" id="expert-6">
+                    <span class="weight-badge" id="w-6">w=0.55</span>
+                    <div class="expert-name">Expert 7</div>
+                    <div class="expert-specialty">Biology & Nature Taxonomy</div>
+                </div>
+                <div class="expert-card" id="expert-7">
+                    <span class="weight-badge" id="w-7">w=0.45</span>
+                    <div class="expert-name">Expert 8</div>
+                    <div class="expert-specialty">Data Structs & Graphs</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="metrics">
+        <div class="metric-card">
+            <div class="metric-val">47 Billion</div>
+            <div class="metric-label">Total Model Parameters</div>
+        </div>
+        <div class="metric-card">
+            <div class="metric-val" id="active-params">~13 Billion</div>
+            <div class="metric-label">Activated Parameters (Compute Cost)</div>
+        </div>
+        <div class="metric-card">
+            <div class="metric-val" id="compute-saved">0%</div>
+            <div class="metric-label">FFN FLOPs Saved vs Dense Model</div>
+        </div>
+    </div>
+
+    <div class="explainer">
+        <strong>Interview Note:</strong> Notice how the parameter count and computation disconnect. Even though the system has 8 total experts sitting in memory (high VRAM footprint), only <strong>Top K=2</strong> are executing matrix multiplications for any individual token. This allows models like Mixtral 8x7B to achieve the performance of massive networks with the processing speed of a much leaner dense model.
+    </div>
+</div>
+
+<script>
+    const canvas = document.getElementById('connectionsCanvas');
+    const ctx = canvas.getContext('2d');
+
+    // Resize canvas properly to map points accurately
+    function resizeCanvas() {
+        const grid = document.getElementById('moeGrid');
+        canvas.width = grid.clientWidth;
+        canvas.height = grid.clientHeight;
+    }
+    
+    window.addEventListener('resize', resizeCanvas);
+    setTimeout(resizeCanvas, 100);
+
+    function processToken(tokenType, activeExpertIds) {
+        resizeCanvas(); // Ensure correct boundaries
+        
+        // Reset styles
+        document.querySelectorAll('.expert-card').forEach(el => el.classList.remove('active'));
+        const tokenBox = document.getElementById('token-display');
+        tokenBox.classList.remove('active');
+        
+        // Update Token Text based on selection
+        let tokenName = "";
+        if(tokenType === 'Physics') tokenName = "Quantum";
+        if(tokenType === 'Code') tokenName = "async/await";
+        if(tokenType === 'Creative') tokenName = "Metaphor";
+        if(tokenType === 'Math') tokenName = "Matrix";
+        if(tokenType === 'Ambiguous') tokenName = "Python";
+        
+        tokenBox.innerText = `"${tokenName}"`;
+        tokenBox.classList.add('active');
+
+        // Update Router text
+        document.getElementById('router-status').innerHTML = `Routing top-2 experts...`;
+
+        // Clear canvas
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+        // Animate routing lines
+        setTimeout(() => {
+            // Activate selected experts
+            activeExpertIds.forEach(id => {
+                document.getElementById(`expert-${id}`).classList.add('active');
+            });
+
+            drawConnections(activeExpertIds);
+            
+            // Update live metrics 
+            document.getElementById('compute-saved').innerText = "75%";
+            document.getElementById('active-params').innerText = "~12.8 Billion";
+        }, 150);
+    }
+
+    function drawConnections(expertIds) {
+        const gridRect = document.getElementById('moeGrid').getBoundingClientRect();
+        const tokenRect = document.getElementById('token-display').getBoundingClientRect();
+        const routerRect = document.getElementById('router').getBoundingClientRect();
+
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+        // 1. Line from Token Box to Router Box
+        ctx.beginPath();
+        ctx.moveTo(tokenRect.right - gridRect.left, tokenRect.top + (tokenRect.height/2) - gridRect.top);
+        ctx.lineTo(routerRect.left - gridRect.left, routerRect.top + (routerRect.height/2) - gridRect.top);
+        ctx.strokeStyle = '#38bdf8';
+        ctx.lineWidth = 3;
+        ctx.stroke();
+
+        // 2. Lines from Router to active Experts
+        expertIds.forEach(id => {
+            const expRect = document.getElementById(`expert-${id}`).getBoundingClientRect();
+            
+            ctx.beginPath();
+            ctx.moveTo(routerRect.right - gridRect.left, routerRect.top + (routerRect.height/2) - gridRect.top);
+            ctx.lineTo(expRect.left - gridRect.left, expRect.top + (expRect.height/2) - gridRect.top);
+            ctx.strokeStyle = '#22c55e';
+            ctx.lineWidth = 2.5;
+            ctx.setLineDash([4, 2]); // Dotted processing path
+            ctx.stroke();
+            ctx.setLineDash([]); // Reset
+        });
+    }
+</script>
+
+</body>
+</html>

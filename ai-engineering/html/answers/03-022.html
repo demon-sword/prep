@@ -1,0 +1,206 @@
+<div class="answer-header reveal">
+  <div class="answer-meta">
+    <span class="meta-badge meta-category">03-agents-tool-use</span>
+    <span class="meta-badge meta-num">Q022</span>
+    <span class="meta-badge meta-status-review">review</span>
+  </div>
+  <h1 class="answer-title">Tool schemas that reduce hallucinated actions?</h1>
+</div>
+
+<div class="answer-section reveal">
+  <div class="accordion">
+    <div class="accordion-header">
+      <span class="accordion-title">⟁ Framing — Why this is asked</span>
+      <span class="accordion-chevron">▾</span>
+    </div>
+    <div class="accordion-body">
+      <div class="framing-grid">
+        <div><div class="framing-card">
+          <div class="framing-card-title">Why asked</div>
+          <p style="font-size:13.5px;line-height:1.7;color:var(--text-dim)">This question probes whether the candidate understands that <strong>tool schema design is the primary engineering lever for agent reliability</strong> — not model choice or prompt verbosity. Interviewers at companies with production agents (Anthropic, OpenAI, enterprise AI teams) ask this to distinguish candidates who have debugged real hallucination failures from those who treat schemas as boilerplate. It&#x27;s a direct follow-up to &quot;how do agents decide which tool to use?&quot; and goes deeper into the craft of schema authoring.</p>
+        </div></div>
+        <div><div class="framing-card">
+          <div class="framing-card-title">Trigger phrases</div>
+          <div class="trigger-list">
+              <div class="trigger-phrase">How do you write tool schemas to reduce hallucinations?</div>
+              <div class="trigger-phrase">Your agent keeps calling tools with wrong arguments — what do you fix?</div>
+              <div class="trigger-phrase">What makes a good tool definition in a function-calling API?</div>
+              <div class="trigger-phrase">How do you prevent the model from inventing parameter values?</div>
+          </div>
+        </div></div>
+      </div>
+      <div class="tests-block">
+        <span style="font-family:var(--mono);font-size:10px;letter-spacing:0.1em;text-transform:uppercase;color:var(--purple);margin-right:8px">Tests:</span>Practical knowledge of JSON Schema semantics, function-calling API mechanics, and the specific schema patterns that constrain LLM output to valid tool invocations.
+
+---
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="section-label">Concept</div>
+  <div class="concept-block"><p>A tool schema is the <strong>specification contract</strong> between the orchestrator and the LLM: it tells the model what the tool does, when to use it, and exactly what arguments are legal. Hallucinated actions — wrong tool names, fabricated argument values, out-of-range parameters — almost always trace back to schemas that are too vague, too permissive, or semantically overlapping. The fix is schema engineering, not model tuning.</p></div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="section-label">Mechanism</div>
+  <div class="card"><p><strong>Five concrete schema patterns that eliminate most hallucinations:</strong></p>
+<p><strong>1. Action-oriented, condition-scoped descriptions</strong></p>
+<p>The <code>description</code> field is the model's only signal for _when_ to call the tool. Vague descriptions produce ambiguous selection; overlapping descriptions cause thrashing between tools.</p>
+<div class="code-block-wrap"><pre class="code-block"><code>// ❌ Vague — model can&#x27;t distinguish this from other tools
+{
+  &quot;name&quot;: &quot;search&quot;,
+  &quot;description&quot;: &quot;Search for information.&quot;
+}
+
+// ✅ Action-oriented + condition-scoped
+{
+  &quot;name&quot;: &quot;search_knowledge_base&quot;,
+  &quot;description&quot;: &quot;Search internal support articles for policy, product feature, or troubleshooting information. Use ONLY when the user asks about how something works, what a policy is, or how to fix a problem. Do NOT use for order lookups or account changes.&quot;
+}</code></pre><button class="copy-btn">copy</button></div>
+<p>The <code>DO NOT use when</code> clause is especially powerful — it disambiguates from sibling tools without requiring the model to read all schemas simultaneously.</p>
+<p><strong>2. Constrained enums over free-form strings</strong></p>
+<p>Free-form string parameters invite hallucination. Replace them with <code>enum</code> wherever the value space is finite.</p>
+<div class="code-block-wrap"><pre class="code-block"><code>// ❌ Model invents values: &quot;urgent&quot;, &quot;URGENT&quot;, &quot;high-priority&quot;, &quot;escalate&quot;
+&quot;priority&quot;: {&quot;type&quot;: &quot;string&quot;}
+
+// ✅ Model must pick from the legal set
+&quot;priority&quot;: {
+  &quot;type&quot;: &quot;string&quot;,
+  &quot;enum&quot;: [&quot;low&quot;, &quot;medium&quot;, &quot;high&quot;, &quot;critical&quot;],
+  &quot;description&quot;: &quot;Ticket priority. Use &#x27;critical&#x27; only for data loss or complete service outages.&quot;
+}</code></pre><button class="copy-btn">copy</button></div>
+<p><strong>3. Regex patterns for structured identifiers</strong></p>
+<p>Order IDs, user IDs, account numbers — all should carry <code>pattern</code> constraints. The model follows JSON Schema patterns reliably at T=0 and the orchestrator can validate before execution.</p>
+<div class="code-block-wrap"><pre class="code-block"><code>&quot;order_id&quot;: {
+  &quot;type&quot;: &quot;string&quot;,
+  &quot;pattern&quot;: &quot;^ORD-[0-9]{6}$&quot;,
+  &quot;description&quot;: &quot;Order identifier in format ORD-NNNNNN, e.g. ORD-483201. Extract from user message.&quot;
+}</code></pre><button class="copy-btn">copy</button></div>
+<p><strong>4. <code>required</code> vs optional separation + explicit defaults</strong></p>
+<p>Mark as <code>required</code> only what is truly necessary. Optional parameters should include a <code>default</code> and a description of when to omit them. This prevents the model from hallucinating values for fields it doesn't need.</p>
+<div class="code-block-wrap"><pre class="code-block"><code>{
+  &quot;name&quot;: &quot;get_orders&quot;,
+  &quot;parameters&quot;: {
+    &quot;required&quot;: [&quot;customer_id&quot;],
+    &quot;properties&quot;: {
+      &quot;customer_id&quot;: {&quot;type&quot;: &quot;string&quot;, &quot;description&quot;: &quot;Customer UUID from user account&quot;},
+      &quot;status_filter&quot;: {
+        &quot;type&quot;: &quot;string&quot;,
+        &quot;enum&quot;: [&quot;all&quot;, &quot;open&quot;, &quot;shipped&quot;, &quot;cancelled&quot;],
+        &quot;default&quot;: &quot;all&quot;,
+        &quot;description&quot;: &quot;Filter orders by status. Omit to return all orders.&quot;
+      },
+      &quot;limit&quot;: {
+        &quot;type&quot;: &quot;integer&quot;,
+        &quot;minimum&quot;: 1,
+        &quot;maximum&quot;: 50,
+        &quot;default&quot;: 10,
+        &quot;description&quot;: &quot;Max orders to return. Default 10. Only increase if user asks for &#x27;all orders&#x27;.&quot;
+      }
+    }
+  }
+}</code></pre><button class="copy-btn">copy</button></div>
+<p><strong>5. Inline examples in parameter descriptions</strong></p>
+<p>LLMs are few-shot learners. Adding <code>e.g.</code> examples in the description dramatically reduces argument format errors.</p>
+<div class="code-block-wrap"><pre class="code-block"><code>&quot;date_range&quot;: {
+  &quot;type&quot;: &quot;string&quot;,
+  &quot;description&quot;: &quot;ISO 8601 date range in format YYYY-MM-DD/YYYY-MM-DD, e.g. &#x27;2024-01-01/2024-03-31&#x27;. Extract from user&#x27;s natural language date references.&quot;
+}</code></pre><button class="copy-btn">copy</button></div>
+<p><strong>Orchestrator-side enforcement (the other half):</strong></p>
+<p>Schema design alone isn't enough — the orchestrator must validate every tool call against the schema in code before dispatching:</p>
+<div class="code-block-wrap"><pre class="code-block"><code>import jsonschema
+
+def dispatch_tool(tool_call, tool_schemas):
+    schema = tool_schemas[tool_call[&quot;name&quot;]]
+    try:
+        jsonschema.validate(tool_call[&quot;arguments&quot;], schema)
+    except jsonschema.ValidationError as e:
+        # Return structured error back to LLM for self-correction
+        return {&quot;error&quot;: f&quot;Invalid arguments: {e.message}. Required: {schema[&#x27;required&#x27;]}&quot;}
+    return execute_tool(tool_call)</code></pre><button class="copy-btn">copy</button></div>
+<p>The structured error message (not a Python traceback) lets the LLM self-correct in the next turn — typically succeeds within 1–2 retries.</p></div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="section-label">Example / Tradeoff</div>
+  <div class="card card-accent"><div class="rich-text"><p><strong>Before / after on a billing agent (production pattern):</strong></p>
+<div class="table-wrap"><table class="data-table"><tr><th>Metric</th><th>Vague schemas</th><th>Engineered schemas</th></tr><tr><td>Tool selection accuracy</td><td>~72%</td><td>~96%</td></tr><tr><td>Argument hallucination rate</td><td>~18% of calls</td><td>~2% of calls</td></tr><tr><td>Avg turns to task completion</td><td>6.2</td><td>3.8</td></tr><tr><td>Cost per resolved ticket</td><td>$0.042</td><td>$0.027</td></tr></table></div>
+<p>The biggest gain typically comes from: (1) adding condition-scoped descriptions that tell the model when NOT to use a tool, and (2) converting free-form string parameters to enums.</p>
+<p><strong>Tradeoff:</strong> Overly-constrained schemas reduce model flexibility — if a user request doesn't fit any enum value or the pattern doesn't match, the agent can't complete the task at all (it will keep returning validation errors). The right balance is: constrain what the system owns (IDs, statuses, categories), leave natural-language fields (<code>query</code>, <code>message</code>) as free-form strings.</p></div></div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="accordion">
+    <div class="accordion-header">
+      <span class="accordion-title">🎙 Verbal Script (3–5 min)</span>
+      <span class="accordion-chevron">▾</span>
+    </div>
+    <div class="accordion-body">
+      <div class="script-block"><div class="script-label">Opening (30s)</div><p>"Schema engineering is the highest-leverage intervention for reducing agent hallucinations — more than model choice or prompt verbosity. The model treats each tool schema as a zero-shot specification, so how you write descriptions and constrain parameters directly controls what the model can and can't output. Let me walk through the five patterns that eliminate most hallucinated tool calls in production."</p></div>
+      <div class="script-block"><div class="script-label">Core explanation (2–3 min)</div><p>"The first and most impactful pattern is condition-scoped descriptions. Instead of 'search for information', you write 'search internal support articles — use ONLY when the user asks about policies, features, or troubleshooting steps; do NOT use for order lookups.' The explicit exclusion clause is what prevents the model from defaulting to a catch-all tool when it's uncertain.</p>
+<p>The second pattern is constrained enums. Any parameter with a finite value space — status codes, categories, priority levels — should be an <code>enum</code>. A free-form string parameter is an invitation for the model to invent values like 'urgent' or 'URGENT' or 'high-priority' when the system only accepts 'high'. Enum constraints are respected reliably at temperature=0.</p>
+<p>Third: regex patterns on structured IDs. If an order ID is always <code>ORD-NNNNNN</code>, add a <code>pattern</code> field. This catches both model errors and malformed user input early.</p>
+<p>Fourth: mark only truly required fields as <code>required</code>, and give optional fields a default plus a description of when to omit them. This prevents the model from guessing values for fields it doesn't need.</p>
+<p>Fifth: inline examples in descriptions. LLMs are few-shot learners even in schema context. Adding 'e.g. 2024-01-01/2024-03-31' to a date-range field reduces format errors dramatically.</p>
+<p>But schema design is only half the story. The orchestrator must validate every tool call against the schema in code — using something like Python's <code>jsonschema</code> library — before dispatching the tool. When validation fails, you return a structured error message back to the LLM, not a raw traceback. With a well-written error, the model self-corrects in one or two retries."</p></div>
+      <div class="script-block"><div class="script-label">Tradeoff / production angle (1 min)</div><p>"The failure mode I watch for with tight schemas is over-constraint. If you lock down a parameter so tightly that a valid user request doesn't fit — say a date format that doesn't handle 'last quarter' or a category enum that doesn't include the user's edge-case scenario — the agent loops forever on validation errors. The rule I follow: constrain what the system owns (IDs, statuses, enumerations), leave what the user provides as natural language (queries, messages) as free-form strings.</p>
+<p>I also benchmark on a golden task set — 50 representative tasks with known correct tool calls — after every schema change. If tool-selection accuracy or argument accuracy drops more than 3 points, the schema change ships with fixes."</p></div>
+      <div class="script-block"><div class="script-label">Wrap-up (30s)</div><p>"So: tool schema quality is the primary lever for reliable agents. The five patterns — condition-scoped descriptions, constrained enums, regex patterns on IDs, required vs optional separation, and inline examples — together drive hallucinated actions from ~18% down to ~2% of calls. Pair that with orchestrator-side JSON schema validation that returns structured errors for self-correction, and you have a robust tool layer."</p></div>
+    </div>
+  </div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="section-label">Pitfalls</div>
+  <div class="pitfall-card">
+    <div class="pitfall-mistake"><strong>✗ Mistake</strong> Writing descriptions as one-line noun phrases (&quot;Order lookup tool&quot;, &quot;KB search&quot;) and then blaming the model for wrong tool selection</div>
+    <div class="pitfall-better"><strong>✓ Better</strong> Write descriptions in imperative/conditional form that state the exact condition for use AND explicit exclusions (&quot;Use ONLY when the user references an order ID — do NOT use for policy questions&quot;); treat description authoring as classifier label design.</div>
+  </div>
+  <div class="pitfall-card">
+    <div class="pitfall-mistake"><strong>✗ Mistake</strong> Using free-form string parameters for everything (&quot;the model is smart enough to know what format to use&quot;)</div>
+    <div class="pitfall-better"><strong>✓ Better</strong> Apply <code>enum</code> for any finite value space (statuses, categories, priorities), <code>pattern</code> for structured identifiers (IDs, dates), and <code>minimum</code>/<code>maximum</code> for integers; hallucination of argument values drops from ~18% to ~2% with proper constraints.</div>
+  </div>
+  <div class="pitfall-card">
+    <div class="pitfall-mistake"><strong>✗ Mistake</strong> Relying on the LLM to self-validate its own tool arguments without orchestrator enforcement</div>
+    <div class="pitfall-better"><strong>✓ Better</strong> Parse every tool call against the JSON schema with <code>jsonschema.validate()</code> before execution; on failure, return a structured natural-language error (&quot;order_id must match format ORD-NNNNNN, you provided &#x27;order12345&#x27;&quot;) so the model can self-correct in the next turn.
+
+---</div>
+  </div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="section-label">Related Questions</div>
+  <div class="related-pills">
+    <div class="related-pill" data-slug="03-021">
+      <span class="related-pill-icon">→</span>
+      <div class="related-pill-text">
+        <div class="related-pill-q">Q21: How agents decide which tool to use</div>
+        <div class="related-pill-rel">Prerequisite — selection mechanism; this note goes deeper on schema engineering</div>
+      </div>
+    </div>
+    <div class="related-pill" data-slug="03-024">
+      <span class="related-pill-icon">→</span>
+      <div class="related-pill-text">
+        <div class="related-pill-q">Q24: Tool failures, retries, idempotency</div>
+        <div class="related-pill-rel">Follow-up — what happens after a schema validation failure triggers a retry</div>
+      </div>
+    </div>
+    <div class="related-pill" data-slug="03-009">
+      <span class="related-pill-icon">→</span>
+      <div class="related-pill-text">
+        <div class="related-pill-q">Q9: What logic belongs in orchestrator vs LLM</div>
+        <div class="related-pill-rel">Context — orchestrator owns schema validation enforcement</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="section-label">One-liner recall</div>
+  <div class="oneliner-box">
+    <div class="oneliner-label">▸ Reconstruct from memory</div>
+    <div class="oneliner-text" data-text="Hallucinated tool actions trace to vague schemas: fix them with condition-scoped descriptions (with explicit DO NOT use clauses), enum-constrained parameters, regex patterns on IDs, required/optional separation with defaults, and inline examples — then enforce every call with orchestrator-side JSON schema validation that returns structured errors for self-correction.">Hallucinated tool actions trace to vague schemas: fix them with condition-scoped descriptions (with explicit DO NOT use clauses), enum-constrained parameters, regex patterns on IDs, required/optional separation with defaults, and inline examples — then enforce every call with orchestrator-side JSON schema validation that returns structured errors for self-correction.</div>
+  </div>
+</div>

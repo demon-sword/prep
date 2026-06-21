@@ -1,0 +1,139 @@
+<div class="answer-header reveal">
+  <div class="answer-meta">
+    <span class="meta-badge meta-category">03-agents-tool-use</span>
+    <span class="meta-badge meta-num">Q015</span>
+    <span class="meta-badge meta-status-review">review</span>
+  </div>
+  <h1 class="answer-title">Partial observability or missing information?</h1>
+</div>
+
+<div class="answer-section reveal">
+  <div class="accordion">
+    <div class="accordion-header">
+      <span class="accordion-title">⟁ Framing — Why this is asked</span>
+      <span class="accordion-chevron">▾</span>
+    </div>
+    <div class="accordion-body">
+      <div class="framing-grid">
+        <div><div class="framing-card">
+          <div class="framing-card-title">Why asked</div>
+          <p style="font-size:13.5px;line-height:1.7;color:var(--text-dim)">Interviewers probe whether you understand that real-world agent environments are rarely fully observable — the agent can&#x27;t see the full state of the world, tool outputs can be incomplete, APIs can fail silently, and users give ambiguous instructions. Strong candidates know how to architect agents that degrade gracefully, ask clarifying questions, and make principled decisions under uncertainty rather than hallucinating or crashing.</p>
+        </div></div>
+        <div><div class="framing-card">
+          <div class="framing-card-title">Trigger phrases</div>
+          <div class="trigger-list">
+              <div class="trigger-phrase">What happens when your agent can&#x27;t find the information it needs?</div>
+              <div class="trigger-phrase">How does your agent handle incomplete or missing context?</div>
+              <div class="trigger-phrase">What if a tool returns no results or an error?</div>
+              <div class="trigger-phrase">How do you handle ambiguous user instructions in an agent?</div>
+          </div>
+        </div></div>
+      </div>
+      <div class="tests-block">
+        <span style="font-family:var(--mono);font-size:10px;letter-spacing:0.1em;text-transform:uppercase;color:var(--purple);margin-right:8px">Tests:</span>Whether the candidate can design agents that behave safely and predictably when the environment is incomplete — distinguishing between recoverable uncertainty (query again, reframe) and unrecoverable uncertainty (escalate to human or abstain).
+
+---
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="section-label">Concept</div>
+  <div class="concept-block"><p>Partial observability means the agent's current state representation does not capture the full world state — tool results may be missing, truncated, or contradictory; user intent may be ambiguous; prior conversation context may be absent. An agent designed only for the happy path will hallucinate, loop, or crash when this occurs. The solution is a layered uncertainty-handling architecture: detect the gap → classify severity → respond with the appropriate mitigation (retry, clarify, escalate, or abstain).</p></div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="section-label">Mechanism</div>
+  <div class="card"><p><strong>1. Classify the missing-information scenario:</strong></p>
+<div class="table-wrap"><table class="data-table"><tr><th>Type</th><th>Example</th><th>Mitigation</th></tr><tr><td><strong>Ambiguous user intent</strong></td><td>"Process the report" — which one?</td><td>Clarifying question before tool calls</td></tr><tr><td><strong>Empty tool result</strong></td><td>Vector DB returns 0 hits</td><td>Lower similarity threshold → retry; or abstain</td></tr><tr><td><strong>Tool error / timeout</strong></td><td>API returns 500</td><td>Retry with exponential backoff (max 3); mark step failed</td></tr><tr><td><strong>Conflicting tool outputs</strong></td><td>Two sources give contradictory facts</td><td>Surface both with source attribution; don't synthesize</td></tr><tr><td><strong>Incomplete observation</strong></td><td>Agent only sees page 1 of a 50-page doc</td><td>Pagination loop or chunked tool calls</td></tr><tr><td><strong>Stale context / lost history</strong></td><td>Multi-turn session, prior turns dropped</td><td>Redis session store with rolling summary</td></tr></table></div>
+<p><strong>2. Detect uncertainty at each step:</strong></p>
+<ul class="styled-list"><li>Structured tool output schemas (JSON with <code>status: success | empty | error</code> field) let the orchestrator branch on outcome rather than rely on the LLM parsing failure prose.</li><li>Confidence signals: cosine similarity score from retrieval, HTTP status codes, empty list detection.</li></ul>
+<p><strong>3. Respond proportionally:</strong></p>
+<ul class="styled-list"><li><strong>Low severity (empty result):</strong> retry with query rewriting (HyDE, synonym expansion), then fall back to BM25 keyword search.</li><li><strong>Medium severity (ambiguous intent):</strong> emit a structured clarifying question from the orchestrator before proceeding; limit to one clarification per turn to avoid interrogation loops.</li><li><strong>High severity (critical data missing):</strong> halt the agent, surface the gap to the user/HITL reviewer with a structured explanation — <code>"I need X to proceed; here's what I have so far"</code>.</li><li><strong>Unrecoverable (persistent tool failure):</strong> write checkpoint state to Redis/Postgres, escalate to HITL via LangGraph <code>interrupt_before</code>, allow human to supply missing data or abort.</li></ul>
+<p><strong>4. Prompt-level signaling:</strong> Instruct the LLM to use a structured <code>MISSING_INFO</code> action type in its ReAct output rather than guessing:</p>
+<div class="code-block-wrap"><pre class="code-block"><code>Thought: I need the user&#x27;s account ID but it wasn&#x27;t provided.
+Action: MISSING_INFO
+Action Input: {&quot;missing&quot;: &quot;account_id&quot;, &quot;reason&quot;: &quot;required for billing lookup&quot;}</code></pre><button class="copy-btn">copy</button></div>
+<p>The orchestrator catches <code>MISSING_INFO</code> actions, routes to clarification, and resumes after the human responds.</p></div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="section-label">Example / Tradeoff</div>
+  <div class="card card-accent"><div class="rich-text"><p><strong>Support-ticket agent (LangGraph):</strong> When the agent calls <code>lookup_order(order_id)</code> and the CRM returns <code>{"status": "not_found"}</code>, the orchestrator checks the action result, increments a <code>missing_count</code> counter, and:</p>
+<ol class="mechanism-steps"><li>Tries <code>lookup_order_by_email(customer_email)</code> as fallback.</li><li>If that also fails, emits <code>interrupt_before</code> with a message to the human queue: "Order not found by ID or email — please verify the order number with the customer."</li></ol>
+<p>Without this, a naive agent might hallucinate an order status or loop indefinitely retrying the same failed call.</p>
+<p><strong>Tradeoff:</strong> Aggressive clarification (ask before every ambiguity) kills UX — users hate being interrogated. Set a confidence threshold: only ask when the agent's tool results have a cosine score < 0.65 <em>and</em> the action is irreversible (e.g., send email, update record). For low-stakes actions, allow the agent to proceed with the best available information and log the uncertainty.</p></div></div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="accordion">
+    <div class="accordion-header">
+      <span class="accordion-title">🎙 Verbal Script (3–5 min)</span>
+      <span class="accordion-chevron">▾</span>
+    </div>
+    <div class="accordion-body">
+      <div class="script-block"><div class="script-label">Opening (30s)</div><p>"Partial observability is one of the core challenges that separates toy agents from production ones. In the real world, the agent never has perfect information — tools return empty results, users give ambiguous instructions, APIs time out. My approach is to classify the type of missing information and respond proportionally, rather than letting the LLM guess or loop."</p></div>
+      <div class="script-block"><div class="script-label">Core explanation (2–3 min)</div><p>"I'd start by categorizing the gap. Ambiguous user intent is different from an empty tool result, which is different from a hard API failure. For each type, I use a different mitigation.</p>
+<p>For ambiguous intent, I have the orchestrator emit a single structured clarifying question before any tool calls — not the LLM free-forming a question, but the orchestrator detecting that a required parameter is missing from the parsed intent.</p>
+<p>For empty tool results, I retry with query rewriting — synonyms, HyDE-style hypothesis expansion, or falling back from dense to BM25 hybrid search. If the retry also fails, I escalate rather than proceed.</p>
+<p>For tool errors or timeouts, I use exponential backoff with a max of three retries in the orchestrator code, then checkpoint state and route to HITL via something like LangGraph's <code>interrupt_before</code>.</p>
+<p>The key pattern across all of these is structured tool output schemas — I want the orchestrator to branch on a <code>status</code> field, not have the LLM parse failure prose. And I give the LLM a <code>MISSING_INFO</code> action type in its ReAct format so it can signal uncertainty explicitly rather than hallucinating a plausible answer."</p></div>
+      <div class="script-block"><div class="script-label">Tradeoff / production angle (1 min)</div><p>"The main tension is between user experience and safety. If you ask for clarification too aggressively — every time the agent is less than 90% confident — users feel interrogated and abandon the session. So I tune the threshold: only trigger clarification when the action is irreversible <em>and</em> confidence is below a defined threshold, like cosine < 0.65 on retrieval. For low-stakes, reversible actions, I let the agent proceed and log the uncertainty for offline review. And I always preserve checkpoint state before any irreversible action so a human can resume from the last safe point."</p></div>
+      <div class="script-block"><div class="script-label">Wrap-up (30s)</div><p>"In short: classify the gap, respond proportionally — retry for empty results, clarify for ambiguous intent, escalate for critical missing data — and use structured orchestrator control rather than hoping the LLM handles uncertainty gracefully on its own. Happy to go deeper on any of the specific patterns."</p></div>
+    </div>
+  </div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="section-label">Pitfalls</div>
+  <div class="pitfall-card">
+    <div class="pitfall-mistake"><strong>✗ Mistake</strong> Saying &quot;the agent will ask the user if it doesn&#x27;t know&quot; without specifying how or when</div>
+    <div class="pitfall-better"><strong>✓ Better</strong> Describe the concrete trigger (structured missing parameter detection, cosine threshold, <code>MISSING_INFO</code> action type) and limit to one clarification per turn to avoid interrogation loops.</div>
+  </div>
+  <div class="pitfall-card">
+    <div class="pitfall-mistake"><strong>✗ Mistake</strong> Treating all missing-information scenarios identically (always retry, or always escalate)</div>
+    <div class="pitfall-better"><strong>✓ Better</strong> Classify by severity and reversibility: empty retrieval result → retry with query rewriting; ambiguous intent on irreversible action → clarify; persistent tool failure → checkpoint + HITL escalation.</div>
+  </div>
+  <div class="pitfall-card">
+    <div class="pitfall-mistake"><strong>✗ Mistake</strong> Letting the LLM parse tool error prose and decide what to do</div>
+    <div class="pitfall-better"><strong>✓ Better</strong> Enforce structured tool output schemas with a <code>status</code> field so the orchestrator branches deterministically on success/empty/error, not based on the LLM&#x27;s interpretation of an error message.
+
+---</div>
+  </div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="section-label">Related Questions</div>
+  <div class="related-pills">
+    <div class="related-pill" data-slug="03-010">
+      <span class="related-pill-icon">→</span>
+      <div class="related-pill-text">
+        <div class="related-pill-q">Q10: Design a safe and debuggable agent loop</div>
+        <div class="related-pill-rel">Safe loop design includes partial observability handling</div>
+      </div>
+    </div>
+    <div class="related-pill" data-slug="03-011">
+      <span class="related-pill-icon">→</span>
+      <div class="related-pill-text">
+        <div class="related-pill-q">Q11: Termination conditions in long-running agents</div>
+        <div class="related-pill-rel">Missing information can trigger a stuck-detection termination path</div>
+      </div>
+    </div>
+    <div class="related-pill" data-slug="03-029">
+      <span class="related-pill-icon">→</span>
+      <div class="related-pill-text">
+        <div class="related-pill-q">Q29: Human-in-the-loop patterns — when trigger human review</div>
+        <div class="related-pill-rel">HITL is the escalation path for unrecoverable missing information</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="section-label">One-liner recall</div>
+  <div class="oneliner-box">
+    <div class="oneliner-label">▸ Reconstruct from memory</div>
+    <div class="oneliner-text" data-text="Classify missing information by type (ambiguous intent / empty result / tool failure / stale context), respond proportionally (clarify once / retry with rewriting / checkpoint + HITL), and enforce this in the orchestrator via structured tool schemas and a `MISSING_INFO` action type — never let the LLM guess when the data is absent.">Classify missing information by type (ambiguous intent / empty result / tool failure / stale context), respond proportionally (clarify once / retry with rewriting / checkpoint + HITL), and enforce this in the orchestrator via structured tool schemas and a `MISSING_INFO` action type — never let the LLM guess when the data is absent.</div>
+  </div>
+</div>

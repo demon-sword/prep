@@ -1,0 +1,137 @@
+<div class="answer-header reveal">
+  <div class="answer-meta">
+    <span class="meta-badge meta-category">02-rag-systems</span>
+    <span class="meta-badge meta-num">Q006</span>
+    <span class="meta-badge meta-status-review">review</span>
+  </div>
+  <h1 class="answer-title">System processing huge PDF reports — how handle context when splitting documents</h1>
+</div>
+
+<div class="answer-section reveal">
+  <div class="accordion">
+    <div class="accordion-header">
+      <span class="accordion-title">⟁ Framing — Why this is asked</span>
+      <span class="accordion-chevron">▾</span>
+    </div>
+    <div class="accordion-body">
+      <div class="framing-grid">
+        <div><div class="framing-card">
+          <div class="framing-card-title">Why asked</div>
+          <p style="font-size:13.5px;line-height:1.7;color:var(--text-dim)">Interviewers ask this to probe whether you&#x27;ve actually shipped document processing in production — not just run a tutorial. Large PDFs (annual reports, legal contracts, technical manuals) break naive fixed-size chunking: context spans page boundaries, tables split mid-row, footnotes reference headings 20 pages earlier, and the doc&#x27;s own metadata (e.g., &quot;all figures in thousands&quot;) applies globally but isn&#x27;t repeated per chunk. A weak candidate chunks by character count and calls it done. A strong candidate designs a pipeline that preserves semantic coherence and document-global context.</p>
+        </div></div>
+        <div><div class="framing-card">
+          <div class="framing-card-title">Trigger phrases</div>
+          <div class="trigger-list">
+              <div class="trigger-phrase">You have a 300-page annual report — how do you chunk it for RAG?</div>
+              <div class="trigger-phrase">What happens when a document&#x27;s context spans multiple pages?</div>
+              <div class="trigger-phrase">How do you handle large PDFs in a document Q&amp;A system?</div>
+              <div class="trigger-phrase">A financial report says &#x27;amounts expressed in millions&#x27; on page 1 — how does your RAG know that?</div>
+          </div>
+        </div></div>
+      </div>
+      <div class="tests-block">
+        <span style="font-family:var(--mono);font-size:10px;letter-spacing:0.1em;text-transform:uppercase;color:var(--purple);margin-right:8px">Tests:</span>Ability to design structure-aware, semantically coherent chunking pipelines for real-world documents with cross-page and global context dependencies.
+
+---
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="section-label">Concept</div>
+  <div class="concept-block"><p>Huge PDFs can't be chunked naively because meaning is distributed: a table header on page 4 explains data on pages 5–7, a footnote on page 1 applies to every figure in the document, and chapters form logical units that fixed-size windows shred arbitrarily. The solution is a <strong>multi-layer extraction + parent-child chunking strategy</strong> that preserves document structure and propagates global metadata to every chunk.</p></div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="section-label">Mechanism</div>
+  <div class="card"><p><strong>1. Structure-aware extraction (before chunking)</strong></p>
+<ul class="styled-list"><li>Use a PDF parser that understands layout: <strong>PyMuPDF</strong> (fast, open-source), <strong>Adobe PDF Extract API</strong>, or <strong>AWS Textract</strong> for scanned/complex docs.</li><li>Extract: plain-text blocks, tables (convert to Markdown), images (store separately or caption with GPT-4o Vision), headers/footers (detect via font size/position heuristics).</li><li>Identify document sections: use heading hierarchy (H1→H2→H3) to build a <strong>section tree</strong>.</li></ul>
+<p><strong>2. Global metadata injection</strong></p>
+<ul class="styled-list"><li>During extraction, identify document-wide context: currency units, date ranges, entity names, jurisdiction, disclaimer language.</li><li>Store these as <strong>chunk-level metadata fields</strong> that every chunk in that document carries (e.g., <code>{"currency_unit": "thousands", "report_year": 2023, "company": "Acme Corp"}</code>).</li><li>At generation time, prepend a <strong>document preamble</strong> to the system prompt: <em>"Note: all monetary values in this document are expressed in thousands of USD."</em></li></ul>
+<p><strong>3. Parent-child (hierarchical) chunking</strong></p>
+<ul class="styled-list"><li><strong>Parent chunks</strong>: natural document sections (chapter, sub-section) — typically 1,000–2,000 tokens. Indexed in the vector store for broad context retrieval.</li><li><strong>Child chunks</strong>: fine-grained passages — typically 200–400 tokens. Indexed separately for precision retrieval.</li><li>Retrieval: use child chunks to find relevant passages; return the parent chunk (or an expanded window) to the LLM for full context. This is the <strong>"small-to-big" retrieval</strong> pattern used in LlamaIndex's <code>SentenceWindowNodeParser</code>.</li></ul>
+<p><strong>4. Table and cross-page handling</strong></p>
+<ul class="styled-list"><li>Tables: extract as Markdown; keep table + 1–2 sentence caption as a single chunk (never split mid-row).</li><li>Cross-page continuations: detect via trailing punctuation or unclosed table rows; merge with the next page's block before chunking.</li><li>Page headers/footers: strip repetitive boilerplate; inject once as metadata.</li></ul>
+<p><strong>5. Overlap windows for boundary safety</strong></p>
+<ul class="styled-list"><li>Use a 10–20% token overlap between adjacent text chunks to prevent sentences from being cut at chunk boundaries and losing context.</li></ul></div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="section-label">Example / Tradeoff</div>
+  <div class="card card-accent"><div class="rich-text"><p><strong>Stack:</strong> PyMuPDF → custom section-tree extractor → LlamaIndex <code>SentenceWindowNodeParser</code> (child=256 tokens, window=3 sentences) → Pinecone (with metadata filters) → GPT-4o-mini with document preamble injection.</p>
+<p><strong>Tradeoff — chunk size:</strong></p>
+<div class="table-wrap"><table class="data-table"><tr><th>Smaller chunks (128–256 tokens)</th><th>Larger chunks (512–1024 tokens)</th></tr><tr><td>Higher precision retrieval</td><td>More complete context per chunk</td></tr><tr><td>Risk: misses cross-sentence context</td><td>Risk: "lost in the middle" degradation</td></tr><tr><td>Best for: keyword-dense Q&A</td><td>Best for: reasoning over long passages</td></tr></table></div>
+<p><strong>Global metadata gotcha:</strong> Without metadata injection, a RAG pipeline answering "What was Acme's revenue?" returns "$4,200" with no unit — leading to a 1,000× error if the model assumes dollars instead of thousands. The fix is trivial (one metadata field) but commonly missed.</p>
+<p><strong>Cost signal:</strong> A 300-page PDF ≈ 75,000 tokens. Embedding all child chunks (256 tokens each, ≈300 chunks) at $0.0001/1K tokens costs ~$0.003 per document. The extraction step (Textract for scanned docs) is the expensive part (~$0.015/page for complex layout).</p></div></div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="accordion">
+    <div class="accordion-header">
+      <span class="accordion-title">🎙 Verbal Script (3–5 min)</span>
+      <span class="accordion-chevron">▾</span>
+    </div>
+    <div class="accordion-body">
+      <div class="script-block"><div class="script-label">Opening (30s)</div><p>"I'd frame this as a two-part problem: how you extract structure from the PDF before you even think about chunks, and then how you handle the fact that some context is global to the document — like currency units or a disclaimer — that needs to be attached to every chunk, not just the first page."</p></div>
+      <div class="script-block"><div class="script-label">Core explanation (2–3 min)</div><p>"Starting with extraction — for a well-formed PDF I'd use PyMuPDF to pull text blocks with their layout positions, which lets me detect headers by font size and reconstruct a section hierarchy. For scanned or complex layout documents, I'd route through AWS Textract. The key insight at this stage is to handle tables as units — extract them as Markdown and keep the caption with the table; never let a chunker split a table mid-row.</p>
+<p>Then for global metadata — if page 1 says 'all amounts in thousands,' I detect that during extraction and store it as a metadata field on every chunk for that document. At query time, I prepend a one-line preamble to the system prompt: 'Note: all monetary figures are in thousands.' This is how you prevent a model from misreading $4,200 as $4,200 instead of $4.2M.</p>
+<p>For the actual chunking, I use a parent-child strategy: large parent chunks (around 1,000 tokens) aligned to document sections give semantic coherence, while smaller child chunks (256 tokens) give precision retrieval. Retrieval finds the child, but returns the parent to the LLM. LlamaIndex calls this the sentence window pattern. For boundary safety I add a 15% token overlap between adjacent chunks."</p></div>
+      <div class="script-block"><div class="script-label">Tradeoff / production angle (1 min)</div><p>"The main tradeoff is chunk size vs. context completeness. Smaller chunks give you better vector-search precision but risk breaking semantic units. Larger chunks ensure coherence but increase 'lost in the middle' risk and raise token costs. My default is 256-token children with 1,024-token parents and I tune based on recall@5 on a golden set of representative questions. The other failure mode to watch for is embedding drift — if you re-index with a new embedding model, you need to re-embed everything, including those metadata fields."</p></div>
+      <div class="script-block"><div class="script-label">Wrap-up (30s)</div><p>"So the core pattern is: structure-aware extraction → global metadata as chunk fields → parent-child chunking → document preamble at generation time. Happy to go deeper on table handling, multi-modal PDFs with charts, or the cost breakdown for Textract at scale."</p></div>
+    </div>
+  </div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="section-label">Pitfalls</div>
+  <div class="pitfall-card">
+    <div class="pitfall-mistake"><strong>✗ Mistake</strong> Describing fixed-size character chunking (e.g., &quot;I split every 500 characters with 50-character overlap&quot;) without acknowledging that this shreds tables, sentences, and cross-section context</div>
+    <div class="pitfall-better"><strong>✓ Better</strong> Lead with structure-aware extraction first; chunking strategy follows from document structure, not arbitrary byte counts.</div>
+  </div>
+  <div class="pitfall-card">
+    <div class="pitfall-mistake"><strong>✗ Mistake</strong> Ignoring global document metadata — answering &quot;how do you know the currency unit?&quot; with &quot;the model will figure it out from context&quot;</div>
+    <div class="pitfall-better"><strong>✓ Better</strong> Explicitly describe metadata extraction during ingestion and preamble injection at generation time; the model cannot reliably infer document-global facts from a 256-token chunk.</div>
+  </div>
+  <div class="pitfall-card">
+    <div class="pitfall-mistake"><strong>✗ Mistake</strong> Treating all PDFs the same — not distinguishing between native-text PDFs (PyMuPDF) and scanned/image PDFs (Textract/OCR)</div>
+    <div class="pitfall-better"><strong>✓ Better</strong> Describe a routing step based on PDF type, noting that scanned PDFs require OCR and have confidence-score gating before indexing.
+
+---</div>
+  </div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="section-label">Related Questions</div>
+  <div class="related-pills">
+    <div class="related-pill" data-slug="01-014">
+      <span class="related-pill-icon">→</span>
+      <div class="related-pill-text">
+        <div class="related-pill-q">Q14: How does chunking happen?</div>
+        <div class="related-pill-rel">Core chunking strategies (prerequisite)</div>
+      </div>
+    </div>
+    <div class="related-pill" data-slug="02-016">
+      <span class="related-pill-icon">→</span>
+      <div class="related-pill-text">
+        <div class="related-pill-q">Q16: Financial report — how handle doc-wide context</div>
+        <div class="related-pill-rel">Direct extension: global metadata injection</div>
+      </div>
+    </div>
+    <div class="related-pill" data-slug="02-003">
+      <span class="related-pill-icon">→</span>
+      <div class="related-pill-text">
+        <div class="related-pill-q">Q3: Design a GenAI document-processing pipeline for unstructured data</div>
+        <div class="related-pill-rel">Broader pipeline: multi-format doc processing</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="section-label">One-liner recall</div>
+  <div class="oneliner-box">
+    <div class="oneliner-label">▸ Reconstruct from memory</div>
+    <div class="oneliner-text" data-text="For huge PDFs: extract structure first (PyMuPDF/Textract), inject global metadata (currency, date range) as chunk fields + generation preamble, use parent-child chunking (1024/256 tokens) with overlap, and never split tables mid-row.">For huge PDFs: extract structure first (PyMuPDF/Textract), inject global metadata (currency, date range) as chunk fields + generation preamble, use parent-child chunking (1024/256 tokens) with overlap, and never split tables mid-row.</div>
+  </div>
+</div>

@@ -1,0 +1,147 @@
+<div class="answer-header reveal">
+  <div class="answer-meta">
+    <span class="meta-badge meta-category">02-rag-systems</span>
+    <span class="meta-badge meta-num">Q016</span>
+    <span class="meta-badge meta-status-review">review</span>
+  </div>
+  <h1 class="answer-title">Financial report: page 1 says &quot;amounts in thousands&quot; — how handle doc-wide context when chunking</h1>
+</div>
+
+<div class="answer-section reveal">
+  <div class="accordion">
+    <div class="accordion-header">
+      <span class="accordion-title">⟁ Framing — Why this is asked</span>
+      <span class="accordion-chevron">▾</span>
+    </div>
+    <div class="accordion-body">
+      <div class="framing-grid">
+        <div><div class="framing-card">
+          <div class="framing-card-title">Why asked</div>
+          <p style="font-size:13.5px;line-height:1.7;color:var(--text-dim)">This is a precision retrieval trap. Fixed-size chunking discards doc-wide context — a chunk saying &quot;revenue: 42,500&quot; is meaningless without knowing the unit of measure declared on page 1. Interviewers use this scenario to probe whether you understand <strong>metadata propagation</strong>, <strong>parent-child chunking</strong>, and the real-world consequence of treating a document as an independent bag of text fragments.</p>
+        </div></div>
+        <div><div class="framing-card">
+          <div class="framing-card-title">Trigger phrases</div>
+          <div class="trigger-list">
+              <div class="trigger-phrase">How would you chunk a financial report where page 1 declares &#x27;all amounts in thousands&#x27;?</div>
+              <div class="trigger-phrase">How do you preserve document-level context that isn&#x27;t repeated on every page?</div>
+              <div class="trigger-phrase">What happens to chunk accuracy when a unit-of-measure header only appears once?</div>
+          </div>
+        </div></div>
+      </div>
+      <div class="tests-block">
+        <span style="font-family:var(--mono);font-size:10px;letter-spacing:0.1em;text-transform:uppercase;color:var(--purple);margin-right:8px">Tests:</span>Whether you know to propagate doc-global metadata (unit declarations, currency, date scope, entity name) into every child chunk — not just extract text sequentially.
+
+---
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="section-label">Concept</div>
+  <div class="concept-block"><p>Fixed-size chunking destroys <strong>document-scope context</strong> — information that applies to the entire document but only appears once (page 1 header, cover page, introductory disclaimer). The unit declaration "amounts in thousands" is a canonical example: every numeric chunk is ambiguous without it. The fix is to extract these global signals at the document level and inject them as <strong>chunk metadata</strong> and optionally as a <strong>preamble</strong> prepended to each chunk.</p></div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="section-label">Mechanism</div>
+  <div class="card"><p><strong>Step 1 — Document-level extraction pass</strong> Before chunking, run a structured extraction step over the first 1–2 pages (or the entire document for short files) to pull doc-global metadata:</p>
+<ul class="styled-list"><li>Unit of measure: <code>amounts_unit: "thousands USD"</code></li><li>Reporting period: <code>period: "FY2024"</code></li><li>Entity name: <code>entity: "Acme Corp"</code></li><li>Currency: <code>currency: "USD"</code></li></ul>
+<p>Tools: PyMuPDF for native PDFs, AWS Textract for scanned documents. A lightweight LLM call (GPT-4o-mini) can reliably extract structured JSON from the cover/first page.</p>
+<p><strong>Step 2 — Parent-child chunking with metadata inheritance</strong> Structure the document as parent nodes (sections/pages, ~1024 tokens) and child nodes (paragraphs, ~256 tokens). Every child chunk inherits the doc-global metadata fields extracted in Step 1.</p>
+<div class="code-block-wrap"><pre class="code-block"><code>Chunk schema:
+{
+  &quot;text&quot;: &quot;Revenue for Q3 was 42,500.&quot;,
+  &quot;doc_id&quot;: &quot;annual-report-fy2024&quot;,
+  &quot;page&quot;: 7,
+  &quot;section&quot;: &quot;Income Statement&quot;,
+  &quot;amounts_unit&quot;: &quot;thousands USD&quot;,   ← injected at index time
+  &quot;period&quot;: &quot;FY2024&quot;,
+  &quot;entity&quot;: &quot;Acme Corp&quot;,
+  &quot;currency&quot;: &quot;USD&quot;
+}</code></pre><button class="copy-btn">copy</button></div>
+<p><strong>Step 3 — Generation preamble injection</strong> At generation time, prepend a one-line preamble before the retrieved chunks in the prompt:</p>
+<div class="code-block-wrap"><pre class="code-block"><code>[Context: Acme Corp Annual Report FY2024. All monetary amounts are in thousands of USD unless otherwise noted.]
+
+Retrieved passages:
+&lt;chunk&gt;Revenue for Q3 was 42,500.&lt;/chunk&gt;</code></pre><button class="copy-btn">copy</button></div>
+<p>This ensures the LLM interprets "42,500" as $42.5M, not $42,500.</p>
+<p><strong>Step 4 — Overlap windows for cross-page continuity</strong> Use a 10–15% token overlap between adjacent chunks so that a unit declaration near the bottom of page 1 naturally bleeds into the top of page 2's chunk, providing a fallback even if metadata extraction missed it.</p></div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="section-label">Example / Tradeoff</div>
+  <div class="card card-accent"><div class="rich-text"><p><strong>Before:</strong> A RAG system chunked a 10-K filing into fixed 512-token blocks. Retrieved chunk: <em>"Total liabilities: 8,200"</em> — LLM answered "$8,200" when the correct answer was "$8.2 billion."</p>
+<p><strong>After:</strong> Metadata extraction pass added <code>amounts_unit: "billions USD"</code> to every chunk. Generation preamble injected the unit. LLM answered correctly across all financial queries.</p>
+<p><strong>Tradeoff:</strong> The metadata extraction LLM call adds ~200ms and ~$0.001/document at GPT-4o-mini pricing. For a corpus of 300K legal/financial documents, that's ~$300 total — negligible compared to re-embedding costs from a botched chunking strategy. The right call is always to pay the extraction cost upfront.</p>
+<p><strong>Edge case — conflicting unit declarations:</strong> Some reports switch units by section (e.g., "segment revenues in millions, per-share amounts in dollars"). The metadata extraction prompt must capture these per-section overrides, or the parent chunk must carry its own <code>amounts_unit</code> override distinct from the doc-level default.</p></div></div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="accordion">
+    <div class="accordion-header">
+      <span class="accordion-title">🎙 Verbal Script (3–5 min)</span>
+      <span class="accordion-chevron">▾</span>
+    </div>
+    <div class="accordion-body">
+      <div class="script-block"><div class="script-label">Opening (30s)</div><p>"This is a great question because it's about a failure mode that's easy to miss: fixed-size chunking assumes each chunk is self-contained, but financial documents aren't — they have document-scope context that's declared once and applies everywhere. The unit declaration on page 1 is the classic example. I'd solve this with a two-part approach: metadata extraction before chunking, and preamble injection at generation time."</p></div>
+      <div class="script-block"><div class="script-label">Core explanation (2–3 min)</div><p>"I'd start with a document-level extraction pass over the cover page and first section. Using PyMuPDF for native PDFs or Textract for scanned documents, I'd run a structured extraction — either a regex pattern for common financial headers, or a cheap GPT-4o-mini call — to pull out global metadata: <code>amounts_unit</code>, <code>period</code>, <code>entity</code>, <code>currency</code>. This takes maybe 200ms per document and costs fractions of a cent.</p>
+<p>Then I'd use parent-child chunking — parent nodes at the section or page level (~1024 tokens), child nodes at the paragraph level (~256 tokens). Every child chunk gets the doc-global metadata fields injected into its index record. So when a chunk says 'Revenue: 42,500,' the vector DB record also stores <code>amounts_unit: thousands USD</code>.</p>
+<p>At retrieval time, the metadata travels with the chunk. At generation time, I prepend a one-line preamble to the LLM prompt: 'All monetary amounts in this document are in thousands of USD.' The LLM then correctly interprets every number. I also add 10–15% overlap between adjacent chunks as a fallback — if the unit appears at the bottom of page 1, it bleeds into the top of page 2's chunk naturally."</p></div>
+      <div class="script-block"><div class="script-label">Tradeoff / production angle (1 min)</div><p>"The main complexity is conflicting unit declarations. Some 10-Ks report segment revenues in millions but per-share amounts in dollars. A flat doc-level <code>amounts_unit</code> field breaks here. The fix is to make unit metadata per-section, not just per-document — the parent chunk carries an override that takes precedence over the doc default. It's more schema complexity but it's essential for accurate financial QA. I'd validate this with a golden dataset of known-unit questions before shipping to production."</p></div>
+      <div class="script-block"><div class="script-label">Wrap-up (30s)</div><p>"The key insight is that document-scope context has to be explicitly extracted and propagated — it doesn't survive naive chunking. Metadata injection at index time plus preamble injection at generation time is the production pattern. Happy to go deeper on the extraction prompt design or the schema for handling conflicting unit declarations."</p></div>
+    </div>
+  </div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="section-label">Pitfalls</div>
+  <div class="pitfall-card">
+    <div class="pitfall-mistake"><strong>✗ Mistake</strong> Saying &quot;I&#x27;d include overlap so the unit declaration appears in later chunks&quot;</div>
+    <div class="pitfall-better"><strong>✓ Better</strong> Overlap is a fragile fallback for short windows; it fails entirely when the declaration is on page 1 and the chunk is on page 40. The primary fix is explicit metadata extraction and injection — overlap is just a safety net.</div>
+  </div>
+  <div class="pitfall-card">
+    <div class="pitfall-mistake"><strong>✗ Mistake</strong> Extracting unit metadata but only storing it in a sidecar file, not in the vector DB record</div>
+    <div class="pitfall-better"><strong>✓ Better</strong> The metadata must be stored as a field on every chunk in the vector index so it travels with retrieved results and can be injected into the generation prompt automatically.</div>
+  </div>
+  <div class="pitfall-card">
+    <div class="pitfall-mistake"><strong>✗ Mistake</strong> Ignoring per-section unit overrides (treating the document as having one unit throughout)</div>
+    <div class="pitfall-better"><strong>✓ Better</strong> For financial filings, some sections switch units (e.g., per-share figures are always in dollars even when aggregate figures are in thousands). The schema needs to support section-level overrides, and the extraction step should check for phrases like &quot;except per share amounts.&quot;
+
+---</div>
+  </div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="section-label">Related Questions</div>
+  <div class="related-pills">
+    <div class="related-pill" data-slug="02-006">
+      <span class="related-pill-icon">→</span>
+      <div class="related-pill-text">
+        <div class="related-pill-q">Q6: System processing huge PDF reports — how handle context when splitting documents</div>
+        <div class="related-pill-rel">same parent topic — PDF splitting and context preservation</div>
+      </div>
+    </div>
+    <div class="related-pill" data-slug="02-003">
+      <span class="related-pill-icon">→</span>
+      <div class="related-pill-text">
+        <div class="related-pill-q">Q3: Design a GenAI document-processing pipeline for unstructured data</div>
+        <div class="related-pill-rel">broader pipeline this chunk design fits into</div>
+      </div>
+    </div>
+    <div class="related-pill" data-slug="02-029">
+      <span class="related-pill-icon">→</span>
+      <div class="related-pill-text">
+        <div class="related-pill-q">Q29: Bad chunking — fixed-size vs semantic</div>
+        <div class="related-pill-rel">root cause: fixed-size chunking destroys doc-scope context</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="section-label">One-liner recall</div>
+  <div class="oneliner-box">
+    <div class="oneliner-label">▸ Reconstruct from memory</div>
+    <div class="oneliner-text" data-text="Extract doc-global metadata (unit declarations, period, entity) before chunking, inject it as structured fields on every child chunk in the vector index, and prepend a one-line preamble at generation time — overlap is a fallback, not the fix.">Extract doc-global metadata (unit declarations, period, entity) before chunking, inject it as structured fields on every child chunk in the vector index, and prepend a one-line preamble at generation time — overlap is a fallback, not the fix.</div>
+  </div>
+</div>

@@ -1,0 +1,1080 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Section 8: Observability &amp; Analytics | System Design Answers</title>
+  <meta name="description" content="Interview-depth answers for Payments-System frontend system design.">
+  <style>
+    :root {
+      --bg: #f8f9fb; --surface: #ffffff; --text: #1a1d26; --text-muted: #5c6370;
+      --border: #e2e6ed; --accent: #3d5a80; --accent-soft: #eef2f7;
+      --code-bg: #f0f2f6; --pre-bg: #1e2433; --pre-text: #e8ecf4;
+      --nav-bg: rgba(248, 249, 251, 0.92); --shadow: 0 1px 3px rgba(0, 0, 0, 0.06);
+    }
+    @media (prefers-color-scheme: dark) {
+      :root {
+        --bg: #12151c; --surface: #1a1f2a; --text: #e8ecf4; --text-muted: #9aa3b2;
+        --border: #2d3548; --accent: #8cb4d9; --accent-soft: #232a38;
+        --code-bg: #252d3d; --pre-bg: #0d1017; --pre-text: #d4dae6;
+        --nav-bg: rgba(18, 21, 28, 0.94); --shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
+      }
+    }
+    *, *::before, *::after { box-sizing: border-box; }
+    html { scroll-behavior: smooth; scroll-padding-top: 5.5rem; }
+    body { margin: 0; font-family: "Segoe UI", system-ui, sans-serif; font-size: 1.0625rem;
+      line-height: 1.65; color: var(--text); background: var(--bg); }
+    .site-nav { position: sticky; top: 0; z-index: 100; background: var(--nav-bg);
+      backdrop-filter: blur(10px); border-bottom: 1px solid var(--border); box-shadow: var(--shadow); }
+    .site-nav-inner { max-width: 900px; margin: 0 auto; padding: 0.75rem 1.5rem; }
+    .site-nav-title { font-size: 0.8125rem; font-weight: 600; text-transform: uppercase;
+      letter-spacing: 0.04em; color: var(--text-muted); margin: 0 0 0.5rem; }
+    .toc { display: flex; flex-wrap: wrap; gap: 0.35rem 0.75rem; margin: 0; padding: 0;
+      list-style: none; font-size: 0.8125rem; }
+    .toc a { color: var(--accent); text-decoration: none; white-space: nowrap; }
+    .toc a:hover { text-decoration: underline; }
+    .page { max-width: 900px; margin: 0 auto; padding: 2rem 1.5rem 4rem; }
+    header.page-header { margin-bottom: 2.5rem; padding-bottom: 1.5rem; border-bottom: 1px solid var(--border); }
+    h1 { font-size: 1.75rem; font-weight: 700; margin: 0 0 0.75rem; }
+    .lead { margin: 0; color: var(--text-muted); font-size: 1.05rem; }
+    h2.section { font-size: 1.35rem; font-weight: 700; margin: 2.5rem 0 1.25rem;
+      color: var(--accent); border-bottom: 2px solid var(--accent-soft); padding-bottom: 0.35rem; }
+    article.qa { margin-bottom: 2.75rem; background: var(--surface); border: 1px solid var(--border);
+      border-radius: 10px; padding: 1.5rem 1.75rem; box-shadow: var(--shadow); }
+    h3.question { font-size: 1.2rem; font-weight: 600; margin: 0 0 1rem; }
+    article.qa p { margin: 0 0 1rem; }
+    ol, ul { margin: 0 0 1rem; padding-left: 1.35rem; }
+    table { width: 100%; border-collapse: collapse; margin: 0 0 1rem; font-size: 0.95rem; }
+    th, td { border: 1px solid var(--border); padding: 0.55rem 0.75rem; text-align: left; }
+    th { background: var(--accent-soft); font-weight: 600; }
+    code { font-family: ui-monospace, Menlo, Consolas, monospace; font-size: 0.88em;
+      background: var(--code-bg); padding: 0.15em 0.4em; border-radius: 4px; }
+    pre { margin: 0 0 1rem; padding: 1rem; background: var(--pre-bg); color: var(--pre-text);
+      border-radius: 8px; overflow-x: auto; font-size: 0.875rem; }
+    pre code { background: none; padding: 0; color: inherit; }
+    .mermaid-wrap { margin: 0 0 1rem; padding: 1rem; background: var(--surface);
+      border: 1px solid var(--border); border-radius: 8px; overflow-x: auto; }
+    footer.page-footer { max-width: 900px; margin: 0 auto; padding: 1.5rem;
+      border-top: 1px solid var(--border); font-size: 0.9375rem; }
+    footer.page-footer a { color: var(--accent); text-decoration: none; font-weight: 500; }
+  </style>
+  <link rel="stylesheet" href="assets/interactive.css">
+</head>
+<body>
+  <nav class="site-nav" aria-label="Table of contents">
+    <div class="site-nav-inner">
+      <p class="site-nav-title">On this page</p>
+      
+    </div>
+  </nav>
+  <main class="page">
+    <header class="page-header">
+      <h1>Section 8: Observability &amp; Analytics</h1>
+      <p class="lead">Interview-depth answers for Payments-System frontend system design.</p>
+    </header>
+    <h1 id="section-8-observability-analytics">Section 8: Observability &amp; Analytics</h1>
+<hr>
+<h2 class="section" id="q1">Q1</h2>
+<p><strong>Problem framing</strong></p>
+<p>Checkout funnels are multi-step flows where users drop off at every stage. Without precise event instrumentation you can&#x27;t tell whether users abandon at address entry, payment entry, or order review — meaning you optimize blindly. Granular events with consistent properties let you compute step-level conversion, run cohort analyses, and A/B-test individual stages.</p>
+<p><strong>Approach</strong></p>
+<p>Define one event per discrete funnel boundary. Each event carries a shared &quot;envelope&quot; of properties plus step-specific ones.</p>
+<pre><code>// Shared envelope attached to every checkout event
+interface CheckoutEventBase {
+  session_id: string;          // anonymous, per-tab
+  checkout_id: string;         // idempotency key for this cart attempt
+  user_id?: string;            // logged-in users only
+  experiment_variants: Record&lt;string, string&gt;; // active A/B flags
+  device_type: &#x27;mobile&#x27; | &#x27;tablet&#x27; | &#x27;desktop&#x27;;
+  timestamp_ms: number;
+}
+
+// --- Step events ---
+
+// Fired when checkout page first renders (before Stripe init)
+track(&#x27;checkout_started&#x27;, {
+  ...base,
+  cart_total_cents: 4999,
+  currency: &#x27;USD&#x27;,
+  item_count: 3,
+  coupon_applied: false,
+});
+
+// Fired on first keystroke in any address field
+track(&#x27;shipping_address_started&#x27;, { ...base });
+
+// Fired when address form passes validation and user advances
+track(&#x27;shipping_address_completed&#x27;, {
+  ...base,
+  address_country: &#x27;US&#x27;,
+  address_state: &#x27;CA&#x27;,
+  validation_errors_count: 0,
+});
+
+// Fired when Stripe Elements iframe is fully mounted and interactive
+track(&#x27;payment_form_viewed&#x27;, {
+  ...base,
+  stripe_elements_load_ms: performance.now() - stripeInitStart,
+  payment_methods_shown: [&#x27;card&#x27;, &#x27;apple_pay&#x27;, &#x27;google_pay&#x27;],
+});
+
+// Fired on first interaction with card number field (focus event)
+track(&#x27;payment_details_started&#x27;, {
+  ...base,
+  payment_method_type: &#x27;card&#x27;,
+});
+
+// Fired when all card fields complete (Stripe onChange complete=true)
+track(&#x27;payment_details_completed&#x27;, {
+  ...base,
+  payment_method_type: &#x27;card&#x27;,
+  card_brand: &#x27;visa&#x27;,         // from Stripe&#x27;s onChange event — safe to log
+  card_funding: &#x27;credit&#x27;,
+  is_saved_card: false,
+});
+
+// Fired on &quot;Place Order&quot; button click — before any network call
+track(&#x27;checkout_submitted&#x27;, {
+  ...base,
+  payment_method_type: &#x27;card&#x27;,
+  total_cents: 4999,
+  submission_attempt: 1,      // increments on retries
+});
+
+// Fired when payment confirmation arrives from your backend
+track(&#x27;checkout_completed&#x27;, {
+  ...base,
+  outcome: &#x27;success&#x27;,
+  processing_time_ms: 1234,
+  requires_3ds: false,
+});</code></pre>
+<p>Funnel calculation in your analytics warehouse (BigQuery / Amplitude):</p>
+<pre><code>SELECT
+  DATE(timestamp) AS day,
+  COUNTIF(event = &#x27;checkout_started&#x27;)          AS started,
+  COUNTIF(event = &#x27;payment_form_viewed&#x27;)       AS reached_payment,
+  COUNTIF(event = &#x27;payment_details_started&#x27;)   AS touched_card,
+  COUNTIF(event = &#x27;checkout_submitted&#x27;)        AS submitted,
+  COUNTIF(event = &#x27;checkout_completed&#x27;)        AS completed,
+  SAFE_DIVIDE(
+    COUNTIF(event = &#x27;checkout_completed&#x27;),
+    COUNTIF(event = &#x27;checkout_started&#x27;)
+  ) AS overall_cvr
+FROM events
+WHERE checkout_id IS NOT NULL
+GROUP BY day;</code></pre>
+<div class="mermaid-wrap"><pre class="mermaid">flowchart LR
+    A[checkout_started] --> B[shipping_address_started]
+    B --> C[shipping_address_completed]
+    C --> D[payment_form_viewed]
+    D --> E[payment_details_started]
+    E --> F[payment_details_completed]
+    F --> G[checkout_submitted]
+    G --> H{outcome}
+    H -->|success| I[checkout_completed]
+    H -->|failure| J[checkout_failed]
+    H -->|3DS| K[3ds_challenged]
+    K --> H</pre></div>
+<p><strong>Tradeoffs</strong></p>
+<ul><li><strong>Page-level vs. field-level granularity</strong>: Tracking every individual field interaction (blur/focus) gives maximum signal but floods your event volume and raises PII risk. The approach above stops at &quot;first interaction&quot; + &quot;completed&quot; for each form section — good enough for funnel analysis without bloat.</li><li><strong>Client-only vs. server-confirmed events</strong>: <code>checkout_completed</code> should be fired on the client when the success screen renders, but also emitted server-side on webhook confirmation. Deduplication by <code>checkout_id</code> avoids double-counting; the server event is the source of truth for financial reporting.</li><li><strong>Amplitude vs. Mixpanel vs. Segment</strong>: Using Segment as a routing layer means you send events once and route to Amplitude for product analytics and BigQuery for ad-hoc SQL — decoupling instrumentation from vendor choice.</li></ul>
+<hr>
+<h2 class="section" id="q2">Q2</h2>
+<p><strong>Problem framing</strong></p>
+<p>&quot;Payment abandonment&quot; is not a single metric — it bundles three behaviorally distinct exits that require completely different product responses. Conflating them leads to misdiagnosis: redesigning the card form when the actual problem is price shock on the order summary page.</p>
+<p><strong>Approach</strong></p>
+<p>Model abandonment as three mutually-exclusive states, tracked via a combination of events and session lifecycle signals:</p>
+<pre><code>// (a) Pre-engagement abandonment: user sees payment step but never touches it
+// Detection: session ends with payment_form_viewed fired but NO payment_details_started
+// Use beforeunload + Beacon API to flush a final event
+window.addEventListener(&#x27;beforeunload&#x27;, () =&gt; {
+  const state = checkoutStore.getState();
+  if (state.step === &#x27;payment&#x27; &amp;&amp; !state.cardTouched) {
+    navigator.sendBeacon(&#x27;/analytics&#x27;, JSON.stringify({
+      event: &#x27;checkout_abandoned&#x27;,
+      abandonment_type: &#x27;pre_engagement&#x27;,  // (a)
+      checkout_id: state.checkoutId,
+      time_on_payment_step_ms: Date.now() - state.paymentStepEnteredAt,
+    }));
+  }
+});
+
+// (b) Mid-entry abandonment: user interacted with card fields but left before submitting
+// Detection: payment_details_started fired, checkout_submitted NOT fired
+window.addEventListener(&#x27;beforeunload&#x27;, () =&gt; {
+  const state = checkoutStore.getState();
+  if (state.step === &#x27;payment&#x27; &amp;&amp; state.cardTouched &amp;&amp; !state.submitted) {
+    navigator.sendBeacon(&#x27;/analytics&#x27;, JSON.stringify({
+      event: &#x27;checkout_abandoned&#x27;,
+      abandonment_type: &#x27;mid_entry&#x27;,        // (b)
+      checkout_id: state.checkoutId,
+      fields_completed: state.stripeComplete, // boolean from Stripe onChange
+      time_spent_ms: Date.now() - state.cardTouchedAt,
+    }));
+  }
+});
+
+// (c) Post-submit failure: user clicked Pay but request failed
+// Detection: checkout_submitted fired, response was an error
+async function handleSubmit() {
+  track(&#x27;checkout_submitted&#x27;, { ...base, submission_attempt: attempt });
+  try {
+    const result = await stripe.confirmCardPayment(clientSecret);
+    if (result.error) {
+      track(&#x27;checkout_failed&#x27;, {
+        ...base,
+        abandonment_type: &#x27;post_submit_failure&#x27;,  // (c)
+        error_code: result.error.code,             // e.g. &#x27;card_declined&#x27;
+        decline_code: result.error.decline_code,   // e.g. &#x27;insufficient_funds&#x27;
+        error_type: result.error.type,
+        submission_attempt: attempt,
+      });
+    }
+  } catch (networkErr) {
+    track(&#x27;checkout_failed&#x27;, {
+      ...base,
+      abandonment_type: &#x27;post_submit_failure&#x27;,
+      error_code: &#x27;network_error&#x27;,
+    });
+  }
+}</code></pre>
+<p><strong>Why the distinction drives different decisions:</strong></p>
+<table>
+<thead><tr>
+<th>Type</th>
+<th>Root cause hypotheses</th>
+<th>Product response</th>
+</tr></thead><tbody>
+<tr>
+<td>(a) Pre-engagement</td>
+<td>Price shock on order summary, missing trust signals, slow Elements load, required account creation</td>
+<td>Show trust badges earlier, guest checkout, optimize load time</td>
+</tr>
+<tr>
+<td>(b) Mid-entry</td>
+<td>Form confusion, card not at hand, frustration with CVV/expiry layout, mobile UX friction</td>
+<td>UX simplification, saved cards, buy-now-pay-later options</td>
+</tr>
+<tr>
+<td>(c) Post-submit failure</td>
+<td>Decline handling, error message clarity, retry UX, network timeouts</td>
+<td>Better error messages, smart retry suggestions, alternative payment methods</td>
+</tr>
+</tbody></table>
+<p><strong>Tradeoffs</strong></p>
+<ul><li><strong><code>beforeunload</code> reliability</strong>: Browsers do not guarantee <code>beforeunload</code> fires on mobile tab-switch or app backgrounding. Supplement with a server-side &quot;did this checkout_id ever get a submit?&quot; reconciliation job that runs on sessions older than 30 minutes and back-fills <code>abandonment_type</code>.</li><li><strong>Session replay correlation</strong>: Tools like Datadog Session Replay or FullStory let you click through to a recording of any <code>mid_entry</code> abandonment. Tag the session with <code>abandonment_type</code> as a custom attribute so support/product can filter replays — far more actionable than just a metric.</li></ul>
+<hr>
+<h2 class="section" id="q3">Q3</h2>
+<p><strong>Problem framing</strong></p>
+<p>Payment flows handle the most sensitive user data: card numbers (PANs), CVVs, expiry dates, and billing addresses. A single accidental log line containing a PAN sent to Sentry or Datadog creates a PCI DSS scope violation that can trigger fines, audits, and loss of card-processing capability. The challenge is being aggressive about sanitization without stripping context that makes errors debuggable.</p>
+<p><strong>Approach</strong></p>
+<p>Layer the defense at three points: <strong>Stripe SDK boundary</strong>, <strong>network request interception</strong>, and <strong>SDK-level scrubbing hooks</strong>.</p>
+<p><strong>Layer 1 — Never touch raw card data</strong></p>
+<p>Stripe Elements renders card fields in a cross-origin iframe — your JavaScript literally cannot read the PAN or CVV. This is the primary protection. The risk comes from other sources: form field values you read yourself, API request/response bodies, and error messages that echo user input.</p>
+<pre><code>// NEVER do this — reading form values to pass to your own backend
+const cardNumber = (document.getElementById(&#x27;card-number&#x27;) as HTMLInputElement).value;
+
+// SAFE — let Stripe tokenize in its iframe, only pass the PaymentMethod ID
+const { paymentMethod, error } = await stripe.createPaymentMethod({ type: &#x27;card&#x27;, card: cardElement });
+// paymentMethod.id = &#x27;pm_xxxxx&#x27; — safe to log</code></pre>
+<p><strong>Layer 2 — Sentry scrubbing configuration</strong></p>
+<pre><code>// sentry.init configuration
+Sentry.init({
+  dsn: process.env.SENTRY_DSN,
+  beforeSend(event) {
+    return sanitizeSentryEvent(event);
+  },
+  beforeBreadcrumb(breadcrumb) {
+    // Strip fetch/XHR breadcrumbs that might contain card data in body
+    if (breadcrumb.category === &#x27;fetch&#x27; || breadcrumb.category === &#x27;xhr&#x27;) {
+      if (breadcrumb.data?.body) {
+        breadcrumb.data.body = &#x27;[REDACTED]&#x27;;
+      }
+    }
+    return breadcrumb;
+  },
+});
+
+const PAN_PATTERN = /\b(?:\d[ -]?){13,19}\b/g;
+const CVV_PATTERN = /\b\d{3,4}\b/g;  // too broad alone — combine with field context
+const SENSITIVE_KEYS = new Set([
+  &#x27;card_number&#x27;, &#x27;cardNumber&#x27;, &#x27;pan&#x27;, &#x27;cvv&#x27;, &#x27;cvc&#x27;, &#x27;cvc2&#x27;,
+  &#x27;expiry&#x27;, &#x27;expiration&#x27;, &#x27;exp_month&#x27;, &#x27;exp_year&#x27;,
+  &#x27;ssn&#x27;, &#x27;social_security&#x27;, &#x27;account_number&#x27;, &#x27;routing_number&#x27;,
+  &#x27;password&#x27;, &#x27;token&#x27;, &#x27;secret&#x27;, &#x27;authorization&#x27;,
+]);
+
+function sanitizeSentryEvent(event: Sentry.Event): Sentry.Event {
+  // Deep-clone then walk all string values
+  const sanitized = JSON.parse(JSON.stringify(event));
+  walkAndScrub(sanitized);
+  return sanitized;
+}
+
+function walkAndScrub(obj: unknown): void {
+  if (typeof obj !== &#x27;object&#x27; || obj === null) return;
+  for (const [key, val] of Object.entries(obj as Record&lt;string, unknown&gt;)) {
+    if (SENSITIVE_KEYS.has(key.toLowerCase())) {
+      (obj as Record&lt;string, unknown&gt;)[key] = &#x27;[REDACTED]&#x27;;
+    } else if (typeof val === &#x27;string&#x27;) {
+      (obj as Record&lt;string, unknown&gt;)[key] = val.replace(PAN_PATTERN, &#x27;[PAN-REDACTED]&#x27;);
+    } else {
+      walkAndScrub(val);
+    }
+  }
+}</code></pre>
+<p><strong>Layer 3 — Datadog RUM custom masking</strong></p>
+<pre><code>datadogRum.init({
+  // Mask all input fields by default — opt-in to unmasking safe fields
+  defaultPrivacyLevel: &#x27;mask&#x27;,
+  // Redact specific URLs that carry card data in query params (shouldn&#x27;t happen, but defense-in-depth)
+  beforeSend(event) {
+    if (event.type === &#x27;resource&#x27;) {
+      event.resource.url = event.resource.url.replace(/card_number=[^&amp;]+/, &#x27;card_number=[REDACTED]&#x27;);
+    }
+    return true;
+  },
+});</code></pre>
+<p><strong>Layer 4 — Allowed-list for analytics properties</strong></p>
+<p>Maintain an explicit allow-list of properties that may be sent to GA/Amplitude:</p>
+<pre><code>const ANALYTICS_SAFE_KEYS = new Set([
+  &#x27;checkout_id&#x27;, &#x27;session_id&#x27;, &#x27;user_id&#x27;, &#x27;event&#x27;,
+  &#x27;card_brand&#x27;, &#x27;card_funding&#x27;, &#x27;payment_method_type&#x27;,
+  &#x27;error_code&#x27;, &#x27;decline_code&#x27;, &#x27;amount_cents&#x27;, &#x27;currency&#x27;,
+]);
+
+function trackSafe(event: string, props: Record&lt;string, unknown&gt;) {
+  const safe = Object.fromEntries(
+    Object.entries(props).filter(([k]) =&gt; ANALYTICS_SAFE_KEYS.has(k))
+  );
+  analytics.track(event, safe);
+}</code></pre>
+<p><strong>Tradeoffs</strong></p>
+<ul><li><strong>Regex PAN detection is imperfect</strong>: The Luhn algorithm detects valid card numbers more precisely. Add a Luhn check to reduce false positives — but lean toward over-redacting (false positive) rather than under-redacting (false negative). Cost of over-redaction is a less useful error; cost of under-redaction is a PCI incident.</li><li><strong>Error message content</strong>: Stripe error messages like <code>&quot;Your card number is incorrect&quot;</code> are safe; user-typed validation errors that echo their input are not. Sanitize <code>error.message</code> fields that originate from user input fields.</li><li><strong>Sampling vs. full capture</strong>: Some teams disable full request body capture in Datadog APM for <code>/api/payments/*</code> routes entirely, trading debuggability for guaranteed compliance. Structured logging of only safe fields (e.g., <code>payment_intent_id</code>, HTTP status, duration) is usually sufficient.</li></ul>
+<hr>
+<h2 class="section" id="q4">Q4</h2>
+<p><strong>Problem framing</strong></p>
+<p>Stripe.js is a third-party script (~300 KB) that your users must download, parse, and execute before the card form becomes interactive. If this takes 4 seconds on mobile, users see a spinner or blank form — a primary cause of payment abandonment. RUM data lets you correlate load times with checkout conversion per-session, proving causality for engineering prioritization.</p>
+<p><strong>Approach</strong></p>
+<p>Use the [User Timing API](https://developer.mozilla.org/en-US/docs/Web/API/User_Timing_API) to emit custom <code>performance.mark()</code> and <code>performance.measure()</code> calls, then ship these to Datadog RUM as custom vitals.</p>
+<pre><code>// stripe-loader.ts
+
+export async function loadStripeWithTiming(): Promise&lt;Stripe&gt; {
+  performance.mark(&#x27;stripe_js_load_start&#x27;);
+
+  // loadStripe() fetches stripe.js and resolves when parsed
+  const stripe = await loadStripe(process.env.STRIPE_PUBLISHABLE_KEY!);
+
+  performance.mark(&#x27;stripe_js_load_end&#x27;);
+  performance.measure(&#x27;stripe_js_load&#x27;, &#x27;stripe_js_load_start&#x27;, &#x27;stripe_js_load_end&#x27;);
+
+  return stripe!;
+}
+
+// CheckoutForm.tsx
+useEffect(() =&gt; {
+  performance.mark(&#x27;stripe_elements_mount_start&#x27;);
+
+  const elements = stripe.elements({ clientSecret });
+  const cardElement = elements.create(&#x27;payment&#x27;);
+
+  cardElement.on(&#x27;ready&#x27;, () =&gt; {
+    performance.mark(&#x27;stripe_elements_mount_end&#x27;);
+    const measure = performance.measure(
+      &#x27;stripe_elements_mount&#x27;,
+      &#x27;stripe_elements_mount_start&#x27;,
+      &#x27;stripe_elements_mount_end&#x27;,
+    );
+
+    // Report to Datadog RUM as a custom vital
+    datadogRum.addDurationVital(&#x27;stripe_elements_mount_ms&#x27;, {
+      startTime: measure.startTime,
+      duration: measure.duration,
+    });
+
+    // Also track via analytics for funnel correlation
+    track(&#x27;payment_form_viewed&#x27;, {
+      ...base,
+      stripe_js_load_ms: getEntryDuration(&#x27;stripe_js_load&#x27;),
+      stripe_elements_mount_ms: measure.duration,
+      connection_type: (navigator as any).connection?.effectiveType ?? &#x27;unknown&#x27;,
+    });
+  });
+
+  cardElement.mount(&#x27;#card-element&#x27;);
+}, [stripe]);
+
+function getEntryDuration(name: string): number {
+  const entries = performance.getEntriesByName(name, &#x27;measure&#x27;);
+  return entries.length &gt; 0 ? Math.round(entries[0].duration) : -1;
+}</code></pre>
+<p><strong>Datadog RUM dashboard panels:</strong></p>
+<table>
+<thead><tr>
+<th>Panel</th>
+<th>Metric</th>
+<th>Query</th>
+</tr></thead><tbody>
+<tr>
+<td>P50/P75/P95 Elements mount time</td>
+<td><code>@duration:stripe_elements_mount_ms</code></td>
+<td>RUM custom vital, percentile</td>
+</tr>
+<tr>
+<td>Mount time by device type</td>
+<td>Group by <code>@device.type</code></td>
+<td>Heatmap</td>
+</tr>
+<tr>
+<td>Conversion by mount time bucket</td>
+<td><code>checkout_completed</code> rate where <code>stripe_elements_mount_ms &gt; 3000</code></td>
+<td>Funnel</td>
+</tr>
+<tr>
+<td>Mount time trend over deployments</td>
+<td>Overlaid deploy markers</td>
+<td>Time series</td>
+</tr>
+</tbody></table>
+<p><strong>Correlating load time with drop-off:</strong></p>
+<pre><code>-- BigQuery: conversion rate by Elements mount time bucket
+SELECT
+  CASE
+    WHEN stripe_elements_mount_ms &lt; 1000 THEN &#x27;fast (&lt;1s)&#x27;
+    WHEN stripe_elements_mount_ms &lt; 3000 THEN &#x27;medium (1-3s)&#x27;
+    WHEN stripe_elements_mount_ms &lt; 5000 THEN &#x27;slow (3-5s)&#x27;
+    ELSE &#x27;very_slow (&gt;5s)&#x27;
+  END AS load_bucket,
+  COUNT(*) AS sessions_reached_payment,
+  COUNTIF(checkout_completed) AS conversions,
+  ROUND(COUNTIF(checkout_completed) / COUNT(*) * 100, 1) AS cvr_pct
+FROM checkout_sessions
+GROUP BY load_bucket
+ORDER BY load_bucket;</code></pre>
+<p><strong>Tradeoffs</strong></p>
+<ul><li><strong><code>PerformanceObserver</code> vs. manual marks</strong>: A <code>PerformanceObserver</code> watching for <code>longtask</code> entries can detect whether the main thread was blocked during Elements mount, giving more diagnostic detail. Add this if you&#x27;re investigating jank, not just total duration.</li><li><strong>Resource Timing for stripe.js</strong>: <code>performance.getEntriesByType(&#x27;resource&#x27;)</code> gives you the raw network timing for <code>js.stripe.com/v3/</code> (TTFB, transfer size) without custom instrumentation — useful for separating &quot;slow network&quot; from &quot;slow parse/execute.&quot;</li><li><strong>Synthetic monitoring</strong>: Datadog Synthetics can run a headless browser against your checkout on a cron, emitting <code>stripe_elements_mount_ms</code> from a controlled environment — isolates regressions from CDN or Stripe-side slowdowns versus your code changes.</li></ul>
+<hr>
+<h2 class="section" id="q5">Q5</h2>
+<p><strong>Problem framing</strong></p>
+<p>Payment success rate is the north-star metric for a payments frontend. A degradation from 94% to 87% costs real revenue every minute it goes undetected. A real-time dashboard with sensible alerting thresholds lets on-call engineers respond within minutes, not hours.</p>
+<p><strong>Approach</strong></p>
+<div class="mermaid-wrap"><pre class="mermaid">flowchart LR
+    subgraph Events
+        A[checkout_submitted] --> B{outcome}
+        B -->|success| C[checkout_completed]
+        B -->|error| D[checkout_failed]
+        B -->|3DS| E[3ds_challenged]
+        E --> F{3DS outcome}
+        F -->|complete| C
+        F -->|abandon| D
+    end
+    subgraph Aggregation
+        G[Datadog Metrics]
+        C -->|increment| G
+        D -->|increment + tags| G
+    end
+    subgraph Dashboard
+        G --> H[Success Rate Panel]
+        G --> I[Decline Breakdown]
+        G --> J[3DS Completion Rate]
+        G --> K[Failure by Country/Method]
+    end</pre></div>
+<p><strong>Metric definitions (StatsD / Datadog custom metrics):</strong></p>
+<pre><code>// Sent from your backend on payment confirmation (authoritative)
+// Tags drive slice-and-dice
+
+// On success:
+dd.increment(&#x27;payments.outcome&#x27;, 1, {
+  outcome: &#x27;success&#x27;,
+  payment_method: &#x27;card&#x27;,
+  card_brand: &#x27;visa&#x27;,
+  country: &#x27;US&#x27;,
+  platform: &#x27;web&#x27;,
+});
+
+// On decline:
+dd.increment(&#x27;payments.outcome&#x27;, 1, {
+  outcome: &#x27;declined&#x27;,
+  decline_code: stripeError.decline_code,  // &#x27;insufficient_funds&#x27;, &#x27;do_not_honor&#x27;, etc.
+  payment_method: &#x27;card&#x27;,
+  country: &#x27;US&#x27;,
+});
+
+// On 3DS:
+dd.increment(&#x27;payments.3ds&#x27;, 1, {
+  outcome: &#x27;3ds_required&#x27;,
+  country: &#x27;DE&#x27;,  // 3DS is heavily triggered in EU/SCA regions
+});
+dd.increment(&#x27;payments.3ds&#x27;, 1, {
+  outcome: &#x27;3ds_completed&#x27;,
+});
+dd.increment(&#x27;payments.3ds&#x27;, 1, {
+  outcome: &#x27;3ds_abandoned&#x27;,
+});</code></pre>
+<p><strong>Derived metrics in Datadog:</strong></p>
+<pre><code># Success rate (rolling 5-minute window)
+success_rate = payments.outcome{outcome:success} / payments.outcome{*}
+
+# 3DS completion rate
+3ds_cvr = payments.3ds{outcome:3ds_completed} /
+          (payments.3ds{outcome:3ds_required})
+
+# Decline rate by code — top-N
+topn(payments.outcome{outcome:declined}, 10, &#x27;mean&#x27;, &#x27;top&#x27;)</code></pre>
+<p><strong>Dashboard panels:</strong></p>
+<table>
+<thead><tr>
+<th>Panel</th>
+<th>Visualization</th>
+<th>Window</th>
+</tr></thead><tbody>
+<tr>
+<td>Overall success rate</td>
+<td>Big number + sparkline</td>
+<td>5 min rolling</td>
+</tr>
+<tr>
+<td>Success rate trend</td>
+<td>Time series, 95% CI band</td>
+<td>24 h</td>
+</tr>
+<tr>
+<td>Decline breakdown by code</td>
+<td>Stacked bar (top 10 codes)</td>
+<td>1 h</td>
+</tr>
+<tr>
+<td>3DS funnel (required → completed → abandoned)</td>
+<td>Funnel chart</td>
+<td>1 h</td>
+</tr>
+<tr>
+<td>Failure rate by country</td>
+<td>Choropleth map</td>
+<td>1 h</td>
+</tr>
+<tr>
+<td>Failure rate by device type</td>
+<td>Bar chart</td>
+<td>1 h</td>
+</tr>
+<tr>
+<td>Error rate by payment method</td>
+<td>Multi-series line</td>
+<td>1 h</td>
+</tr>
+</tbody></table>
+<p><strong>Alerting thresholds:</strong></p>
+<pre><code># Datadog Monitor — page on-call immediately
+alert:
+  name: &quot;Payment Success Rate Critical&quot;
+  query: &gt;
+    (sum:payments.outcome{outcome:success}.as_rate() /
+     sum:payments.outcome{*}.as_rate()) * 100
+  condition: &quot;&lt; 90 for last 5 minutes&quot;
+  severity: P1
+  notify: pagerduty-payments-oncall
+
+warning:
+  condition: &quot;&lt; 93 for last 10 minutes&quot;
+  severity: P2
+  notify: slack-payments-alerts
+
+# 3DS abandonment spike
+alert:
+  name: &quot;3DS Abandonment Rate High&quot;
+  query: &gt;
+    sum:payments.3ds{outcome:3ds_abandoned}.as_rate() /
+    sum:payments.3ds{outcome:3ds_required}.as_rate()
+  condition: &quot;&gt; 0.30 for last 10 minutes&quot;
+  severity: P2</code></pre>
+<p><strong>Tradeoffs</strong></p>
+<ul><li><strong>Client-side vs. server-side events</strong>: Client-side events fire faster (sub-second) but can be lost on network failure or browser crash. Server-side events (from your API on Stripe webhook) are authoritative but have ~5-30 second webhook latency. For real-time alerting, use client events for speed; reconcile against server events for accuracy in reports.</li><li><strong>Volume thresholds for alerting</strong>: A 90% threshold on 5 minutes is too noisy during low-traffic periods (midnight: 2 failures out of 20 attempts = 90%, may page unnecessarily). Add a minimum volume gate: <code>count &gt; 50</code> in the same window before alerting.</li></ul>
+<hr>
+<h2 class="section" id="q6">Q6</h2>
+<p><strong>Problem framing</strong></p>
+<p>When a card is declined, your UX presents retry options (try another card, check card details, use a different payment method). Without instrumentation, you don&#x27;t know whether users successfully retry, give up, or keep failing with the same card — and whether your error messages are clear enough to guide recovery.</p>
+<p><strong>Approach</strong></p>
+<p>Model the retry as a mini-funnel, tracking each attempt as an increment on <code>submission_attempt</code>:</p>
+<pre><code>// Retry state in your checkout store
+const checkoutStore = {
+  submissionAttempt: 0,
+  declineHistory: [] as DeclineRecord[],
+};
+
+async function handlePaymentSubmit() {
+  checkoutStore.submissionAttempt++;
+
+  track(&#x27;checkout_submitted&#x27;, {
+    ...base,
+    submission_attempt: checkoutStore.submissionAttempt,
+    is_retry: checkoutStore.submissionAttempt &gt; 1,
+    previous_decline_code: checkoutStore.declineHistory.at(-1)?.decline_code,
+  });
+
+  const result = await stripe.confirmCardPayment(clientSecret);
+
+  if (result.error) {
+    const decline: DeclineRecord = {
+      attempt: checkoutStore.submissionAttempt,
+      decline_code: result.error.decline_code,
+      error_code: result.error.code,
+      timestamp: Date.now(),
+    };
+    checkoutStore.declineHistory.push(decline);
+
+    track(&#x27;checkout_failed&#x27;, {
+      ...base,
+      submission_attempt: checkoutStore.submissionAttempt,
+      decline_code: result.error.decline_code,
+      error_code: result.error.code,
+      // Did we suggest a different action?
+      recovery_action_shown: getRecoveryAction(result.error.decline_code),
+    });
+  }
+}
+
+// Track what the user does AFTER seeing the error
+function onErrorCTAClick(action: &#x27;retry_same_card&#x27; | &#x27;change_card&#x27; | &#x27;use_paypal&#x27; | &#x27;exit&#x27;) {
+  track(&#x27;checkout_retry_action&#x27;, {
+    ...base,
+    action,
+    submission_attempt: checkoutStore.submissionAttempt,
+    decline_code: checkoutStore.declineHistory.at(-1)?.decline_code,
+  });
+}</code></pre>
+<p><strong>Metrics that signal the retry flow is working:</strong></p>
+<table>
+<thead><tr>
+<th>Metric</th>
+<th>Healthy signal</th>
+<th>Warning signal</th>
+</tr></thead><tbody>
+<tr>
+<td><code>retry_success_rate</code> = completions where <code>submission_attempt &gt; 1</code></td>
+<td>&gt; 30% of retried checkouts complete</td>
+<td>&lt; 15% → error messaging not helping</td>
+</tr>
+<tr>
+<td><code>retry_attempt_count</code> distribution</td>
+<td>Most retries succeed by attempt 2</td>
+<td>Spike in attempt 3+ → users stuck in loop</td>
+</tr>
+<tr>
+<td><code>change_card</code> CTA click rate after generic decline</td>
+<td>&gt; 40%</td>
+<td>&lt; 10% → &quot;card declined&quot; message unclear</td>
+</tr>
+<tr>
+<td>Time between decline and retry action</td>
+<td>&lt; 30s → user understood error</td>
+<td>&gt; 2min → user confused, may abandon</td>
+</tr>
+<tr>
+<td><code>checkout_abandoned</code> rate after decline</td>
+<td>&lt; 50%</td>
+<td>&gt; 70% → UX not recovering users</td>
+</tr>
+</tbody></table>
+<pre><code>-- Retry success rate by decline code
+SELECT
+  decline_code,
+  COUNT(*) AS declined_sessions,
+  COUNTIF(eventually_succeeded) AS recovered,
+  ROUND(COUNTIF(eventually_succeeded) / COUNT(*) * 100, 1) AS recovery_rate_pct
+FROM (
+  SELECT
+    session_id,
+    decline_code,
+    MAX(IF(event = &#x27;checkout_completed&#x27;, 1, 0)) AS eventually_succeeded
+  FROM events
+  WHERE event IN (&#x27;checkout_failed&#x27;, &#x27;checkout_completed&#x27;)
+  GROUP BY session_id, decline_code
+)
+GROUP BY decline_code
+ORDER BY declined_sessions DESC;</code></pre>
+<p><strong>Tradeoffs</strong></p>
+<ul><li><strong>Same <code>clientSecret</code> on retry</strong>: Stripe recommends reusing the same <code>PaymentIntent</code> (and thus <code>clientSecret</code>) across retry attempts rather than creating a new one — this ensures idempotency and links attempts in Stripe&#x27;s dashboard. Make sure your <code>checkout_id</code> in analytics maps 1:1 to <code>payment_intent_id</code> so you can cross-reference Stripe&#x27;s attempt log.</li><li><strong>Soft vs. hard declines</strong>: Soft declines (e.g., <code>insufficient_funds</code>, <code>try_again_later</code>) are worth retrying; hard declines (<code>do_not_honor</code>, <code>card_not_supported</code>) rarely succeed on retry. Segment retry metrics by soft/hard to avoid inflating &quot;retry success rate&quot; with easy wins.</li></ul>
+<hr>
+<h2 class="section" id="q7">Q7</h2>
+<p><strong>Problem framing</strong></p>
+<p><code>payment_intent_id</code> (e.g., <code>pi_3Abc123</code>) and <code>charge_id</code> (e.g., <code>ch_3Abc123</code>) are Stripe-generated identifiers that uniquely reference a specific payment transaction. Sending these to third-party analytics (GA4, Amplitude, Mixpanel) creates risks that require explicit evaluation rather than a default yes or no.</p>
+<p><strong>Approach</strong></p>
+<p><strong>Risks of including these identifiers:</strong></p>
+<ol><li><strong>Data linkage / re-identification</strong>: If an attacker or rogue employee gains access to your analytics dataset AND your Stripe dashboard, they can cross-reference <code>payment_intent_id</code> to retrieve full transaction details (amount, card brand, billing address, Stripe customer ID). This enables targeted fraud, identity theft, or regulatory exposure.</li></ol>
+<ol><li><strong>Third-party data sharing</strong>: Google Analytics, Amplitude, and Mixpanel collect data under their own privacy policies. Sharing transaction identifiers means those vendors now hold data that links an anonymous session to a specific financial transaction — this may violate GDPR Article 25 (data minimization) or CCPA.</li></ol>
+<ol><li><strong>PCI DSS scope expansion</strong>: While <code>pi_xxxxx</code> is not cardholder data (CHD) itself, Stripe&#x27;s documentation and PCI assessors may consider systematically logging payment identifiers in unsecured third-party systems to be a scope expansion, requiring those systems to be included in your PCI audit.</li></ol>
+<ol><li><strong>Regulatory subpoena exposure</strong>: If your analytics vendor is subpoenaed, transaction-linked session data becomes discoverable — a legal risk your legal team should evaluate.</li></ol>
+<p><strong>When it IS acceptable:</strong></p>
+<pre><code>// Scenario A: First-party data warehouse (BigQuery/Redshift) — generally OK
+// You control the data, encryption at rest, access controls, retention policies
+analyticsWarehouse.write({
+  session_id: sessionId,
+  payment_intent_id: paymentIntentId,  // ✓ OK in your own controlled system
+  outcome: &#x27;success&#x27;,
+  timestamp: Date.now(),
+});
+
+// Scenario B: Third-party analytics — avoid or hash
+// If you need to correlate across systems without exposing the raw ID:
+const hashedId = await crypto.subtle.digest(
+  &#x27;SHA-256&#x27;,
+  new TextEncoder().encode(paymentIntentId + ANALYTICS_SALT)
+);
+const safeCorrelationId = bufferToHex(hashedId).slice(0, 16);
+
+analytics.track(&#x27;checkout_completed&#x27;, {
+  session_id: sessionId,
+  correlation_id: safeCorrelationId,  // ✓ not reversible to payment_intent_id
+  outcome: &#x27;success&#x27;,
+});</code></pre>
+<p><strong>Decision framework:</strong></p>
+<table>
+<thead><tr>
+<th>Destination</th>
+<th>Include raw `pi_xxxxx`?</th>
+<th>Rationale</th>
+</tr></thead><tbody>
+<tr>
+<td>Your own data warehouse</td>
+<td>✅ Yes</td>
+<td>Controlled, auditable, within your PCI scope</td>
+</tr>
+<tr>
+<td>Sentry error monitoring</td>
+<td>✅ Yes (as tag, not PII)</td>
+<td>Helps debug specific failed payments; Sentry is PCI-compliant</td>
+</tr>
+<tr>
+<td>Datadog RUM/APM</td>
+<td>✅ Yes</td>
+<td>Operational tooling, not marketing analytics</td>
+</tr>
+<tr>
+<td>Amplitude/Mixpanel</td>
+<td>⚠️ Only with legal sign-off</td>
+<td>Third-party with its own data use</td>
+</tr>
+<tr>
+<td>Google Analytics (GA4)</td>
+<td>❌ No</td>
+<td>Data is shared with Google; violates data minimization</td>
+</tr>
+<tr>
+<td>Segment (as passthrough to GA)</td>
+<td>❌ No</td>
+<td>Same as above</td>
+</tr>
+</tbody></table>
+<p><strong>Tradeoffs</strong></p>
+<ul><li><strong>Debuggability vs. compliance</strong>: Excluding <code>payment_intent_id</code> from Sentry events makes it harder to pull up the exact Stripe payment in their dashboard when debugging a failure. The compromise: include it in Sentry (operational tool, justified) but not in marketing analytics.</li><li><strong>Hashing provides weak protection</strong>: A hashed ID prevents direct lookup but is still a unique identifier that links events across sessions — if both the analytics and Stripe data are leaked, the hash can be brute-forced for the relatively small space of <code>pi_xxxxx</code> IDs. Hashing reduces risk; it does not eliminate it.</li></ul>
+<hr>
+<h2 class="section" id="q8-deep">Q8 *(Deep)*</h2>
+<p><strong>Problem framing</strong></p>
+<p>23% abandonment at the payment step is a significant but ambiguous signal. Multiple hypotheses compete: slow Elements load time, price shock on the order summary, friction from required account creation, or missing trust signals. Before investing engineering effort in Stripe load optimization, you need to establish causal responsibility — correlation between &quot;4-second load&quot; and &quot;abandonment&quot; is not causation, because slow-loading sessions may also be low-intent users on poor connections.</p>
+<p><strong>Approach</strong></p>
+<p><strong>Step 1 — Instrument to generate per-hypothesis data</strong></p>
+<pre><code>// H1: Elements load time
+track(&#x27;payment_form_viewed&#x27;, {
+  stripe_elements_mount_ms: elementsMountDuration,
+  connection_effective_type: navigator.connection?.effectiveType,
+  device_memory_gb: navigator.deviceMemory,
+});
+
+// H2: Price shock — did the user scroll to see the total?
+const observer = new IntersectionObserver(([entry]) =&gt; {
+  if (entry.isIntersecting) {
+    track(&#x27;order_total_visible&#x27;, { checkout_id, total_cents });
+  }
+}, { threshold: 0.8 });
+observer.observe(document.getElementById(&#x27;order-total&#x27;)!);
+
+// H3: Account creation friction
+track(&#x27;account_required_shown&#x27;, {
+  checkout_id,
+  gate_type: &#x27;hard_require&#x27; | &#x27;soft_nudge&#x27;,
+});
+track(&#x27;guest_checkout_clicked&#x27;, { checkout_id });
+
+// H4: Trust signals — scroll depth before abandonment
+document.addEventListener(&#x27;scroll&#x27;, throttle(() =&gt; {
+  const depth = Math.round((window.scrollY / document.body.scrollHeight) * 100);
+  checkoutStore.maxScrollDepth = Math.max(checkoutStore.maxScrollDepth, depth);
+}, 500));
+// Flush maxScrollDepth in the abandonment beacon</code></pre>
+<p><strong>Step 2 — Observational analysis before running an experiment</strong></p>
+<pre><code>-- Check if load time alone explains abandonment
+SELECT
+  CASE WHEN stripe_elements_mount_ms &gt; 3000 THEN &#x27;slow&#x27; ELSE &#x27;fast&#x27; END AS load_speed,
+  AVG(abandoned) AS abandonment_rate,
+  COUNT(*) AS n
+FROM sessions
+WHERE reached_payment_step = TRUE
+GROUP BY load_speed;
+
+-- Control for connection type (confound)
+SELECT
+  connection_effective_type,
+  CASE WHEN stripe_elements_mount_ms &gt; 3000 THEN &#x27;slow&#x27; ELSE &#x27;fast&#x27; END AS load_speed,
+  AVG(abandoned) AS abandonment_rate
+FROM sessions
+GROUP BY 1, 2;</code></pre>
+<p>If slow-connection users have both slow load AND higher abandonment regardless of load time, load time is a proxy for connection quality, not the causal variable.</p>
+<p><strong>Step 3 — Design the experiment</strong></p>
+<div class="mermaid-wrap"><pre class="mermaid">flowchart TD
+    A[User reaches payment step] --> B{Random assignment\nby session_id hash}
+    B -->|25% Control| C[Current experience\n4s Elements load]
+    B -->|25% Skeleton UI| D[Show skeleton loader\nduring Elements mount]
+    B -->|25% Skeleton + Prefetch| E[Prefetch stripe.js\non cart page]
+    B -->|25% Inline price summary| F[Show order total\nabove payment form]
+    C & D & E & F --> G[Measure: abandon rate\ntime-to-submit\nconversion rate]</pre></div>
+<p><strong>Instrumentation additions for the experiment:</strong></p>
+<pre><code>// 1. Tag every event with experiment assignment
+const experimentVariant = getVariantForSession(sessionId, &#x27;stripe-load-experiment&#x27;);
+// variant: &#x27;control&#x27; | &#x27;skeleton_ui&#x27; | &#x27;skeleton_prefetch&#x27; | &#x27;price_summary&#x27;
+
+// 2. For skeleton_prefetch: measure actual vs. perceived load time
+performance.mark(&#x27;stripe_prefetch_start&#x27;); // on cart page
+performance.mark(&#x27;stripe_prefetch_end&#x27;);   // when stripe.js resolves on cart
+// On checkout page, Elements mounts near-instantly — measure perceived time
+performance.mark(&#x27;payment_form_interactive&#x27;); // on Elements &#x27;ready&#x27;
+
+// 3. Capture whether user scrolled to see total BEFORE abandoning
+// This isolates H2 (price shock) from H1 (load time)</code></pre>
+<p><strong>Isolating the variable — statistical requirements:</strong></p>
+<ul><li><strong>Sample size</strong>: With 23% baseline abandonment, to detect a 3pp improvement (23%→20%) at 80% power, α=0.05 → ~2,500 sessions per variant. At typical checkout traffic, this may take 1-2 weeks.</li><li><strong>Guardrail metrics</strong>: Monitor <code>checkout_error_rate</code> and <code>stripe_js_load_error</code> — a variant that aggressively prefetches Stripe might cause resource contention on slow devices.</li><li><strong>Segmented analysis</strong>: Run treatment effect analysis separately for <code>connection_effective_type IN (&#x27;slow-2g&#x27;, &#x27;3g&#x27;)</code> — the experiment hypothesis is most relevant for these users.</li></ul>
+<p><strong>Tradeoffs</strong></p>
+<ul><li><strong>A/B test vs. regression discontinuity</strong>: If you can&#x27;t randomize (e.g., you already deployed the skeleton loader), use a regression discontinuity design around the deploy timestamp — compare abandonment immediately before vs. after while controlling for time-of-day effects.</li><li><strong>Novelty effect</strong>: Users seeing a skeleton loader may behave differently initially because it&#x27;s new, not because it&#x27;s faster. Run the experiment long enough (at least 2 full weekly cycles) to wash out novelty.</li></ul>
+<hr>
+<h2 class="section" id="q9-deep">Q9 *(Deep)*</h2>
+<p><strong>Problem framing</strong></p>
+<p>When a payment incident hits, the on-call engineer needs answers in 60 seconds: how bad is it, where is the failure, and who is affected. This requires pre-built observability infrastructure — you cannot instrument after the fact.</p>
+<p><strong>Approach</strong></p>
+<div class="mermaid-wrap"><pre class="mermaid">flowchart LR
+    subgraph Browser
+        A[Checkout Events] --> B[Datadog RUM SDK]
+        C[Stripe SDK errors] --> D[Sentry]
+    end
+    subgraph Your Backend
+        E[Payment API] --> F[Datadog APM]
+        E --> G[Custom StatsD Metrics]
+    end
+    subgraph External
+        H[Stripe API] --> I[Stripe Webhooks]
+        I --> E
+    end
+    B & G & D --> J[Datadog]
+    J --> K[Dashboard Panels]
+    J --> L[Alerts → PagerDuty]</pre></div>
+<p><strong>Event taxonomy for incident isolation:</strong></p>
+<pre><code>// Event 1: Attempt registered (fires before any network call)
+track(&#x27;payment_attempt&#x27;, {
+  checkout_id, session_id, payment_method: &#x27;card&#x27;,
+  country: billingCountry, device_type,
+});
+
+// Event 2a: Stripe SDK error (client-side, before hitting your API)
+cardElement.on(&#x27;change&#x27;, (e) =&gt; {
+  if (e.error) {
+    dd.increment(&#x27;payments.stripe_sdk_error&#x27;, { error_code: e.error.code });
+  }
+});
+stripe.confirmCardPayment(clientSecret).then(result =&gt; {
+  if (result.error) {
+    const layer = classifyError(result.error);
+    // layer: &#x27;stripe_client&#x27; | &#x27;your_api&#x27; | &#x27;network&#x27;
+    dd.increment(&#x27;payments.failure&#x27;, { layer, error_code: result.error.code });
+  }
+});
+
+// Error layer classification
+function classifyError(error: StripeError): FailureLayer {
+  if (error.type === &#x27;validation_error&#x27; || error.type === &#x27;card_error&#x27;) {
+    return &#x27;stripe_client&#x27;;      // Stripe processed it; card rejected
+  }
+  if (error.type === &#x27;api_connection_error&#x27;) {
+    return &#x27;network&#x27;;            // Could not reach Stripe OR your API
+  }
+  if (error.type === &#x27;api_error&#x27;) {
+    return &#x27;your_api&#x27;;           // Your backend returned 5xx
+  }
+  return &#x27;unknown&#x27;;
+}
+
+// Event 2b: Your API response time and status
+// (Emitted from your backend, correlated by checkout_id)
+dd.histogram(&#x27;payments.api_latency_ms&#x27;, durationMs, { status_code: &#x27;200&#x27; });
+dd.increment(&#x27;payments.api_response&#x27;, { status: &#x27;5xx&#x27;, route: &#x27;/payments/confirm&#x27; });</code></pre>
+<p><strong>Three dashboard panels for 60-second diagnosis:</strong></p>
+<p><strong>Panel 1 — Success rate in real time (top of dashboard, large number)</strong></p>
+<pre><code>Query: sum:payments.outcome{outcome:success}.as_rate() /
+       sum:payments.outcome{*}.as_rate() * 100
+Display: Large number + trend arrow + red/yellow/green background
+Refresh: 10 seconds</code></pre>
+<p><strong>Panel 2 — Failure layer breakdown (stacked time series)</strong></p>
+<pre><code>Query A (stripe_client failures):
+  sum:payments.failure{layer:stripe_client}.as_rate()
+
+Query B (your API failures):
+  sum:payments.failure{layer:your_api}.as_rate()
+
+Query C (network failures):
+  sum:payments.failure{layer:network}.as_rate()
+
+Display: Stacked bar chart, last 30 minutes, 1-minute granularity
+Interpretation: spike in your_api = backend regression; spike in stripe_client = Stripe issue</code></pre>
+<p><strong>Panel 3 — Failure rate by segment (table)</strong></p>
+<pre><code>Rows: country (top 10 by volume)
+Columns: payment method, device type
+Value: failure_rate = failures / attempts * 100
+Conditional formatting: red if &gt; 15%, yellow if &gt; 8%
+Refresh: 30 seconds</code></pre>
+<p><strong>Supplementary panels for root-cause depth:</strong></p>
+<pre><code>Panel 4: Stripe SDK error codes — top 10 bar chart (updated every 60s)
+Panel 5: Your API error rate by endpoint — table
+Panel 6: Network error rate by geographic region — map
+Panel 7: 3DS abandonment rate — time series
+Panel 8: Sentry error rate grouped by fingerprint — table with links</code></pre>
+<p><strong>Alerting configuration for 60-second detection:</strong></p>
+<pre><code>monitors:
+  - name: &quot;Payments: Success Rate Critical Drop&quot;
+    type: metric_alert
+    query: &gt;
+      avg(last_5m):
+        sum:payments.outcome{outcome:success}.as_rate() /
+        sum:payments.outcome{*}.as_rate() * 100
+    critical: 88
+    warning: 92
+    require_full_window: false  # alert even on partial data
+    new_group_delay: 0          # no delay on new tags
+
+  - name: &quot;Payments: API Layer Spike&quot;
+    query: &gt;
+      sum(last_2m):payments.failure{layer:your_api}.as_count()
+    critical: 50   # 50 API-layer failures in 2 minutes = page immediately
+
+  - name: &quot;Payments: Network Error Spike&quot;
+    query: &gt;
+      sum(last_2m):payments.failure{layer:network}.as_count()
+    critical: 30</code></pre>
+<p><strong>Tradeoffs</strong></p>
+<ul><li><strong>Client vs. server-side <code>payments.outcome</code> events</strong>: Relying solely on client events for real-time rate is risky — browser crashes and ad-blockers suppress events. Run both client and server metrics in parallel; for alerting, use server-side (webhook-derived) as primary truth since it has zero loss, accepting ~10-30s webhook latency.</li><li><strong>Cardinality explosion</strong>: Tagging by <code>country × payment_method × device_type</code> creates up to hundreds of unique metric tag combinations. Use Datadog&#x27;s <code>percentile</code> aggregation and avoid unbounded tags (like <code>user_id</code>) to stay within cardinality limits. Segment analysis at query time rather than metric emission time.</li></ul>
+<hr>
+<h2 class="section" id="q10-deep">Q10 *(Deep)*</h2>
+<p><strong>Problem framing</strong></p>
+<p>Success rate drops from 94% to 87% — a 7-point drop that, at any meaningful payment volume, represents tens of thousands of dollars per hour in lost revenue. You have three possible culprits: a frontend regression from your deploy, a Stripe-side issue, or a backend API regression. Your diagnostic playbook must distinguish these within minutes and give you clear rollback criteria.</p>
+<p><strong>Approach</strong></p>
+<div class="mermaid-wrap"><pre class="mermaid">flowchart TD
+    A[Alert fires: success rate 87%] --> B[Check deploy timestamp vs. metric drop]
+    B --> C{Correlated with deploy?}
+    C -->|Yes, within 5 min| D[Frontend regression likely]
+    C -->|No, or pre-deploy| E[Check Stripe status]
+    D --> F[Check Sentry for new error fingerprints]
+    E --> G{Stripe incident?}
+    G -->|Yes| H[Communicate to stakeholders\nMonitor Stripe ETA]
+    G -->|No| I[Check backend APM]
+    F --> J{New JS errors post-deploy?}
+    J -->|Yes| K[Rollback deploy immediately]
+    J -->|No| L[Check network layer errors]
+    I --> M{API 5xx spike?}
+    M -->|Yes| N[Backend rollback or hotfix]
+    M -->|No| O[Deeper investigation: decline codes]</pre></div>
+<p><strong>Step 1 — Correlate the deploy timestamp (&lt; 2 minutes)</strong></p>
+<pre><code># Get last 5 deploy times from your CI/CD system
+# In Datadog, add deploy events as annotations on dashboards:
+curl -X POST &quot;https://api.datadoghq.com/api/v1/events&quot; \
+  -H &quot;DD-API-KEY: $DD_API_KEY&quot; \
+  -d &#x27;{
+    &quot;title&quot;: &quot;Deploy: payments-frontend v2.4.1&quot;,
+    &quot;text&quot;: &quot;Deployed at 14:32 UTC&quot;,
+    &quot;tags&quot;: [&quot;service:payments-frontend&quot;, &quot;env:production&quot;],
+    &quot;alert_type&quot;: &quot;info&quot;
+  }&#x27;</code></pre>
+<p>In Datadog&#x27;s success rate time series, overlay the deploy event marker. If the metric drop begins within 1-2 minutes of the deploy timestamp, frontend causation is highly probable.</p>
+<p><strong>Step 2 — Check Stripe&#x27;s status page (&lt; 1 minute)</strong></p>
+<pre><code># Stripe status API — check programmatically
+curl https://status.stripe.com/api/v2/status.json | jq &#x27;.status.description&#x27;
+
+# Also check components (card processing specifically)
+curl https://status.stripe.com/api/v2/components.json | jq &#x27;.components[] | select(.name | contains(&quot;Card&quot;))&#x27;</code></pre>
+<p>If Stripe shows &quot;investigating&quot; or &quot;degraded,&quot; stop — this is not your regression. Communicate to stakeholders with Stripe&#x27;s incident link and set a monitor on their status RSS feed.</p>
+<p><strong>Step 3 — Sentry: new error fingerprints post-deploy (&lt; 3 minutes)</strong></p>
+<p>In Sentry, filter by:</p>
+<ul><li><strong>Time range</strong>: Last 30 minutes</li><li><strong>Tag</strong>: <code>release:v2.4.1</code> (deploy version, set via <code>Sentry.init({ release })</code>)</li><li><strong>Sort</strong>: Newest first</li></ul>
+<p>Look for:</p>
+<pre><code># Typical frontend regression signatures:
+TypeError: Cannot read properties of undefined (reading &#x27;confirmCardPayment&#x27;)
+  → Stripe object not initialized — likely a loading order regression
+
+StripeError: No such payment_intent: &#x27;pi_xxx&#x27;
+  → clientSecret is stale or not being passed — likely a state management regression
+
+NetworkError: Failed to fetch /api/payments/confirm
+  → API endpoint URL changed or CORS misconfigured in deploy</code></pre>
+<p><strong>Step 4 — Datadog RUM: client-side error rate by version</strong></p>
+<pre><code>RUM Query: @type:error @view.name:Checkout
+Filter by: @application.version:2.4.1 vs @application.version:2.4.0
+Compare: Error count, error rate, JS exception rate</code></pre>
+<p><strong>Step 5 — Datadog APM: backend error rate</strong></p>
+<pre><code>APM → Services → payments-api
+Filter: Last 30 min, env:production
+Look at:
+  - HTTP 5xx rate (should be &lt; 0.5% baseline)
+  - Latency P95 (spike could cause client timeouts)
+  - Trace: /api/payments/confirm endpoint specifically</code></pre>
+<p>If APM shows your backend is healthy (low error rate, normal latency) but the client-side failure rate is high, the failure is in the frontend or in Stripe&#x27;s API (since Stripe errors surface as <code>card_error</code> not 5xx from your backend).</p>
+<p><strong>Step 6 — Check decline code distribution (&lt; 5 minutes)</strong></p>
+<pre><code>-- BigQuery (or Datadog metric breakdown): has the decline code distribution shifted?
+SELECT
+  decline_code,
+  COUNT(*) AS count,
+  ROUND(COUNT(*) / SUM(COUNT(*)) OVER () * 100, 1) AS pct
+FROM payments
+WHERE created_at &gt; TIMESTAMP_SUB(CURRENT_TIMESTAMP(), INTERVAL 30 MINUTE)
+GROUP BY decline_code
+ORDER BY count DESC;</code></pre>
+<p>If <code>do_not_honor</code> or <code>generic_decline</code> spikes without a corresponding Stripe incident, it may be a Stripe-side routing issue even without a formal incident post.</p>
+<p><strong>Step 7 — Stripe Dashboard</strong></p>
+<p>In Stripe&#x27;s Dashboard:</p>
+<ul><li><strong>Payments → Overview</strong>: Check authorization rate graph for the last hour</li><li><strong>Payments → Failed payments</strong>: Filter by time, look for new error codes</li><li><strong>Radar</strong>: Check if a new Radar rule was accidentally deployed (Stripe has its own deploy cycle)</li><li><strong>Developers → Events</strong>: Filter for <code>payment_intent.payment_failed</code> in the last 30 min and examine <code>last_payment_error</code></li></ul>
+<p><strong>Rollback decision criteria:</strong></p>
+<table>
+<thead><tr>
+<th>Signal</th>
+<th>Action</th>
+</tr></thead><tbody>
+<tr>
+<td>New Sentry errors correlated with <code>release:v2.4.1</code> + success rate drop within 5 min of deploy</td>
+<td><strong>Rollback immediately</strong></td>
+</tr>
+<tr>
+<td>Stripe status shows active incident</td>
+<td><strong>Hold rollback</strong>, monitor Stripe ETA, communicate</td>
+</tr>
+<tr>
+<td>Backend APM shows 5xx spike with no Sentry frontend errors</td>
+<td><strong>Backend rollback</strong>, not frontend</td>
+</tr>
+<tr>
+<td>Decline codes shifted dramatically (new code pattern) with Stripe healthy</td>
+<td><strong>Escalate to Stripe support</strong> with <code>payment_intent_id</code> examples</td>
+</tr>
+<tr>
+<td>No clear signal after 10 minutes</td>
+<td><strong>Rollback as precaution</strong>, investigate from clean baseline</td>
+</tr>
+</tbody></table>
+<pre><code># Frontend rollback (assuming Vercel/CloudFront instant rollback)
+vercel rollback --to=v2.4.0 --scope=production
+
+# Or feature-flag rollback if using LaunchDarkly
+ldcli flags update payments-new-checkout-flow --off --environment=production</code></pre>
+<p><strong>Tradeoffs</strong></p>
+<ul><li><strong>Rollback vs. hotfix</strong>: If the regression is a one-line bug (e.g., wrong Stripe API version string), a hotfix deploy is faster than rollback in some CI/CD systems. But at 7-point success rate drop, the revenue loss per minute of investigation exceeds most hotfix windows — bias toward rollback unless the fix is trivially obvious.</li><li><strong>False positives from Stripe&#x27;s &quot;no incident&quot;</strong>: Stripe publishes incidents with a lag. A success rate drop that preceded a Stripe incident post by 20 minutes is not your regression. Cross-reference Stripe&#x27;s <code>payment_intent.payment_failed</code> webhook volume against your historical baseline before concluding it&#x27;s your code.</li></ul>
+  </main>
+  <footer class="page-footer">
+    <a href="index.html">← All sections</a> ·
+    <a href="../payments-system-frontend-architecture.html">Architecture map</a>
+  </footer>
+  <script src="assets/interactive.js" defer></script>
+</body>
+</html>

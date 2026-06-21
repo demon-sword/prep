@@ -1,0 +1,139 @@
+<div class="answer-header reveal">
+  <div class="answer-meta">
+    <span class="meta-badge meta-category">06-ml-fundamentals</span>
+    <span class="meta-badge meta-num">Q022</span>
+    <span class="meta-badge meta-status-review">review</span>
+  </div>
+  <h1 class="answer-title">Gradient descent?</h1>
+</div>
+
+<div class="answer-section reveal">
+  <div class="accordion">
+    <div class="accordion-header">
+      <span class="accordion-title">⟁ Framing — Why this is asked</span>
+      <span class="accordion-chevron">▾</span>
+    </div>
+    <div class="accordion-body">
+      <div class="framing-grid">
+        <div><div class="framing-card">
+          <div class="framing-card-title">Why asked</div>
+          <p style="font-size:13.5px;line-height:1.7;color:var(--text-dim)">Interviewers use this to check foundational ML fluency — whether a candidate understands <em>why</em> models learn at all (the optimization engine), not just how to call <code>.fit()</code>. For senior/LLM-focused roles it also tests whether the candidate knows how Adam, learning-rate schedules, and batch size interact in practice with large-scale training.</p>
+        </div></div>
+        <div><div class="framing-card">
+          <div class="framing-card-title">Trigger phrases</div>
+          <div class="trigger-list">
+              <div class="trigger-phrase">Walk me through how a neural network actually learns.</div>
+              <div class="trigger-phrase">What is gradient descent and how do its variants differ?</div>
+              <div class="trigger-phrase">Why does your training loss oscillate / not converge?</div>
+              <div class="trigger-phrase">Compare SGD, Adam, and AdamW.</div>
+          </div>
+        </div></div>
+      </div>
+      <div class="tests-block">
+        <span style="font-family:var(--mono);font-size:10px;letter-spacing:0.1em;text-transform:uppercase;color:var(--purple);margin-right:8px">Tests:</span>Understanding of the core iterative optimization algorithm that drives all neural network and LLM training, plus practical intuition for variant selection and common failure modes.
+
+---
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="section-label">Concept</div>
+  <div class="concept-block"><p>Gradient descent is an iterative first-order optimization algorithm that minimizes a loss function L(θ) by repeatedly moving parameters θ in the direction <em>opposite</em> to the gradient: <strong>θ ← θ − η · ∇L(θ)</strong>, where η is the learning rate. The gradient tells us the direction of steepest ascent; we step downhill toward a minimum.</p></div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="section-label">Mechanism</div>
+  <div class="card"><p><strong>Core update rule:</strong></p>
+<div class="code-block-wrap"><pre class="code-block"><code>θ_new = θ_old − η · ∇_θ L(θ_old)</code></pre><button class="copy-btn">copy</button></div>
+<p><strong>Three regimes by batch size:</strong></p>
+<div class="table-wrap"><table class="data-table"><tr><th>Variant</th><th>Batch size</th><th>Properties</th></tr><tr><td>Batch GD</td><td>Full dataset</td><td>Exact gradient, slow per step, memory intensive</td></tr><tr><td>SGD</td><td>1 sample</td><td>Noisy, fast per step, escapes local minima</td></tr><tr><td>Mini-batch SGD</td><td>32–512</td><td>GPU-efficient, best of both worlds — industry default</td></tr></table></div>
+<p><strong>Adaptive optimizers (the modern stack):</strong></p>
+<ul class="styled-list"><li><strong>Momentum SGD</strong> — exponential moving average of gradients; reduces oscillation in ravines.  </li></ul>
+<p><code>v_t = β·v_{t-1} + (1−β)·g_t</code>; <code>θ ← θ − η·v_t</code></p>
+<ul class="styled-list"><li><strong>Adam</strong> — per-parameter adaptive learning rates using first moment (mean, m_t) and second moment (uncentered variance, v_t):  </li></ul>
+<p><code>m_t = β₁·m_{t-1} + (1−β₁)·g_t</code>     <code>v_t = β₂·v_{t-1} + (1−β₂)·g_t²</code>     <code>θ ← θ − η · m̂_t / (√v̂_t + ε)</code>     Bias-corrected m̂_t, v̂_t compensate for zero-initialization.     Defaults: β₁=0.9, β₂=0.999, ε=1e-8.</p>
+<ul class="styled-list"><li><strong>AdamW</strong> — Adam + decoupled weight decay (L2 penalty applied directly to θ, not folded into gradient). This is the default for LLM pre-training and fine-tuning (Hugging Face Transformers default).</li></ul>
+<p><strong>Learning rate schedules:</strong></p>
+<ul class="styled-list"><li>Warmup + cosine decay: standard for LLM training (linear warmup 1–5% of steps, cosine anneal to 0.1× peak LR).</li><li>OneCycleLR: fast convergence for image models.</li></ul>
+<p><strong>Gradient issues and fixes:</strong></p>
+<div class="table-wrap"><table class="data-table"><tr><th>Problem</th><th>Symptom</th><th>Fix</th></tr><tr><td>Exploding gradients</td><td>Loss → NaN, gradient norm spikes</td><td>Gradient clipping (<code>clip_grad_norm_</code>, threshold=1.0)</td></tr><tr><td>Vanishing gradients</td><td>Layers not learning (near-zero grads)</td><td>ReLU/GELU activations, residual connections, LayerNorm</td></tr><tr><td>Learning rate too high</td><td>Loss oscillates / diverges</td><td>LR warmup, reduce η</td></tr></table></div>| Learning rate too low | Loss plateaus slowly | Increase η or use LR finder |</div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="section-label">Example / Tradeoff</div>
+  <div class="card card-accent"><div class="rich-text"><p>Training Llama 3 8B with QLoRA: AdamW with β₁=0.9, β₂=0.999, η_peak=2e-4, 100-step linear warmup, cosine decay to 2e-5, gradient clipping at 1.0. Mini-batch size 4 with gradient accumulation steps=8 (effective batch=32) to fit in 16 GB VRAM. Without gradient clipping, loss spikes to NaN within the first 50 steps on noisy instruction data.</p>
+<p>SGD with momentum is still used in computer vision (ResNet ImageNet training) because it generalizes better than Adam in some regimes (Wilson et al., 2017) — but Adam dominates NLP/LLM training due to sparse gradient handling.</p></div></div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="accordion">
+    <div class="accordion-header">
+      <span class="accordion-title">🎙 Verbal Script (3–5 min)</span>
+      <span class="accordion-chevron">▾</span>
+    </div>
+    <div class="accordion-body">
+      <div class="script-block"><div class="script-label">Opening (30s)</div><p>"Gradient descent is the optimization engine behind all neural network training. At its core it's simple: compute how much each parameter contributes to the loss, then nudge each parameter in the direction that reduces the loss. The interesting part is in the variants — how you compute that nudge efficiently at scale."</p></div>
+      <div class="script-block"><div class="script-label">Core explanation (2–3 min)</div><p>"The basic update is θ ← θ − η · ∇L(θ). The learning rate η controls step size. Too large and you overshoot the minimum; too small and you never get there.</p>
+<p>In practice we use mini-batch SGD — we don't compute the gradient over the whole dataset (too slow) or a single sample (too noisy). Mini-batches of 32–512 give us GPU-efficient computation with a good gradient signal.</p>
+<p>Modern training almost always uses adaptive optimizers. Adam maintains a running average of both the gradient (first moment) and the squared gradient (second moment), giving each parameter its own effective learning rate. This is great for sparse gradients — which is why it dominates NLP and LLM training. AdamW adds decoupled weight decay, which corrects a subtle bug in how L2 regularization interacts with Adam — it's the default in Hugging Face Transformers.</p>
+<p>For LLM training we also layer on a learning rate schedule: linear warmup for the first 1–5% of steps (so we don't blow up the model on garbage gradients early on), then cosine decay to roughly 10% of the peak LR. And we clip gradients at norm 1.0 to prevent NaN loss from noisy batches."</p></div>
+      <div class="script-block"><div class="script-label">Tradeoff / production angle (1 min)</div><p>"The main tradeoffs I watch in practice: learning rate is the most sensitive hyperparameter — I use a warmup period and monitor gradient norms, not just loss. Batch size interacts with effective learning rate (linear scaling rule: if you double the batch, double the LR). And for fine-tuning LLMs with QLoRA, AdamW's paged optimizer variant (bitsandbytes) lets you avoid OOM by offloading optimizer state to CPU, which is critical when training on a single 16 GB GPU."</p></div>
+      <div class="script-block"><div class="script-label">Wrap-up (30s)</div><p>"So the short answer: gradient descent is step-by-step downhill on the loss surface. Mini-batch SGD with Adam/AdamW plus warmup + cosine decay is the production standard for LLMs. The two things that bite you in practice are learning rate (too high → NaN, too low → slow convergence) and gradient explosion (fix: clip at 1.0). Happy to go deeper on any piece — Adam's bias correction, gradient clipping, or LR scheduling."</p></div>
+    </div>
+  </div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="section-label">Pitfalls</div>
+  <div class="pitfall-card">
+    <div class="pitfall-mistake"><strong>✗ Mistake</strong> Describing only batch gradient descent (&quot;you compute the gradient over all training data&quot;)</div>
+    <div class="pitfall-better"><strong>✓ Better</strong> Distinguish batch / SGD / mini-batch, explain why mini-batch is the practical default (GPU parallelism + gradient signal), and note that batch GD is infeasible at scale.</div>
+  </div>
+  <div class="pitfall-card">
+    <div class="pitfall-mistake"><strong>✗ Mistake</strong> Treating Adam as a black box without mentioning AdamW</div>
+    <div class="pitfall-better"><strong>✓ Better</strong> Explain that AdamW decouples weight decay from the gradient update (L2 is applied to θ directly), which is why it&#x27;s the default for transformer/LLM training; plain Adam&#x27;s weight decay interacts with the adaptive LR in a way that under-regularizes.</div>
+  </div>
+  <div class="pitfall-card">
+    <div class="pitfall-mistake"><strong>✗ Mistake</strong> Ignoring learning rate schedules</div>
+    <div class="pitfall-better"><strong>✓ Better</strong> Mention warmup (prevents large early updates destabilizing untrained layers) + cosine or linear decay (prevents oscillation near convergence); LLM fine-tuning without warmup commonly causes loss spikes in the first 50–100 steps.
+
+---</div>
+  </div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="section-label">Related Questions</div>
+  <div class="related-pills">
+    <div class="related-pill" data-slug="06-009">
+      <span class="related-pill-icon">→</span>
+      <div class="related-pill-text">
+        <div class="related-pill-q">Q9: Bias-variance tradeoff</div>
+        <div class="related-pill-rel">Gradient descent is the mechanism that moves a model toward fitting data; bias/variance determines whether it under- or over-fits</div>
+      </div>
+    </div>
+    <div class="related-pill" data-slug="06-016">
+      <span class="related-pill-icon">→</span>
+      <div class="related-pill-text">
+        <div class="related-pill-q">Q16: Regularization — L1, L2, dropout</div>
+        <div class="related-pill-rel">Weight decay / L2 regularization is applied during or alongside gradient descent (AdamW decouples it)</div>
+      </div>
+    </div>
+    <div class="related-pill" data-slug="04-003">
+      <span class="related-pill-icon">→</span>
+      <div class="related-pill-text">
+        <div class="related-pill-q">Q4: Fine-tuning &amp; training — QLoRA vs LoRA</div>
+        <div class="related-pill-rel">QLoRA uses paged AdamW optimizers and gradient checkpointing to make gradient descent feasible on consumer GPUs</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="section-label">One-liner recall</div>
+  <div class="oneliner-box">
+    <div class="oneliner-label">▸ Reconstruct from memory</div>
+    <div class="oneliner-text" data-text="Gradient descent minimizes loss by iteratively stepping parameters opposite the gradient (θ ← θ − η·∇L); mini-batch + AdamW + warmup/cosine decay + gradient clipping at 1.0 is the production LLM training stack.">Gradient descent minimizes loss by iteratively stepping parameters opposite the gradient (θ ← θ − η·∇L); mini-batch + AdamW + warmup/cosine decay + gradient clipping at 1.0 is the production LLM training stack.</div>
+  </div>
+</div>

@@ -1,0 +1,135 @@
+<div class="answer-header reveal">
+  <div class="answer-meta">
+    <span class="meta-badge meta-category">02-rag-systems</span>
+    <span class="meta-badge meta-num">Q007</span>
+    <span class="meta-badge meta-status-review">review</span>
+  </div>
+  <h1 class="answer-title">How efficiently generate and store embeddings for products and queries?</h1>
+</div>
+
+<div class="answer-section reveal">
+  <div class="accordion">
+    <div class="accordion-header">
+      <span class="accordion-title">⟁ Framing — Why this is asked</span>
+      <span class="accordion-chevron">▾</span>
+    </div>
+    <div class="accordion-body">
+      <div class="framing-grid">
+        <div><div class="framing-card">
+          <div class="framing-card-title">Why asked</div>
+          <p style="font-size:13.5px;line-height:1.7;color:var(--text-dim)">This probes production-scale embedding pipeline design — a core RAG engineering task that separates candidates who&#x27;ve built real systems from those who&#x27;ve only run notebooks. Interviewers want to see that you understand batching, cost-efficiency, storage architecture, query-time versus index-time asymmetry, and incremental update patterns.</p>
+        </div></div>
+        <div><div class="framing-card">
+          <div class="framing-card-title">Trigger phrases</div>
+          <div class="trigger-list">
+              <div class="trigger-phrase">How would you generate and store embeddings for a product catalog of 5M items?</div>
+              <div class="trigger-phrase">We have 10M documents — how do you build the embedding pipeline efficiently?</div>
+              <div class="trigger-phrase">How do you handle incremental updates to your vector index?</div>
+          </div>
+        </div></div>
+      </div>
+      <div class="tests-block">
+        <span style="font-family:var(--mono);font-size:10px;letter-spacing:0.1em;text-transform:uppercase;color:var(--purple);margin-right:8px">Tests:</span>Ability to design a scalable, cost-efficient embedding pipeline covering batch generation, storage architecture (vector DB + metadata DB), and real-time query embedding — including incremental update and embedding model migration strategies.
+
+---
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="section-label">Concept</div>
+  <div class="concept-block"><p>Embedding generation for a large corpus is a batch-processing engineering problem: you need to run millions of items through a model (OpenAI <code>text-embedding-3-small</code>, <code>ada-002</code>, or a self-hosted <code>sentence-transformers</code> model) and persist the resulting dense vectors in a vector database (Pinecone, Qdrant, Weaviate, or FAISS + object store) so they can be searched at query time. Query-time embeddings are generated on-demand, usually in < 50 ms, so they need a different optimization path than index-time embeddings.</p></div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="section-label">Mechanism</div>
+  <div class="card"><p><strong>Index-time (offline) pipeline:</strong></p>
+<ol class="mechanism-steps"><li><strong>Extract & clean</strong> — pull product records from source DB, normalize text fields (title + description + category + attributes concatenated), strip HTML, handle missing fields.</li><li><strong>Batch with parallelism</strong> — chunk corpus into batches of 512–2048 items; run concurrent embedding calls (OpenAI supports 2048 inputs per call). Use async Python (<code>asyncio</code> + <code>httpx</code>) or a workflow orchestrator (Airflow, Prefect) with parallel workers. For a self-hosted model, use GPU batching with <code>sentence-transformers</code> on an A10/A100; set <code>batch_size=256–512</code> for throughput.</li><li><strong>Cost gate</strong> — for OpenAI <code>text-embedding-3-small</code>: $0.02 / 1M tokens. A product record averaging 200 tokens → 5M products = 1B tokens = ~$20 total (one-time). For incremental daily delta, cost is negligible.</li><li><strong>Store vectors</strong> — upsert into vector DB with a stable <code>product_id</code> as the primary key. Pinecone accepts batches of 100 vectors per upsert; Qdrant supports bulk upsert of 10K+.</li><li><strong>Store metadata</strong> — keep all filterable fields (price, category, brand, in_stock) in a metadata sidecar (PostgreSQL or the vector DB's payload store). This avoids bloating vector payloads and enables pre-filter pushdown.</li><li><strong>Incremental updates</strong> — listen to change events (CDC from PostgreSQL via Debezium, or a Kafka topic). Re-embed only changed records; upsert by <code>product_id</code>. For deletions, call vector DB delete-by-id.</li></ol>
+<p><strong>Query-time (online) pipeline:</strong></p>
+<ol class="mechanism-steps"><li>User query arrives → normalize (lowercase, strip punctuation).</li><li>Embed query via the <strong>same model</strong> used at index time (model mismatch = garbage retrieval).</li><li>Execute ANN search (Pinecone <code>query()</code>, Qdrant <code>search()</code>) with top-k=20 and metadata filter.</li><li>Target p95 embedding latency < 20 ms (OpenAI API); for stricter SLOs, cache frequent query embeddings in Redis (TTL 1 h) keyed on <code>sha256(query_text)</code>.</li></ol>
+<p><strong>Self-hosted option (cost at scale):</strong> For > 100M queries/month, OpenAI costs dominate. Deploy <code>text-embedding-3-small</code> via vLLM or <code>sentence-transformers</code> on a GPU server — throughput ~20K embeddings/s on an A10G. Break-even vs OpenAI API at roughly 500M tokens/month.</p></div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="section-label">Example / Tradeoff</div>
+  <div class="card card-accent"><div class="rich-text"><p><strong>Stack used at mid-scale product search (5M SKUs, 500K queries/day):</strong></p>
+<ul class="styled-list"><li>Index pipeline: Airflow DAG → 8 parallel workers → OpenAI <code>text-embedding-3-small</code> → Pinecone serverless (us-east-1), 1536-dim vectors.</li><li>Metadata: PostgreSQL; Pinecone payload store holds only <code>product_id</code>, <code>category</code>, <code>in_stock</code>.</li><li>Query: FastAPI service → <code>httpx</code> async embed call → Pinecone query with category pre-filter → cross-encoder rerank top-20 → return top-5.</li><li>Incremental: Debezium CDC → Kafka topic <code>product-changes</code> → worker re-embeds + upserts within 2 min SLA.</li></ul>
+<p><strong>Key tradeoffs:</strong></p>
+<div class="table-wrap"><table class="data-table"><tr><th>Decision</th><th>Option A</th><th>Option B</th></tr><tr><td>Model</td><td>OpenAI API (easy, $)</td><td>Self-hosted sentence-transformers (complex, cheap at scale)</td></tr><tr><td>Storage</td><td>Pinecone serverless (no ops)</td><td>Qdrant on-prem (cheaper at high QPS)</td></tr><tr><td>Updates</td><td>Periodic batch re-index</td><td>CDC streaming (lower staleness, higher complexity)</td></tr><tr><td>Dimension</td><td>1536-dim (high accuracy)</td><td>256-dim MRL (4× cheaper, ~95% quality)</td></tr></table></div>
+<p><strong>Matryoshka Representation Learning (MRL):</strong> models like <code>text-embedding-3-small</code> support truncating embeddings to lower dimensions (256, 512) without significant accuracy loss — a powerful cost/storage lever.</p></div></div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="accordion">
+    <div class="accordion-header">
+      <span class="accordion-title">🎙 Verbal Script (3–5 min)</span>
+      <span class="accordion-chevron">▾</span>
+    </div>
+    <div class="accordion-body">
+      <div class="script-block"><div class="script-label">Opening (30s)</div><p>"I'd break this into two distinct paths: the offline batch pipeline for generating and indexing embeddings at scale, and the online path for embedding user queries at low latency. They have very different optimization goals — throughput vs latency — and should be treated separately."</p></div>
+      <div class="script-block"><div class="script-label">Core explanation (2–3 min)</div><p>"For offline indexing — say 5M products — I'd run a parallel batch pipeline. Extract text fields from the source DB, concatenate title plus description plus attributes, then fan out to embedding workers. With OpenAI's <code>text-embedding-3-small</code>, you can send batches of 2048 inputs per call, and async HTTP lets you saturate the API rate limit. Total cost for 5M products at 200 tokens each is roughly $20 — basically free. The vectors go into Pinecone or Qdrant keyed on <code>product_id</code>, with filterable metadata like category and price in a sidecar PostgreSQL table or the vector DB's payload store — you don't want to bloat the vector payload.</p>
+<p>For incremental updates, I'd set up CDC via Debezium on the source DB, publish change events to Kafka, and have a consumer worker re-embed and upsert changed records. That keeps the index fresh within a 2-minute SLA without a full re-index.</p>
+<p>On the query side, the critical rule is to use the exact same model. A mismatch between index-time and query-time models breaks retrieval entirely. For latency, I target sub-20ms embedding via the API, and cache frequent query embeddings in Redis — e.g. common product search terms don't need re-embedding every time."</p></div>
+      <div class="script-block"><div class="script-label">Tradeoff / production angle (1 min)</div><p>"At very high scale — say 100M+ queries/month — OpenAI API costs start to dominate. That's where self-hosting with <code>sentence-transformers</code> on an A10G GPU makes sense; you get ~20K embeddings/s. The break-even is roughly 500M tokens/month. Another great lever is MRL — <code>text-embedding-3-small</code> supports truncating vectors to 256 dimensions with minimal accuracy loss, which cuts storage and ANN search cost by 6×."</p></div>
+      <div class="script-block"><div class="script-label">Wrap-up (30s)</div><p>"So the key architecture is: offline batch pipeline with parallelism and CDC-driven incremental updates, Pinecone or Qdrant for vector storage with metadata in a sidecar, and the same model used for both indexing and queries. Happy to go deeper on the CDC update flow or the self-hosting tradeoff."</p></div>
+    </div>
+  </div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="section-label">Pitfalls</div>
+  <div class="pitfall-card">
+    <div class="pitfall-mistake"><strong>✗ Mistake</strong> Using a different embedding model at query time than at index time (or re-indexing after a model upgrade without re-embedding all documents)</div>
+    <div class="pitfall-better"><strong>✓ Better</strong> Treat embedding model version as part of the index schema; when you change models, trigger a full re-index and A/B test before cutover using RAGAS retrieval metrics.</div>
+  </div>
+  <div class="pitfall-card">
+    <div class="pitfall-mistake"><strong>✗ Mistake</strong> Generating embeddings one-at-a-time in a loop instead of batching</div>
+    <div class="pitfall-better"><strong>✓ Better</strong> Always batch at 512–2048 inputs per API call and parallelize across workers; single-threaded embedding of 5M products at 1 embedding/call would take hours and 5× the cost.</div>
+  </div>
+  <div class="pitfall-card">
+    <div class="pitfall-mistake"><strong>✗ Mistake</strong> Storing all metadata fields inside the vector payload, making the index bloated and slow</div>
+    <div class="pitfall-better"><strong>✓ Better</strong> Keep only filterable fields in the vector DB payload; store full records in PostgreSQL or a document store, joining on <code>product_id</code> after retrieval.</div>
+  </div>
+  <div class="pitfall-card">
+    <div class="pitfall-mistake"><strong>✗ Mistake</strong> Ignoring stale embeddings after product catalog changes</div>
+    <div class="pitfall-better"><strong>✓ Better</strong> Architect CDC-driven incremental update from day one; full re-indexes don&#x27;t scale and create stale retrieval windows.
+
+---</div>
+  </div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="section-label">Related Questions</div>
+  <div class="related-pills">
+    <div class="related-pill" data-slug="01-013">
+      <span class="related-pill-icon">→</span>
+      <div class="related-pill-text">
+        <div class="related-pill-q">Q13: What are embeddings?</div>
+        <div class="related-pill-rel">Prerequisite — what embeddings are before covering how to generate them at scale</div>
+      </div>
+    </div>
+    <div class="related-pill" data-slug="02-023">
+      <span class="related-pill-icon">→</span>
+      <div class="related-pill-text">
+        <div class="related-pill-q">Q23: How does ANN search work? HNSW indexing?</div>
+        <div class="related-pill-rel">Follow-up — what happens after embeddings are stored: ANN search mechanics</div>
+      </div>
+    </div>
+    <div class="related-pill" data-slug="02-033">
+      <span class="related-pill-icon">→</span>
+      <div class="related-pill-text">
+        <div class="related-pill-q">Q33: Stale indexes, embedding drift</div>
+        <div class="related-pill-rel">Same concept — the incremental update / embedding drift failure mode in detail</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="section-label">One-liner recall</div>
+  <div class="oneliner-box">
+    <div class="oneliner-label">▸ Reconstruct from memory</div>
+    <div class="oneliner-text" data-text="Batch-generate embeddings offline (2048/call, async, ~$20 per 5M products), store vectors in Pinecone/Qdrant keyed on stable IDs with metadata in a sidecar, drive incremental updates via CDC, and always use the same model for index and query time.">Batch-generate embeddings offline (2048/call, async, ~$20 per 5M products), store vectors in Pinecone/Qdrant keyed on stable IDs with metadata in a sidecar, drive incremental updates via CDC, and always use the same model for index and query time.</div>
+  </div>
+</div>

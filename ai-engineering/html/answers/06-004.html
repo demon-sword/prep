@@ -1,0 +1,133 @@
+<div class="answer-header reveal">
+  <div class="answer-meta">
+    <span class="meta-badge meta-category">06-ml-fundamentals</span>
+    <span class="meta-badge meta-num">Q004</span>
+    <span class="meta-badge meta-status-review">review</span>
+  </div>
+  <h1 class="answer-title">Optimize for latency or throughput? (personal assistant, one request)</h1>
+</div>
+
+<div class="answer-section reveal">
+  <div class="accordion">
+    <div class="accordion-header">
+      <span class="accordion-title">⟁ Framing — Why this is asked</span>
+      <span class="accordion-chevron">▾</span>
+    </div>
+    <div class="accordion-body">
+      <div class="framing-grid">
+        <div><div class="framing-card">
+          <div class="framing-card-title">Why asked</div>
+          <p style="font-size:13.5px;line-height:1.7;color:var(--text-dim)">The interviewer is probing whether you understand the fundamental tension between latency and throughput in ML serving, and whether you can apply that understanding to a concrete scenario. A personal assistant serving one interactive user has completely different optimization priorities than a batch pipeline processing 10,000 documents overnight. Strong candidates distinguish these objectives immediately and explain the architectural implications.</p>
+        </div></div>
+        <div><div class="framing-card">
+          <div class="framing-card-title">Trigger phrases</div>
+          <div class="trigger-list">
+              <div class="trigger-phrase">Optimize for latency or throughput — personal assistant, one request</div>
+              <div class="trigger-phrase">Your model needs to respond to a user — what do you optimize for?</div>
+              <div class="trigger-phrase">What&#x27;s the difference between latency optimization and throughput optimization in ML serving?</div>
+          </div>
+        </div></div>
+      </div>
+      <div class="tests-block">
+        <span style="font-family:var(--mono);font-size:10px;letter-spacing:0.1em;text-transform:uppercase;color:var(--purple);margin-right:8px">Tests:</span>Whether the candidate can apply the latency-vs-throughput tradeoff to a specific production scenario and explain the architectural decisions that follow from that choice.
+
+---
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="section-label">Concept</div>
+  <div class="concept-block"><p><strong>Latency</strong> is the time from request submission to response delivery for a single request. <strong>Throughput</strong> is the number of requests completed per unit time across all concurrent users. For an interactive personal assistant serving one request, <strong>latency is the primary optimization target</strong> — the user is waiting, and every millisecond of delay degrades perceived quality. Throughput optimizations (batching, queue depth, high concurrency) introduce latency for the sake of aggregate efficiency, which is the wrong tradeoff for an interactive single-user scenario.</p></div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="section-label">Mechanism</div>
+  <div class="card"><p>The key insight is that latency and throughput pull in opposite directions:</p>
+<div class="table-wrap"><table class="data-table"><tr><th>Optimization</th><th>Effect on latency</th><th>Effect on throughput</th></tr><tr><td>Batching requests</td><td>↑ increases (wait for batch to fill)</td><td>↑ increases (amortized GPU overhead)</td></tr><tr><td>Large batch size</td><td>↑ increases</td><td>↑↑ increases</td></tr><tr><td>Streaming (token-by-token)</td><td>↓ TTFT improves perceived latency</td><td>↓ reduces per-request throughput</td></tr><tr><td>Greedy decoding (T=0)</td><td>↓ single forward pass</td><td>neutral</td></tr><tr><td>Smaller/distilled model</td><td>↓↓ decreases</td><td>↑ increases (more capacity for batching)</td></tr><tr><td>Speculative decoding</td><td>↓ reduces p50 latency on structured output</td><td>↑ slight increase</td></tr><tr><td>Semantic caching</td><td>↓↓ cache hit → ~10ms</td><td>↑ reduces load on serving tier</td></tr></table></div>
+<p><strong>For a personal assistant (one interactive user, one request at a time):</strong></p>
+<ol class="mechanism-steps"><li><strong>Optimize for TTFT (time to first token)</strong> — stream tokens as they're generated so the user sees a response immediately, even if total generation takes 5s. vLLM and TGI both support streaming via SSE.</li><li><strong>Use the smallest model that meets quality bar</strong> — a 7B distilled model at 200ms vs a 70B model at 2s. Model tiering (Gemini Flash / GPT-4o-mini / Claude Haiku for routine turns) directly cuts p50 latency.</li><li><strong>Avoid unnecessary batching</strong> — batch size = 1 is correct for a dedicated single-user assistant. Batching other users' requests into the same inference call would add queue-wait latency.</li><li><strong>Semantic caching</strong> — if the assistant handles repeated queries (e.g., "what's my calendar today?"), a Redis semantic cache with cosine > 0.93 delivers ~10ms responses vs 800ms inference.</li><li><strong>Prompt compression</strong> — LLMLingua or conversation summarization reduces prefill tokens, which directly reduces time-to-first-token.</li></ol>
+<p><strong>When throughput becomes the right objective:</strong> batch processing (overnight document summarization, embedding generation for 1M products), shared multi-tenant services where amortizing GPU cost matters, or offline evaluation pipelines.</p></div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="section-label">Example / Tradeoff</div>
+  <div class="card card-accent"><div class="rich-text"><p>A voice-powered personal assistant (think Apple Siri or a Claude mobile agent): the UX bar is <500ms TTFT so the user doesn't feel they're waiting. The architecture choices are:</p>
+<ul class="styled-list"><li><strong>GPT-4o-mini</strong> for calendar/todo queries (latency: ~150ms TTFT, cost: $0.15/1M tokens) vs <strong>GPT-4o</strong> for complex reasoning (latency: ~400ms TTFT, cost: $2.50/1M tokens)</li><li><strong>Streaming SSE</strong> to the frontend — user sees "I checked your calendar…" immediately</li><li><strong>Semantic cache</strong> in Redis for repeated patterns ("do I have meetings today?" answered from cache in 8ms)</li><li><strong>Batch size = 1</strong> on the vLLM server for this user's session; other users get separate sessions, not co-batched</li></ul>
+<p>At scale (10k concurrent users), the serving tier switches objective: maximize throughput by increasing vLLM's <code>--max-num-seqs</code> and using PagedAttention to share KV cache blocks, accepting higher p95 latency per user in exchange for cost efficiency.</p></div></div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="accordion">
+    <div class="accordion-header">
+      <span class="accordion-title">🎙 Verbal Script (3–5 min)</span>
+      <span class="accordion-chevron">▾</span>
+    </div>
+    <div class="accordion-body">
+      <div class="script-block"><div class="script-label">Opening (30s)</div><p>"The answer depends on the serving scenario. For an interactive personal assistant handling one request at a time, I'd optimize for latency — specifically time to first token, since the user is actively waiting. Throughput optimizations like batching help when you're serving many users concurrently and want to amortize GPU cost, but they hurt individual response time. Let me walk through the specific levers."</p></div>
+      <div class="script-block"><div class="script-label">Core explanation (2–3 min)</div><p>"The fundamental tension is that batching — the main driver of throughput — adds latency because you wait for a batch to fill before processing. For a single interactive user, batch size = 1 is correct. Beyond that, there are four main latency levers:</p>
+<p>First, streaming. Instead of waiting for the full response, I'd use SSE or WebSockets to stream tokens as they're generated. The user sees output almost immediately, so perceived latency drops even if wall-clock generation time stays the same.</p>
+<p>Second, model tiering. A 7B distilled model might give 150ms TTFT vs 2 seconds for a 70B model. For routine turns — calendar queries, reminders, small talk — I'd route to the smaller model automatically, falling back to the larger model only for complex reasoning.</p>
+<p>Third, semantic caching. For a personal assistant, many queries are semantically similar day-to-day. I'd put a Redis-based semantic cache in front of inference with a cosine similarity threshold around 0.93. Cache hits return in 8–10ms instead of 800ms.</p>
+<p>Fourth, prompt compression. Tools like LLMLingua reduce the number of prefill tokens by 30–50% without significant quality loss, directly cutting time-to-first-token.</p>
+<p>A concrete example: a voice assistant with a 500ms TTFT SLO. GPT-4o-mini for routine queries, GPT-4o for complex ones, streaming enabled, semantic cache in Redis. The cache alone hits 25-30% of queries in a personal assistant context."</p></div>
+      <div class="script-block"><div class="script-label">Tradeoff / production angle (1 min)</div><p>"The calculus flips when you're serving many concurrent users. At 10k QPS, throughput is the optimization objective — you want high batch utilization, large <code>--max-num-seqs</code> in vLLM, PagedAttention for KV cache sharing, and aggressive caching at every layer. But you'd also accept higher p95 latency per user, maybe 2-3 seconds instead of 500ms. That's fine for a shared API but not for a voice assistant where the user is staring at a spinner.</p>
+<p>One pitfall: people conflate throughput and scalability. A system can handle high throughput but still have high per-request latency if batches are large. Always clarify which metric matters for the use case."</p></div>
+      <div class="script-block"><div class="script-label">Wrap-up (30s)</div><p>"In short: personal assistant, one request → optimize for latency via streaming, model tiering, semantic caching, and prompt compression. Batch pipeline or multi-tenant API → optimize for throughput via batching, PagedAttention, and high concurrency. Happy to go deeper on any of those levers."</p></div>
+    </div>
+  </div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="section-label">Pitfalls</div>
+  <div class="pitfall-card">
+    <div class="pitfall-mistake"><strong>✗ Mistake</strong> Saying &quot;optimize for throughput to handle more users&quot; when the question specifies a personal assistant handling one request</div>
+    <div class="pitfall-better"><strong>✓ Better</strong> Recognize the scenario immediately: single interactive user = latency first. TTFT is the metric that matters. Batching is the wrong lever here.</div>
+  </div>
+  <div class="pitfall-card">
+    <div class="pitfall-mistake"><strong>✗ Mistake</strong> Defining latency and throughput in the abstract without connecting them to concrete architectural choices (model size, batch size, streaming)</div>
+    <div class="pitfall-better"><strong>✓ Better</strong> Name the specific levers: streaming SSE reduces <em>perceived</em> TTFT; model tiering (GPT-4o-mini vs GPT-4o) cuts <em>actual</em> TTFT by 3-10x; semantic caching eliminates inference latency for repeated queries.</div>
+  </div>
+  <div class="pitfall-card">
+    <div class="pitfall-mistake"><strong>✗ Mistake</strong> Treating &quot;reduce latency&quot; as synonymous with &quot;use a faster GPU&quot;</div>
+    <div class="pitfall-better"><strong>✓ Better</strong> GPU is rarely the bottleneck for a single interactive request. The primary levers are model selection, prompt size (prefill latency), and avoiding unnecessary wait (batching). Streaming is a UX latency fix even without changing inference speed.
+
+---</div>
+  </div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="section-label">Related Questions</div>
+  <div class="related-pills">
+    <div class="related-pill" data-slug="06-005">
+      <span class="related-pill-icon">→</span>
+      <div class="related-pill-text">
+        <div class="related-pill-q">Q5: Data parallelism for single-request assistant?</div>
+        <div class="related-pill-rel">Direct follow-up — data parallelism helps throughput, not single-request latency</div>
+      </div>
+    </div>
+    <div class="related-pill" data-slug="07-003">
+      <span class="related-pill-icon">→</span>
+      <div class="related-pill-text">
+        <div class="related-pill-q">Q11: How do you reduce latency in GenAI applications?</div>
+        <div class="related-pill-rel">Broader latency optimization catalogue (§9 cost &amp; latency category)</div>
+      </div>
+    </div>
+    <div class="related-pill" data-slug="06-003">
+      <span class="related-pill-icon">→</span>
+      <div class="related-pill-text">
+        <div class="related-pill-q">Q3: Diagnose performance bugs in a model?</div>
+        <div class="related-pill-rel">Related diagnostic mindset — profile before optimizing</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="section-label">One-liner recall</div>
+  <div class="oneliner-box">
+    <div class="oneliner-label">▸ Reconstruct from memory</div>
+    <div class="oneliner-text" data-text="For a personal assistant serving one interactive request, optimize for **latency** (streaming + model tiering + semantic caching), not throughput — batching helps multi-tenant cost efficiency but adds queue-wait latency the user directly feels.">For a personal assistant serving one interactive request, optimize for **latency** (streaming + model tiering + semantic caching), not throughput — batching helps multi-tenant cost efficiency but adds queue-wait latency the user directly feels.</div>
+  </div>
+</div>

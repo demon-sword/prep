@@ -1,0 +1,130 @@
+<div class="answer-header reveal">
+  <div class="answer-meta">
+    <span class="meta-badge meta-category">01-llm-fundamentals</span>
+    <span class="meta-badge meta-num">Q017</span>
+    <span class="meta-badge meta-status-review">review</span>
+  </div>
+  <h1 class="answer-title">What is reflection in the context of LLM agents?</h1>
+</div>
+
+<div class="answer-section reveal">
+  <div class="accordion">
+    <div class="accordion-header">
+      <span class="accordion-title">⟁ Framing — Why this is asked</span>
+      <span class="accordion-chevron">▾</span>
+    </div>
+    <div class="accordion-body">
+      <div class="framing-grid">
+        <div><div class="framing-card">
+          <div class="framing-card-title">Why asked</div>
+          <p style="font-size:13.5px;line-height:1.7;color:var(--text-dim)">Interviewers ask this to probe whether you understand the self-improvement loop that distinguishes modern agentic systems from simple LLM chains. It tests awareness of how agents critique their own outputs, catch errors, and iteratively improve — a key pattern in production agent design (ReAct, Reflexion, self-consistency). It also reveals whether you know <em>when</em> reflection adds value vs. when it wastes tokens and latency.</p>
+        </div></div>
+        <div><div class="framing-card">
+          <div class="framing-card-title">Trigger phrases</div>
+          <div class="trigger-list">
+              <div class="trigger-phrase">How does an agent know when its answer is wrong?</div>
+              <div class="trigger-phrase">What is Reflexion / self-critique in agent systems?</div>
+              <div class="trigger-phrase">How do agents improve their own outputs without human feedback?</div>
+              <div class="trigger-phrase">Walk me through how a ReAct agent corrects itself.</div>
+          </div>
+        </div></div>
+      </div>
+      <div class="tests-block">
+        <span style="font-family:var(--mono);font-size:10px;letter-spacing:0.1em;text-transform:uppercase;color:var(--purple);margin-right:8px">Tests:</span>Whether you understand the self-evaluation feedback loop that enables agents to detect and fix their own errors without external supervision.
+
+---
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="section-label">Concept</div>
+  <div class="concept-block"><p>Reflection (also called self-critique or self-revision) is a pattern where an LLM agent evaluates its own previous output — identifying errors, gaps, or quality issues — and then generates a revised response or plan. It's the agentic equivalent of "check your work before submitting." The agent produces a critique, then conditions its next generation on that critique to produce a better result.</p></div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="section-label">Mechanism</div>
+  <div class="card"><p>The reflection loop has three stages:</p>
+<ol class="mechanism-steps"><li><strong>Generate</strong> — The agent produces an initial response or plan (e.g., a code solution, a research summary, a tool-call sequence).</li><li><strong>Critique</strong> — The same (or a separate critic) LLM evaluates the output against an explicit rubric: "Is this answer factually grounded? Did I use the right tool? Does the code pass the test cases?" The critique is itself a natural-language string.</li><li><strong>Revise</strong> — The agent is called again with the original prompt + initial output + critique appended to its context, and produces an improved response.</li></ol>
+<p>This loop can repeat for N iterations or until a stopping criterion is met (e.g., "no further critique", test suite passes, judge LLM scores above threshold).</p>
+<p><strong>Reflexion (Shinn et al., 2023)</strong> is the canonical formalization: the agent stores critiques in an episodic memory buffer and uses them in subsequent episodes — so the agent learns from failure <em>across tasks</em>, not just within a single generation.</p>
+<p><strong>Self-consistency</strong> is a related but distinct pattern: run the same prompt N times with temperature > 0, then take a majority vote. This exploits variance to find more reliable answers but does not involve self-critique.</p></div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="section-label">Example / Tradeoff</div>
+  <div class="card card-accent"><div class="rich-text"><p><strong>Code generation agent (LangChain / LangGraph):</strong> A coding agent generates a Python function, runs unit tests via a tool call, and receives a test failure message. It appends the failure + traceback to the conversation context and regenerates, fixing the bug. This is reflection driven by external tool feedback rather than a purely introspective critique.</p>
+<p><strong>GPT-4 benchmark:</strong> On HumanEval (code generation), a simple Reflexion loop (generate → critique → revise, up to 3 iterations) improved pass@1 from ~67% to ~88%, demonstrating that reflection can substitute for a larger model in some tasks.</p>
+<p><strong>Tradeoff:</strong> Each reflection iteration adds 1–3 LLM calls and 2–5× the token cost of a single pass. For cheap, fast tasks (simple Q&A, classification), reflection is overkill — better to use temperature=0 and accept the first output. For high-stakes, multi-step tasks (code, research synthesis, long-form writing), reflection can reduce error rates significantly. A common production pattern is <em>conditional reflection</em>: trigger the critic only when confidence is low (low log-probability of the output) or when an external tool returns an error signal.</p></div></div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="accordion">
+    <div class="accordion-header">
+      <span class="accordion-title">🎙 Verbal Script (3–5 min)</span>
+      <span class="accordion-chevron">▾</span>
+    </div>
+    <div class="accordion-body">
+      <div class="script-block"><div class="script-label">Opening (30s)</div><p>"Reflection in agent systems is the ability of an LLM to evaluate and revise its own prior output — essentially 'checking its work.' It's distinct from just calling the LLM again; the key is that the evaluation is explicit and fed back into the next generation as context."</p></div>
+      <div class="script-block"><div class="script-label">Core explanation (2–3 min)</div><p>"The basic loop is three steps: generate, critique, revise. The agent first produces an initial response. A critic — which can be the same model with a different system prompt, or a separate cheaper model — evaluates it against a rubric: is the reasoning sound? did it use the right tools? does it meet the task requirements? That critique is natural-language text, and it's appended to the context for the next generation.</p>
+<p>The key paper here is Reflexion by Shinn et al. in 2023. They added one important upgrade: the agent stores critiques in an episodic memory buffer, so it doesn't just improve within a single run — it learns from failure across multiple task attempts. On HumanEval, a 3-iteration Reflexion loop pushed GPT-3.5 pass@1 from ~48% to ~68%, which is otherwise only achievable by jumping to a much larger model.</p>
+<p>In production, I've seen two common variants: <em>introspective reflection</em>, where the model critiques its own reasoning — useful for research agents and long-form writing — and <em>tool-feedback reflection</em>, where the critique comes from an external signal like a test suite, a search result that contradicts the claim, or a downstream validator. The tool-feedback variant is more reliable because the critique is grounded in objective evidence rather than the model's potentially flawed self-assessment."</p></div>
+      <div class="script-block"><div class="script-label">Tradeoff / production angle (1 min)</div><p>"The main cost is latency and tokens: each reflection pass adds at least one extra LLM call. For a task that already takes 2 seconds, three reflection rounds can push you to 6–8 seconds — a real UX problem. So in production, I'd make reflection conditional: trigger it only when there's a concrete failure signal (test failure, low confidence score, factual contradiction from retrieval) rather than always running N rounds. You can also use a smaller, cheaper model as the critic — say, Haiku critiquing Sonnet's output — to reduce cost while preserving most of the quality benefit."</p></div>
+      <div class="script-block"><div class="script-label">Wrap-up (30s)</div><p>"So the one-liner: reflection is a generate → critique → revise loop that lets agents catch and fix their own errors, and Reflexion extends this across episodes via memory. It's powerful for code and research tasks but needs cost and latency guardrails in production. Happy to go deeper on how to implement a conditional reflection trigger or the episodic memory design."</p></div>
+    </div>
+  </div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="section-label">Pitfalls</div>
+  <div class="pitfall-card">
+    <div class="pitfall-mistake"><strong>✗ Mistake</strong> Confusing reflection with simply re-prompting the same question</div>
+    <div class="pitfall-better"><strong>✓ Better</strong> Emphasize that reflection requires an <em>explicit critique</em> appended to context; just retrying without a critique is random sampling, not self-improvement.</div>
+  </div>
+  <div class="pitfall-card">
+    <div class="pitfall-mistake"><strong>✗ Mistake</strong> Saying &quot;reflection always improves output&quot; without mentioning compounding cost</div>
+    <div class="pitfall-better"><strong>✓ Better</strong> Quantify: each reflection pass ≈ 1 extra LLM call; 3 passes = 3× token cost; recommend conditional triggering (on tool error or low confidence) rather than unconditional N rounds.</div>
+  </div>
+  <div class="pitfall-card">
+    <div class="pitfall-mistake"><strong>✗ Mistake</strong> Not distinguishing introspective reflection (self-critique) from tool-feedback reflection (external error signal)</div>
+    <div class="pitfall-better"><strong>✓ Better</strong> Explain both variants; note that tool-feedback is more reliable because the critique is grounded in objective evidence rather than the model&#x27;s potentially hallucinated self-assessment.
+
+---</div>
+  </div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="section-label">Related Questions</div>
+  <div class="related-pills">
+    <div class="related-pill" data-slug="03-006">
+      <span class="related-pill-icon">→</span>
+      <div class="related-pill-text">
+        <div class="related-pill-q">Q6: Agent vs. simple LLM chain — what makes a system truly agentic?</div>
+        <div class="related-pill-rel">Reflection is one of the core patterns that distinguishes true agents from chains</div>
+      </div>
+    </div>
+    <div class="related-pill" data-slug="01-008">
+      <span class="related-pill-icon">→</span>
+      <div class="related-pill-text">
+        <div class="related-pill-q">Q8: Explain few-shot learning and chain-of-thought prompting</div>
+        <div class="related-pill-rel">Self-consistency (related pattern) and CoT are both precursors to reflection</div>
+      </div>
+    </div>
+    <div class="related-pill" data-slug="01-011">
+      <span class="related-pill-icon">→</span>
+      <div class="related-pill-text">
+        <div class="related-pill-q">Q11: How do you ensure LLM outputs are consistent and accurate in multi-step workflows?</div>
+        <div class="related-pill-rel">Reflection is one of the production strategies for consistency in multi-step pipelines</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="section-label">One-liner recall</div>
+  <div class="oneliner-box">
+    <div class="oneliner-label">▸ Reconstruct from memory</div>
+    <div class="oneliner-text" data-text="Reflection is a generate → critique → revise loop where an LLM evaluates its own prior output and conditions the next generation on that critique; Reflexion (Shinn 2023) extends this across tasks via episodic memory, but requires conditional triggering in production to avoid 3× token cost.">Reflection is a generate → critique → revise loop where an LLM evaluates its own prior output and conditions the next generation on that critique; Reflexion (Shinn 2023) extends this across tasks via episodic memory, but requires conditional triggering in production to avoid 3× token cost.</div>
+  </div>
+</div>

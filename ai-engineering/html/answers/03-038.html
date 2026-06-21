@@ -1,0 +1,162 @@
+<div class="answer-header reveal">
+  <div class="answer-meta">
+    <span class="meta-badge meta-category">03-agents-tool-use</span>
+    <span class="meta-badge meta-num">Q038</span>
+    <span class="meta-badge meta-status-review">review</span>
+  </div>
+  <h1 class="answer-title">Agent reviewing code and suggesting improvements</h1>
+</div>
+
+<div class="answer-section reveal">
+  <div class="accordion">
+    <div class="accordion-header">
+      <span class="accordion-title">⟁ Framing — Why this is asked</span>
+      <span class="accordion-chevron">▾</span>
+    </div>
+    <div class="accordion-body">
+      <div class="framing-grid">
+        <div><div class="framing-card">
+          <div class="framing-card-title">Why asked</div>
+          <p style="font-size:13.5px;line-height:1.7;color:var(--text-dim)">This is a design prompt that tests whether you can translate abstract agent concepts into a concrete, production-shaped system. Interviewers want to see: tool selection discipline (which capabilities does the agent actually need?), safety thinking (it touches code — what prevents it from doing damage?), practical awareness of cost/latency (LLM calls per diff can get expensive), and evaluation instincts (how do you know if its suggestions are good?).</p>
+        </div></div>
+        <div><div class="framing-card">
+          <div class="framing-card-title">Trigger phrases</div>
+          <div class="trigger-list">
+              <div class="trigger-phrase">Design an agent that reviews code and suggests improvements.</div>
+              <div class="trigger-phrase">Walk me through a code-review agent — how would you build and deploy it?</div>
+              <div class="trigger-phrase">How would you build an AI-powered code reviewer for a GitHub pull request?</div>
+              <div class="trigger-phrase">We want an agent that catches bugs and style issues in PRs — how would you architect it?</div>
+          </div>
+        </div></div>
+      </div>
+      <div class="tests-block">
+        <span style="font-family:var(--mono);font-size:10px;letter-spacing:0.1em;text-transform:uppercase;color:var(--purple);margin-right:8px">Tests:</span>Ability to scope a realistic multi-tool agent, enforce safety/cost discipline on code-touching systems, and define a concrete eval framework for a non-deterministic output.
+
+---
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="section-label">Concept</div>
+  <div class="concept-block"><p>A code-review agent is a read-only LLM loop that ingests a diff or file, runs static analysis tools to gather structured signals, then synthesizes human-readable review comments with actionable suggestions — all without modifying files or executing untrusted code. "Read-only" is the key design constraint that keeps it safe.</p></div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="section-label">Mechanism</div>
+  <div class="card"><p><strong>Trigger and scope</strong> The agent is triggered by a pull-request webhook (GitHub Actions, GitLab CI). It receives the PR diff — not the entire repo — as its primary context. Scope is bounded: it reviews only changed files and their immediate imports.</p>
+<p><strong>Tool layer (all read-only)</strong></p>
+<div class="table-wrap"><table class="data-table"><tr><th>Tool</th><th>Purpose</th><th>Schema</th></tr><tr><td><code>get_diff</code></td><td>Fetch PR diff as unified patch</td><td><code>{pr_id, repo}</code> → <code>{files: [{path, patch}]}</code></td></tr><tr><td><code>get_file</code></td><td>Read full file for context around a hunk</td><td><code>{repo, path, sha}</code> → <code>{content}</code></td></tr><tr><td><code>run_linter</code></td><td>Run language linter (ruff, eslint) on diff</td><td><code>{language, code}</code> → <code>{violations: [{line, rule, msg}]}</code></td></tr><tr><td><code>run_sast</code></td><td>Static security scan (Bandit, Semgrep)</td><td><code>{language, code}</code> → <code>{findings: [{severity, line, cwe}]}</code></td></tr><tr><td><code>search_docs</code></td><td>Retrieve relevant style-guide / architecture docs</td><td><code>{query}</code> → <code>{chunks}</code></td></tr></table></div>
+<p>All tool calls are sandboxed: linters run in a Docker container with <code>--network=none</code> and read-only bind mounts. No code is executed; only parsed/statically analysed.</p>
+<p><strong>Agent loop (LangGraph ReAct)</strong></p>
+<div class="code-block-wrap"><pre class="code-block"><code>1. get_diff → structured file list
+2. For each changed file:
+   a. get_file (context around hunks)
+   b. run_linter + run_sast (parallel)
+   c. LLM synthesizes structured comment objects:
+      {file, line, severity, category, message, suggestion}
+3. Aggregate comments → deduplicate → rank by severity
+4. If comment count &gt; threshold → request human reviewer
+5. Post comments via GitHub API (write tool, called once at end)</code></pre><button class="copy-btn">copy</button></div>
+<p>The LLM is only reasoning; it cannot push commits. The GitHub post is a single write call, gated after synthesis.</p>
+<p><strong>Model tiering</strong></p>
+<ul class="styled-list"><li>Linter/SAST violations: GPT-4o-mini (low cost, format is structured)</li><li>Architectural / design feedback: GPT-4o or Claude 3.5 Sonnet (nuanced reasoning)</li><li>Token budget: diff chunked to ≤4K tokens per file; larger files use sliding window with overlap</li></ul>
+<p><strong>Output format</strong></p>
+<div class="code-block-wrap"><pre class="code-block"><code>{
+  &quot;file&quot;: &quot;src/auth/token.py&quot;,
+  &quot;line&quot;: 42,
+  &quot;severity&quot;: &quot;high&quot;,
+  &quot;category&quot;: &quot;security&quot;,
+  &quot;message&quot;: &quot;JWT secret read from env without fallback guard — will panic on missing key.&quot;,
+  &quot;suggestion&quot;: &quot;Use `os.environ.get(&#x27;JWT_SECRET&#x27;) or raise ValueError(...)` and validate at startup.&quot;
+}</code></pre><button class="copy-btn">copy</button></div>
+<p>Structured output enforced via <code>response_format=json_schema</code> so the GitHub posting tool can parse reliably.</p></div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="section-label">Example / Tradeoff</div>
+  <div class="card card-accent"><div class="rich-text"><p><strong>Production example — GitHub Copilot / CodeRabbit pattern</strong> CodeRabbit and similar tools use a pipeline close to this: diff → file context → parallel static analysis → LLM summary → PR comment thread. They process ~200–500 files/PR with costs in the $0.05–$0.30/PR range using model tiering.</p>
+<p><strong>Key tradeoffs</strong></p>
+<div class="table-wrap"><table class="data-table"><tr><th>Axis</th><th>Conservative</th><th>Aggressive</th></tr><tr><td>Scope</td><td>Changed files only</td><td>Full repo context</td></tr><tr><td>LLM call count</td><td>1 call per file</td><td>N calls per hunk</td></tr><tr><td>Cost/PR</td><td>$0.05–$0.15</td><td>$1–$5+</td></tr><tr><td>False positive rate</td><td>Higher (no full-context)</td><td>Lower</td></tr><tr><td>Latency</td><td><60s</td><td>2–5min</td></tr></table></div>
+<p><strong>When the agent should NOT auto-post</strong></p>
+<ul class="styled-list"><li>Security findings with CVE severity ≥ HIGH → route to HITL (security team Slack alert)</li><li>Comment count > 20 → collapse to summary + link to full report (avoids notification flood)</li><li>Draft PRs → skip entirely</li></ul>
+<p><strong>Eval framework</strong></p>
+<ul class="styled-list"><li>Precision@k: of the top-k comments, how many are correct? (Manual label 50 PRs/week)</li><li>False negative rate: run on PRs where bugs were later reported in production</li><li>Developer acceptance rate: % of suggestions acted upon (accept/apply vs dismiss)</li><li>Regression: golden diff set with known bugs — verify agent flags them across model versions</li></ul></div></div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="accordion">
+    <div class="accordion-header">
+      <span class="accordion-title">🎙 Verbal Script (3–5 min)</span>
+      <span class="accordion-chevron">▾</span>
+    </div>
+    <div class="accordion-body">
+      <div class="script-block"><div class="script-label">Opening (30s)</div><p>"I'd approach this as a read-only ReAct agent that combines static analysis tools with LLM synthesis — the key design principle is that the LLM never executes code or writes to the repo; it only reasons. Let me walk through the architecture."</p></div>
+      <div class="script-block"><div class="script-label">Core explanation (2–3 min)</div><p>"The trigger is a PR webhook from GitHub Actions. The agent gets the unified diff, not the whole repo — that's important for cost and latency. It has four tools: <code>get_diff</code>, <code>get_file</code> for surrounding context, <code>run_linter</code> for structured violations like ruff or eslint, and <code>run_sast</code> for security patterns via Semgrep or Bandit. Both linters run in Docker containers with <code>--network=none</code> — read-only, sandboxed, no code execution.</p>
+<p>The LLM loop works per file: fetch the file, run linter and SAST in parallel, then ask the LLM to synthesize structured comment objects — file, line, severity, category, message, suggestion. I'd enforce JSON schema output so the downstream GitHub posting tool can parse reliably without fragile string parsing.</p>
+<p>For model tiering: I'd use GPT-4o-mini for reformatting linter output, and GPT-4o or Claude 3.5 Sonnet only for architectural or design-level feedback that requires real reasoning. That keeps cost in the $0.05–$0.15/PR range."</p></div>
+      <div class="script-block"><div class="script-label">Tradeoff / production angle (1 min)</div><p>"The main tradeoffs are scope versus cost. If I only review changed files, I miss cross-file issues — a function signature change that breaks callers elsewhere. If I load full repo context, costs spike to $1–5/PR and latency blows out. The pragmatic middle is changed files plus their direct imports. I'd also add an auto-suppress rule: if the agent generates more than 20 comments, collapse them into a summary rather than flooding the PR thread — that's a real developer experience failure I've seen with noisy tools.</p>
+<p>On safety: security findings with CVE severity HIGH or above should route to HITL — a Slack alert to the security team — rather than auto-posting. And I'd skip draft PRs entirely.</p>
+<p>For eval, I'd track developer acceptance rate (what % of suggestions are applied), false negative rate against bugs that reached production, and run a golden diff set regression on every model update."</p></div>
+      <div class="script-block"><div class="script-label">Wrap-up (30s)</div><p>"So the architecture is: PR webhook → read-only tool loop → LLM synthesis with structured output → single gated write to GitHub. The discipline is: the LLM reasons, the orchestrator enforces limits, and nothing executes untrusted code. Happy to go deeper on the sandboxing, eval framework, or multi-language support."</p></div>
+    </div>
+  </div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="section-label">Pitfalls</div>
+  <div class="pitfall-card">
+    <div class="pitfall-mistake"><strong>✗ Mistake</strong> Designing the agent to also apply fixes automatically (auto-commit)</div>
+    <div class="pitfall-better"><strong>✓ Better</strong> Explain that auto-applying changes on untrusted code is a serious security and correctness risk; the agent should only suggest, and a human (or a separate opt-in &quot;apply fix&quot; flow with HITL confirmation) makes the change.</div>
+  </div>
+  <div class="pitfall-card">
+    <div class="pitfall-mistake"><strong>✗ Mistake</strong> Sending the entire repository as context to reduce false negatives, without discussing cost or latency impact</div>
+    <div class="pitfall-better"><strong>✓ Better</strong> Start with diff + direct imports; quantify cost at $0.05 vs $1–5/PR and discuss the scope/cost/FN-rate triangle explicitly.</div>
+  </div>
+  <div class="pitfall-card">
+    <div class="pitfall-mistake"><strong>✗ Mistake</strong> Treating the agent&#x27;s output as always correct and auto-posting every comment</div>
+    <div class="pitfall-better"><strong>✓ Better</strong> Add a confidence gate and comment-count cap; describe the developer acceptance rate metric and the noise problem with over-eager review bots.</div>
+  </div>
+  <div class="pitfall-card">
+    <div class="pitfall-mistake"><strong>✗ Mistake</strong> Skipping the eval framework entirely</div>
+    <div class="pitfall-better"><strong>✓ Better</strong> Immediately mention precision@k, developer acceptance rate, and a golden diff regression set; reviewers know non-deterministic outputs are hard to eval and want to see you&#x27;ve thought about it.
+
+---</div>
+  </div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="section-label">Related Questions</div>
+  <div class="related-pills">
+    <div class="related-pill" data-slug="03-008">
+      <span class="related-pill-icon">→</span>
+      <div class="related-pill-text">
+        <div class="related-pill-q">Q8: Walk through a production-ready agent architecture</div>
+        <div class="related-pill-rel">Core architecture pattern this design extends</div>
+      </div>
+    </div>
+    <div class="related-pill" data-slug="03-023">
+      <span class="related-pill-icon">→</span>
+      <div class="related-pill-text">
+        <div class="related-pill-q">Q23: Sandbox tool execution safely</div>
+        <div class="related-pill-rel">Sandboxing linters/SAST in Docker — the safety layer</div>
+      </div>
+    </div>
+    <div class="related-pill" data-slug="03-022">
+      <span class="related-pill-icon">→</span>
+      <div class="related-pill-text">
+        <div class="related-pill-q">Q22: Tool schemas that reduce hallucinated actions</div>
+        <div class="related-pill-rel">Structured output schema discipline for review comments</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="section-label">One-liner recall</div>
+  <div class="oneliner-box">
+    <div class="oneliner-label">▸ Reconstruct from memory</div>
+    <div class="oneliner-text" data-text="A code-review agent is a read-only ReAct loop — diff in, linter+SAST tools run in Docker, LLM synthesizes structured comment objects, single gated write to GitHub — with model tiering, comment-count caps, HITL for high-severity findings, and dev acceptance rate as the primary eval metric.">A code-review agent is a read-only ReAct loop — diff in, linter+SAST tools run in Docker, LLM synthesizes structured comment objects, single gated write to GitHub — with model tiering, comment-count caps, HITL for high-severity findings, and dev acceptance rate as the primary eval metric.</div>
+  </div>
+</div>

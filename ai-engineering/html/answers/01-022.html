@@ -1,0 +1,147 @@
+<div class="answer-header reveal">
+  <div class="answer-meta">
+    <span class="meta-badge meta-category">01-llm-fundamentals</span>
+    <span class="meta-badge meta-num">Q022</span>
+    <span class="meta-badge meta-status-review">review</span>
+  </div>
+  <h1 class="answer-title">What is self-attention? How does it differ from multi-head attention?</h1>
+</div>
+
+<div class="answer-section reveal">
+  <div class="accordion">
+    <div class="accordion-header">
+      <span class="accordion-title">⟁ Framing — Why this is asked</span>
+      <span class="accordion-chevron">▾</span>
+    </div>
+    <div class="accordion-body">
+      <div class="framing-grid">
+        <div><div class="framing-card">
+          <div class="framing-card-title">Why asked</div>
+          <p style="font-size:13.5px;line-height:1.7;color:var(--text-dim)">This is a frequent technical screening question — asked to separate candidates who have genuinely understood the transformer architecture from those who have only used it. Interviewers probe whether you can explain the Q/K/V mechanism, the dot-product scoring formula, the role of the scaling factor, and what multi-head adds beyond single-head attention. Strong candidates connect the math to production implications (GQA, FlashAttention, KV cache size).</p>
+        </div></div>
+        <div><div class="framing-card">
+          <div class="framing-card-title">Trigger phrases</div>
+          <div class="trigger-list">
+              <div class="trigger-phrase">What is self-attention and how does it work?</div>
+              <div class="trigger-phrase">Walk me through the attention mechanism in a transformer.</div>
+              <div class="trigger-phrase">What&#x27;s the difference between single-head and multi-head attention?</div>
+              <div class="trigger-phrase">Why do we use multiple attention heads?</div>
+              <div class="trigger-phrase">How does the model know which tokens to focus on?</div>
+          </div>
+        </div></div>
+      </div>
+      <div class="tests-block">
+        <span style="font-family:var(--mono);font-size:10px;letter-spacing:0.1em;text-transform:uppercase;color:var(--purple);margin-right:8px">Tests:</span>Deep understanding of the transformer&#x27;s core mechanism: how Q/K/V projections implement dynamic, content-based token aggregation, and how multi-head attention enables the model to capture multiple relationship types simultaneously.
+
+---
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="section-label">Concept</div>
+  <div class="concept-block"><p><strong>Self-attention</strong> is a mechanism that lets each token in a sequence compute a weighted combination of all other tokens, where the weights are determined by how relevant each pair of tokens is to each other. Unlike RNNs that pass information sequentially, or CNNs that use fixed local windows, self-attention operates over the entire sequence in parallel — every token attends to every other token in a single operation.</p>
+<p><strong>Multi-head attention (MHA)</strong> runs H independent self-attention operations in parallel (each on a lower-dimensional subspace), then concatenates and projects their outputs. This allows different heads to specialize in different relationship patterns — one head might capture syntactic dependencies, another semantic similarity, another positional proximity.</p></div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="section-label">Mechanism</div>
+  <div class="card"><p><strong>Single-head self-attention — step by step:</strong></p>
+<ol class="mechanism-steps"><li><strong>Linear projections:</strong> For input matrix <code>X</code> (shape <code>[seq_len, d_model]</code>), compute three matrices via learned weight matrices:</li></ol>
+<ul class="styled-list"><li><code>Q = X · W_Q</code> — queries (what does this token want to know?)</li><li><code>K = X · W_K</code> — keys (what does this token offer?)</li><li><code>V = X · W_V</code> — values (what information does this token carry?)</li><li>Each of Q, K, V has shape <code>[seq_len, d_k]</code></li></ul>
+<ol class="mechanism-steps"><li><strong>Attention scores:</strong> <code>Scores = Q · K^T / √d_k</code></li></ol>
+<ul class="styled-list"><li>Shape: <code>[seq_len, seq_len]</code> — a similarity score between every pair of tokens</li><li>Dividing by <code>√d_k</code> prevents dot products from growing so large that softmax saturates (vanishing gradients)</li></ul>
+<ol class="mechanism-steps"><li><strong>Softmax:</strong> <code>A = softmax(Scores)</code> — normalize scores to sum to 1 per row</li></ol>
+<ul class="styled-list"><li>For <strong>causal (decoder) attention</strong>: apply mask to zero out positions j > i so token i cannot attend to future tokens</li></ul>
+<ol class="mechanism-steps"><li><strong>Output:</strong> <code>Z = A · V</code> — weighted average of value vectors, shape <code>[seq_len, d_model]</code></li></ol>
+<p>Putting it together: <code>Attention(Q, K, V) = softmax(QK^T / √d_k) · V</code></p>
+<p><strong>Multi-head attention — what changes:</strong></p>
+<p>Instead of one set of Q/K/V projections at dimension <code>d_model</code>, run H heads each projecting to dimension <code>d_k = d_model / H</code>:</p>
+<div class="code-block-wrap"><pre class="code-block"><code>head_i = Attention(X·W_Q_i, X·W_K_i, X·W_V_i)   # shape [seq_len, d_k]
+
+MultiHead(Q, K, V) = Concat(head_1, ..., head_H) · W_O  # shape [seq_len, d_model]</code></pre><button class="copy-btn">copy</button></div>
+<ul class="styled-list"><li>Each head has its own <code>W_Q_i</code>, <code>W_K_i</code>, <code>W_V_i</code> weight matrices — separate learned projections</li><li><code>W_O</code> is a final projection that blends the concatenated head outputs back to <code>d_model</code></li><li>Total parameter count: roughly the same as a single large head, because each head is <code>d_model/H</code> wide</li></ul>
+<p><strong>Why multiple heads help:</strong> Each head can learn a different type of relationship. In practice, heads in BERT were shown (Voita et al., 2019) to specialize in: syntactic structure (subject-verb agreement), co-reference (pronoun resolution), positional proximity, and rare token detection. A single head with all parameters pooled together cannot specialize this way.</p></div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="section-label">Example / Tradeoff</div>
+  <div class="card card-accent"><div class="rich-text"><p><strong>Concrete example — LLaMA-3-8B:</strong></p>
+<ul class="styled-list"><li><code>d_model = 4096</code>, <code>H = 32</code> heads, so <code>d_k = 128</code> per head</li><li><strong>GQA variant:</strong> 8 KV heads shared across 32 query heads — each group of 4 query heads shares one K/V head</li><li>This reduces the KV cache by 4× (from 32 K/V pairs to 8), critical for serving long contexts</li></ul>
+<p><strong>Tradeoff — attention is O(n²) in sequence length:</strong> The attention score matrix is <code>[seq_len, seq_len]</code> — at 128K tokens, that's 16 billion cells per layer. Solutions:</p>
+<ul class="styled-list"><li><strong>FlashAttention:</strong> Tiled computation on-chip that avoids materializing the full matrix; O(n) memory instead of O(n²)</li><li><strong>Sparse/local attention:</strong> Restrict each token to a sliding window of nearby tokens (used in Longformer, BigBird) — trades recall on long-range dependencies for feasibility</li><li><strong>GQA / MQA:</strong> Reduce KV head count to shrink KV cache, not the score matrix</li></ul>
+<p><strong>Multi-head vs single-head benchmark:</strong> Removing multi-head attention (using a single full-width head) in BERT-base degrades performance on GLUE by ~2 points; ablations show heads specialize and removing them selectively degrades specific tasks.</p></div></div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="accordion">
+    <div class="accordion-header">
+      <span class="accordion-title">🎙 Verbal Script (3–5 min)</span>
+      <span class="accordion-chevron">▾</span>
+    </div>
+    <div class="accordion-body">
+      <div class="script-block"><div class="script-label">Opening (30s)</div><p>"Self-attention is the core building block of transformers — it's the mechanism that lets every token directly aggregate information from every other token in a single parallel operation. Multi-head attention is the production version that runs several of these attention operations in parallel subspaces, so the model can learn multiple types of relationships simultaneously. Let me walk through the math and then the why."</p></div>
+      <div class="script-block"><div class="script-label">Core explanation (2–3 min)</div><p>"I'd start with single-head self-attention. Given an input sequence of token embeddings, we compute three linear projections for every token: a Query, a Key, and a Value. Intuitively, the Query is 'what am I looking for?', the Key is 'what do I offer?', and the Value is 'what information do I contain?'</p>
+<p>The attention score between token i and token j is the dot product of i's query and j's key, scaled by the square root of the key dimension to prevent the dot products from blowing up and saturating the softmax. We softmax those scores to get weights, then take a weighted sum of all the value vectors. So the output for token i is: how much of every other token's value should I absorb?</p>
+<p>For decoder-only models like GPT, we apply a causal mask — token i can only attend to tokens 1 through i. This is how autoregressive generation works: the model can't peek at future tokens.</p>
+<p>Now, multi-head attention: instead of one big Q/K/V projection at d_model = 4096, we run H parallel attention heads, each at d_k = d_model/H (say, 128 for 32 heads). Each head has its own learned projection matrices, so they can specialize. Research has shown heads specialize naturally — some track syntactic structure, some track coreference, some track positional proximity. We concatenate all head outputs and project back to d_model via W_O.</p>
+<p>The parameter count is roughly equivalent to a single large head, but you get the specialization benefit."</p></div>
+      <div class="script-block"><div class="script-label">Tradeoff / production angle (1 min)</div><p>"The key production concern is that self-attention is O(n²) in sequence length — the score matrix is seq_len × seq_len per layer. At 128K tokens, that's infeasible without optimizations. FlashAttention tiles the computation on-chip and avoids materializing the full matrix, cutting memory to O(n). And Grouped Query Attention (GQA) — which LLaMA-3 and Mistral use — reduces the number of K/V heads while keeping more Q heads, shrinking the KV cache 4–8× at the cost of slight model quality reduction."</p></div>
+      <div class="script-block"><div class="script-label">Wrap-up (30s)</div><p>"So: self-attention = dynamic content-based aggregation via QK^T/√d_k applied to V vectors. Multi-head = run H independent attention operations in parallel, let each specialize, then blend. The key production constraints are O(n²) attention cost — addressed by FlashAttention — and KV cache size — addressed by GQA. Happy to go deeper on any piece."</p></div>
+    </div>
+  </div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="section-label">Pitfalls</div>
+  <div class="pitfall-card">
+    <div class="pitfall-mistake"><strong>✗ Mistake</strong> Describing self-attention as &quot;the model pays attention to important words&quot; without explaining how scores are computed</div>
+    <div class="pitfall-better"><strong>✓ Better</strong> State the formula <code>Attention(Q,K,V) = softmax(QK^T / √d_k) · V</code> and explain each term: Q/K used for scoring, V is what&#x27;s aggregated, √d_k scaling prevents softmax saturation. Without the formula you&#x27;ve only described the intent, not the mechanism.</div>
+  </div>
+  <div class="pitfall-card">
+    <div class="pitfall-mistake"><strong>✗ Mistake</strong> Saying multi-head attention &quot;uses multiple layers&quot; or &quot;runs the model multiple times&quot;</div>
+    <div class="pitfall-better"><strong>✓ Better</strong> MHA runs H attention heads in parallel within a single layer, each on a lower-dimensional projection (d_k = d_model/H). It&#x27;s a width split within one operation, not depth or repetition.</div>
+  </div>
+  <div class="pitfall-card">
+    <div class="pitfall-mistake"><strong>✗ Mistake</strong> Not knowing why we scale by <code>√d_k</code> — answering &quot;to normalize&quot; without explaining the vanishing gradient risk</div>
+    <div class="pitfall-better"><strong>✓ Better</strong> With large d_k, dot products grow in magnitude, pushing softmax into saturation regions with near-zero gradients. Dividing by <code>√d_k</code> keeps the variance stable (if Q and K have unit variance, QK^T has variance d_k; dividing returns it to ~1).
+
+---</div>
+  </div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="section-label">Related Questions</div>
+  <div class="related-pills">
+    <div class="related-pill" data-slug="01-002">
+      <span class="related-pill-icon">→</span>
+      <div class="related-pill-text">
+        <div class="related-pill-q">Q2: How do transformers work?</div>
+        <div class="related-pill-rel">Broader transformer architecture context for this mechanism</div>
+      </div>
+    </div>
+    <div class="related-pill" data-slug="01-023">
+      <span class="related-pill-icon">→</span>
+      <div class="related-pill-text">
+        <div class="related-pill-q">Q23: What is grouped query attention (GQA)?</div>
+        <div class="related-pill-rel">GQA is a direct production optimization of multi-head attention</div>
+      </div>
+    </div>
+    <div class="related-pill" data-slug="01-033">
+      <span class="related-pill-icon">→</span>
+      <div class="related-pill-text">
+        <div class="related-pill-q">Q33: What is FlashAttention and how does it work?</div>
+        <div class="related-pill-rel">FlashAttention addresses the O(n²) cost of self-attention</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="section-label">One-liner recall</div>
+  <div class="oneliner-box">
+    <div class="oneliner-label">▸ Reconstruct from memory</div>
+    <div class="oneliner-text" data-text="Self-attention computes `softmax(QK^T / √d_k) · V` — scoring every token pair by query-key dot product, then aggregating values by those weights; multi-head attention runs H independent projections in parallel (d_k = d_model/H each) so different heads can specialize in syntax, semantics, or position, then blends outputs via W_O.">Self-attention computes `softmax(QK^T / √d_k) · V` — scoring every token pair by query-key dot product, then aggregating values by those weights; multi-head attention runs H independent projections in parallel (d_k = d_model/H each) so different heads can specialize in syntax, semantics, or position, then blends outputs via W_O.</div>
+  </div>
+</div>

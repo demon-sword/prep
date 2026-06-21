@@ -1,0 +1,136 @@
+<div class="answer-header reveal">
+  <div class="answer-meta">
+    <span class="meta-badge meta-category">01-llm-fundamentals</span>
+    <span class="meta-badge meta-num">Q033</span>
+    <span class="meta-badge meta-status-review">review</span>
+  </div>
+  <h1 class="answer-title">What is FlashAttention and how does it work?</h1>
+</div>
+
+<div class="answer-section reveal">
+  <div class="accordion">
+    <div class="accordion-header">
+      <span class="accordion-title">⟁ Framing — Why this is asked</span>
+      <span class="accordion-chevron">▾</span>
+    </div>
+    <div class="accordion-body">
+      <div class="framing-grid">
+        <div><div class="framing-card">
+          <div class="framing-card-title">Why asked</div>
+          <p style="font-size:13.5px;line-height:1.7;color:var(--text-dim)">This question probes whether the candidate understands the <em>systems</em> side of LLM inference — specifically the GPU memory hierarchy bottleneck that makes vanilla attention slow. It separates candidates who have read about transformers at a high level from those who understand why production serving (vLLM, TGI, TensorRT-LLM) all adopt IO-aware attention kernels.</p>
+        </div></div>
+        <div><div class="framing-card">
+          <div class="framing-card-title">Trigger phrases</div>
+          <div class="trigger-list">
+              <div class="trigger-phrase">How would you speed up attention computation at scale?</div>
+              <div class="trigger-phrase">Why is long-context inference expensive?</div>
+              <div class="trigger-phrase">What is FlashAttention and why does it matter for serving?</div>
+              <div class="trigger-phrase">How do modern inference frameworks optimize the attention layer?</div>
+          </div>
+        </div></div>
+      </div>
+      <div class="tests-block">
+        <span style="font-family:var(--mono);font-size:10px;letter-spacing:0.1em;text-transform:uppercase;color:var(--purple);margin-right:8px">Tests:</span>Deep understanding of GPU memory hierarchy (HBM vs SRAM), the true bottleneck in transformer inference (memory bandwidth, not FLOPs), and awareness of how systems-level optimizations translate to real serving cost and latency improvements.
+
+---
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="section-label">Concept</div>
+  <div class="concept-block"><p>FlashAttention is an IO-aware exact attention algorithm that restructures the standard <code>softmax(QK^T / √d_k)V</code> computation to minimize data movement between GPU HBM (high-bandwidth memory, ~2 TB/s) and on-chip SRAM (~19 TB/s), making attention up to 3–4× faster and 5–20× more memory-efficient than standard PyTorch attention — without approximation.</p></div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="section-label">Mechanism</div>
+  <div class="card"><p>Standard attention materializes the full N×N attention matrix in HBM:</p>
+<ol class="mechanism-steps"><li>Load Q, K → compute QK^T (N×N) → write to HBM</li><li>Load QK^T → compute softmax → write to HBM</li><li>Load softmax(QK^T) → multiply by V → write output to HBM</li></ol>
+<p>For N=4096 tokens with d_model=4096, this is ~67 MB of HBM traffic per head — the bandwidth, not the arithmetic, is the bottleneck.</p>
+<p>FlashAttention (Dao et al., 2022) fixes this via <strong>tiling + recomputation</strong>:</p>
+<ul class="styled-list"><li><strong>Tiling:</strong> Split Q, K, V into blocks that fit in SRAM (~20 MB on A100). Process each tile entirely in SRAM — never writing the intermediate N×N matrix to HBM.</li><li><strong>Online softmax:</strong> Use a numerically stable running max+sum trick (from Milakov & Gimelshein) to compute the softmax incrementally across tiles without materializing the full row.</li><li><strong>Recomputation (backward pass):</strong> Instead of storing the N×N attention matrix for the backward pass (O(N²) memory), recompute it from stored Q, K, V during the backward pass — trading a bit of compute for massive memory savings.</li></ul>
+<p><strong>FlashAttention-2</strong> (2023) additionally parallelizes across the sequence dimension and reduces non-matmul FLOPs, achieving ~2× throughput improvement over FA1 on A100. <strong>FlashAttention-3</strong> (2024) targets H100/H800 with asynchronous warp specialization and FP8 support.</p>
+<p><strong>Memory complexity:</strong> O(N) instead of O(N²) — critical for long contexts. A 128K-token sequence with standard attention would require ~64 GB just for the attention matrix; FlashAttention keeps it in SRAM tiles.</p></div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="section-label">Example / Tradeoff</div>
+  <div class="card card-accent"><div class="rich-text"><p><strong>Production adoption:</strong> vLLM, HuggingFace TGI, TensorRT-LLM, and MosaicML's LLM Foundry all use FlashAttention as their default attention kernel. Llama 2 training at Meta used FA to enable 4096-token sequences cost-effectively.</p>
+<p><strong>Concrete numbers (A100 80GB, GPT-3 175B):</strong></p>
+<ul class="styled-list"><li>Standard attention: ~1.7× memory overhead from N×N matrix</li><li>FlashAttention: ~15% faster end-to-end training, 3× memory reduction on attention layer</li></ul>
+<p><strong>Tradeoffs:</strong></p>
+<div class="table-wrap"><table class="data-table"><tr><th>Factor</th><th>Standard attention</th><th>FlashAttention</th></tr><tr><td>Memory</td><td>O(N²) — kills long contexts</td><td>O(N) — enables 128K+</td></tr><tr><td>Speed</td><td>Memory-bandwidth bound</td><td>~3–4× faster</td></tr><tr><td>Accuracy</td><td>Exact</td><td>Exact (no approximation)</td></tr><tr><td>Backward pass</td><td>Store N×N matrix</td><td>Recompute (slightly more FLOPs)</td></tr><tr><td>Hardware support</td><td>All GPUs</td><td>Best on A100/H100; requires CUDA custom kernels</td></tr></table></div>
+<p><strong>When FlashAttention is not enough:</strong> For very long contexts (1M+ tokens), sparse/linear attention approximations (Longformer, Mamba/SSMs) may still be needed. FlashAttention reduces constant factors but doesn't change the O(N²) FLOPs complexity.</p></div></div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="accordion">
+    <div class="accordion-header">
+      <span class="accordion-title">🎙 Verbal Script (3–5 min)</span>
+      <span class="accordion-chevron">▾</span>
+    </div>
+    <div class="accordion-body">
+      <div class="script-block"><div class="script-label">Opening (30s)</div><p>"FlashAttention is the key systems optimization that makes modern LLM serving tractable at long context lengths. The core insight is that vanilla attention is <em>memory-bandwidth-bound</em>, not compute-bound — so the fix is to restructure computation to stay in fast on-chip SRAM rather than round-tripping through slow HBM."</p></div>
+      <div class="script-block"><div class="script-label">Core explanation (2–3 min)</div><p>"I'd start with why standard attention is slow. When you compute softmax(QK^T / √d_k)V, you have to write that N×N attention matrix to GPU HBM three times — once to write it, once to read it for softmax, once to read it for the V multiplication. For a 4K-token sequence, that's tens of megabytes of HBM traffic per layer per head. GPU HBM bandwidth is about 2 TB/s, but on-chip SRAM is 10× faster. The bottleneck is data movement, not arithmetic.</p>
+<p>FlashAttention solves this with two ideas: tiling and online softmax. It splits Q, K, V into blocks small enough to fit in SRAM, and processes each block entirely on-chip using a numerically stable running-max trick to compute softmax incrementally — without ever materializing the full N×N matrix in HBM. The output is accumulated tile by tile. For the backward pass, instead of storing the N×N matrix, it recomputes it on the fly — trading a small amount of extra compute for O(N) memory instead of O(N²).</p>
+<p>FlashAttention-2 added parallelization across the sequence dimension and reduced non-matmul work, getting another 2× on A100s. FlashAttention-3, targeting H100s, adds asynchronous warp specialization and FP8.</p>
+<p>In practice: vLLM, TGI, and TensorRT-LLM all use FlashAttention by default. It's what enables serving 128K-context models like Llama 3's extended variants without out-of-memory errors."</p></div>
+      <div class="script-block"><div class="script-label">Tradeoff / production angle (1 min)</div><p>"The key production implication is memory: FlashAttention reduces attention-layer memory from O(N²) to O(N), which is why 128K-token context windows are now feasible on single A100 80GB cards. The tradeoff is that it requires custom CUDA kernels — you can't implement it in pure PyTorch. But since every major inference framework ships it, you get it for free. The remaining bottleneck at very long contexts (1M+) is FLOPs — FlashAttention doesn't change the O(N²) compute complexity, just the memory and bandwidth. That's where state-space models like Mamba become relevant."</p></div>
+      <div class="script-block"><div class="script-label">Wrap-up (30s)</div><p>"So in short: FlashAttention is an IO-aware kernel that tiles the attention computation to stay in SRAM, gives you exact attention (no approximation), 3–4× speedup, and O(N) memory — making long-context serving economically viable. Happy to go deeper into the tiling algorithm or how it interacts with GQA and KV cache."</p></div>
+    </div>
+  </div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="section-label">Pitfalls</div>
+  <div class="pitfall-card">
+    <div class="pitfall-mistake"><strong>✗ Mistake</strong> Saying &quot;FlashAttention approximates attention to make it faster&quot;</div>
+    <div class="pitfall-better"><strong>✓ Better</strong> FlashAttention is <em>exact</em> — it produces numerically identical results to standard attention. The speedup comes from IO restructuring, not approximation. Approximation-based approaches like Longformer or BigBird are a separate technique.</div>
+  </div>
+  <div class="pitfall-card">
+    <div class="pitfall-mistake"><strong>✗ Mistake</strong> Describing FlashAttention only as &quot;faster attention&quot; without explaining <em>why</em> (memory bandwidth bottleneck, HBM vs SRAM hierarchy)</div>
+    <div class="pitfall-better"><strong>✓ Better</strong> Explain that GPU inference is memory-bandwidth-bound, not FLOPs-bound; the N×N matrix in HBM is the bottleneck; FlashAttention eliminates it via tiling. This shows systems-level depth.</div>
+  </div>
+  <div class="pitfall-card">
+    <div class="pitfall-mistake"><strong>✗ Mistake</strong> Confusing FlashAttention (IO-aware exact kernel) with KV cache (reusing computed K/V tensors across decode steps)</div>
+    <div class="pitfall-better"><strong>✓ Better</strong> Clearly distinguish: KV cache avoids recomputing K/V across <em>tokens</em>; FlashAttention makes the within-sequence attention computation itself faster by staying in SRAM.
+
+---</div>
+  </div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="section-label">Related Questions</div>
+  <div class="related-pills">
+    <div class="related-pill" data-slug="01-009">
+      <span class="related-pill-icon">→</span>
+      <div class="related-pill-text">
+        <div class="related-pill-q">Q9: What is KV cache? How does it help in LLM inference?</div>
+        <div class="related-pill-rel">FlashAttention speeds up attention computation; KV cache avoids recomputing K/V tokens — complementary optimizations</div>
+      </div>
+    </div>
+    <div class="related-pill" data-slug="01-034">
+      <span class="related-pill-icon">→</span>
+      <div class="related-pill-text">
+        <div class="related-pill-q">Q34: Why is LLM inference memory-bounded?</div>
+        <div class="related-pill-rel">FlashAttention is the direct answer to the memory-bandwidth bottleneck explained in Q34</div>
+      </div>
+    </div>
+    <div class="related-pill" data-slug="01-023">
+      <span class="related-pill-icon">→</span>
+      <div class="related-pill-text">
+        <div class="related-pill-q">Q23: What is grouped query attention (GQA)?</div>
+        <div class="related-pill-rel">GQA and FlashAttention are both used together in production (e.g. Llama 3) — GQA reduces KV heads, FA speeds up the kernel</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="section-label">One-liner recall</div>
+  <div class="oneliner-box">
+    <div class="oneliner-label">▸ Reconstruct from memory</div>
+    <div class="oneliner-text" data-text="FlashAttention tiles Q/K/V into SRAM blocks and uses online softmax to compute exact attention without materializing the O(N²) matrix in HBM — achieving 3–4× speedup and O(N) memory purely by eliminating memory-bandwidth bottlenecks.">FlashAttention tiles Q/K/V into SRAM blocks and uses online softmax to compute exact attention without materializing the O(N²) matrix in HBM — achieving 3–4× speedup and O(N) memory purely by eliminating memory-bandwidth bottlenecks.</div>
+  </div>
+</div>

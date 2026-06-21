@@ -1,0 +1,134 @@
+<div class="answer-header reveal">
+  <div class="answer-meta">
+    <span class="meta-badge meta-category">04-fine-tuning-training</span>
+    <span class="meta-badge meta-num">Q009</span>
+    <span class="meta-badge meta-status-review">review</span>
+  </div>
+  <h1 class="answer-title">Instruction tuning vs pre-training?</h1>
+</div>
+
+<div class="answer-section reveal">
+  <div class="accordion">
+    <div class="accordion-header">
+      <span class="accordion-title">⟁ Framing — Why this is asked</span>
+      <span class="accordion-chevron">▾</span>
+    </div>
+    <div class="accordion-body">
+      <div class="framing-grid">
+        <div><div class="framing-card">
+          <div class="framing-card-title">Why asked</div>
+          <p style="font-size:13.5px;line-height:1.7;color:var(--text-dim)">Interviewers use this to check whether a candidate understands the two-phase lifecycle of a modern LLM — what each phase teaches the model and what it costs. Strong candidates know that pre-training is a one-time, massively expensive knowledge-injection step, while instruction tuning is a cheap, repeatable behavior-shaping step that runs on top of a frozen or lightly trained base. Confusing the two reveals a textbook-only understanding with no production intuition.</p>
+        </div></div>
+        <div><div class="framing-card">
+          <div class="framing-card-title">Trigger phrases</div>
+          <div class="trigger-list">
+              <div class="trigger-phrase">What&#x27;s the difference between pre-training and instruction tuning?</div>
+              <div class="trigger-phrase">When would you do instruction fine-tuning vs continued pre-training?</div>
+              <div class="trigger-phrase">Why can&#x27;t you just instruction-tune to teach the model new domain knowledge?</div>
+          </div>
+        </div></div>
+      </div>
+      <div class="tests-block">
+        <span style="font-family:var(--mono);font-size:10px;letter-spacing:0.1em;text-transform:uppercase;color:var(--purple);margin-right:8px">Tests:</span>Whether the candidate understands the knowledge-vs-behavior distinction and can articulate when each training phase is appropriate, including data requirements, compute cost, and failure modes.
+
+---
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="section-label">Concept</div>
+  <div class="concept-block"><p><strong>Pre-training</strong> teaches a model <em>what to know</em> — it learns language patterns, world knowledge, and reasoning capabilities by predicting the next token across hundreds of billions to trillions of tokens of raw text. <strong>Instruction tuning</strong> (also called supervised fine-tuning or SFT) teaches the model <em>how to behave</em> — it learns to follow instructions, produce structured outputs, stay on-topic, and adopt a consistent tone by training on (instruction, response) pairs, typically with full cross-entropy loss on the response tokens only.</p>
+<p>Pre-training is a one-time compute-intensive investment (thousands of GPU-days); instruction tuning is cheap and repeatable (hours to days on commodity hardware with LoRA).</p></div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="section-label">Mechanism</div>
+  <div class="card"><p><strong>Pre-training pipeline:</strong></p>
+<ol class="mechanism-steps"><li>Collect a massive, diverse corpus (CommonCrawl, Books, arXiv, GitHub, Wikipedia — trillions of tokens).</li><li>Deduplicate with MinHash/near-dedup, filter quality (perplexity-based, classifier-based).</li><li>Tokenize with BPE (e.g., tiktoken, SentencePiece), pack sequences to fill context windows.</li><li>Train a decoder-only transformer with causal language modeling (CLM) loss: predict token <code>t+1</code> given <code>1..t</code>. No labels — fully self-supervised.</li><li>Scale: Chinchilla law says optimal allocation is ~20 tokens per parameter; a 7B model trained on 140B tokens is compute-optimal; Llama 3 8B used ~15T tokens (over-trained for inference efficiency).</li><li>Cost: GPT-3 (175B) cost ~$4M in 2020 GPU time; Llama 3 70B required ~6M H100 GPU-hours.</li></ol>
+<p><strong>Instruction tuning pipeline:</strong></p>
+<ol class="mechanism-steps"><li>Collect (instruction, response) pairs — either human-written (OpenAI's InstructGPT had 13K curated pairs initially) or synthetically generated (Alpaca: 52K GPT-3.5 pairs; Orca: GPT-4 traces).</li><li>Format as a prompt template (e.g., <code>### Instruction:\n{inst}\n### Response:\n{resp}</code>).</li><li>Apply cross-entropy loss <strong>only on the response tokens</strong> — ignore instruction tokens in the loss (they're the "input," not the target).</li><li>Train with LoRA (rank 8–64) or full SFT on the base pre-trained checkpoint. Typical: 1–3 epochs, LR 1e-4–2e-4, batch 128, BF16.</li><li>Optionally follow with DPO/RLHF for preference alignment.</li><li>Cost: Llama 3 8B instruction-tuned with LoRA on 4× A100 40GB — ~8 hours for 50K examples.</li></ol>
+<p><strong>Key distinction — what each phase can and cannot do:</strong></p>
+<div class="table-wrap"><table class="data-table"><tr><th>Dimension</th><th>Pre-training</th><th>Instruction tuning</th></tr><tr><td>Goal</td><td>Teach world knowledge, language patterns</td><td>Teach instruction-following, format, style</td></tr><tr><td>Data</td><td>Trillions of raw text tokens</td><td>Thousands–millions of (instruction, response) pairs</td></tr><tr><td>Loss</td><td>CLM on all tokens</td><td>CE on response tokens only</td></tr><tr><td>Compute</td><td>GPU clusters, weeks–months</td><td>4–8 GPUs, hours–days</td></tr><tr><td>Updateable?</td><td>No (base model frozen after)</td><td>Yes — re-run on new data</td></tr><tr><td>Teaches new facts?</td><td>Yes (primary)</td><td>Weakly — brittle memorization</td></tr><tr><td>Risk</td><td>Very high (catastrophic if wrong data mix)</td><td>Low (LoRA keeps base frozen)</td></tr></table></div>| Output | Base model (raw, no chat behavior) | Chat/instruction model |</div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="section-label">Example / Tradeoff</div>
+  <div class="card card-accent"><div class="rich-text"><p><strong>Why instruction tuning does NOT reliably inject new facts:</strong> Take a domain like proprietary legal contracts. If the base model never saw those contracts during pre-training, instruction-tuning on 5K Q&A pairs can cause the model to <em>pattern-match the format</em> (answering like a lawyer) but will hallucinate the underlying clauses — it has no real knowledge of them. For factual knowledge gaps, RAG or continued pre-training on the raw documents is the right tool.</p>
+<p><strong>Real-world example — Llama 3 lifecycle:</strong></p>
+<ul class="styled-list"><li><strong>Pre-training:</strong> Meta trained Llama 3 8B on 15T tokens (web, code, books, math) for several weeks on 16K H100 GPUs. This gives the base model broad knowledge and language capability.</li><li><strong>Instruction tuning (SFT):</strong> Meta then applied SFT on ~10M curated instruction pairs (Meta's internal annotation + synthetically generated via Meta's own models) for a few days. This gave Llama 3 8B Instruct its chat behavior, JSON output formatting, and safety refusals.</li><li><strong>Preference alignment (DPO):</strong> Final alignment pass on preference pairs to reduce harmful outputs.</li></ul>
+<p><strong>Continued pre-training</strong> (domain-adaptive pre-training, DAPT) is a middle ground: you start from a pre-trained base and run CLM loss on domain-specific raw text (e.g., PubMed articles for BioMedLM, legal filings for Harvey AI's models). This injects domain vocabulary and factual knowledge <em>without</em> the cost of training from scratch. You then run instruction tuning on top. DAPT typically requires 10B–100B domain tokens to be meaningful.</p>
+<p><strong>Break-even heuristic:</strong></p>
+<ul class="styled-list"><li>Use instruction tuning alone when: behavior gap (style, format, safety, instruction-following) and the model already has general domain knowledge.</li><li>Use DAPT + instruction tuning when: domain vocabulary is highly specialized (clinical codes, legal citations, code in a niche language) AND you have 10B+ raw domain tokens.</li><li>Use RAG when: knowledge needs to stay fresh, authoritative, or citable, and you don't have the compute budget for DAPT.</li></ul></div></div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="accordion">
+    <div class="accordion-header">
+      <span class="accordion-title">🎙 Verbal Script (3–5 min)</span>
+      <span class="accordion-chevron">▾</span>
+    </div>
+    <div class="accordion-body">
+      <div class="script-block"><div class="script-label">Opening (30s)</div><p>"These are two distinct phases in the life of a modern LLM with fundamentally different goals. Pre-training teaches the model <em>what to know</em> — world knowledge and language patterns — while instruction tuning teaches it <em>how to behave</em> — how to follow instructions, format outputs, and adopt a consistent style. The key production insight is that they're not interchangeable: instruction tuning can't reliably inject new facts, and pre-training can't make a model follow instructions."</p></div>
+      <div class="script-block"><div class="script-label">Core explanation (2–3 min)</div><p>"Pre-training is self-supervised: the model predicts the next token across trillions of tokens of raw internet text, books, and code. No labels needed. The result is a base model with broad knowledge — but it's raw, unfiltered, and will complete any prompt as if continuing a document, not as if answering a question. The cost is enormous: Llama 3 8B took 15 trillion tokens and weeks of training on thousands of H100 GPUs.</p>
+<p>Instruction tuning starts from that pre-trained base and trains on (instruction, response) pairs — typically tens of thousands to millions of them. Critically, the loss is applied only on the response tokens, not the instruction. The model learns the <em>conversational format and behavior</em> — how to answer questions, follow safety guidelines, produce JSON, write code. Llama 3 Instruct, GPT-4, Claude — all were instruction-tuned on top of a pre-trained base. With LoRA, you can do this in hours on a few GPUs by only updating low-rank adapter weights while keeping the base frozen.</p>
+<p>The failure mode to call out explicitly: instruction tuning does not reliably inject new factual knowledge. If you fine-tune on Q&A pairs about your proprietary contracts, the model learns to <em>answer in the style</em> of a contract lawyer but will hallucinate the underlying clauses because the base model never saw those contracts. For factual knowledge gaps, you need RAG or domain-adaptive pre-training — running CLM loss on raw domain text like PubMed articles or legal filings."</p></div>
+      <div class="script-block"><div class="script-label">Tradeoff / production angle (1 min)</div><p>"In practice, there are three common training recipes you see in production: base model → instruction tuning (cheapest, works for most chat products); base model → domain-adaptive pre-training (DAPT) → instruction tuning (for highly specialized domains like clinical or legal); and the increasingly popular 'post-training' approach — base model → SFT → DPO/RLHF — which is what Meta did for Llama 3 Instruct and what OpenAI did for InstructGPT. The choice between these is mostly driven by whether your domain vocabulary and facts are already in the base model or not."</p></div>
+      <div class="script-block"><div class="script-label">Wrap-up (30s)</div><p>"So the short version: pre-training = knowledge, instruction tuning = behavior. They're complementary, not alternatives. For most product teams, the base model's pre-training is a given and you're doing instruction tuning — and increasingly just LoRA-based SFT plus DPO. I'm happy to go deeper on LoRA mechanics, the DPO preference-alignment step, or when DAPT is worth the cost."</p></div>
+    </div>
+  </div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="section-label">Pitfalls</div>
+  <div class="pitfall-card">
+    <div class="pitfall-mistake"><strong>✗ Mistake</strong> Saying &quot;instruction tuning teaches the model new information&quot;</div>
+    <div class="pitfall-better"><strong>✓ Better</strong> Clarify that instruction tuning primarily shapes <em>behavior and format</em>, not factual knowledge; new facts are best injected via RAG (updateable, citeable) or domain-adaptive pre-training (CLM on raw domain text); instruction-tuned Q&amp;A memorization is brittle and produces confident hallucinations on unseen variants</div>
+  </div>
+  <div class="pitfall-card">
+    <div class="pitfall-mistake"><strong>✗ Mistake</strong> Treating pre-training as something product teams do from scratch</div>
+    <div class="pitfall-better"><strong>✓ Better</strong> In practice, product teams start from an open-source pre-trained base (Llama 3, Mistral, Qwen) or use a hosted API; pre-training from scratch requires billions of dollars in compute and is only done by foundation model labs; the realistic decision is instruction-tune vs DAPT+instruction-tune vs RAG</div>
+  </div>
+  <div class="pitfall-card">
+    <div class="pitfall-mistake"><strong>✗ Mistake</strong> Not knowing the loss function difference</div>
+    <div class="pitfall-better"><strong>✓ Better</strong> In pre-training, CLM loss applies to all tokens; in instruction tuning, cross-entropy loss is applied <em>only on response tokens</em> (instruction tokens are masked), which is why instruction tuning converges quickly even on small datasets
+
+---</div>
+  </div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="section-label">Related Questions</div>
+  <div class="related-pills">
+    <div class="related-pill" data-slug="04-001">
+      <span class="related-pill-icon">→</span>
+      <div class="related-pill-text">
+        <div class="related-pill-q">Q1: When fine-tune vs prompt engineering?</div>
+        <div class="related-pill-rel">Prerequisite: the full decision ladder (prompt → RAG → SFT → DPO → pre-training)</div>
+      </div>
+    </div>
+    <div class="related-pill" data-slug="04-004">
+      <span class="related-pill-icon">→</span>
+      <div class="related-pill-text">
+        <div class="related-pill-q">Q4: What is RLHF and why important?</div>
+        <div class="related-pill-rel">Follow-up: the preference alignment stage that typically runs after instruction tuning</div>
+      </div>
+    </div>
+    <div class="related-pill" data-slug="04-005">
+      <span class="related-pill-icon">→</span>
+      <div class="related-pill-text">
+        <div class="related-pill-q">Q5: Fine-tune or prompt-engineered RAG?</div>
+        <div class="related-pill-rel">Related: when to use RAG instead of SFT for knowledge gaps — the exact failure mode of instruction tuning</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="section-label">One-liner recall</div>
+  <div class="oneliner-box">
+    <div class="oneliner-label">▸ Reconstruct from memory</div>
+    <div class="oneliner-text" data-text="Pre-training injects knowledge via CLM loss on trillions of raw tokens; instruction tuning shapes behavior via CE loss on response tokens only — the two are complementary phases, not alternatives, and IT cannot reliably inject new facts.">Pre-training injects knowledge via CLM loss on trillions of raw tokens; instruction tuning shapes behavior via CE loss on response tokens only — the two are complementary phases, not alternatives, and IT cannot reliably inject new facts.</div>
+  </div>
+</div>

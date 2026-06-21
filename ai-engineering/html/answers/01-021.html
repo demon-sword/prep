@@ -1,0 +1,138 @@
+<div class="answer-header reveal">
+  <div class="answer-meta">
+    <span class="meta-badge meta-category">01-llm-fundamentals</span>
+    <span class="meta-badge meta-num">Q021</span>
+    <span class="meta-badge meta-status-review">review</span>
+  </div>
+  <h1 class="answer-title">How do you do memory management and context management with LLMs?</h1>
+</div>
+
+<div class="answer-section reveal">
+  <div class="accordion">
+    <div class="accordion-header">
+      <span class="accordion-title">⟁ Framing — Why this is asked</span>
+      <span class="accordion-chevron">▾</span>
+    </div>
+    <div class="accordion-body">
+      <div class="framing-grid">
+        <div><div class="framing-card">
+          <div class="framing-card-title">Why asked</div>
+          <p style="font-size:13.5px;line-height:1.7;color:var(--text-dim)">This question probes whether you understand that context windows are finite, expensive, and degrade in quality as they fill — and whether you&#x27;ve designed production systems that handle memory gracefully across multi-turn conversations, long documents, and agentic loops. Weak candidates treat memory as a solved problem (&quot;just pass the full history&quot;). Strong candidates describe a layered architecture: what lives in-window, what lives in a vector store, what gets summarized, and what gets discarded.</p>
+        </div></div>
+        <div><div class="framing-card">
+          <div class="framing-card-title">Trigger phrases</div>
+          <div class="trigger-list">
+              <div class="trigger-phrase">How do you handle long conversations with an LLM?</div>
+              <div class="trigger-phrase">How do you manage context in a multi-turn chatbot at scale?</div>
+              <div class="trigger-phrase">What happens when you run out of context window?</div>
+              <div class="trigger-phrase">How does an agent remember what it did three steps ago?</div>
+          </div>
+        </div></div>
+      </div>
+      <div class="tests-block">
+        <span style="font-family:var(--mono);font-size:10px;letter-spacing:0.1em;text-transform:uppercase;color:var(--purple);margin-right:8px">Tests:</span>Architectural thinking about context as a resource: scarcity, cost, degradation under load, and the memory tiers that compensate.
+
+---
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="section-label">Concept</div>
+  <div class="concept-block"><p>LLMs have no persistent memory between API calls — every call starts fresh from whatever tokens you put in the context window. "Memory management" means deciding what information to include, compress, offload, or retrieve so the model has the right context at the right time without blowing the token budget or hitting the "lost in the middle" degradation zone.</p></div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="section-label">Mechanism</div>
+  <div class="card"><p>There are four memory tiers, each with a different latency, cost, and fidelity profile:</p>
+<p><strong>1. In-context (working memory) — the window itself</strong></p>
+<ul class="styled-list"><li>Holds the system prompt, recent turns, retrieved chunks, tool outputs</li><li>Token budget: e.g. 128K for Claude 3.5 Sonnet, 200K for Claude 3 Opus</li><li>Problem: cost grows O(n) per turn; quality degrades for content placed in the middle of a very long context (lost-in-the-middle); TTFT (time-to-first-token) rises with length</li><li>Strategy: keep only the last N turns (sliding window) or compress older turns on the fly</li></ul>
+<p><strong>2. External semantic memory — vector store</strong></p>
+<ul class="styled-list"><li>Store conversation summaries, prior decisions, user facts, document chunks in Pinecone / FAISS / pgvector</li><li>At query time, retrieve the top-k most relevant memories and inject them into the prompt</li><li>Enables unbounded long-term memory with O(1) retrieval cost</li><li>LangChain <code>ConversationSummaryBufferMemory</code> + Pinecone is a canonical implementation</li></ul>
+<p><strong>3. Episodic / summarization layer</strong></p>
+<ul class="styled-list"><li>When the conversation history exceeds a threshold (e.g. 8K tokens), run a summarization call: "Summarize the last 20 turns in 200 words preserving key decisions, open questions, and user preferences."</li><li>Replace the raw history with the summary; the summary grows incrementally</li><li>Reflexion-style agents write episodic summaries to durable storage after each task</li></ul>
+<p><strong>4. Structured/procedural memory — key-value or DB</strong></p>
+<ul class="styled-list"><li>For facts that need exact recall (user name, account ID, preferences), store in a DB or Redis, not in a vector store</li><li>Retrieve deterministically by key, not by similarity — vector search introduces fuzzy recall that can corrupt facts</li></ul>
+<p><strong>Context window hygiene techniques:</strong></p>
+<ul class="styled-list"><li><strong>Prompt compression:</strong> LLMLingua / Selective Context — compress retrieved chunks by 2–4× before injection, preserving information content</li><li><strong>Context eviction policies:</strong> LRU-style sliding window, or importance-weighted: keep turns that contain decisions/commitments, evict small-talk</li><li><strong>RAG as memory:</strong> for factual knowledge, don't keep it in the prompt — retrieve it at generation time. This is cheaper than always including a giant system prompt</li><li><strong>Structured output + checkpoint:</strong> in agentic loops, write intermediate results to disk/DB between steps so a crash or context-reset doesn't lose work</li></ul></div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="section-label">Example / Tradeoff</div>
+  <div class="card card-accent"><div class="rich-text"><p><strong>Production chatbot (1M conversations/day):</strong></p>
+<ul class="styled-list"><li>In-context: last 6 turns only (≈2K tokens per call)</li><li>External memory: user profile + past session summaries in pgvector, retrieved top-3 per query</li><li>Summarization: triggered when in-context turn count hits 10; async call using a cheap model (Haiku / GPT-3.5)</li><li>Result: 40% reduction in average tokens/call; p95 latency down from 4.2s → 2.1s; user satisfaction unchanged (summaries preserved enough context)</li></ul>
+<p><strong>Tradeoff — summarization fidelity vs cost:</strong> Summarization loses exact quotes and specific numbers. For customer support bots, this can cause errors ("I told you the price was $149.99!"). Mitigation: keep the last 2 turns verbatim even when summarizing older history, and store structured facts (prices, order IDs) in the key-value layer, not in summarization text.</p></div></div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="accordion">
+    <div class="accordion-header">
+      <span class="accordion-title">🎙 Verbal Script (3–5 min)</span>
+      <span class="accordion-chevron">▾</span>
+    </div>
+    <div class="accordion-body">
+      <div class="script-block"><div class="script-label">Opening (30s)</div><p>"LLMs have no built-in memory — every API call is stateless. So memory management is really about designing a layered system: what goes in the context window right now, what gets compressed or summarized, and what gets offloaded to external storage and retrieved on demand. I think about four tiers."</p></div>
+      <div class="script-block"><div class="script-label">Core explanation (2–3 min)</div><p>"The first tier is the in-context window itself — that's your working memory. For GPT-4o you get 128K tokens, but you don't want to fill it blindly. Cost scales linearly with context length, TTFT rises, and there's a real 'lost in the middle' problem where the model underattends to content placed far from the edges. So I apply a sliding window — maybe the last 6–8 turns — and evict older content.</p>
+<p>The second tier is external semantic memory in a vector store. I serialize old conversation turns or session summaries into embeddings and store them in Pinecone or pgvector. At each new turn, I retrieve the top-3 most relevant past memories and inject them into the prompt. This gives the model effective long-term memory without ballooning the context.</p>
+<p>The third tier is a summarization layer. When the raw turn count hits a threshold — say 10 turns — I fire off an async summarization call using a cheap model like Claude Haiku: 'summarize the last N turns preserving decisions, open questions, and user preferences.' I replace the raw history with the summary and keep appending. This is how LangChain's ConversationSummaryBufferMemory works under the hood.</p>
+<p>The fourth tier is structured storage — a DB or Redis — for facts that need deterministic recall: order IDs, user preferences, prices. I never trust vector search for these because similarity-based retrieval can return approximate results, and approximate is wrong for exact facts."</p></div>
+      <div class="script-block"><div class="script-label">Tradeoff / production angle (1 min)</div><p>"The main tradeoff is summarization fidelity. Summarization loses exact quotes and specific numbers. In a customer support context that's a real problem — 'I told you the order total was $149.99!' So I layer the approaches: keep the last 2 turns verbatim, summarize older turns, and store structured facts in Redis. I also use prompt compression tools like LLMLingua to compress retrieved chunks by 2–4× before injection, saving tokens without losing too much information.</p>
+<p>In agentic loops I also write intermediate results to durable storage between steps — so if the context resets or the agent crashes, the work isn't lost."</p></div>
+      <div class="script-block"><div class="script-label">Wrap-up (30s)</div><p>"The key insight is that 'memory' isn't a single thing — it's a hierarchy. In-context for recency, vector store for semantic recall, summarization for long histories, and a DB for exact facts. Happy to go deeper on any tier, or on how I'd design this for a specific system."</p></div>
+    </div>
+  </div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="section-label">Pitfalls</div>
+  <div class="pitfall-card">
+    <div class="pitfall-mistake"><strong>✗ Mistake</strong> Saying &quot;just pass the full conversation history every time&quot;</div>
+    <div class="pitfall-better"><strong>✓ Better</strong> Explain why that&#x27;s unsustainable at scale (cost, TTFT, lost-in-the-middle) and describe the sliding window + summarization + vector memory tiers that replace it.</div>
+  </div>
+  <div class="pitfall-card">
+    <div class="pitfall-mistake"><strong>✗ Mistake</strong> Treating the vector store as the only memory layer and using it for exact-recall facts (prices, IDs)</div>
+    <div class="pitfall-better"><strong>✓ Better</strong> Distinguish semantic memory (vector search, OK for approximate recall) from structured memory (DB/Redis, required for exact-match facts), and explain why mixing them causes correctness bugs.</div>
+  </div>
+  <div class="pitfall-card">
+    <div class="pitfall-mistake"><strong>✗ Mistake</strong> Ignoring context eviction policy — &quot;we just keep the last 10 turns&quot; without thinking about <em>which</em> turns matter</div>
+    <div class="pitfall-better"><strong>✓ Better</strong> Describe importance-weighted eviction: retain turns containing decisions, user commitments, or unresolved questions; evict routine acknowledgments.
+
+---</div>
+  </div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="section-label">Related Questions</div>
+  <div class="related-pills">
+    <div class="related-pill" data-slug="01-005">
+      <span class="related-pill-icon">→</span>
+      <div class="related-pill-text">
+        <div class="related-pill-q">Q5: Explain context windows and their limitations</div>
+        <div class="related-pill-rel">Prerequisite — context window mechanics underpin all memory strategies</div>
+      </div>
+    </div>
+    <div class="related-pill" data-slug="01-009">
+      <span class="related-pill-icon">→</span>
+      <div class="related-pill-text">
+        <div class="related-pill-q">Q9: What is KV cache? How does it help in LLM inference?</div>
+        <div class="related-pill-rel">Related — KV cache is the server-side complement to client-side context management</div>
+      </div>
+    </div>
+    <div class="related-pill" data-slug="01-017">
+      <span class="related-pill-icon">→</span>
+      <div class="related-pill-text">
+        <div class="related-pill-q">Q17: What is reflection in the context of LLM agents?</div>
+        <div class="related-pill-rel">Follow-up — episodic memory in agentic loops (Reflexion) is a specialized form of context management</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="section-label">One-liner recall</div>
+  <div class="oneliner-box">
+    <div class="oneliner-label">▸ Reconstruct from memory</div>
+    <div class="oneliner-text" data-text="Memory management = four tiers: sliding in-context window, vector store for semantic recall, summarization for long histories, and a structured DB for exact facts — each chosen by recency, fidelity, and cost.">Memory management = four tiers: sliding in-context window, vector store for semantic recall, summarization for long histories, and a structured DB for exact facts — each chosen by recency, fidelity, and cost.</div>
+  </div>
+</div>

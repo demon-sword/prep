@@ -1,0 +1,136 @@
+<div class="answer-header reveal">
+  <div class="answer-meta">
+    <span class="meta-badge meta-category">03-agents-tool-use</span>
+    <span class="meta-badge meta-num">Q027</span>
+    <span class="meta-badge meta-status-review">review</span>
+  </div>
+  <h1 class="answer-title">Types of memory: working, episodic, semantic, procedural?</h1>
+</div>
+
+<div class="answer-section reveal">
+  <div class="accordion">
+    <div class="accordion-header">
+      <span class="accordion-title">⟁ Framing — Why this is asked</span>
+      <span class="accordion-chevron">▾</span>
+    </div>
+    <div class="accordion-body">
+      <div class="framing-grid">
+        <div><div class="framing-card">
+          <div class="framing-card-title">Why asked</div>
+          <p style="font-size:13.5px;line-height:1.7;color:var(--text-dim)">Interviewers ask this to probe whether a candidate understands the <em>memory architecture</em> of a production agent — not just that &quot;agents have memory,&quot; but the distinct purpose, storage backend, and lifetime of each memory tier. Weak candidates treat memory as a monolith (one chat history buffer); strong candidates map cognitive psychology&#x27;s memory taxonomy onto concrete engineering choices (Redis, Pinecone, system prompts, fine-tuning).</p>
+        </div></div>
+        <div><div class="framing-card">
+          <div class="framing-card-title">Trigger phrases</div>
+          <div class="trigger-list">
+              <div class="trigger-phrase">How does your agent remember things across turns?</div>
+              <div class="trigger-phrase">What types of memory should an agent have?</div>
+              <div class="trigger-phrase">How do you handle long-term memory without polluting context?</div>
+              <div class="trigger-phrase">Walk me through the memory architecture in your agent system.</div>
+          </div>
+        </div></div>
+      </div>
+      <div class="tests-block">
+        <span style="font-family:var(--mono);font-size:10px;letter-spacing:0.1em;text-transform:uppercase;color:var(--purple);margin-right:8px">Tests:</span>Ability to design a multi-tier agent memory system with appropriate backends, lifetimes, and retrieval strategies for each memory type.
+
+---
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="section-label">Concept</div>
+  <div class="concept-block"><p>Agent memory mirrors the cognitive science taxonomy: <strong>working memory</strong> holds the current context window; <strong>episodic memory</strong> stores past interaction sessions; <strong>semantic memory</strong> holds general world/domain knowledge; and <strong>procedural memory</strong> encodes <em>how</em> to do things — skills, workflows, tool-call patterns. Each type has a different lifetime, storage backend, and retrieval strategy, and conflating them is the most common production mistake.</p></div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="section-label">Mechanism</div>
+  <div class="card"><div class="table-wrap"><table class="data-table"><tr><th>Memory type</th><th>Cognitive analogy</th><th>Storage backend</th><th>Lifetime</th><th>Retrieval</th></tr><tr><td><strong>Working</strong></td><td>RAM / scratchpad</td><td>In-context window (prompt tokens)</td><td>Single agent turn/run</td><td>Implicit — already in prompt</td></tr><tr><td><strong>Episodic</strong></td><td>Personal diary</td><td>Redis / Postgres (serialised JSON) keyed by session_id</td><td>Session or user-lifetime</td><td>Fetch last N turns or summarise with GPT-4o-mini</td></tr><tr><td><strong>Semantic</strong></td><td>Encyclopedia</td><td>Vector store (Pinecone / Qdrant) + optional KG (Neo4j)</td><td>Long-lived, updated async</td><td>ANN cosine search; refreshed by CDC on knowledge updates</td></tr><tr><td><strong>Procedural</strong></td><td>Muscle memory</td><td>System prompt snippets, few-shot examples, or fine-tuned weights (LoRA)</td><td>Encoded at deploy time</td><td>Always-on (system prompt) or retrieved by task classifier</td></tr></table></div>
+<p><strong>Integration flow:</strong></p>
+<ol class="mechanism-steps"><li><strong>Turn start</strong> — orchestrator loads working memory (last N messages, current tool call queue) into the prompt.</li><li><strong>Episodic lookup</strong> — query Redis for recent session state; if session is cold, summarise prior episodes with LangChain <code>ConversationSummaryBufferMemory</code>.</li><li><strong>Semantic retrieval</strong> — embed the user's current intent and query Pinecone; inject top-k relevant facts/docs into working context.</li><li><strong>Procedural injection</strong> — task classifier routes to the correct system-prompt section (e.g. "billing workflow" vs "escalation policy") or triggers a tool-call sequence stored as a LangGraph DAG node.</li><li><strong>Post-turn write-back</strong> — append new turn to Redis session store; async upsert any new facts to Pinecone; update episodic summary if session length exceeds token budget.</li></ol>
+<p><strong>Context budget management:</strong></p>
+<div class="code-block-wrap"><pre class="code-block"><code>Working (in-context):    ~2,000–8,000 tokens  (current turn + sliding window)
+Episodic (injected):     ~500–1,500 tokens    (summary or last 3–5 turns)
+Semantic (injected):     ~1,000–3,000 tokens  (RAG top-k chunks)
+Procedural (system):     ~500–2,000 tokens    (stable system prompt instructions)
+─────────────────────────────────────────────────────────────
+Total context budget:    ~5,000–14,500 tokens of a 128K window</code></pre><button class="copy-btn">copy</button></div></div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="section-label">Example / Tradeoff</div>
+  <div class="card card-accent"><div class="rich-text"><p><strong>LangGraph support agent:</strong></p>
+<ul class="styled-list"><li>Working memory: current ticket + tool outputs in the active ReAct scratchpad.</li><li>Episodic: Redis hash <code>session:{user_id}:{ticket_id}</code> with 30-day TTL; LangGraph <code>PostgresSaver</code> for checkpointing resumable runs.</li><li>Semantic: Pinecone index of 50K KB articles queried at turn start; updated nightly via Confluence webhook.</li><li>Procedural: <code>billing_agent.system_prompt</code> hard-codes escalation SLA rules; LangChain <code>ConversationSummaryBufferMemory</code> triggers when episodic exceeds 4K tokens, summarising to ~300 tokens.</li></ul>
+<p><strong>Key tradeoff — episodic vs semantic boundary:</strong>   Facts that <em>generalise across users</em> (product docs, policies) belong in semantic memory (vector store). Facts that are <em>user-specific and session-scoped</em> (what the user just said, what tools were called) belong in episodic memory (session store). Mixing them — storing per-user session turns in Pinecone — causes privacy leakage and relevance pollution.</p></div></div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="accordion">
+    <div class="accordion-header">
+      <span class="accordion-title">🎙 Verbal Script (3–5 min)</span>
+      <span class="accordion-chevron">▾</span>
+    </div>
+    <div class="accordion-body">
+      <div class="script-block"><div class="script-label">Opening (30s)</div><p>"I'd frame agent memory in four tiers borrowed from cognitive science — working, episodic, semantic, and procedural — because each has fundamentally different storage needs and retrieval patterns. The design mistake I see most often is treating all memory as one big chat history buffer, which quickly blows the context window and creates privacy problems."</p></div>
+      <div class="script-block"><div class="script-label">Core explanation (2–3 min)</div><p>"Working memory is just the active context window — the current turn, tool outputs, and a sliding window of recent messages. It's implicit: it's already in the prompt. You need to actively <em>budget</em> it: I typically reserve 2–8K tokens for working memory, leaving room for the other tiers.</p>
+<p>Episodic memory is per-session state — what this user said in prior turns, what tools were called, what actions were taken. I store that in Redis keyed by session ID with a TTL that matches business requirements — say 30 days for support tickets. When a session gets long, I use LangChain's <code>ConversationSummaryBufferMemory</code> to compress old turns into a 300-token rolling summary rather than truncating blindly.</p>
+<p>Semantic memory is the agent's general domain knowledge — product docs, KB articles, policies — stored in a vector database like Pinecone or Qdrant. It's retrieved via ANN search at the start of each turn: embed the user's query, pull top-k relevant chunks, inject into context. The critical operational point is keeping this index fresh via CDC — Confluence webhooks or nightly batch jobs. An agent giving answers from a six-month-old index is worse than no agent.</p>
+<p>Procedural memory is <em>how</em> to do things — task-specific workflows, tool-call sequences, domain rules. This lives in the system prompt for stable policies, in LangGraph DAG nodes for multi-step workflows, or in LoRA-fine-tuned weights for behaviour you can't capture in prompt text. It's always-on or task-routed, not retrieved dynamically."</p></div>
+      <div class="script-block"><div class="script-label">Tradeoff / production angle (1 min)</div><p>"The subtlest tradeoff is the episodic-vs-semantic boundary: user-specific session state must never go into the shared semantic vector store — that causes cross-user leakage and relevance noise. Another common pitfall is over-injecting from all four tiers simultaneously, exhausting your 128K window on boilerplate. I address this with a priority hierarchy: procedural first (stable, small), then semantic retrieval, then episodic summary, leaving the bulk of the window for working memory and LLM reasoning. At scale, the Redis session store becomes a hotspot — I shard by user_id modulo and set aggressive TTLs, and I use LangGraph's PostgresSaver for agents that need durable checkpointing across failures."</p></div>
+      <div class="script-block"><div class="script-label">Wrap-up (30s)</div><p>"So the design principle is: four tiers, four backends, explicit budget allocation, and a strict boundary between user-scoped episodic state and shared semantic knowledge. Happy to go deeper on any tier — the procedural memory vs fine-tuning tradeoff is especially interesting."</p></div>
+    </div>
+  </div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="section-label">Pitfalls</div>
+  <div class="pitfall-card">
+    <div class="pitfall-mistake"><strong>✗ Mistake</strong> Describing memory as &quot;just storing the chat history in a list&quot; without distinguishing session-scoped episodic state from shared semantic knowledge</div>
+    <div class="pitfall-better"><strong>✓ Better</strong> Explain all four types with their specific backends (Redis for episodic, Pinecone for semantic) and explain the privacy/relevance reason to separate them.</div>
+  </div>
+  <div class="pitfall-card">
+    <div class="pitfall-mistake"><strong>✗ Mistake</strong> Saying &quot;we put everything in the vector database&quot; — conflating user-session state with domain knowledge causes cross-user data leakage and relevance pollution</div>
+    <div class="pitfall-better"><strong>✓ Better</strong> State explicitly that only generalizable, non-user-specific knowledge belongs in the semantic vector store; per-session state belongs in a keyed session store like Redis with TTLs.</div>
+  </div>
+  <div class="pitfall-card">
+    <div class="pitfall-mistake"><strong>✗ Mistake</strong> Not mentioning context budget management — candidates describe all four types but don&#x27;t explain how they fit into a finite token window</div>
+    <div class="pitfall-better"><strong>✓ Better</strong> Give a concrete token allocation (e.g. 2K working + 1K episodic summary + 2K semantic + 1K procedural) and explain the compression strategy (summarisation, top-k tuning) when budgets are exceeded.
+
+---</div>
+  </div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="section-label">Related Questions</div>
+  <div class="related-pills">
+    <div class="related-pill" data-slug="03-028">
+      <span class="related-pill-icon">→</span>
+      <div class="related-pill-text">
+        <div class="related-pill-q">Q28: Long-term memory without polluting it?</div>
+        <div class="related-pill-rel">Direct follow-up — applies the four-type taxonomy to the specific problem of long-term memory hygiene</div>
+      </div>
+    </div>
+    <div class="related-pill" data-slug="03-006">
+      <span class="related-pill-icon">→</span>
+      <div class="related-pill-text">
+        <div class="related-pill-q">Q6: Essential components of an agent beyond an LLM?</div>
+        <div class="related-pill-rel">Memory is one of the four core agent components — prerequisite framing</div>
+      </div>
+    </div>
+    <div class="related-pill" data-slug="03-018">
+      <span class="related-pill-icon">→</span>
+      <div class="related-pill-text">
+        <div class="related-pill-q">Q18: Stateless vs stateful agents?</div>
+        <div class="related-pill-rel">Stateful agents require episodic memory backends; working memory is the stateless mode</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="section-label">One-liner recall</div>
+  <div class="oneliner-box">
+    <div class="oneliner-label">▸ Reconstruct from memory</div>
+    <div class="oneliner-text" data-text="Agents need four memory tiers — working (in-context window), episodic (Redis session store, per-user/session), semantic (Pinecone vector store, shared domain knowledge), and procedural (system prompt or fine-tuned weights for task workflows) — each with its own backend, lifetime, and strict privacy boundary.">Agents need four memory tiers — working (in-context window), episodic (Redis session store, per-user/session), semantic (Pinecone vector store, shared domain knowledge), and procedural (system prompt or fine-tuned weights for task workflows) — each with its own backend, lifetime, and strict privacy boundary.</div>
+  </div>
+</div>

@@ -1,0 +1,133 @@
+<div class="answer-header reveal">
+  <div class="answer-meta">
+    <span class="meta-badge meta-category">06-ml-fundamentals</span>
+    <span class="meta-badge meta-num">Q010</span>
+    <span class="meta-badge meta-status-review">review</span>
+  </div>
+  <h1 class="answer-title">Why neural networks not first choice for tabular data?</h1>
+</div>
+
+<div class="answer-section reveal">
+  <div class="accordion">
+    <div class="accordion-header">
+      <span class="accordion-title">⟁ Framing — Why this is asked</span>
+      <span class="accordion-chevron">▾</span>
+    </div>
+    <div class="accordion-body">
+      <div class="framing-grid">
+        <div><div class="framing-card">
+          <div class="framing-card-title">Why asked</div>
+          <p style="font-size:13.5px;line-height:1.7;color:var(--text-dim)">Interviewers use this question to separate engineers who reach for deep learning by default from those who reason about the right tool for the job. It probes algorithm-selection discipline, understanding of inductive biases, and practical ML experience with tabular datasets — the most common real-world data format.</p>
+        </div></div>
+        <div><div class="framing-card">
+          <div class="framing-card-title">Trigger phrases</div>
+          <div class="trigger-list">
+              <div class="trigger-phrase">Would you use a neural network or gradient-boosted trees for this?</div>
+              <div class="trigger-phrase">Why not just use a neural network for everything?</div>
+              <div class="trigger-phrase">When would you prefer XGBoost over a deep learning model?</div>
+          </div>
+        </div></div>
+      </div>
+      <div class="tests-block">
+        <span style="font-family:var(--mono);font-size:10px;letter-spacing:0.1em;text-transform:uppercase;color:var(--purple);margin-right:8px">Tests:</span>The ability to reason about inductive biases, training data requirements, and the practical sample-efficiency advantages of tree-based ensembles on structured data.
+
+---
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="section-label">Concept</div>
+  <div class="concept-block"><p>Neural networks are general-purpose function approximators that learn representations from scratch, but tabular data rarely benefits from this flexibility — the features are already hand-engineered, heterogeneous (mix of numeric, categorical, ordinal), and often scarce. Gradient-boosted trees (XGBoost, LightGBM, CatBoost) are the empirical first choice because they encode inductive biases that match the structure of most tabular problems.</p></div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="section-label">Mechanism</div>
+  <div class="card"><p>Several properties make NNs a poor default for tabular data:</p>
+<ol class="mechanism-steps"><li><strong>Sample efficiency</strong> — Gradient boosted trees (GBTs) reach strong performance with hundreds to low thousands of rows. NNs typically need 50K+ samples to learn competitive representations without heavy regularization. Most enterprise tabular datasets (churn, fraud, pricing) are in the 10K–500K range.</li></ol>
+<ol class="mechanism-steps"><li><strong>Heterogeneous feature handling</strong> — Tabular data mixes continuous, ordinal, categorical-high-cardinality, and binary features. Trees split on each feature independently and handle missing values natively (LightGBM). NNs require careful encoding (embedding layers for categoricals), imputation, and scaling — all of which introduce failure modes.</li></ol>
+<ol class="mechanism-steps"><li><strong>No spatial/sequential structure to exploit</strong> — CNNs exploit spatial locality; RNNs exploit sequences; transformers exploit pairwise token interactions. Raw tabular features have none of these structures, so deep architectures offer no architectural advantage over shallow split-based models.</li></ol>
+<ol class="mechanism-steps"><li><strong>Regularization complexity</strong> — GBTs regularize via early stopping + tree depth + min_samples_leaf with few hyperparameters. NNs require weight decay, dropout, batch normalization, learning-rate scheduling, and careful initialization — a much larger search space.</li></ol>
+<ol class="mechanism-steps"><li><strong>Interpretability</strong> — SHAP values on XGBoost are exact Shapley computations (TreeSHAP, O(TLD) time). SHAP on NNs is approximate (DeepLIFT, Integrated Gradients) and slower — critical for regulated domains (credit, insurance, healthcare).</li></ol>
+<p><strong>When NNs win on tabular data:</strong></p>
+<ul class="styled-list"><li>Very large datasets (millions of rows) where learned embeddings can compress high-cardinality categoricals (e.g. entity embeddings in DeepFM/TabNet)</li><li>Datasets with rich semi-structured text/image columns that mix with tabular features (multimodal fusion models)</li><li>When joint optimization with an embedding space or shared representation is needed (e.g. two-tower retrieval systems)</li></ul></div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="section-label">Example / Tradeoff</div>
+  <div class="card card-accent"><div class="rich-text"><p><strong>Benchmark evidence:</strong> The Grinsztajn et al. 2022 paper ("Why tree-based models still outperform deep learning on tabular data", NeurIPS 2022) benchmarked 45 tabular datasets. XGBoost/Random Forest outperformed tabular DL models (TabNet, NODE, FT-Transformer) on 60%+ of datasets, especially those with ≤10K rows or high feature heterogeneity.</p>
+<p><strong>Production example — credit-risk scoring:</strong> A 6-month churn prediction model at a fintech. Dataset: 80K rows, 120 features (transaction counts, days-since-last-login, plan tier, geography). XGBoost trained in 3 min on a MacBook (early stopping, ~600 trees), AUC 0.87. A 5-layer MLP trained in 45 min on GPU, AUC 0.84, required learning-rate warmup, dropout tuning, and still underfit on the minority churn class. SHAP values on XGBoost fed directly into the compliance report; the MLP required post-hoc LIME approximations.</p>
+<p><strong>Tabular transformers (FT-Transformer, TabPFN):</strong> The latest generation narrows the gap, but still lags GBTs on most <100K-row datasets and costs 10–100× more compute. Use them only when you have millions of rows, need embedding-space sharing with other models, or are running AutoML tournaments where compute is not constrained.</p></div></div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="accordion">
+    <div class="accordion-header">
+      <span class="accordion-title">🎙 Verbal Script (3–5 min)</span>
+      <span class="accordion-chevron">▾</span>
+    </div>
+    <div class="accordion-body">
+      <div class="script-block"><div class="script-label">Opening (30s)</div><p>"The short answer is that gradient-boosted trees — XGBoost, LightGBM, CatBoost — are empirically superior on most tabular datasets, and neural networks only close the gap at very large scale. I'll explain the structural reasons, then give a concrete example."</p></div>
+      <div class="script-block"><div class="script-label">Core explanation (2–3 min)</div><p>"Tabular data is fundamentally different from images or text. The features are already hand-crafted and heterogeneous — you have a mix of continuous, ordinal, and high-cardinality categorical columns. Trees handle that natively with per-feature splits and native missing-value imputation; a neural network needs explicit encoding layers for each feature type, which introduces more failure modes.</p>
+<p>The second issue is sample efficiency. Most enterprise tabular datasets are in the 10K–500K row range. Gradient-boosted trees reach strong performance there; neural networks typically need 50K+ samples just to avoid heavy overfitting, and then you're tuning dropout, weight decay, learning rate, and batch size on top of the model itself.</p>
+<p>There's also no inductive bias to exploit. CNNs exploit spatial locality; transformers exploit token-pair interactions. Tabular features don't have spatial or sequential structure, so deep architectures add complexity without providing an architectural advantage.</p>
+<p>Finally, interpretability: TreeSHAP gives exact Shapley values for GBTs in milliseconds. SHAP on neural networks is approximate and slow. For anything credit-scoring, insurance-pricing, or medical-risk-related, regulators often require SHAP feature-importance explanations, and GBTs make that tractable."</p></div>
+      <div class="script-block"><div class="script-label">Tradeoff / production angle (1 min)</div><p>"Neural networks do win when the dataset is very large — millions of rows — or when you need to jointly embed tabular features with text or images. DeepFM or two-tower models for recommendation systems are a good example, where entity embeddings for high-cardinality user/item IDs compress the space better than one-hot encodings. The Grinsztajn et al. NeurIPS 2022 benchmark formalizes this: GBTs outperformed tabular DL on 60%+ of 45 benchmark datasets, with the gap closing only as row count and cardinality grew."</p></div>
+      <div class="script-block"><div class="script-label">Wrap-up (30s)</div><p>"My rule of thumb: start with LightGBM or XGBoost, get a SHAP-explainable baseline, and only reach for tabular neural networks (TabNet, FT-Transformer) when you have millions of rows or a genuine multimodal fusion requirement. Happy to dig into any of those tradeoffs."</p></div>
+    </div>
+  </div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="section-label">Pitfalls</div>
+  <div class="pitfall-card">
+    <div class="pitfall-mistake"><strong>✗ Mistake</strong> Saying &quot;neural networks are more powerful so they&#x27;d do better&quot; without addressing sample efficiency or inductive bias</div>
+    <div class="pitfall-better"><strong>✓ Better</strong> Acknowledge that GBTs encode inductive biases (independent per-feature splits, native missing-value handling) that match tabular structure, and cite the sample-efficiency gap at typical enterprise dataset sizes.</div>
+  </div>
+  <div class="pitfall-card">
+    <div class="pitfall-mistake"><strong>✗ Mistake</strong> Claiming NNs are always worse on tabular data</div>
+    <div class="pitfall-better"><strong>✓ Better</strong> Acknowledge the 2022 NeurIPS evidence showing the gap narrows at millions of rows or high-cardinality categoricals, and name specific contexts where tabular DL (TabNet, FT-Transformer, two-tower) wins.</div>
+  </div>
+  <div class="pitfall-card">
+    <div class="pitfall-mistake"><strong>✗ Mistake</strong> Ignoring the interpretability/compliance angle</div>
+    <div class="pitfall-better"><strong>✓ Better</strong> Mention that TreeSHAP (exact Shapley values in O(TLD) time) is a practical requirement for regulated domains and is far more tractable than SHAP on NNs.
+
+---</div>
+  </div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="section-label">Related Questions</div>
+  <div class="related-pills">
+    <div class="related-pill" data-slug="06-009">
+      <span class="related-pill-icon">→</span>
+      <div class="related-pill-text">
+        <div class="related-pill-q">Q9: Bias-variance tradeoff?</div>
+        <div class="related-pill-rel">Random Forest as variance-reduction ensemble; same inductive bias concept</div>
+      </div>
+    </div>
+    <div class="related-pill" data-slug="06-023">
+      <span class="related-pill-icon">→</span>
+      <div class="related-pill-text">
+        <div class="related-pill-q">Q23: Classification algorithms?</div>
+        <div class="related-pill-rel">Broader algorithm selection — GBTs vs NNs vs linear models</div>
+      </div>
+    </div>
+    <div class="related-pill" data-slug="05-007">
+      <span class="related-pill-icon">→</span>
+      <div class="related-pill-text">
+        <div class="related-pill-q">Q7: SHAP, LIME, model interpretability</div>
+        <div class="related-pill-rel">TreeSHAP vs approximate SHAP for NNs in regulated domains</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="section-label">One-liner recall</div>
+  <div class="oneliner-box">
+    <div class="oneliner-label">▸ Reconstruct from memory</div>
+    <div class="oneliner-text" data-text="GBTs (XGBoost/LightGBM) beat NNs on most tabular data because tabular features are already hand-engineered and heterogeneous (no spatial/sequential structure to exploit), GBTs are far more sample-efficient at typical enterprise dataset sizes (10K–500K rows), and TreeSHAP provides exact interpretability that regulators require — NNs only win at millions of rows or multimodal fusion tasks.">GBTs (XGBoost/LightGBM) beat NNs on most tabular data because tabular features are already hand-engineered and heterogeneous (no spatial/sequential structure to exploit), GBTs are far more sample-efficient at typical enterprise dataset sizes (10K–500K rows), and TreeSHAP provides exact interpretability that regulators require — NNs only win at millions of rows or multimodal fusion tasks.</div>
+  </div>
+</div>

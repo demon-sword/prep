@@ -1,0 +1,135 @@
+<div class="answer-header reveal">
+  <div class="answer-meta">
+    <span class="meta-badge meta-category">06-ml-fundamentals</span>
+    <span class="meta-badge meta-num">Q026</span>
+    <span class="meta-badge meta-status-review">review</span>
+  </div>
+  <h1 class="answer-title">BERT architecture?</h1>
+</div>
+
+<div class="answer-section reveal">
+  <div class="accordion">
+    <div class="accordion-header">
+      <span class="accordion-title">⟁ Framing — Why this is asked</span>
+      <span class="accordion-chevron">▾</span>
+    </div>
+    <div class="accordion-body">
+      <div class="framing-grid">
+        <div><div class="framing-card">
+          <div class="framing-card-title">Why asked</div>
+          <p style="font-size:13.5px;line-height:1.7;color:var(--text-dim)">Interviewers use this to probe whether candidates understand encoder-only transformers at the architectural level — not just that BERT exists, but <em>why</em> its bidirectional masked pre-training makes it powerful for classification, NER, and re-ranking tasks while also understanding why it&#x27;s been largely displaced by decoder-only models in the LLM era. The question also surfaces whether candidates can articulate the practical difference between BERT-family (encoders) and GPT-family (decoders).</p>
+        </div></div>
+        <div><div class="framing-card">
+          <div class="framing-card-title">Trigger phrases</div>
+          <div class="trigger-list">
+              <div class="trigger-phrase">Walk me through the BERT architecture.</div>
+              <div class="trigger-phrase">How does BERT differ from GPT?</div>
+              <div class="trigger-phrase">Why would you use BERT for re-ranking instead of a generative model?</div>
+              <div class="trigger-phrase">What is masked language modeling?</div>
+          </div>
+        </div></div>
+      </div>
+      <div class="tests-block">
+        <span style="font-family:var(--mono);font-size:10px;letter-spacing:0.1em;text-transform:uppercase;color:var(--purple);margin-right:8px">Tests:</span>Depth on encoder-only transformers — bidirectional attention, MLM/NSP pre-training, and when encoder models remain the right tool (cross-encoder re-ranking, NLP classification) versus when to use decoders.
+
+---
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="section-label">Concept</div>
+  <div class="concept-block"><p>BERT (Bidirectional Encoder Representations from Transformers, Devlin et al. 2019) is an encoder-only transformer pre-trained with Masked Language Modeling (MLM) and Next Sentence Prediction (NSP). Unlike GPT's left-to-right causal attention, BERT attends to both left and right context simultaneously, producing deeply contextualised token representations ideal for understanding tasks (classification, NER, question answering, re-ranking).</p></div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="section-label">Mechanism</div>
+  <div class="card"><p><strong>Architecture:</strong></p>
+<ul class="styled-list"><li>Stack of N transformer <em>encoder</em> blocks (BERT-base: 12 layers, 768 hidden dim, 12 heads = 110M params; BERT-large: 24 layers, 1024 dim, 16 heads = 340M params).</li><li>Each block: Multi-Head Self-Attention (bidirectional, no causal mask) → Layer Norm → Feed-Forward (4× hidden dim) → Layer Norm.</li><li>Input embedding = token embedding + segment embedding (sentence A vs B) + learned positional embedding.</li><li>Special tokens: <code>[CLS]</code> (pooled representation for classification), <code>[SEP]</code> (segment separator), <code>[MASK]</code>.</li></ul>
+<p><strong>Pre-training objectives:</strong></p>
+<ol class="mechanism-steps"><li><strong>Masked Language Modeling (MLM):</strong> 15% of tokens are randomly masked; the model predicts the original token using bidirectional context. This forces the model to build rich contextual representations.</li></ol>
+<ul class="styled-list"><li>Of the 15%: 80% replaced with <code>[MASK]</code>, 10% replaced with a random token, 10% left unchanged (prevents mismatch at fine-tune time).</li></ul>
+<ol class="mechanism-steps"><li><strong>Next Sentence Prediction (NSP):</strong> Given sentence pairs, predict whether sentence B follows sentence A. Helps with sentence-pair tasks (QA, NLI). <em>Note: later work (RoBERTa, 2019) showed NSP hurts and removed it.</em></li></ol>
+<p><strong>Fine-tuning:</strong></p>
+<ul class="styled-list"><li>Add a task-specific head on top of <code>[CLS]</code> (classification) or token representations (NER, span extraction).</li><li>Fine-tune on labeled data for a few epochs — typically 3–5 epochs on moderate datasets.</li></ul>
+<p><strong>Key architectural difference from GPT:</strong></p>
+<div class="table-wrap"><table class="data-table"><tr><th>Property</th><th>BERT (encoder-only)</th><th>GPT (decoder-only)</th></tr><tr><td>Attention mask</td><td>Bidirectional (full)</td><td>Causal (left-to-right)</td></tr><tr><td>Pre-training objective</td><td>MLM + NSP</td><td>Next-token prediction (CLM)</td></tr><tr><td>Best for</td><td>Understanding (classification, re-ranking)</td><td>Generation</td></tr><tr><td>Context direction</td><td>Both left and right</td><td>Left only</td></tr></table></div>| 2025 relevance | Cross-encoder re-ranking, NLP classification | Instruction-following LLMs |</div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="section-label">Example / Tradeoff</div>
+  <div class="card card-accent"><div class="rich-text"><p><strong>Cross-encoder re-ranking (production BERT use-case):</strong> In a RAG pipeline, a bi-encoder (two separate BERT encoders) retrieves top-100 candidates from Pinecone/FAISS. A cross-encoder BERT (both query and document fed together through the same model) then re-ranks the top-100 → top-5. The cross-encoder sees the full joint context, enabling 20–30 point NDCG improvement over bi-encoder alone. Models: <code>ms-marco-MiniLM-L-6-v2</code> (Sentence Transformers), Cohere Rerank API.</p>
+<p><strong>Concrete benchmark:</strong> On MS MARCO passage ranking, BERT-large cross-encoder achieves MRR@10 ~36 vs bi-encoder ~33 out of the box; with fine-tuning on domain data it reaches ~39.</p>
+<p><strong>Why not just use GPT-4 for re-ranking?</strong> Cross-encoder BERT is ~170ms latency for 100 candidate pairs on CPU, costs fractions of a cent per query. GPT-4o for the same task: ~1–2s, ~$0.002–0.01 per query at 100 candidates. For a RAG pipeline at 1M queries/day, BERT re-ranking saves ~$1,500–8,000/day versus LLM-based re-ranking.</p></div></div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="accordion">
+    <div class="accordion-header">
+      <span class="accordion-title">🎙 Verbal Script (3–5 min)</span>
+      <span class="accordion-chevron">▾</span>
+    </div>
+    <div class="accordion-body">
+      <div class="script-block"><div class="script-label">Opening (30s)</div><p>"BERT is an encoder-only transformer — the key architectural insight is that it uses <em>bidirectional</em> self-attention, meaning every token can attend to every other token in the sequence. That's fundamentally different from GPT's causal masking, which only lets tokens attend to the left. That bidirectional context makes BERT exceptional for understanding tasks — classification, NER, question answering, and especially cross-encoder re-ranking in RAG pipelines."</p></div>
+      <div class="script-block"><div class="script-label">Core explanation (2–3 min)</div><p>"Architecturally, BERT-base is 12 transformer encoder blocks: each block runs multi-head self-attention — 12 heads, 768 hidden dimensions — then a feed-forward sublayer at 4× that width, with layer norm after each. The input combines token, segment, and positional embeddings, with two special tokens: <code>[CLS]</code> at the start, whose final hidden state is used as the pooled sequence representation for classification, and <code>[SEP]</code> to separate sentence pairs.</p>
+<p>Pre-training uses two objectives. The main one is Masked Language Modeling — 15% of tokens are randomly masked, and the model predicts the originals using full bidirectional context. That forces every layer to build rich contextual representations. The second objective, Next Sentence Prediction, predicts whether two sentences are consecutive — useful for sentence-pair tasks but later shown by RoBERTa to actually hurt performance, so modern BERT variants drop it.</p>
+<p>Fine-tuning is straightforward: you add a small task head on top of the <code>[CLS]</code> token (for classification) or individual token representations (for NER or span extraction), then fine-tune on labeled data for 3–5 epochs. BERT-base achieves excellent results on GLUE benchmarks with just a few thousand labeled examples."</p></div>
+      <div class="script-block"><div class="script-label">Tradeoff / production angle (1 min)</div><p>"In 2025–2026, the main production use of BERT-family encoders is <em>cross-encoder re-ranking</em> in RAG systems. You use a bi-encoder for fast ANN retrieval at scale — Pinecone, FAISS, Qdrant — then a cross-encoder BERT for precise re-ranking of the top-100 candidates. That two-stage approach delivers the latency of ANN search with the precision of cross-attention, and it's 10–100× cheaper than using a generative LLM for the same re-ranking task. The key tradeoff: cross-encoders can't be pre-indexed, so they only scale to hundreds of candidates, not millions."</p></div>
+      <div class="script-block"><div class="script-label">Wrap-up (30s)</div><p>"So BERT's bidirectional architecture makes it ideal for discriminative understanding tasks, and its primary production role today is cross-encoder re-ranking in RAG pipelines — where its accuracy advantage over bi-encoders justifies the query-time latency cost. Happy to go deeper on the cross-encoder vs bi-encoder tradeoff or into RoBERTa and DeBERTa improvements."</p></div>
+    </div>
+  </div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="section-label">Pitfalls</div>
+  <div class="pitfall-card">
+    <div class="pitfall-mistake"><strong>✗ Mistake</strong> Describing BERT as &quot;just a transformer&quot; without explaining what makes the encoder-only / bidirectional design special</div>
+    <div class="pitfall-better"><strong>✓ Better</strong> Explicitly contrast the bidirectional (no causal mask) attention with GPT&#x27;s causal masking, and explain why MLM requires seeing both directions.</div>
+  </div>
+  <div class="pitfall-card">
+    <div class="pitfall-mistake"><strong>✗ Mistake</strong> Saying BERT is outdated/irrelevant because LLMs replaced it</div>
+    <div class="pitfall-better"><strong>✓ Better</strong> Explain that BERT-family cross-encoders remain the state-of-the-art for re-ranking in RAG pipelines and NLP classification tasks at production scale due to their speed and cost advantage over generative models.</div>
+  </div>
+  <div class="pitfall-card">
+    <div class="pitfall-mistake"><strong>✗ Mistake</strong> Confusing bi-encoder (two separate BERT encoders for ANN retrieval) with cross-encoder (joint query+doc input for re-ranking)</div>
+    <div class="pitfall-better"><strong>✓ Better</strong> Clearly distinguish the two architectures: bi-encoder for scalable ANN retrieval (pre-indexable), cross-encoder for precise re-ranking of top-N candidates (query-time only).
+
+---</div>
+  </div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="section-label">Related Questions</div>
+  <div class="related-pills">
+    <div class="related-pill" data-slug="06-025">
+      <span class="related-pill-icon">→</span>
+      <div class="related-pill-text">
+        <div class="related-pill-q">Q25: CNN architecture?</div>
+        <div class="related-pill-rel">Parallel architecture deep-dive; both probe &quot;explain a foundational deep learning architecture&quot;</div>
+      </div>
+    </div>
+    <div class="related-pill" data-slug="02-018">
+      <span class="related-pill-icon">→</span>
+      <div class="related-pill-text">
+        <div class="related-pill-q">Q18: What is re-ranking? Cross-encoder vs bi-encoder?</div>
+        <div class="related-pill-rel">Primary production use-case for BERT cross-encoders in RAG</div>
+      </div>
+    </div>
+    <div class="related-pill" data-slug="01-022">
+      <span class="related-pill-icon">→</span>
+      <div class="related-pill-text">
+        <div class="related-pill-q">Q22: What is self-attention? How does it differ from multi-head attention?</div>
+        <div class="related-pill-rel">BERT&#x27;s core mechanism — prerequisite for understanding how bidirectional attention works</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="section-label">One-liner recall</div>
+  <div class="oneliner-box">
+    <div class="oneliner-label">▸ Reconstruct from memory</div>
+    <div class="oneliner-text" data-text="BERT is an encoder-only transformer with bidirectional (non-causal) self-attention, pre-trained via Masked Language Modeling, and remains production-relevant as a cross-encoder re-ranker in RAG pipelines where it delivers 20–30pt NDCG gains at a fraction of the cost of using a generative LLM.">BERT is an encoder-only transformer with bidirectional (non-causal) self-attention, pre-trained via Masked Language Modeling, and remains production-relevant as a cross-encoder re-ranker in RAG pipelines where it delivers 20–30pt NDCG gains at a fraction of the cost of using a generative LLM.</div>
+  </div>
+</div>

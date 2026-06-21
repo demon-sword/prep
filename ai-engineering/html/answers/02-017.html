@@ -1,0 +1,132 @@
+<div class="answer-header reveal">
+  <div class="answer-meta">
+    <span class="meta-badge meta-category">02-rag-systems</span>
+    <span class="meta-badge meta-num">Q017</span>
+    <span class="meta-badge meta-status-review">review</span>
+  </div>
+  <h1 class="answer-title">What is hybrid search? When combine vector + BM25?</h1>
+</div>
+
+<div class="answer-section reveal">
+  <div class="accordion">
+    <div class="accordion-header">
+      <span class="accordion-title">⟁ Framing — Why this is asked</span>
+      <span class="accordion-chevron">▾</span>
+    </div>
+    <div class="accordion-body">
+      <div class="framing-grid">
+        <div><div class="framing-card">
+          <div class="framing-card-title">Why asked</div>
+          <p style="font-size:13.5px;line-height:1.7;color:var(--text-dim)">This is a depth probe on RAG retrieval architecture. The interviewer wants to know whether you understand <em>why</em> neither pure dense nor pure sparse retrieval is sufficient in production — and whether you&#x27;ve actually debugged the failure modes that make hybrid necessary. It tests practical experience over textbook knowledge.</p>
+        </div></div>
+        <div><div class="framing-card">
+          <div class="framing-card-title">Trigger phrases</div>
+          <div class="trigger-list">
+              <div class="trigger-phrase">How would you improve retrieval quality in your RAG system?</div>
+              <div class="trigger-phrase">When would you combine vector search with BM25?</div>
+              <div class="trigger-phrase">Walk me through your retrieval strategy.</div>
+              <div class="trigger-phrase">What is hybrid search and why does it matter?</div>
+          </div>
+        </div></div>
+      </div>
+      <div class="tests-block">
+        <span style="font-family:var(--mono);font-size:10px;letter-spacing:0.1em;text-transform:uppercase;color:var(--purple);margin-right:8px">Tests:</span>Whether the candidate understands the complementary failure modes of dense and sparse retrieval and can articulate when and how to fuse them in production.
+
+---
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="section-label">Concept</div>
+  <div class="concept-block"><p>Hybrid search combines <strong>sparse retrieval</strong> (BM25 / keyword-based inverted index) with <strong>dense retrieval</strong> (bi-encoder embeddings + ANN index like HNSW) into a single ranked list. The key insight is that each approach has orthogonal failure modes: dense search misses exact keywords and product codes; sparse search misses paraphrase and semantic equivalence. Combining them covers the union of both signal types.</p></div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="section-label">Mechanism</div>
+  <div class="card"><ol class="mechanism-steps"><li><strong>Two parallel retrieval legs:</strong></li></ol>
+<ul class="styled-list"><li><strong>Sparse (BM25):</strong> Elasticsearch/OpenSearch inverted index scores documents by TF-IDF term overlap. Excellent for exact strings: product SKUs (<code>B08N5M7S6K</code>), legal citations (<code>42 U.S.C. § 1983</code>), medical codes (<code>ICD-10: J18.9</code>).</li><li><strong>Dense (bi-encoder):</strong> Query and document embeddings (e.g. <code>text-embedding-3-small</code>, <code>bge-large-en</code>) retrieved via HNSW index (Pinecone, Qdrant, Weaviate). Excellent for paraphrase, synonymy, and conceptual similarity.</li></ul>
+<ol class="mechanism-steps"><li><strong>Fusion — Reciprocal Rank Fusion (RRF):</strong></li></ol>
+<ul class="styled-list"><li>Each leg returns top-K results with their rank positions.</li><li>RRF score: <code>score(d) = Σ 1 / (k + rank_i(d))</code> where k=60 by default.</li><li>Documents appearing in both lists are promoted; outliers from either list are preserved.</li><li>RRF is rank-based (no score normalization needed) — avoids the apples-to-oranges problem of merging BM25 raw scores with cosine similarities.</li></ul>
+<ol class="mechanism-steps"><li><strong>Optional reranking:</strong> After RRF produces a top-20–50 merged list, a cross-encoder reranker (Cohere Rerank, <code>bge-reranker-large</code>) re-scores with full query-document attention, producing the final top-5–10 for generation.</li></ol>
+<ol class="mechanism-steps"><li><strong>Production implementations:</strong></li></ol>
+<ul class="styled-list"><li><strong>Elasticsearch 8.9+</strong> has native <code>knn</code> + <code>match</code> hybrid query with RRF built-in.</li><li><strong>Qdrant</strong> supports sparse+dense hybrid natively via <code>sparse_vectors</code> field.</li><li><strong>LangChain <code>EnsembleRetriever</code></strong> orchestrates BM25 + Chroma/Pinecone with configurable weights.</li></ul></div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="section-label">Example / Tradeoff</div>
+  <div class="card card-accent"><div class="rich-text"><p><strong>Before hybrid:</strong> A product search RAG using dense-only retrieval returned semantically similar products but missed exact SKU lookups — users searching "B08N5M7S6K" got wrong items. Recall@5 was 61%.</p>
+<p><strong>After hybrid (BM25 + dense + RRF + Cohere rerank):</strong> SKU lookups resolved exactly via BM25; semantic queries still handled by dense. Recall@5 jumped to 79%, NDCG@5 from 0.58 to 0.74.</p>
+<p><strong>Cost tradeoff:</strong> Hybrid adds ~5–10ms latency for the BM25 leg. Cross-encoder reranking on top-50 adds 50–150ms. At 1M queries/day, the reranker cost (Cohere Rerank ~$1/1K calls → ~$1K/day) is the main budget line; limit reranking to queries where the fusion score spread is narrow.</p></div></div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="accordion">
+    <div class="accordion-header">
+      <span class="accordion-title">🎙 Verbal Script (3–5 min)</span>
+      <span class="accordion-chevron">▾</span>
+    </div>
+    <div class="accordion-body">
+      <div class="script-block"><div class="script-label">Opening (30s)</div><p>"Hybrid search is one of my go-to architectural defaults for RAG retrieval. The core insight is that dense and sparse retrieval have complementary failure modes — dense alone misses exact keywords, sparse alone misses paraphrase — so combining them gives you the union of both signal types. Let me walk through how it works and when I'd reach for it."</p></div>
+      <div class="script-block"><div class="script-label">Core explanation (2–3 min)</div><p>"I run two retrieval legs in parallel. The sparse leg uses BM25 — an inverted index in Elasticsearch or OpenSearch — which excels at exact string matching: product codes, legal citations, medical abbreviations like 'ICD-10 J18.9'. The dense leg uses a bi-encoder like <code>bge-large-en</code> or OpenAI's <code>text-embedding-3-small</code> with an HNSW index in Pinecone or Qdrant — great for paraphrase and conceptual queries.</p>
+<p>To merge the two ranked lists I use Reciprocal Rank Fusion. RRF scores each document as the sum of <code>1/(k + rank)</code> across all lists, where k is typically 60. The key advantage of RRF over weighted score fusion is that it's rank-based — I don't have to normalize BM25 scores against cosine similarities, which would be apples and oranges. Documents appearing in both lists get a natural boost.</p>
+<p>After RRF I've got a merged top-30 or so. For high-stakes queries, I'll add a cross-encoder reranker — Cohere Rerank or <code>bge-reranker-large</code> — which reads the full query and each document together and re-scores with much higher accuracy. That final list of top-5 or top-10 goes to the LLM."</p></div>
+      <div class="script-block"><div class="script-label">Tradeoff / production angle (1 min)</div><p>"The main cost is latency — BM25 adds 5–10ms, reranking adds 50–150ms per query. At scale, I'll limit reranking to queries where the RRF score spread is tight (the retrieval is uncertain), and skip it when one document dominates. Elasticsearch 8.9+ has native hybrid query with RRF built-in, so in practice it's not that much extra plumbing. The bigger gotcha is that BM25 and dense indexes need to stay in sync — if one index goes stale, the fusion degrades silently. I'd set up CDC-driven updates for both in tandem."</p></div>
+      <div class="script-block"><div class="script-label">Wrap-up (30s)</div><p>"So the short answer: use hybrid search as your default for production RAG. Pure dense is wrong for anything with exact keywords; pure sparse is wrong for semantic queries. RRF fusion is cheap, rank-normalization-free, and battle-tested. Happy to go deeper on reranking or the HNSW internals."</p></div>
+    </div>
+  </div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="section-label">Pitfalls</div>
+  <div class="pitfall-card">
+    <div class="pitfall-mistake"><strong>✗ Mistake</strong> Describing hybrid search as &quot;just averaging the scores from BM25 and cosine similarity&quot;</div>
+    <div class="pitfall-better"><strong>✓ Better</strong> Explain that raw score scales are incompatible (BM25 can be 0–20+, cosine is 0–1) and that RRF is the standard fusion because it operates on ranks, eliminating normalization entirely.</div>
+  </div>
+  <div class="pitfall-card">
+    <div class="pitfall-mistake"><strong>✗ Mistake</strong> Saying &quot;I&#x27;d use hybrid search always&quot; without naming the concrete failure mode it solves</div>
+    <div class="pitfall-better"><strong>✓ Better</strong> Lead with the failure mode: &quot;Dense-only fails on exact keywords like SKUs and codes; sparse-only fails on paraphrase — hybrid covers both&quot; then explain the mechanism.</div>
+  </div>
+  <div class="pitfall-card">
+    <div class="pitfall-mistake"><strong>✗ Mistake</strong> Forgetting that both indexes must stay in sync</div>
+    <div class="pitfall-better"><strong>✓ Better</strong> Mention that embedding drift or stale BM25 indexes silently degrade fusion quality; both pipelines need the same CDC-driven update trigger.
+
+---</div>
+  </div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="section-label">Related Questions</div>
+  <div class="related-pills">
+    <div class="related-pill" data-slug="02-012">
+      <span class="related-pill-icon">→</span>
+      <div class="related-pill-text">
+        <div class="related-pill-q">Q12: Compare sparse vs dense retrieval. When use each?</div>
+        <div class="related-pill-rel">Prerequisite — explains the individual failure modes that make hybrid necessary</div>
+      </div>
+    </div>
+    <div class="related-pill" data-slug="02-018">
+      <span class="related-pill-icon">→</span>
+      <div class="related-pill-text">
+        <div class="related-pill-q">Q18: What is re-ranking? Cross-encoder vs bi-encoder?</div>
+        <div class="related-pill-rel">Natural follow-up — reranking is the layer applied after hybrid fusion</div>
+      </div>
+    </div>
+    <div class="related-pill" data-slug="02-013">
+      <span class="related-pill-icon">→</span>
+      <div class="related-pill-text">
+        <div class="related-pill-q">Q13: Common RAG failure points — how debug them?</div>
+        <div class="related-pill-rel">Same domain — vocabulary mismatch is one of the 6 failure modes hybrid search directly fixes</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="section-label">One-liner recall</div>
+  <div class="oneliner-box">
+    <div class="oneliner-label">▸ Reconstruct from memory</div>
+    <div class="oneliner-text" data-text="Hybrid search fuses BM25 (exact keyword recall) + dense bi-encoder (semantic recall) via Reciprocal Rank Fusion, then optionally reranks the merged top-K with a cross-encoder — covering the complementary failure modes of each retrieval method alone.">Hybrid search fuses BM25 (exact keyword recall) + dense bi-encoder (semantic recall) via Reciprocal Rank Fusion, then optionally reranks the merged top-K with a cross-encoder — covering the complementary failure modes of each retrieval method alone.</div>
+  </div>
+</div>

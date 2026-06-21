@@ -1,0 +1,129 @@
+<div class="answer-header reveal">
+  <div class="answer-meta">
+    <span class="meta-badge meta-category">01-llm-fundamentals</span>
+    <span class="meta-badge meta-num">Q029</span>
+    <span class="meta-badge meta-status-review">review</span>
+  </div>
+  <h1 class="answer-title">RLHF vs DPO — when prefer one over the other?</h1>
+</div>
+
+<div class="answer-section reveal">
+  <div class="accordion">
+    <div class="accordion-header">
+      <span class="accordion-title">⟁ Framing — Why this is asked</span>
+      <span class="accordion-chevron">▾</span>
+    </div>
+    <div class="accordion-body">
+      <div class="framing-grid">
+        <div><div class="framing-card">
+          <div class="framing-card-title">Why asked</div>
+          <p style="font-size:13.5px;line-height:1.7;color:var(--text-dim)">The interviewer is probing whether you understand the full alignment pipeline beyond &quot;we RLHF&#x27;d the model.&quot; Both RLHF and DPO are production techniques for making models follow instructions safely, but they have very different complexity, stability, and infrastructure requirements. Senior candidates are expected to know which to reach for and why, and to articulate the tradeoffs concretely.</p>
+        </div></div>
+        <div><div class="framing-card">
+          <div class="framing-card-title">Trigger phrases</div>
+          <div class="trigger-list">
+              <div class="trigger-phrase">How do you align a model to human preferences?</div>
+              <div class="trigger-phrase">What&#x27;s the difference between RLHF and DPO?</div>
+              <div class="trigger-phrase">When would you prefer DPO over PPO-based RLHF?</div>
+              <div class="trigger-phrase">Walk me through your fine-tuning pipeline.</div>
+          </div>
+        </div></div>
+      </div>
+      <div class="tests-block">
+        <span style="font-family:var(--mono);font-size:10px;letter-spacing:0.1em;text-transform:uppercase;color:var(--purple);margin-right:8px">Tests:</span>Understanding of post-training alignment methods — when RL-based approaches are worth the complexity versus when the simpler DPO closed-form objective is sufficient.
+
+---
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="section-label">Concept</div>
+  <div class="concept-block"><p><strong>RLHF (Reinforcement Learning from Human Feedback)</strong> aligns a language model by training a separate reward model on human preference pairs, then using PPO (proximal policy optimization) to update the LLM to maximize that reward while staying close to the original model via a KL-divergence penalty. <strong>DPO (Direct Preference Optimization)</strong> skips the reward model entirely, reparameterizing the RLHF objective as a closed-form loss directly over preference pairs (chosen vs rejected responses), making the alignment step as simple as supervised fine-tuning.</p></div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="section-label">Mechanism</div>
+  <div class="card"><p><strong>RLHF pipeline (3 stages):</strong></p>
+<ol class="mechanism-steps"><li><strong>Supervised Fine-Tuning (SFT):</strong> Fine-tune the base model on high-quality demonstration data (instruction → ideal response). This is the starting policy <code>π_SFT</code>.</li><li><strong>Reward Model (RM):</strong> Train a separate model (same architecture, regression head) on human-labeled preference pairs <code>(prompt, chosen, rejected)</code> to predict a scalar reward. Loss: <code>−log σ(r_θ(chosen) − r_θ(rejected))</code>.</li><li><strong>PPO RL loop:</strong> Use PPO to update the policy <code>π_θ</code> to maximize <code>E[r_θ(response)] − β · KL(π_θ ‖ π_SFT)</code>. The KL term (controlled by <code>β</code>) prevents reward hacking — the model drifting into high-reward gibberish. This requires generating rollouts online, scoring them, computing advantages, and updating with clipped gradients. Four models may be live simultaneously: actor, critic, reward model, reference policy.</li></ol>
+<p><strong>DPO (1-stage after SFT):</strong> DPO shows that the optimal RLHF policy can be expressed in closed form: <code>π<em>(y|x) ∝ π_SFT(y|x) · exp(r</em>(y,x)/β)</code>. This lets you rearrange the preference objective to train directly on <code>(prompt, chosen, rejected)</code> triplets without ever materializing a reward model:</p>
+<div class="code-block-wrap"><pre class="code-block"><code>L_DPO = −E[ log σ( β · log(π_θ(chosen)/π_ref(chosen)) − β · log(π_θ(rejected)/π_ref(rejected)) ) ]</code></pre><button class="copy-btn">copy</button></div>
+<p>You still need a frozen reference model <code>π_ref</code> (the SFT checkpoint) to compute log-prob ratios, but there's no RL loop, no reward model, no online sampling.</p></div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="section-label">Example / Tradeoff</div>
+  <div class="card card-accent"><div class="rich-text"><div class="table-wrap"><table class="data-table"><tr><th>Dimension</th><th>RLHF (PPO)</th><th>DPO</th></tr><tr><td>Pipeline complexity</td><td>High — RM training + PPO loop, 4 models live</td><td>Low — supervised loss, 2 models (policy + ref)</td></tr><tr><td>Infrastructure</td><td>Requires online rollout generation; needs 4× GPU memory headroom</td><td>Standard SFT setup; no rollouts</td></tr><tr><td>Stability</td><td>PPO is notoriously finicky (reward hacking, KL collapse)</td><td>Stable, reproducible like any SFT run</td></tr><tr><td>Data</td><td>Can incorporate online human feedback or AI feedback in the loop</td><td>Offline preference dataset required upfront</td></tr><tr><td>Performance ceiling</td><td>Higher — RL can explore beyond the dataset; used by GPT-4, Claude 2</td><td>Slightly lower ceiling on complex tasks, but closes the gap on instruction following</td></tr><tr><td>When to use</td><td>When you can generate rollouts, have human annotators in loop, or need frontier performance</td><td>When you have a fixed preference dataset, limited infra, or need fast iteration</td></tr></table></div>
+<p><strong>Real examples:</strong> Meta's Llama 3 used a combination of SFT + RLHF for chat alignment. Mistral-7B-Instruct-v0.2 was aligned with DPO. TRL (HuggingFace) ships both <code>PPOTrainer</code> and <code>DPOTrainer</code> — DPO has ~3× fewer lines of config.</p>
+<p><strong>IPO, KTO, SimPO</strong> are DPO variants that address specific failure modes (distribution shift, need for paired data) — worth mentioning at senior level.</p></div></div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="accordion">
+    <div class="accordion-header">
+      <span class="accordion-title">🎙 Verbal Script (3–5 min)</span>
+      <span class="accordion-chevron">▾</span>
+    </div>
+    <div class="accordion-body">
+      <div class="script-block"><div class="script-label">Opening (30s)</div><p>"Great question — both RLHF and DPO solve the same problem: aligning the model's outputs to human preferences after supervised fine-tuning. The key difference is how they do it. RLHF uses an actual RL loop with a trained reward model, while DPO reparameterizes the same objective as a simple supervised loss, eliminating the reward model entirely. I'll walk through each and then give you my decision framework."</p></div>
+      <div class="script-block"><div class="script-label">Core explanation (2–3 min)</div><p>"RLHF is a three-stage process. First you do SFT — fine-tune on demonstration data. Then you train a reward model on human preference pairs: given two responses, which is better? That reward model outputs a scalar. Then you run PPO — you generate rollouts from the current policy, score them with the reward model, compute advantages, and update the policy with clipped gradients. The critical ingredient is the KL penalty: you penalize the policy for drifting too far from the SFT checkpoint, controlled by β. Without it, the model finds adversarial inputs that fool the reward model — reward hacking.</p>
+<p>DPO skips all of that. Rafailov et al. showed you can rearrange the RLHF objective so that the reward model is implicit in the policy itself. The loss operates directly on preference triplets and is essentially a binary cross-entropy over log-probability ratios between the current policy and a frozen reference. No rollouts, no reward model, no four-model setup. It trains like standard SFT — stable, reproducible, fast to iterate."</p></div>
+      <div class="script-block"><div class="script-label">Tradeoff / production angle (1 min)</div><p>"In practice: if you have a fixed offline preference dataset and limited infra, DPO is the obvious choice. HuggingFace TRL's DPOTrainer lets you go from SFT checkpoint to aligned model in hours. If you need frontier performance — especially on tasks that require exploring beyond your dataset, like RLHF with live human feedback in the loop — PPO is worth the complexity. That's why GPT-4 and Claude 2 used RLHF. The newer DPO variants like IPO and SimPO address some of DPO's edge cases around distribution shift."</p></div>
+      <div class="script-block"><div class="script-label">Wrap-up (30s)</div><p>"So my heuristic: reach for DPO first — it's 80% of the benefit at 20% of the complexity. Graduate to PPO-based RLHF only when you're doing frontier model training with online feedback or when DPO's ceiling is measurably insufficient for your task. Happy to go deeper on reward hacking or the KL penalty math."</p></div>
+    </div>
+  </div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="section-label">Pitfalls</div>
+  <div class="pitfall-card">
+    <div class="pitfall-mistake"><strong>✗ Mistake</strong> Saying &quot;RLHF is always better because it uses RL&quot;</div>
+    <div class="pitfall-better"><strong>✓ Better</strong> Explain that DPO closes most of the gap for instruction-following tasks, avoids reward hacking, and is dramatically simpler to run; RLHF&#x27;s advantage is in online/frontier settings where you can explore beyond your static dataset.</div>
+  </div>
+  <div class="pitfall-card">
+    <div class="pitfall-mistake"><strong>✗ Mistake</strong> Describing RLHF as just &quot;training on human feedback&quot; without mentioning the reward model, PPO, or the KL penalty</div>
+    <div class="pitfall-better"><strong>✓ Better</strong> Walk through all three stages (SFT → RM → PPO with KL leash) and explain why the KL term exists (to prevent reward hacking / model collapse).</div>
+  </div>
+  <div class="pitfall-card">
+    <div class="pitfall-mistake"><strong>✗ Mistake</strong> Not knowing what a preference pair looks like or how DPO&#x27;s loss is computed</div>
+    <div class="pitfall-better"><strong>✓ Better</strong> Be able to say DPO takes <code>(prompt, chosen, rejected)</code> triplets and trains on log-prob ratios between the current policy and a frozen reference; no reward model or rollouts needed.
+
+---</div>
+  </div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="section-label">Related Questions</div>
+  <div class="related-pills">
+    <div class="related-pill" data-slug="01-018">
+      <span class="related-pill-icon">→</span>
+      <div class="related-pill-text">
+        <div class="related-pill-q">Q18: Explain KL divergence</div>
+        <div class="related-pill-rel">Prerequisite — KL penalty is central to both RLHF and DPO</div>
+      </div>
+    </div>
+    <div class="related-pill" data-slug="01-004">
+      <span class="related-pill-icon">→</span>
+      <div class="related-pill-text">
+        <div class="related-pill-q">Q4: What is the difference between pre-training and fine-tuning?</div>
+        <div class="related-pill-rel">Prerequisite — RLHF/DPO are post-SFT alignment stages</div>
+      </div>
+    </div>
+    <div class="related-pill" data-slug="04-001">
+      <span class="related-pill-icon">→</span>
+      <div class="related-pill-text">
+        <div class="related-pill-q">Q7: When fine-tune vs prompt engineering?</div>
+        <div class="related-pill-rel">Follow-up — understanding where RLHF/DPO fit in the full adaptation decision tree</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="section-label">One-liner recall</div>
+  <div class="oneliner-box">
+    <div class="oneliner-label">▸ Reconstruct from memory</div>
+    <div class="oneliner-text" data-text="RLHF trains a reward model then runs PPO with a KL leash; DPO reparameterizes the same objective as a supervised log-prob-ratio loss on preference pairs, eliminating the reward model and RL loop entirely — reach for DPO first, PPO when you need frontier-level performance with online feedback.">RLHF trains a reward model then runs PPO with a KL leash; DPO reparameterizes the same objective as a supervised log-prob-ratio loss on preference pairs, eliminating the reward model and RL loop entirely — reach for DPO first, PPO when you need frontier-level performance with online feedback.</div>
+  </div>
+</div>

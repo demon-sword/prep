@@ -1,0 +1,130 @@
+<div class="answer-header reveal">
+  <div class="answer-meta">
+    <span class="meta-badge meta-category">06-ml-fundamentals</span>
+    <span class="meta-badge meta-num">Q002</span>
+    <span class="meta-badge meta-status-review">review</span>
+  </div>
+  <h1 class="answer-title">SQL vs NoSQL for AI workloads?</h1>
+</div>
+
+<div class="answer-section reveal">
+  <div class="accordion">
+    <div class="accordion-header">
+      <span class="accordion-title">⟁ Framing — Why this is asked</span>
+      <span class="accordion-chevron">▾</span>
+    </div>
+    <div class="accordion-body">
+      <div class="framing-grid">
+        <div><div class="framing-card">
+          <div class="framing-card-title">Why asked</div>
+          <p style="font-size:13.5px;line-height:1.7;color:var(--text-dim)">Interviewers want to see whether you can match storage technology to the read/write patterns, data shapes, and consistency requirements that arise in AI systems — vector stores, feature stores, metadata indexes, training data lakes, and serving caches all have different profiles. Weak candidates treat the choice as SQL = old, NoSQL = new.</p>
+        </div></div>
+        <div><div class="framing-card">
+          <div class="framing-card-title">Trigger phrases</div>
+          <div class="trigger-list">
+              <div class="trigger-phrase">What storage would you use for embeddings / features / training logs?</div>
+              <div class="trigger-phrase">SQL vs NoSQL for AI workloads?</div>
+              <div class="trigger-phrase">Why did you choose Postgres/Cassandra/DynamoDB over alternatives?</div>
+          </div>
+        </div></div>
+      </div>
+      <div class="tests-block">
+        <span style="font-family:var(--mono);font-size:10px;letter-spacing:0.1em;text-transform:uppercase;color:var(--purple);margin-right:8px">Tests:</span>Ability to match storage access patterns, consistency needs, and data shapes to the right database technology in the context of real AI system components.
+
+---
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="section-label">Concept</div>
+  <div class="concept-block"><p>SQL (relational) databases enforce a schema, provide ACID transactions, and excel at structured queries with joins; NoSQL databases trade strict consistency and schema rigidity for horizontal scalability, flexible data models, and optimised access patterns (key-value, document, wide-column, graph, or vector). For AI workloads, the choice is driven by the specific component — there is rarely a single "right" answer for the whole system.</p></div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="section-label">Mechanism</div>
+  <div class="card"><p>Map each AI system component to its dominant access pattern, then choose:</p>
+<div class="table-wrap"><table class="data-table"><tr><th>Component</th><th>Access pattern</th><th>Preferred storage</th></tr><tr><td>Feature store (online serving)</td><td>Point lookups by entity ID, <10 ms SLO</td><td>Redis (in-memory key-value) or DynamoDB</td></tr><tr><td>Feature store (offline training)</td><td>Batch reads of entire feature tables by time range</td><td>Parquet on S3 / Delta Lake + Spark</td></tr><tr><td>Metadata (experiments, model registry)</td><td>Rich queries, joins, audit trail</td><td>PostgreSQL / SQLite (MLflow backend)</td></tr><tr><td>Vector index (ANN retrieval)</td><td>Approximate nearest-neighbour by embedding</td><td>Pinecone, Qdrant, Weaviate, pgvector</td></tr><tr><td>Training logs / event telemetry</td><td>Append-only, time-series, high ingest</td><td>ClickHouse, BigQuery, Kafka → S3</td></tr><tr><td>Session / conversation state</td><td>TTL-keyed per session, hot reads</td><td>Redis with TTL</td></tr><tr><td>Document metadata sidecar (RAG)</td><td>Filter by category/date, join on doc_id</td><td>PostgreSQL or Elasticsearch</td></tr><tr><td>User profile / preferences</td><td>Sparse attributes, schema evolves</td><td>DynamoDB or MongoDB</td></tr></table></div>
+<p><strong>Decision heuristics:</strong></p>
+<ol class="mechanism-steps"><li><strong>Need ACID joins or audit trail?</strong> → PostgreSQL</li><li><strong>Sub-millisecond point lookups at high QPS?</strong> → Redis or DynamoDB</li><li><strong>ANN search over millions of embeddings?</strong> → Pinecone / Qdrant / FAISS (pgvector for <1 M rows)</li><li><strong>Petabyte-scale append-only analytics?</strong> → BigQuery / ClickHouse / Parquet on S3</li><li><strong>Flexible document schema that changes often?</strong> → MongoDB / Firestore</li><li><strong>Graph traversal (GraphRAG)?</strong> → Neo4j / Kuzu</li></ol></div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="section-label">Example / Tradeoff</div>
+  <div class="card card-accent"><div class="rich-text"><p>A production RAG pipeline for a customer support chatbot might use:</p>
+<ul class="styled-list"><li><strong>Pinecone</strong> for the vector index (ANN retrieval, managed HNSW, metadata pre-filtering)</li><li><strong>PostgreSQL</strong> for chunk metadata, ACL groups, and conversation audit logs (joins, ACID)</li><li><strong>Redis</strong> for semantic response cache (cosine-similarity lookup, TTL=1h, 30% hit rate → saves ~$3K/day at 1M queries)</li><li><strong>S3 + Parquet</strong> for raw document storage and the offline RAGAS golden-dataset</li></ul>
+<p>The common trap is storing embeddings in PostgreSQL via pgvector for the whole system — pgvector is excellent up to ~1M rows but scan degrades past that without IVFFlat indexes, and it still shares IOPS with transactional traffic.</p></div></div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="accordion">
+    <div class="accordion-header">
+      <span class="accordion-title">🎙 Verbal Script (3–5 min)</span>
+      <span class="accordion-chevron">▾</span>
+    </div>
+    <div class="accordion-body">
+      <div class="script-block"><div class="script-label">Opening (30s)</div><p>"For AI workloads I'd answer this component-by-component rather than picking one technology for the whole system. The key insight is that different AI components have completely different access patterns — a feature store, a vector index, an experiment tracker, and a training data lake each need different storage."</p></div>
+      <div class="script-block"><div class="script-label">Core explanation (2–3 min)</div><p>"I'd break a typical AI system into layers. First, <strong>metadata and audit</strong> — experiment tracking, model registry, chunk metadata — these benefit from relational storage. PostgreSQL with ACID transactions gives you joins, audit trails, and rich filtering. MLflow, for example, uses Postgres as its backend by default.</p>
+<p>Second, <strong>vector retrieval</strong> — this is where purpose-built vector databases shine. Pinecone and Qdrant use HNSW indexes optimised for approximate nearest-neighbour search. pgvector is a reasonable choice for small corpora under about a million vectors, but beyond that you want a dedicated vector store.</p>
+<p>Third, <strong>online feature serving</strong> — if you're serving user or item features to a model at inference time, you need sub-10ms reads. Redis is the standard answer: in-memory key-value, optional TTL, trivially horizontally scalable.</p>
+<p>Fourth, <strong>offline training data and analytics</strong> — for petabyte-scale event logs and training corpora you want columnar storage: Parquet on S3 read by Spark or BigQuery. These are optimised for full-column scans, not point lookups.</p>
+<p>And fifth, <strong>session state and caching</strong> — Redis again with TTL keys, plus semantic caching layers like GPTCache sitting in front of the LLM."</p></div>
+      <div class="script-block"><div class="script-label">Tradeoff / production angle (1 min)</div><p>"The major tradeoff I've seen teams get wrong is over-centralising on one database. A team that puts everything in Postgres will eventually hit IOPS contention between transactional metadata writes and large vector scans. Conversely, a team that uses only DynamoDB loses the ability to do complex analytics or joins on experiment results. The right answer is usually a polyglot architecture — Postgres for relational metadata, a vector DB for embeddings, Redis for caching, and a data lake for offline workloads."</p></div>
+      <div class="script-block"><div class="script-label">Wrap-up (30s)</div><p>"So my decision framework: relational for metadata and audit, vector DB for embeddings, Redis for online feature serving and caching, columnar storage for offline analytics. Happy to go deeper on any specific component — the vector DB selection tradeoffs or the feature store architecture are each a rich topic."</p></div>
+    </div>
+  </div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="section-label">Pitfalls</div>
+  <div class="pitfall-card">
+    <div class="pitfall-mistake"><strong>✗ Mistake</strong> Saying &quot;NoSQL is better for AI because it&#x27;s more scalable&quot; without specifying which component</div>
+    <div class="pitfall-better"><strong>✓ Better</strong> Map each component to its access pattern; SQL is often the right choice for metadata, audit logs, and experiment tracking.</div>
+  </div>
+  <div class="pitfall-card">
+    <div class="pitfall-mistake"><strong>✗ Mistake</strong> Recommending pgvector for all vector workloads without mentioning its scaling limits</div>
+    <div class="pitfall-better"><strong>✓ Better</strong> State that pgvector is excellent for &lt;1M vectors but HNSW scan degrades at scale; purpose-built vector DBs (Pinecone, Qdrant) are needed for production RAG at millions of chunks.</div>
+  </div>
+  <div class="pitfall-card">
+    <div class="pitfall-mistake"><strong>✗ Mistake</strong> Ignoring caching layers entirely and focusing only on primary storage</div>
+    <div class="pitfall-better"><strong>✓ Better</strong> Mention Redis semantic cache (GPTCache) as a cost/latency lever; at 1M queries/day a 30% cache hit rate saves meaningful compute spend.
+
+---</div>
+  </div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="section-label">Related Questions</div>
+  <div class="related-pills">
+    <div class="related-pill" data-slug="06-001">
+      <span class="related-pill-icon">→</span>
+      <div class="related-pill-text">
+        <div class="related-pill-q">Q1: Data pre-processing and feature engineering</div>
+        <div class="related-pill-rel">Feature store is a downstream consumer of cleaned, engineered features</div>
+      </div>
+    </div>
+    <div class="related-pill" data-slug="06-008">
+      <span class="related-pill-icon">→</span>
+      <div class="related-pill-text">
+        <div class="related-pill-q">Q8: Ingest structured, unstructured, event data</div>
+        <div class="related-pill-rel">Ingestion architecture determines which storage tier data lands in</div>
+      </div>
+    </div>
+    <div class="related-pill" data-slug="02-001">
+      <span class="related-pill-icon">→</span>
+      <div class="related-pill-text">
+        <div class="related-pill-q">Q2: Design a RAG system for a customer support chatbot</div>
+        <div class="related-pill-rel">RAG system design requires the full polyglot storage stack described here</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="section-label">One-liner recall</div>
+  <div class="oneliner-box">
+    <div class="oneliner-label">▸ Reconstruct from memory</div>
+    <div class="oneliner-text" data-text="Match each AI system component to its access pattern: PostgreSQL for metadata/audit, a purpose-built vector DB (Pinecone/Qdrant) for embeddings, Redis for online feature serving and caching, and columnar storage (Parquet/BigQuery) for offline training data — never one database for everything.">Match each AI system component to its access pattern: PostgreSQL for metadata/audit, a purpose-built vector DB (Pinecone/Qdrant) for embeddings, Redis for online feature serving and caching, and columnar storage (Parquet/BigQuery) for offline training data — never one database for everything.</div>
+  </div>
+</div>

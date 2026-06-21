@@ -1,0 +1,137 @@
+<div class="answer-header reveal">
+  <div class="answer-meta">
+    <span class="meta-badge meta-category">02-rag-systems</span>
+    <span class="meta-badge meta-num">Q027</span>
+    <span class="meta-badge meta-status-review">review</span>
+  </div>
+  <h1 class="answer-title">Key tradeoffs: latency vs accuracy, chunk size vs context, cost vs quality?</h1>
+</div>
+
+<div class="answer-section reveal">
+  <div class="accordion">
+    <div class="accordion-header">
+      <span class="accordion-title">⟁ Framing — Why this is asked</span>
+      <span class="accordion-chevron">▾</span>
+    </div>
+    <div class="accordion-body">
+      <div class="framing-grid">
+        <div><div class="framing-card">
+          <div class="framing-card-title">Why asked</div>
+          <p style="font-size:13.5px;line-height:1.7;color:var(--text-dim)">This is a senior-level synthesis question. The interviewer wants to see that you understand RAG is not a single dial but a triangle of competing forces — and that every production decision forces an explicit tradeoff. Weak candidates treat each dimension independently; strong candidates expose the interactions (e.g. larger chunks → better accuracy but higher cost AND latency) and show they have a principled framework for resolving them.</p>
+        </div></div>
+        <div><div class="framing-card">
+          <div class="framing-card-title">Trigger phrases</div>
+          <div class="trigger-list">
+              <div class="trigger-phrase">What are the main tradeoffs in a RAG pipeline?</div>
+              <div class="trigger-phrase">How do you balance latency, accuracy, and cost in RAG?</div>
+              <div class="trigger-phrase">Walk me through how chunk size affects performance.</div>
+              <div class="trigger-phrase">What levers do you pull when RAG is too slow / too expensive / not accurate enough?</div>
+          </div>
+        </div></div>
+      </div>
+      <div class="tests-block">
+        <span style="font-family:var(--mono);font-size:10px;letter-spacing:0.1em;text-transform:uppercase;color:var(--purple);margin-right:8px">Tests:</span>Ability to reason across all three RAG optimization axes simultaneously and make explicit, metric-driven tradeoffs rather than treating each in isolation.
+
+---
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="section-label">Concept</div>
+  <div class="concept-block"><p>A production RAG system lives inside a <strong>tradeoff triangle</strong>: latency, retrieval/generation accuracy, and cost. Increasing chunk size improves context completeness (accuracy ↑) but raises token spend and LLM latency (cost ↑, latency ↑). Retrieving more candidates (higher top-k) helps recall but feeds more tokens to the LLM and adds reranking time. Swapping GPT-4o for GPT-4o-mini cuts cost 10–20× but may reduce answer quality. Every tuning decision moves at least two corners of the triangle simultaneously.</p></div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="section-label">Mechanism</div>
+  <div class="card"><p><strong>Tradeoff 1 — Latency vs Accuracy</strong></p>
+<div class="table-wrap"><table class="data-table"><tr><th>Lever</th><th>Latency impact</th><th>Accuracy impact</th></tr><tr><td>Increase top-k (e.g. 5→20)</td><td>+30–60 ms reranker</td><td>+recall, but lost-in-middle risk</td></tr><tr><td>Add cross-encoder reranker</td><td>+80–200 ms</td><td>+precision@5 ~15–25 pts</td></tr><tr><td>Use larger LLM (GPT-4o vs mini)</td><td>+200–500 ms</td><td>+complex reasoning</td></tr><tr><td>Enable streaming (TTFT)</td><td>TTFT perceived ↓</td><td>no change</td></tr><tr><td>Semantic cache hit</td><td>−400–800 ms</td><td>same as cached answer</td></tr></table></div>
+<p>Key insight: <strong>reranking is the highest ROI latency spend</strong> — 80–200 ms buys 15–25 precision points. Semantic caching eliminates latency entirely for repeat queries.</p>
+<p><strong>Tradeoff 2 — Chunk Size vs Context Quality</strong></p>
+<div class="table-wrap"><table class="data-table"><tr><th>Chunk size</th><th>Pros</th><th>Cons</th></tr><tr><td>Small (128–256 tokens)</td><td>High retrieval precision; cheap per chunk</td><td>Breaks cross-sentence reasoning; misses doc-level context</td></tr><tr><td>Medium (512–1024 tokens)</td><td>Best balance for most QA tasks</td><td>Some irrelevant context leaks in</td></tr><tr><td>Large (2048+ tokens)</td><td>Full-section coherence; good for summarization</td><td>Context pollution; "lost in the middle"; expensive per LLM call</td></tr></table></div>
+<p><strong>Parent-child chunking</strong> resolves the tension: index small child chunks (256 tokens) for precise retrieval, but return their parent (1024 tokens) to the LLM for coherent context. This gives retrieval precision AND generation quality without inflating LLM calls.</p>
+<p><strong>Tradeoff 3 — Cost vs Quality</strong></p>
+<div class="table-wrap"><table class="data-table"><tr><th>Decision point</th><th>Cost-first choice</th><th>Quality-first choice</th></tr><tr><td>Generation model</td><td>GPT-4o-mini (~$0.15/1M in)</td><td>GPT-4o (~$2.50/1M in)</td></tr><tr><td>Embedding model</td><td>text-embedding-3-small</td><td>text-embedding-3-large</td></tr><tr><td>Reranker</td><td>bi-encoder score only</td><td>Cohere Rerank / BGE-Reranker</td></tr><tr><td>Top-k</td><td>3</td><td>10 + rerank to 3</td></tr><tr><td>Response cache</td><td>Aggressive (θ=0.92)</td><td>Conservative (θ=0.97)</td></tr></table></div>
+<p><strong>Cost math at 1M queries/day (typical customer support RAG):</strong></p>
+<ul class="styled-list"><li>GPT-4o-mini + aggressive caching: ~$800–1,200/day</li><li>GPT-4o + no caching: ~$12,000–18,000/day</li><li>Model tiering (mini for routing, GPT-4o for escalations): ~$2,000/day with better quality on hard queries</li></ul></div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="section-label">Example / Tradeoff</div>
+  <div class="card card-accent"><div class="rich-text"><p><strong>Real tuning sequence (customer support chatbot):</strong></p>
+<ol class="mechanism-steps"><li><strong>Baseline:</strong> chunk=512, top-k=5, no reranker, GPT-4o-mini → 68% faithfulness, p95 latency 1.1 s, $0.0012/query</li><li><strong>Add cross-encoder reranker (Cohere Rerank):</strong> faithfulness → 79% (+11 pts), latency → 1.35 s (+230 ms), cost → $0.0018/query</li><li><strong>Switch to parent-child chunking:</strong> faithfulness → 84% (+5 pts), latency neutral, cost neutral</li><li><strong>Add semantic cache (GPTCache, θ=0.93, TTL=1 hr):</strong> 28% hit rate, avg latency → 0.92 s (cache path ~0.1 s), cost → $0.0013/query</li><li><strong>Final state:</strong> 84% faithfulness, 0.92 s p95, $0.0013/query — better accuracy and lower cost than baseline</li></ol>
+<p>The lesson: <strong>fix accuracy first (reranker + chunking strategy), then recover cost/latency via caching</strong> — not the reverse.</p>
+<p><strong>RAGAS metric targets for production:</strong></p>
+<ul class="styled-list"><li>Faithfulness ≥ 0.85</li><li>Answer Relevancy ≥ 0.80</li><li>Context Recall ≥ 0.75 (retrieval health)</li><li>p95 latency ≤ 2.0 s</li><li>Cost per query ≤ $0.002 (customer support SLO)</li></ul></div></div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="accordion">
+    <div class="accordion-header">
+      <span class="accordion-title">🎙 Verbal Script (3–5 min)</span>
+      <span class="accordion-chevron">▾</span>
+    </div>
+    <div class="accordion-body">
+      <div class="script-block"><div class="script-label">Opening (30s)</div><p>"RAG tuning is really about navigating a three-way tradeoff — latency, accuracy, and cost — where almost every dial you turn moves at least two of those simultaneously. I like to think of it as a triangle: you can optimize any two corners, but the third usually suffers unless you're clever about it. Let me walk through the three main tension axes and how I'd resolve them."</p></div>
+      <div class="script-block"><div class="script-label">Core explanation (2–3 min)</div><p>"The first axis is <strong>chunk size vs context quality</strong>. Smaller chunks — say 128 to 256 tokens — give you precise retrieval because you're matching tight semantic units. But when you feed those tiny chunks to the LLM, it often lacks the surrounding context to reason across a paragraph. Large chunks flip the problem: retrieval precision suffers because you're matching big blocks, and the LLM hits the 'lost in the middle' problem where content in the middle of a long context gets ignored. The best production pattern I've seen is parent-child chunking — index small child chunks for precise ANN search, but return the parent chunk to the LLM. You get retrieval precision AND generation coherence without a penalty.</p>
+<p>The second axis is <strong>latency vs accuracy</strong>. Adding a cross-encoder reranker — Cohere Rerank or BGE-Reranker — typically costs 80 to 200 milliseconds but buys you 15 to 25 points of precision improvement. That's usually the highest ROI latency spend in the pipeline. The way I offset that latency is semantic caching: if 25–30% of queries hit the cache at a cosine threshold around 0.93, your average latency actually drops even after adding the reranker.</p>
+<p>The third axis is <strong>cost vs quality</strong>. The biggest lever is model tiering. GPT-4o-mini is roughly 15× cheaper than GPT-4o for generation, so I route routine queries to mini and escalate hard or low-confidence queries to GPT-4o. A concrete example: at 1M queries/day, GPT-4o-only runs about $15K/day; tiered routing with caching brings it under $2K/day with comparable end-user quality on the queries that matter."</p></div>
+      <div class="script-block"><div class="script-label">Tradeoff / production angle (1 min)</div><p>"The failure pattern I see most often is teams trying to fix accuracy by blindly increasing chunk size or top-k without measuring the cost and latency impact. A team I've seen bumped top-k from 5 to 20 to recover recall — their faithfulness went up 4 points but latency doubled and token cost tripled. The better move is to fix the underlying retrieval failure (usually vocab mismatch → add BM25 hybrid), then tune from a healthier baseline. Always measure RAGAS faithfulness and context_recall independently so you know whether you have a retrieval problem or a generation problem before pulling levers."</p></div>
+      <div class="script-block"><div class="script-label">Wrap-up (30s)</div><p>"So my framework: fix retrieval first — chunking strategy and hybrid search — then add a reranker for precision, then recover cost and latency with semantic caching and model tiering. Measure everything with RAGAS before and after each change. Happy to go deeper on any of those individual levers."</p></div>
+    </div>
+  </div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="section-label">Pitfalls</div>
+  <div class="pitfall-card">
+    <div class="pitfall-mistake"><strong>✗ Mistake</strong> Discussing latency, accuracy, and cost as three independent dials and optimizing each separately</div>
+    <div class="pitfall-better"><strong>✓ Better</strong> Explain the interactions (e.g. larger chunks → higher cost AND latency AND potential accuracy drop from lost-in-middle; cross-encoder reranker → latency cost but accuracy gain that caching can offset)</div>
+  </div>
+  <div class="pitfall-card">
+    <div class="pitfall-mistake"><strong>✗ Mistake</strong> Saying &quot;just use a larger chunk size to improve context quality&quot; without acknowledging context pollution or token cost at scale</div>
+    <div class="pitfall-better"><strong>✓ Better</strong> Recommend parent-child chunking as the production pattern that decouples retrieval precision from generation context size, and cite the cost impact of larger chunks at 1M queries/day</div>
+  </div>
+  <div class="pitfall-card">
+    <div class="pitfall-mistake"><strong>✗ Mistake</strong> Treating semantic caching as a pure optimization add-on rather than a key part of the tradeoff resolution</div>
+    <div class="pitfall-better"><strong>✓ Better</strong> Show that caching at a 25–30% hit rate is what makes the reranker&#x27;s latency cost acceptable and model tiering cost savings compound
+
+---</div>
+  </div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="section-label">Related Questions</div>
+  <div class="related-pills">
+    <div class="related-pill" data-slug="02-028">
+      <span class="related-pill-icon">→</span>
+      <div class="related-pill-text">
+        <div class="related-pill-q">Q28: Optimize RAG latency in production</div>
+        <div class="related-pill-rel">Deep dive on latency lever specifically</div>
+      </div>
+    </div>
+    <div class="related-pill" data-slug="02-025">
+      <span class="related-pill-icon">→</span>
+      <div class="related-pill-text">
+        <div class="related-pill-q">Q25: Semantic caching — reduce cost and latency</div>
+        <div class="related-pill-rel">Core tool for resolving cost/latency tension</div>
+      </div>
+    </div>
+    <div class="related-pill" data-slug="02-018">
+      <span class="related-pill-icon">→</span>
+      <div class="related-pill-text">
+        <div class="related-pill-q">Q18: What is re-ranking? Cross-encoder vs bi-encoder?</div>
+        <div class="related-pill-rel">The highest-ROI latency spend in the pipeline</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="section-label">One-liner recall</div>
+  <div class="oneliner-box">
+    <div class="oneliner-label">▸ Reconstruct from memory</div>
+    <div class="oneliner-text" data-text="RAG&#x27;s tradeoff triangle — latency, accuracy, cost — means every tuning decision moves multiple axes: fix retrieval first (parent-child chunking + hybrid search + cross-encoder reranker), then recover cost/latency with semantic caching and model tiering, measuring RAGAS faithfulness and context_recall before and after each change.">RAG&#x27;s tradeoff triangle — latency, accuracy, cost — means every tuning decision moves multiple axes: fix retrieval first (parent-child chunking + hybrid search + cross-encoder reranker), then recover cost/latency with semantic caching and model tiering, measuring RAGAS faithfulness and context_recall before and after each change.</div>
+  </div>
+</div>

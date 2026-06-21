@@ -1,0 +1,140 @@
+<div class="answer-header reveal">
+  <div class="answer-meta">
+    <span class="meta-badge meta-category">03-agents-tool-use</span>
+    <span class="meta-badge meta-num">Q034</span>
+    <span class="meta-badge meta-status-review">review</span>
+  </div>
+  <h1 class="answer-title">Evaluate agent performance — tool selection, action advancement, context adherence</h1>
+</div>
+
+<div class="answer-section reveal">
+  <div class="accordion">
+    <div class="accordion-header">
+      <span class="accordion-title">⟁ Framing — Why this is asked</span>
+      <span class="accordion-chevron">▾</span>
+    </div>
+    <div class="accordion-body">
+      <div class="framing-grid">
+        <div><div class="framing-card">
+          <div class="framing-card-title">Why asked</div>
+          <p style="font-size:13.5px;line-height:1.7;color:var(--text-dim)">Agents are notoriously hard to evaluate: they produce long, multi-step trajectories rather than single outputs, and the &quot;correctness&quot; of an intermediate step depends on context. Interviewers ask this to probe whether you have a systematic eval framework — not vibes — and whether you understand the three distinct failure modes: the agent chose the wrong tool, the agent didn&#x27;t make forward progress, or the agent drifted away from the user&#x27;s original intent.</p>
+        </div></div>
+        <div><div class="framing-card">
+          <div class="framing-card-title">Trigger phrases</div>
+          <div class="trigger-list">
+              <div class="trigger-phrase">How do you measure whether your agent is actually doing the right thing?</div>
+              <div class="trigger-phrase">Is there an eval framework for your agent, or is it vibes-based?</div>
+              <div class="trigger-phrase">How do you evaluate tool selection accuracy and task completion in production?</div>
+              <div class="trigger-phrase">Walk me through how you&#x27;d benchmark an agentic system.</div>
+          </div>
+        </div></div>
+      </div>
+      <div class="tests-block">
+        <span style="font-family:var(--mono);font-size:10px;letter-spacing:0.1em;text-transform:uppercase;color:var(--purple);margin-right:8px">Tests:</span>Ability to design a rigorous, multi-dimensional eval framework for non-deterministic multi-step systems — covering offline golden-trajectory benchmarking, production trajectory monitoring, and business-outcome metrics.
+
+---
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="section-label">Concept</div>
+  <div class="concept-block"><p>Agent evaluation requires three complementary lenses: <strong>tool selection accuracy</strong> (did the agent choose the right tool at each step?), <strong>action advancement</strong> (is the agent making forward progress toward the goal?), and <strong>context adherence</strong> (is the agent staying on task relative to the original goal and conversation context?). These correspond to the three distinct failure modes — wrong action, stuck agent, and goal-drifted agent — and each requires a different measurement technique.</p></div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="section-label">Mechanism</div>
+  <div class="card"><p><strong>1. Tool selection accuracy (offline + online)</strong></p>
+<p><em>Offline — golden trajectory benchmarks:</em></p>
+<ul class="styled-list"><li>Build a golden dataset of 50–200 representative tasks with annotated correct tool calls at each step: <code>{task, expected_tool, expected_args_schema}</code>.</li><li>Metrics:</li><li><strong>Tool selection accuracy</strong> = fraction of steps where the agent called the correct tool (exact match or fuzzy schema match).</li><li><strong>Argument hallucination rate</strong> = fraction of tool calls where required args were fabricated rather than grounded in context.</li><li>Tools: LangSmith datasets, PromptFoo, AgentBench, or custom pytest fixtures that mock tool outputs and assert on the call log.</li></ul>
+<p><em>Online — production telemetry:</em></p>
+<ul class="styled-list"><li>Instrument every tool call with structured logs: <code>{run_id, step, tool_name, args_summary, result_status, latency_ms}</code>.</li><li>Track <strong>tool error rate</strong> (schema validation failures, 400s, tool timeouts) per tool per day.</li><li>Alert when tool error rate for a specific tool exceeds baseline by 2σ — often signals a schema mismatch after a tool update.</li></ul>
+<p><strong>2. Action advancement (is the agent making progress?)</strong></p>
+<p>An agent that loops, re-queries the same tool with the same args, or emits only "thought" steps without tool calls is stuck. Measure:</p>
+<ul class="styled-list"><li><strong>Steps-to-completion</strong> on the golden dataset: compare agent trajectory length to the expert annotated trajectory length. A ratio > 2× signals over-planning or loops.</li><li><strong>No-progress rate</strong>: fraction of production runs where ≥2 consecutive steps have identical action fingerprints (same tool + same args hash). This is the production analog of loop detection.</li><li><strong>Task completion rate (TCR)</strong>: fraction of runs that reach a structured FINAL_ANSWER within the budget (<code>max_iterations</code>, <code>max_tokens</code>, <code>wall_clock</code>). For the support-ticket agent, TCR should be >90% within 5 turns.</li></ul>
+<p>Compute TCR against the golden task set offline, and track it in production via orchestrator-emitted run-outcome events.</p>
+<p><strong>3. Context adherence (goal drift)</strong></p>
+<p>Goal drift is the hardest failure to detect because the agent appears to make progress but toward the wrong objective.</p>
+<ul class="styled-list"><li><strong>Offline</strong> — goal-adherence score: after each completed trajectory, use an LLM judge (GPT-4o with a rubric) to score <code>[0–1]</code> whether the final output satisfies the original task description. Include the full trajectory in the judge prompt so it can detect intermediate drift.</li><li><strong>Online</strong> — cosine drift tracking: embed the user's original goal at turn 0; embed each agent step summary. If the cosine similarity between the step embedding and the original goal embedding drops below a threshold (e.g., 0.65) for two consecutive steps, fire a goal-drift alert.</li><li><strong>Context precision on retrieved knowledge</strong>: if the agent uses RAG internally, measure RAGAS <code>context_precision</code> — low precision means retrieved docs are off-topic, which is a leading indicator of hallucinated tool args.</li></ul>
+<p><strong>Full eval matrix:</strong></p>
+<div class="table-wrap"><table class="data-table"><tr><th>Dimension</th><th>Offline metric</th><th>Production metric</th><th>Threshold</th></tr><tr><td>Tool selection</td><td>Selection accuracy @step</td><td>Tool error rate</td><td>>85% acc; <5% error</td></tr><tr><td>Arg quality</td><td>Arg hallucination rate</td><td>Schema validation failure rate</td><td><5% hallucination</td></tr><tr><td>Progress</td><td>Steps-to-completion ratio</td><td>No-progress rate</td><td>ratio <2×; <3% stuck runs</td></tr><tr><td>Completion</td><td>Task completion rate (TCR)</td><td>TCR per run cohort</td><td>>90%</td></tr><tr><td>Goal adherence</td><td>LLM-judge score</td><td>Cosine drift alert</td><td>>0.80 judge; >0.65 cosine</td></tr></table></div>| Business | — (offline only) | Deflection rate, CSAT, cost/run | Org-specific SLOs |</div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="section-label">Example / Tradeoff</div>
+  <div class="card card-accent"><div class="rich-text"><p><strong>Support-ticket agent (LangSmith + custom eval):</strong> A 5-step agent that fetches ticket context, queries CRM, drafts a response, and submits. Golden dataset: 150 tickets with annotated correct tool call per step.</p>
+<ul class="styled-list"><li>Baseline tool selection accuracy: 78% (wrong tool called 22% of steps — mostly confusing <code>fetch_ticket</code> vs <code>search_kb</code>).</li><li>Fix: improved tool descriptions with explicit DO-NOT-use conditions.</li><li>After fix: 94% accuracy, arg hallucination rate dropped from 18% → 3%.</li><li>TCR in production: 91% within 5 turns, 7% reach the turn cap (escalated to human), 2% crash.</li></ul>
+<p><strong>Tradeoff — LLM judge cost vs. proxy metrics:</strong> LLM-judge evaluation at scale costs ~$0.02/run with GPT-4o (150 tokens input + 50 output). At 10K runs/day that's $200/day. Use LLM judge on a sampled 5% of production runs and 100% of golden-dataset regression runs; use cheaper proxy metrics (cosine drift, TCR, tool error rate) for the other 95%.</p></div></div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="accordion">
+    <div class="accordion-header">
+      <span class="accordion-title">🎙 Verbal Script (3–5 min)</span>
+      <span class="accordion-chevron">▾</span>
+    </div>
+    <div class="accordion-body">
+      <div class="script-block"><div class="script-label">Opening (30s)</div><p>"Evaluating an agent is much harder than evaluating a single LLM call because you're assessing a multi-step trajectory rather than a single output. I break it into three dimensions: did the agent choose the right tools, did it make forward progress, and did it stay focused on the original goal? Each has different measurement techniques for offline benchmarking versus production monitoring."</p></div>
+      <div class="script-block"><div class="script-label">Core explanation (2–3 min)</div><p>"Starting with tool selection accuracy — I'd build a golden dataset of representative tasks with annotated correct tool calls at each step. I'd compute two metrics: selection accuracy, which is the fraction of steps where the agent chose the right tool, and argument hallucination rate, which is how often required args were fabricated rather than grounded in context. In LangSmith, you can log every tool call with run_id and step index and replay those against the golden annotations. In production I'd track tool error rate — schema validation failures and 400s — per tool per day, because a sudden spike usually means a schema broke after a tool update.</p>
+<p>For action advancement, I'd measure steps-to-completion relative to the expert trajectory. If the agent takes twice as many steps as the golden trajectory on average, it's over-planning or looping. In production I'd compute a no-progress rate: the fraction of runs where two consecutive steps have identical action fingerprints — same tool, same args. That's a dead giveaway for an infinite loop. Task completion rate — how often the agent reaches a FINAL_ANSWER within its turn budget — is the headline metric for production reporting.</p>
+<p>Goal drift is the sneakiest failure. The agent appears busy but is answering the wrong question. Offline, I'd use an LLM judge with a rubric that gets the full trajectory and scores whether the final output satisfies the original goal. In production I'd embed the user's goal at turn zero and embed each step summary, then alert when cosine similarity drops below 0.65 for two consecutive steps — that's a reliable leading indicator before the user gets a useless response."</p></div>
+      <div class="script-block"><div class="script-label">Tradeoff / production angle (1 min)</div><p>"The main practical tradeoff is LLM-judge eval cost versus proxy metric coverage. Running GPT-4o as a judge on every production run costs $200/day at 10K runs. I'd run the judge on a 5% sample plus 100% of golden-dataset regression runs, and use cheaper signals — cosine drift, TCR, tool error rate — for everything else. The risk is the proxies miss subtle goal-drift cases that the judge would catch; I'd calibrate the proxy thresholds against the judge on a quarterly basis.</p>
+<p>The other important operational note: connect eval to deployment gates. If tool selection accuracy on the golden dataset drops below 85% after a prompt or tool-schema change, that should block the release — same way test coverage gates block a code deploy."</p></div>
+      <div class="script-block"><div class="script-label">Wrap-up (30s)</div><p>"So the framework is: three dimensions, two regimes. Offline golden-trajectory benchmarks for tool accuracy and TCR before deployment, LLM-judge scoring on sampled production runs for goal adherence, and lightweight proxy metrics — no-progress rate, cosine drift, tool error rate — for real-time alerting. Happy to go deeper on the LangSmith dataset setup or the LLM-judge rubric design."</p></div>
+    </div>
+  </div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="section-label">Pitfalls</div>
+  <div class="pitfall-card">
+    <div class="pitfall-mistake"><strong>✗ Mistake</strong> Treating task completion rate as the only metric (&quot;the agent either finishes or it doesn&#x27;t&quot;)</div>
+    <div class="pitfall-better"><strong>✓ Better</strong> Distinguish TCR (did it finish?) from goal adherence (did the final output satisfy the original intent?), tool selection accuracy (were intermediate steps correct?), and action advancement (was there unnecessary looping?). An agent can complete a task via a wrong but accidentally correct path, or complete while drifting from the user&#x27;s actual goal.</div>
+  </div>
+  <div class="pitfall-card">
+    <div class="pitfall-mistake"><strong>✗ Mistake</strong> Saying &quot;I&#x27;d watch the logs&quot; without describing structured telemetry</div>
+    <div class="pitfall-better"><strong>✓ Better</strong> Specify the exact events emitted per step (<code>run_id</code>, <code>step</code>, <code>tool_name</code>, <code>args_summary</code>, <code>result_status</code>), the aggregated dashboards (tool error rate, no-progress rate, TCR), and the alerting thresholds (2σ above baseline tool error rate triggers PagerDuty).</div>
+  </div>
+  <div class="pitfall-card">
+    <div class="pitfall-mistake"><strong>✗ Mistake</strong> Proposing LLM-judge evaluation on 100% of production runs without mentioning cost</div>
+    <div class="pitfall-better"><strong>✓ Better</strong> Design a tiered approach: LLM judge on a 5% production sample + 100% golden regressions + cheaper proxy metrics (cosine drift, TCR) for everything else, with quarterly calibration of proxy thresholds against the judge.
+
+---</div>
+  </div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="section-label">Related Questions</div>
+  <div class="related-pills">
+    <div class="related-pill" data-slug="03-030">
+      <span class="related-pill-icon">→</span>
+      <div class="related-pill-text">
+        <div class="related-pill-q">Q30: Monitor autonomous agent behavior in production</div>
+        <div class="related-pill-rel">Complementary — monitoring is the operational layer; this question focuses on the eval metrics and benchmarking framework</div>
+      </div>
+    </div>
+    <div class="related-pill" data-slug="03-017">
+      <span class="related-pill-icon">→</span>
+      <div class="related-pill-text">
+        <div class="related-pill-q">Q17: Planning failures hardest to detect in production</div>
+        <div class="related-pill-rel">Goal drift and sycophantic loops are covered here from an eval angle; Q17 covers detection mechanisms</div>
+      </div>
+    </div>
+    <div class="related-pill" data-slug="02-021">
+      <span class="related-pill-icon">→</span>
+      <div class="related-pill-text">
+        <div class="related-pill-q">Q8: How evaluate a RAG pipeline? What metrics?</div>
+        <div class="related-pill-rel">RAGAS metrics for RAG-using agents; context_precision is a leading indicator of tool-arg hallucination</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="section-label">One-liner recall</div>
+  <div class="oneliner-box">
+    <div class="oneliner-label">▸ Reconstruct from memory</div>
+    <div class="oneliner-text" data-text="Evaluate agents across three dimensions — tool selection accuracy (golden-dataset step annotations), action advancement (steps-to-completion ratio + no-progress rate), and context/goal adherence (LLM-judge on sampled runs + cosine drift monitoring) — and gate deployments on the offline golden-dataset benchmarks.">Evaluate agents across three dimensions — tool selection accuracy (golden-dataset step annotations), action advancement (steps-to-completion ratio + no-progress rate), and context/goal adherence (LLM-judge on sampled runs + cosine drift monitoring) — and gate deployments on the offline golden-dataset benchmarks.</div>
+  </div>
+</div>

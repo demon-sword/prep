@@ -1,0 +1,150 @@
+<div class="answer-header reveal">
+  <div class="answer-meta">
+    <span class="meta-badge meta-category">03-agents-tool-use</span>
+    <span class="meta-badge meta-num">Q032</span>
+    <span class="meta-badge meta-status-review">review</span>
+  </div>
+  <h1 class="answer-title">Orchestration vs choreography for multi-agent systems?</h1>
+</div>
+
+<div class="answer-section reveal">
+  <div class="accordion">
+    <div class="accordion-header">
+      <span class="accordion-title">⟁ Framing — Why this is asked</span>
+      <span class="accordion-chevron">▾</span>
+    </div>
+    <div class="accordion-body">
+      <div class="framing-grid">
+        <div><div class="framing-card">
+          <div class="framing-card-title">Why asked</div>
+          <p style="font-size:13.5px;line-height:1.7;color:var(--text-dim)">Interviewers want to know whether you understand the two canonical patterns for coordinating multiple agents and can reason about their production tradeoffs — reliability, debuggability, coupling, and scalability. It probes architectural maturity beyond single-agent loops.</p>
+        </div></div>
+        <div><div class="framing-card">
+          <div class="framing-card-title">Trigger phrases</div>
+          <div class="trigger-list">
+              <div class="trigger-phrase">How do multiple agents communicate and coordinate?</div>
+              <div class="trigger-phrase">Would you use a supervisor agent or event-driven agents for this?</div>
+              <div class="trigger-phrase">How do you design a multi-agent system without a single point of failure?</div>
+              <div class="trigger-phrase">Walk me through orchestration vs choreography in the context of agents.</div>
+          </div>
+        </div></div>
+      </div>
+      <div class="tests-block">
+        <span style="font-family:var(--mono);font-size:10px;letter-spacing:0.1em;text-transform:uppercase;color:var(--purple);margin-right:8px">Tests:</span>Ability to choose and justify a multi-agent coordination pattern based on reliability, latency, debuggability, and coupling requirements.
+
+---
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="section-label">Concept</div>
+  <div class="concept-block"><p><strong>Orchestration</strong> uses a central supervisor agent (or orchestrator) that explicitly directs specialist sub-agents — it tells each one what to do and when. <strong>Choreography</strong> removes the central coordinator: agents react to events (messages on a queue or topic) and self-coordinate by publishing results that trigger the next agent downstream. The key distinction is <em>who decides the next step</em>: a single brain (orchestration) vs. the agents themselves reacting to shared state (choreography).</p></div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="section-label">Mechanism</div>
+  <div class="card"><p><strong>Orchestration (centralized control):</strong></p>
+<div class="code-block-wrap"><pre class="code-block"><code>User Request
+     │
+     ▼
+Supervisor Agent (LLM planner)
+  ├─→ spawns ResearchAgent → result returned to supervisor
+  ├─→ spawns WriterAgent(research_result) → draft returned
+  └─→ spawns CriticAgent(draft) → feedback, loop or finalize
+     │
+     ▼
+Final response</code></pre><button class="copy-btn">copy</button></div>
+<ul class="styled-list"><li>Supervisor holds the global plan; sub-agents are stateless workers.</li><li>Easy to trace: one call graph rooted at the supervisor.</li><li>Single point of failure: supervisor crash or hallucination derails everything.</li><li>Framework: LangGraph with a supervisor node, CrewAI orchestrator pattern, AutoGen GroupChat manager.</li></ul>
+<p><strong>Choreography (event-driven, decentralized):</strong></p>
+<div class="code-block-wrap"><pre class="code-block"><code>User Request → Event Bus (Kafka / AWS SNS)
+     │
+     ├─→ ResearchAgent subscribes to &quot;task.created&quot; → publishes &quot;research.done&quot;
+     ├─→ WriterAgent subscribes to &quot;research.done&quot; → publishes &quot;draft.ready&quot;
+     └─→ CriticAgent subscribes to &quot;draft.ready&quot; → publishes &quot;review.done&quot; or &quot;draft.revised&quot;
+     │
+     ▼
+FinalDispatcher subscribes to &quot;review.done&quot; → delivers response</code></pre><button class="copy-btn">copy</button></div>
+<ul class="styled-list"><li>No agent knows the full pipeline; each knows only its upstream trigger and downstream event.</li><li>High resilience: agent failure → dead-letter queue → retry without restarting the whole pipeline.</li><li>Harder to trace end-to-end; requires distributed tracing (OpenTelemetry + correlation IDs).</li><li>Framework: Kafka topics, AWS EventBridge, Temporal workflows (choreography with visibility), Celery chains.</li></ul></div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="section-label">Example / Tradeoff</div>
+  <div class="card card-accent"><div class="rich-text"><div class="table-wrap"><table class="data-table"><tr><th>Dimension</th><th>Orchestration</th><th>Choreography</th></tr><tr><td>Coupling</td><td>Supervisor knows all agents</td><td>Agents know only their event contract</td></tr><tr><td>Debuggability</td><td>Easy — one call tree</td><td>Hard — distributed traces needed (OTel)</td></tr><tr><td>Resilience</td><td>SPOF at supervisor</td><td>Individual agent failure is isolated</td></tr><tr><td>Adaptability</td><td>Supervisor must be updated for new agents</td><td>Add agent by subscribing to an event</td></tr><tr><td>Latency</td><td>Sequential by default (unless supervisor fans out)</td><td>Natural fan-out, parallel processing</td></tr><tr><td>Cost predictability</td><td>Easy to budget per supervisor call</td><td>Harder — fan-out can multiply unexpectedly</td></tr><tr><td>Best for</td><td>Research assistants, complex multi-step planning, regulated flows needing HITL</td><td>Data pipelines, high-volume parallel document processing, loosely-coupled microservice-style AI workflows</td></tr></table></div>
+<p><strong>Concrete example:</strong> A research report generator with 3 agents (researcher, writer, critic) is a natural orchestration fit — the supervisor coordinates tight feedback loops and can insert HITL before finalizing. A document-ingestion pipeline processing 10K PDFs/hour with OCR → extraction → embedding → indexing agents is a natural choreography fit — each agent scales independently, Kafka provides replay on failure, and there's no need for a central planner to monitor every document.</p>
+<p><strong>Hybrid pattern:</strong> Use orchestration at the high-level workflow (supervisor plans which pipeline to invoke) and choreography internally within each pipeline stage for parallelism and resilience. LangGraph supports this: a supervisor node emits tasks to a Kafka-backed worker pool, then collects results.</p></div></div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="accordion">
+    <div class="accordion-header">
+      <span class="accordion-title">🎙 Verbal Script (3–5 min)</span>
+      <span class="accordion-chevron">▾</span>
+    </div>
+    <div class="accordion-body">
+      <div class="script-block"><div class="script-label">Opening (30s)</div><p>"This is a classic distributed systems question applied to agents. The two patterns are orchestration — where a central supervisor directs all the agents — and choreography — where agents are event-driven and self-coordinate. The right choice depends on how tightly coupled your workflow is, how much resilience you need, and how many agents you're coordinating."</p></div>
+      <div class="script-block"><div class="script-label">Core explanation (2–3 min)</div><p>"In orchestration, I have a supervisor agent — often an LLM planner — that explicitly delegates tasks to specialist sub-agents. The supervisor calls ResearchAgent, gets the result, calls WriterAgent with that result, then passes the draft to CriticAgent. It's like a manager calling employees one at a time. The advantage is that the call graph is simple: one root, easy to trace with LangSmith, easy to insert HITL before any step. LangGraph's supervisor pattern and CrewAI both implement this.</p>
+<p>The downside is the supervisor is a single point of failure. If it hallucinates a bad plan, everything downstream is wrong. It also tends to be sequential unless the supervisor explicitly fans out.</p>
+<p>In choreography, I remove the central coordinator entirely. Agents subscribe to events on a bus — say Kafka. ResearchAgent listens for 'task.created', does its work, and publishes 'research.done'. WriterAgent listens for 'research.done', does its work, publishes 'draft.ready'. No agent knows the full pipeline. This is highly resilient — if WriterAgent crashes, the message sits in Kafka and gets retried once it recovers. New agents can be added by subscribing to existing events without changing anything else.</p>
+<p>The cost is observability: I need distributed tracing — OpenTelemetry with correlation IDs — to reconstruct what happened across agents. Choreography also makes it harder to enforce HITL mid-pipeline."</p></div>
+      <div class="script-block"><div class="script-label">Tradeoff / production angle (1 min)</div><p>"For a research-assistant product with 3–5 agents doing tight feedback loops — research, draft, critique, revision — I'd use orchestration via LangGraph. The call structure is predictable, I can add HITL before the final output, and debugging is straightforward.</p>
+<p>For a document-ingestion pipeline processing tens of thousands of PDFs daily, I'd use choreography with Kafka: OCR → extraction → embedding → indexing agents all scale independently, failed messages are retried from the queue, and adding a new enrichment step doesn't require touching the orchestrator.</p>
+<p>The hybrid pattern I often reach for in production is orchestration at the workflow level with choreography inside high-volume pipeline stages."</p></div>
+      <div class="script-block"><div class="script-label">Wrap-up (30s)</div><p>"So the decision comes down to: tightly coupled, inspection-heavy workflows → orchestration; loosely coupled, high-volume, resilience-first pipelines → choreography. Happy to go deeper on how HITL fits into each pattern or how Temporal bridges the two."</p></div>
+    </div>
+  </div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="section-label">Pitfalls</div>
+  <div class="pitfall-card">
+    <div class="pitfall-mistake"><strong>✗ Mistake</strong> Defining orchestration as &quot;using a tool like LangChain&quot; and choreography as &quot;not using a framework&quot;</div>
+    <div class="pitfall-better"><strong>✓ Better</strong> Frame it as <em>who decides the next step</em>: a central coordinator (orchestration) vs. agents reacting to events (choreography); both can be implemented with or without frameworks.</div>
+  </div>
+  <div class="pitfall-card">
+    <div class="pitfall-mistake"><strong>✗ Mistake</strong> Saying choreography is &quot;always better because it&#x27;s more scalable&quot; without acknowledging the observability and HITL challenges</div>
+    <div class="pitfall-better"><strong>✓ Better</strong> Call out that choreography requires distributed tracing (OTel + correlation IDs) and makes mid-pipeline HITL gates significantly harder to implement.</div>
+  </div>
+  <div class="pitfall-card">
+    <div class="pitfall-mistake"><strong>✗ Mistake</strong> Ignoring the hybrid pattern</div>
+    <div class="pitfall-better"><strong>✓ Better</strong> In production, most non-trivial systems combine both: orchestration at the workflow planning level and choreography internally for parallel, high-volume stages.
+
+---</div>
+  </div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="section-label">Related Questions</div>
+  <div class="related-pills">
+    <div class="related-pill" data-slug="03-008">
+      <span class="related-pill-icon">→</span>
+      <div class="related-pill-text">
+        <div class="related-pill-q">Q8: Walk through a production-ready agent architecture</div>
+        <div class="related-pill-rel">Orchestration is the default single-agent architecture; this extends it to multi-agent</div>
+      </div>
+    </div>
+    <div class="related-pill" data-slug="03-020">
+      <span class="related-pill-icon">→</span>
+      <div class="related-pill-text">
+        <div class="related-pill-q">Q20: Architect an agent system: loop, tools, memory, orchestration, safety</div>
+        <div class="related-pill-rel">Full architecture view including orchestration layer</div>
+      </div>
+    </div>
+    <div class="related-pill" data-slug="03-030">
+      <span class="related-pill-icon">→</span>
+      <div class="related-pill-text">
+        <div class="related-pill-q">Q30: Monitor autonomous agent behavior in production</div>
+        <div class="related-pill-rel">Choreography makes observability harder — distributed tracing is the key mitigation</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="section-label">One-liner recall</div>
+  <div class="oneliner-box">
+    <div class="oneliner-label">▸ Reconstruct from memory</div>
+    <div class="oneliner-text" data-text="Orchestration centralizes control in a supervisor (easy to trace, SPOF), while choreography uses event-driven agents reacting to a shared bus (resilient, scalable, but harder to observe) — choose orchestration for tight coupled workflows, choreography for high-volume parallel pipelines, and combine both in production.">Orchestration centralizes control in a supervisor (easy to trace, SPOF), while choreography uses event-driven agents reacting to a shared bus (resilient, scalable, but harder to observe) — choose orchestration for tight coupled workflows, choreography for high-volume parallel pipelines, and combine both in production.</div>
+  </div>
+</div>

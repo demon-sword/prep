@@ -1,0 +1,131 @@
+<div class="answer-header reveal">
+  <div class="answer-meta">
+    <span class="meta-badge meta-category">01-llm-fundamentals</span>
+    <span class="meta-badge meta-num">Q042</span>
+    <span class="meta-badge meta-status-review">review</span>
+  </div>
+  <h1 class="answer-title">Semantic search vs keyword search?</h1>
+</div>
+
+<div class="answer-section reveal">
+  <div class="accordion">
+    <div class="accordion-header">
+      <span class="accordion-title">⟁ Framing — Why this is asked</span>
+      <span class="accordion-chevron">▾</span>
+    </div>
+    <div class="accordion-body">
+      <div class="framing-grid">
+        <div><div class="framing-card">
+          <div class="framing-card-title">Why asked</div>
+          <p style="font-size:13.5px;line-height:1.7;color:var(--text-dim)">Interviewers probe whether you understand retrieval at a systems level, not just surface definitions. In RAG pipelines, choosing the wrong retrieval method is the single most common cause of poor answer quality. This question surfaces whether you can reason about the failure modes of each approach and know when to combine them (hybrid search).</p>
+        </div></div>
+        <div><div class="framing-card">
+          <div class="framing-card-title">Trigger phrases</div>
+          <div class="trigger-list">
+              <div class="trigger-phrase">When would you use semantic search over keyword search?</div>
+              <div class="trigger-phrase">Your RAG pipeline isn&#x27;t finding relevant docs — walk me through how you&#x27;d debug retrieval.</div>
+              <div class="trigger-phrase">Compare vector search and BM25.</div>
+              <div class="trigger-phrase">What is hybrid search and when do you need it?</div>
+          </div>
+        </div></div>
+      </div>
+      <div class="tests-block">
+        <span style="font-family:var(--mono);font-size:10px;letter-spacing:0.1em;text-transform:uppercase;color:var(--purple);margin-right:8px">Tests:</span>Whether you can reason about retrieval tradeoffs — vocabulary mismatch vs semantic drift — and know that production systems almost always need hybrid search combining both.
+
+---
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="section-label">Concept</div>
+  <div class="concept-block"><p>Keyword search (BM25/TF-IDF) matches documents by exact or near-exact term overlap — it's fast, interpretable, and excels on precise terminology, product codes, and domain jargon. Semantic search (dense vector retrieval) matches by embedding-space proximity — it captures paraphrasing and conceptual similarity but can miss exact terms. Neither alone is sufficient for production RAG; hybrid search that scores both and fuses the rankings (Reciprocal Rank Fusion or learned reranker) is the standard answer.</p></div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="section-label">Mechanism</div>
+  <div class="card"><p><strong>Keyword search (BM25)</strong></p>
+<ul class="styled-list"><li>Builds an inverted index: term → (document IDs, TF-IDF-like weights)</li><li>At query time, tokenizes the query, looks up each term in the index, scores documents by BM25 (term frequency, inverse document frequency, document length normalization)</li><li>Returns top-k sorted by score</li><li>Tools: Elasticsearch, OpenSearch, Lucene, Weaviate BM25 module</li></ul>
+<p><strong>Semantic search (dense retrieval)</strong></p>
+<ul class="styled-list"><li>Embed every document chunk with a bi-encoder (e.g., <code>text-embedding-3-large</code>, <code>BAAI/bge-large-en-v1.5</code>) at index time → store vectors in Pinecone, Qdrant, Weaviate, or FAISS with an HNSW index</li><li>At query time, embed the query, run approximate nearest-neighbor (ANN) search via HNSW</li><li>Returns top-k by cosine similarity</li><li>Re-rank with a cross-encoder (e.g., <code>cross-encoder/ms-marco-MiniLM-L-12-v2</code>) for precision</li></ul>
+<p><strong>Hybrid search</strong></p>
+<ol class="mechanism-steps"><li>Run BM25 retrieval → get ranked list A (top-K, e.g., 50)</li><li>Run dense ANN retrieval → get ranked list B (top-K)</li><li>Fuse with Reciprocal Rank Fusion (RRF): <code>score = Σ 1/(k + rank_i)</code> where k=60</li><li>Optionally re-rank fused top-N with a cross-encoder</li><li>Feed top-5 to the LLM</li></ol></div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="section-label">Example / Tradeoff</div>
+  <div class="card card-accent"><div class="rich-text"><div class="table-wrap"><table class="data-table"><tr><th>Scenario</th><th>Use</th></tr><tr><td>"CPT code 99213" in a medical billing doc</td><td>BM25 wins — exact code must match</td></tr><tr><td>"What are the side effects of the blood thinner?"</td><td>Dense wins — "warfarin", "anticoagulant", "Coumadin" are synonyms</td></tr><tr><td>"Cancel policy 8675309 per section 12.3(b)"</td><td>Hybrid — exact policy number + section context</td></tr><tr><td>Low-latency requirement <50ms</td><td>BM25 alone or dense-only with quantized HNSW</td></tr><tr><td>RAGAS context_recall < 0.6 on exact-term queries</td><td>Add BM25 to fix vocabulary mismatch</td></tr></table></div>
+<p><strong>Concrete failure modes:</strong></p>
+<ul class="styled-list"><li><strong>Dense-only failure:</strong> Query "HTTP 429 error" → embedding model maps it near "rate limiting" semantically, but misses docs that literally say "429" because the number tokenizes poorly. BM25 finds it instantly.</li><li><strong>BM25-only failure:</strong> Query "plans for ending one's life" vs documents containing "suicide prevention resources" — zero term overlap, BM25 score = 0. Dense search retrieves it by meaning.</li><li><strong>Negation failure (both):</strong> "models that do NOT support streaming" — embeddings of negated queries are barely different from positive queries in embedding space; BM25 ignores the NOT. This is a hard problem that requires metadata filtering or structured queries.</li></ul></div></div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="accordion">
+    <div class="accordion-header">
+      <span class="accordion-title">🎙 Verbal Script (3–5 min)</span>
+      <span class="accordion-chevron">▾</span>
+    </div>
+    <div class="accordion-body">
+      <div class="script-block"><div class="script-label">Opening (30s)</div><p>"Great question — this is one of the most important practical decisions in RAG system design. The short answer is: keyword search is exact-match and interpretable, semantic search is paraphrase-aware but can miss precise terms, and in production you almost always want hybrid. Let me walk through each and the tradeoffs."</p></div>
+      <div class="script-block"><div class="script-label">Core explanation (2–3 min)</div><p>"Keyword search, specifically BM25, works by building an inverted index — each term maps to the documents that contain it, weighted by how often the term appears in that doc and how rare it is across all docs. It's extremely fast — milliseconds even at millions of documents — and it's unbeatable when the query uses the exact same words as the document. Think product SKUs, error codes, regulatory section numbers like '12 CFR 1026.4'. The failure mode is vocabulary mismatch: if the user asks 'plans for ending one's life' but your docs say 'suicide prevention', BM25 returns nothing because no terms match.</p>
+<p>Semantic search solves that by encoding every document chunk into a dense vector using a bi-encoder — something like <code>text-embedding-3-large</code> from OpenAI or <code>bge-large-en-v1.5</code> from BAAI — and then doing approximate nearest-neighbor search via HNSW at query time. The query also gets embedded, and we find the closest document vectors by cosine similarity. This handles paraphrasing beautifully. But it has its own failure modes: short exact strings like 'HTTP 429' or 'ICD-10 J06.9' get buried in an embedding space dominated by semantic meaning, and negation is nearly invisible — 'no streaming support' looks almost identical to 'supports streaming' in embedding space.</p>
+<p>So in production, the standard pattern is hybrid: run BM25 and dense retrieval in parallel, fuse the rankings using Reciprocal Rank Fusion — which is just <code>1 / (k + rank)</code> summed across both lists — and then optionally re-rank the top 20 fused results with a cross-encoder for precision. Elasticsearch and Weaviate both support this natively."</p></div>
+      <div class="script-block"><div class="script-label">Tradeoff / production angle (1 min)</div><p>"The main tradeoffs are latency and complexity. BM25 alone is <10ms. Dense ANN with HNSW is maybe 20–50ms. Adding a cross-encoder re-rank adds another 50–200ms depending on the model size. At scale — say 10M documents — you also need to think about HNSW index memory, quantization (scalar or product quantization to shrink vectors), and sharding. Pinecone handles the scaling automatically; self-hosted FAISS requires you to manage it. One thing I always do: run RAGAS metrics — specifically context_recall and context_precision — on a golden test set for both BM25-only and dense-only, then show the hybrid improvement before choosing the architecture."</p></div>
+      <div class="script-block"><div class="script-label">Wrap-up (30s)</div><p>"To summarize: BM25 for exact term matching and low latency, dense for semantic paraphrasing, hybrid with RRF for production. The specific failure modes — vocab mismatch for BM25, exact-string misses and negation blindness for dense — are what drive the hybrid decision. Happy to go deeper on the re-ranking layer or how I'd tune the BM25 weight in the fusion if that's useful."</p></div>
+    </div>
+  </div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="section-label">Pitfalls</div>
+  <div class="pitfall-card">
+    <div class="pitfall-mistake"><strong>✗ Mistake</strong> Saying &quot;semantic search is better than keyword search&quot; without qualification</div>
+    <div class="pitfall-better"><strong>✓ Better</strong> Explain that each has distinct failure modes (vocabulary mismatch for BM25, exact-string/negation failures for dense) and that production systems use hybrid; mention BM25&#x27;s unbeatable latency advantage for exact-match use cases.</div>
+  </div>
+  <div class="pitfall-card">
+    <div class="pitfall-mistake"><strong>✗ Mistake</strong> Describing hybrid search as &quot;running both and picking whichever scores higher&quot;</div>
+    <div class="pitfall-better"><strong>✓ Better</strong> Explain Reciprocal Rank Fusion specifically: <code>score = 1/(k + rank)</code> summed across ranked lists, which normalizes incompatible score scales between BM25 (raw BM25 scores) and cosine similarity (0–1).</div>
+  </div>
+  <div class="pitfall-card">
+    <div class="pitfall-mistake"><strong>✗ Mistake</strong> Not mentioning the re-ranking layer when asked about retrieval quality</div>
+    <div class="pitfall-better"><strong>✓ Better</strong> Note that even after hybrid retrieval, a cross-encoder re-ranker (e.g., <code>ms-marco-MiniLM-L-12-v2</code>) is standard for precision on the top-N, and that the bi-encoder/cross-encoder distinction matters (bi-encoder is fast but approximate; cross-encoder attends to both query and doc jointly for much higher accuracy at higher latency).
+
+---</div>
+  </div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="section-label">Related Questions</div>
+  <div class="related-pills">
+    <div class="related-pill" data-slug="01-014">
+      <span class="related-pill-icon">→</span>
+      <div class="related-pill-text">
+        <div class="related-pill-q">Q14: How does chunking happen?</div>
+        <div class="related-pill-rel">Upstream: chunk strategy affects what BM25 and dense search can retrieve</div>
+      </div>
+    </div>
+    <div class="related-pill" data-slug="01-013">
+      <span class="related-pill-icon">→</span>
+      <div class="related-pill-text">
+        <div class="related-pill-q">Q13: What are embeddings?</div>
+        <div class="related-pill-rel">Prerequisite: dense retrieval is built on embeddings</div>
+      </div>
+    </div>
+    <div class="related-pill" data-slug="02-014">
+      <span class="related-pill-icon">→</span>
+      <div class="related-pill-text">
+        <div class="related-pill-q">What is re-ranking? Cross-encoder vs bi-encoder?</div>
+        <div class="related-pill-rel">Follow-up: re-ranking sits on top of hybrid retrieval to boost precision</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="section-label">One-liner recall</div>
+  <div class="oneliner-box">
+    <div class="oneliner-label">▸ Reconstruct from memory</div>
+    <div class="oneliner-text" data-text="Keyword search (BM25) matches exact terms and is unbeatable on jargon/codes; semantic search (dense vectors + HNSW) handles paraphrasing but fails on exact strings and negation; production RAG uses hybrid — RRF-fused BM25 + dense — followed by cross-encoder re-ranking.">Keyword search (BM25) matches exact terms and is unbeatable on jargon/codes; semantic search (dense vectors + HNSW) handles paraphrasing but fails on exact strings and negation; production RAG uses hybrid — RRF-fused BM25 + dense — followed by cross-encoder re-ranking.</div>
+  </div>
+</div>

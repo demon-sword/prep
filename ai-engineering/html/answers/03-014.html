@@ -1,0 +1,159 @@
+<div class="answer-header reveal">
+  <div class="answer-meta">
+    <span class="meta-badge meta-category">03-agents-tool-use</span>
+    <span class="meta-badge meta-num">Q014</span>
+    <span class="meta-badge meta-status-review">review</span>
+  </div>
+  <h1 class="answer-title">Detect and stop infinite planning loops?</h1>
+</div>
+
+<div class="answer-section reveal">
+  <div class="accordion">
+    <div class="accordion-header">
+      <span class="accordion-title">⟁ Framing — Why this is asked</span>
+      <span class="accordion-chevron">▾</span>
+    </div>
+    <div class="accordion-body">
+      <div class="framing-grid">
+        <div><div class="framing-card">
+          <div class="framing-card-title">Why asked</div>
+          <p style="font-size:13.5px;line-height:1.7;color:var(--text-dim)">Interviewers use this question to probe production maturity. An agent that loops forever burns tokens, maxes out API spend, and — without hard limits in the orchestrator — will never terminate gracefully. Candidates who have shipped agents in production immediately think about the termination problem; candidates who have only read tutorials assume the LLM will always know when to stop.</p>
+        </div></div>
+        <div><div class="framing-card">
+          <div class="framing-card-title">Trigger phrases</div>
+          <div class="trigger-list">
+              <div class="trigger-phrase">How do you prevent an agent from running forever?</div>
+              <div class="trigger-phrase">What happens when your agent gets stuck in a loop?</div>
+              <div class="trigger-phrase">How do you detect and stop infinite planning loops?</div>
+              <div class="trigger-phrase">What are your termination safeguards for long-running agents?</div>
+          </div>
+        </div></div>
+      </div>
+      <div class="tests-block">
+        <span style="font-family:var(--mono);font-size:10px;letter-spacing:0.1em;text-transform:uppercase;color:var(--purple);margin-right:8px">Tests:</span>The ability to design hard, code-enforced loop-control mechanisms in the orchestrator layer — not relying on the LLM to self-terminate.
+
+---
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="section-label">Concept</div>
+  <div class="concept-block"><p>An infinite planning loop occurs when an agent repeatedly selects actions that don't advance the goal — either cycling through the same tool calls, failing and retrying identically, or re-planning without ever executing. The LLM cannot reliably detect this itself because it lacks a global view of iteration history. The fix is to enforce termination in the <strong>orchestrator</strong>, not in the prompt.</p></div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="section-label">Mechanism</div>
+  <div class="card"><p>Use a four-signal detection stack — implement all four; each catches a different loop class:</p>
+<div class="table-wrap"><table class="data-table"><tr><th>Signal</th><th>What it catches</th><th>Implementation</th></tr><tr><td><strong>Hard iteration cap</strong></td><td>Any loop, guaranteed</td><td><code>if steps >= MAX_STEPS: raise BudgetExceededError</code></td></tr><tr><td><strong>Wall-clock timeout</strong></td><td>Slow-loop cycles, network hangs</td><td><code>asyncio.wait_for(agent_loop(), timeout=120)</code></td></tr><tr><td><strong>No-progress detector</strong></td><td>Agent selects same tool+args repeatedly</td><td>Hash <code>(tool_name, canonicalized_args)</code> per step; if last N hashes identical → stuck</td></tr><tr><td><strong>Token budget cap</strong></td><td>Cost-runaway loops</td><td>Cumulative token counter; halt when <code>total_tokens > BUDGET</code></td></tr></table></div>
+<p><strong>No-progress detection in detail:</strong></p>
+<div class="code-block-wrap"><pre class="code-block"><code>from collections import Counter
+import hashlib, json
+
+tool_fingerprints = []
+STUCK_WINDOW = 3  # if last 3 steps are identical → stuck
+
+def is_stuck(tool_name: str, args: dict) -&gt; bool:
+    fp = hashlib.md5(
+        json.dumps({&quot;tool&quot;: tool_name, &quot;args&quot;: args}, sort_keys=True).encode()
+    ).hexdigest()
+    tool_fingerprints.append(fp)
+    window = tool_fingerprints[-STUCK_WINDOW:]
+    return len(window) == STUCK_WINDOW and len(set(window)) == 1</code></pre><button class="copy-btn">copy</button></div>
+<p><strong>Goal-drift re-planning loop:</strong> a subtler variant where the LLM keeps re-decomposing the goal into slightly different sub-plans without executing any tool. Detect by counting consecutive <code>thought</code>-only steps (no tool call). After N=3 thought-only steps in LangGraph, force a <code>forced_action</code> interrupt that requires a tool call or escalates to HITL.</p>
+<p><strong>LangGraph concrete pattern:</strong></p>
+<div class="code-block-wrap"><pre class="code-block"><code>from langgraph.graph import StateGraph
+
+def loop_controller(state):
+    if state[&quot;steps&quot;] &gt;= 20:
+        return &quot;hitl_escalate&quot;
+    if is_stuck(state[&quot;last_tool&quot;], state[&quot;last_args&quot;]):
+        return &quot;hitl_escalate&quot;
+    if state[&quot;total_tokens&quot;] &gt; 50_000:
+        return &quot;hitl_escalate&quot;
+    return &quot;continue&quot;
+
+graph.add_conditional_edges(&quot;agent&quot;, loop_controller,
+    {&quot;continue&quot;: &quot;agent&quot;, &quot;hitl_escalate&quot;: &quot;human_review&quot;})</code></pre><button class="copy-btn">copy</button></div></div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="section-label">Example / Tradeoff</div>
+  <div class="card card-accent"><div class="rich-text"><p><strong>Real incident pattern:</strong> a code-review agent repeatedly called <code>search_codebase("authentication")</code> with the same query because the tool returned empty results but the LLM kept re-trying with identical args, not reformulating. No-progress detector (identical fingerprint × 3) caught the loop at step 9, escalated to HITL, and a human added <code>max_results=50</code> to the initial query. Without the detector, the agent would have burned ~$4 in API calls and timed out at the API level after 120s.</p>
+<p><strong>Tradeoff table:</strong></p>
+<div class="table-wrap"><table class="data-table"><tr><th>Control</th><th>Catches</th><th>Miss</th><th>Latency cost</th></tr><tr><td>Hard step cap</td><td>All loops</td><td>Legitimate long tasks</td><td>None (counter check)</td></tr><tr><td>Wall-clock timeout</td><td>Network hangs</td><td>Fast tight loops under limit</td><td>None</td></tr><tr><td>No-progress detector</td><td>Stuck identical calls</td><td>Varied but purposeless calls</td><td>Negligible (hashing)</td></tr><tr><td>Token budget</td><td>Cost explosion</td><td>Free slow loops</td><td>None</td></tr><tr><td>Re-planning counter</td><td>Goal-drift re-planning</td><td>Action-level loops</td><td>None</td></tr></table></div>
+<p><strong>Setting MAX_STEPS:</strong> too low risks cutting off legitimate multi-step tasks; too high wastes money when loops occur. Rule of thumb: set <code>MAX_STEPS = expected_steps × 3</code>, with async HITL at <code>expected_steps × 2</code> so a human can review before hard termination.</p></div></div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="accordion">
+    <div class="accordion-header">
+      <span class="accordion-title">🎙 Verbal Script (3–5 min)</span>
+      <span class="accordion-chevron">▾</span>
+    </div>
+    <div class="accordion-body">
+      <div class="script-block"><div class="script-label">Opening (30s)</div><p>"Infinite planning loops are one of the most expensive failure modes in production agents, and the key insight is that you can't rely on the LLM to self-terminate — you need hard limits enforced in the orchestrator code. I'd design a four-signal stack to detect and halt loops."</p></div>
+      <div class="script-block"><div class="script-label">Core explanation (2–3 min)</div><p>"The first line of defense is a hard iteration cap — something like <code>MAX_STEPS = 20</code>, enforced with a simple counter in the loop controller. If we hit it, we route to HITL escalation, not a silent failure. This catches any loop, guaranteed.</p>
+<p>Second is a wall-clock timeout — <code>asyncio.wait_for(agent_loop(), timeout=120s)</code> — which catches slow cycles and API hangs that the step counter misses.</p>
+<p>Third, and the most production-critical, is a no-progress detector. I hash <code>(tool_name, canonicalized_args)</code> for each step and check if the last N hashes are identical. If the agent calls <code>search_codebase('auth')</code> with the same args three times in a row, it's stuck — the no-progress detector flags it and escalates. This is the one candidates always miss.</p>
+<p>Fourth is a token budget cap — a cumulative token counter that halts the loop when we exceed, say, 50K tokens. This prevents cost explosions even when step counts are varied.</p>
+<p>There's also a subtler variant: goal-drift re-planning loops where the LLM keeps generating new sub-plans without calling any tool. I handle that with a thought-only step counter — after 3 consecutive reasoning steps with no tool call, I force an action or escalate."</p></div>
+      <div class="script-block"><div class="script-label">Tradeoff / production angle (1 min)</div><p>"The tricky calibration is MAX_STEPS. Too low and you interrupt legitimate long-horizon tasks; too high and you burn money before catching runaway loops. My rule of thumb: set the hard cap at 3× expected steps, but trigger async HITL at 2× so a human can intervene before the hard kill. Also, when routing to HITL on loop detection, preserve the full step history in the escalation payload — the human reviewer needs to see exactly which tool was cycling to fix the root cause."</p></div>
+      <div class="script-block"><div class="script-label">Wrap-up (30s)</div><p>"So the key principle is: loop control belongs in the orchestrator, not the prompt. The four signals — step cap, wall-clock timeout, no-progress hash, and token budget — together cover the full class of infinite-loop failure modes. Happy to go deeper on any of them."</p></div>
+    </div>
+  </div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="section-label">Pitfalls</div>
+  <div class="pitfall-card">
+    <div class="pitfall-mistake"><strong>✗ Mistake</strong> &quot;I&#x27;d put a note in the system prompt telling the agent to stop if it&#x27;s looping&quot;</div>
+    <div class="pitfall-better"><strong>✓ Better</strong> Prompts cannot enforce hard limits; the LLM has no reliable self-awareness of its iteration count. The orchestrator must enforce <code>MAX_STEPS</code> in code with a counter checked before every step, and route to error handling or HITL on breach.</div>
+  </div>
+  <div class="pitfall-card">
+    <div class="pitfall-mistake"><strong>✗ Mistake</strong> Relying solely on <code>MAX_STEPS</code> and missing the no-progress variant where an agent calls different tools but none advance the goal</div>
+    <div class="pitfall-better"><strong>✓ Better</strong> Add the no-progress detector (fingerprint hash over last N steps) AND a re-planning counter (consecutive thought-only steps without a tool call); the step cap alone won&#x27;t catch stuck identical-call loops early enough to be cost-effective.</div>
+  </div>
+  <div class="pitfall-card">
+    <div class="pitfall-mistake"><strong>✗ Mistake</strong> Hard-terminating the loop without preserving state</div>
+    <div class="pitfall-better"><strong>✓ Better</strong> Checkpoint agent state (step history, tool outputs, current plan) to Redis or Postgres before raising the budget exception, so the human reviewer or retry mechanism has full context; silent failure discards debugging information.
+
+---</div>
+  </div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="section-label">Related Questions</div>
+  <div class="related-pills">
+    <div class="related-pill" data-slug="03-011">
+      <span class="related-pill-icon">→</span>
+      <div class="related-pill-text">
+        <div class="related-pill-q">Q11: Termination conditions in long-running agents?</div>
+        <div class="related-pill-rel">Parent concept — general termination framework; this Q14 is the infinite-loop-specific subtopic</div>
+      </div>
+    </div>
+    <div class="related-pill" data-slug="03-007">
+      <span class="related-pill-icon">→</span>
+      <div class="related-pill-text">
+        <div class="related-pill-q">Q7: Prevent agents from over-reasoning or over-planning?</div>
+        <div class="related-pill-rel">Adjacent — over-planning leads to goal-drift re-planning loops; same prompt-budget + forced-action techniques</div>
+      </div>
+    </div>
+    <div class="related-pill" data-slug="03-026">
+      <span class="related-pill-icon">→</span>
+      <div class="related-pill-text">
+        <div class="related-pill-q">Q26: Control cost explosions from tool calls?</div>
+        <div class="related-pill-rel">Follow-up — once you detect a loop, token-budget enforcement and model tiering are the cost-control levers</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="section-label">One-liner recall</div>
+  <div class="oneliner-box">
+    <div class="oneliner-label">▸ Reconstruct from memory</div>
+    <div class="oneliner-text" data-text="Detect infinite loops with four orchestrator-enforced signals — hard step cap, wall-clock timeout, no-progress hash (fingerprint identical tool+args across last N steps), and token budget — then route to HITL with preserved state rather than silently failing.">Detect infinite loops with four orchestrator-enforced signals — hard step cap, wall-clock timeout, no-progress hash (fingerprint identical tool+args across last N steps), and token budget — then route to HITL with preserved state rather than silently failing.</div>
+  </div>
+</div>

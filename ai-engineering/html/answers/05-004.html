@@ -1,0 +1,135 @@
+<div class="answer-header reveal">
+  <div class="answer-meta">
+    <span class="meta-badge meta-category">05-evaluation-metrics</span>
+    <span class="meta-badge meta-num">Q004</span>
+    <span class="meta-badge meta-status-review">review</span>
+  </div>
+  <h1 class="answer-title">Prevent factual errors in summarization?</h1>
+</div>
+
+<div class="answer-section reveal">
+  <div class="accordion">
+    <div class="accordion-header">
+      <span class="accordion-title">⟁ Framing — Why this is asked</span>
+      <span class="accordion-chevron">▾</span>
+    </div>
+    <div class="accordion-body">
+      <div class="framing-grid">
+        <div><div class="framing-card">
+          <div class="framing-card-title">Why asked</div>
+          <p style="font-size:13.5px;line-height:1.7;color:var(--text-dim)">Summarization is one of the highest-hallucination tasks in production GenAI systems because the model must compress information without inventing details. Interviewers probe whether the candidate understands the failure modes specific to summarization (extrinsic vs intrinsic hallucination, faithfulness vs relevancy) and has a layered mitigation strategy — not just &quot;lower the temperature.&quot;</p>
+        </div></div>
+        <div><div class="framing-card">
+          <div class="framing-card-title">Trigger phrases</div>
+          <div class="trigger-list">
+              <div class="trigger-phrase">How do you prevent factual errors in summarization?</div>
+              <div class="trigger-phrase">Your document summarizer is making things up — how do you fix it?</div>
+              <div class="trigger-phrase">How do you ensure the summary only contains information from the source?</div>
+          </div>
+        </div></div>
+      </div>
+      <div class="tests-block">
+        <span style="font-family:var(--mono);font-size:10px;letter-spacing:0.1em;text-transform:uppercase;color:var(--purple);margin-right:8px">Tests:</span>Depth of production hallucination-mitigation experience applied specifically to closed-domain summarization tasks.
+
+---
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="section-label">Concept</div>
+  <div class="concept-block"><p>Factual errors in summarization fall into two types: <strong>extrinsic hallucinations</strong> (the model adds facts not in the source) and <strong>intrinsic hallucinations</strong> (the model contradicts the source). The root causes are different: extrinsic errors come from the model's parametric knowledge bleeding in; intrinsic errors come from attention drift on long documents. Mitigation requires defense-in-depth at the prompt, generation, and post-processing layers.</p></div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="section-label">Mechanism</div>
+  <div class="card"><p><strong>Layer 1 — Prompt engineering (cheapest)</strong></p>
+<ul class="styled-list"><li>Use a strict <strong>closed-world grounding prompt</strong>: <code>"Summarize ONLY information present in the document below. If the document does not contain a fact, do not include it."</code></li><li>Set <code>temperature=0</code> to eliminate stochastic invention.</li><li>Explicitly forbid external knowledge: <code>"Do not use prior knowledge."</code></li><li>Add a <strong>format constraint</strong> (e.g., bullet points with source sentence references) — structured output forces the model to anchor each claim.</li></ul>
+<p><strong>Layer 2 — Chunking strategy</strong></p>
+<ul class="styled-list"><li>For long documents, use <strong>Map-Reduce</strong> (summarize each chunk independently, then reduce) rather than stuffing everything in context. This prevents the "lost in the middle" attention drift that causes intrinsic errors.</li><li>Use <strong>Map-Refine</strong> when sequential context matters (legal contracts, annual reports): each chunk's summary is refined against the previous one.</li><li>Keep chunks within 512–1024 tokens so the model can attend to all content uniformly.</li></ul>
+<p><strong>Layer 3 — Post-generation faithfulness check</strong></p>
+<ul class="styled-list"><li><strong>RAGAS <code>faithfulness</code> metric</strong>: scores each claim in the summary against the source chunks using an LLM judge. Threshold <0.85 → reject or flag for human review.</li><li><strong>NLI entailment gate</strong>: run a DeBERTa-based NLI model (e.g., <code>cross-encoder/nli-deberta-v3-base</code>) to check each summary sentence entails from the source. Contradiction label → discard that sentence or trigger regeneration.</li><li>For regulated domains (healthcare, legal), NLI is preferred over LLM judge for auditability and cost.</li></ul>
+<p><strong>Layer 4 — Production monitoring</strong></p>
+<ul class="styled-list"><li>Sample 5% of production summaries through the faithfulness gate asynchronously (async to avoid latency impact).</li><li>Track <code>hallucination_rate</code> as a separate SLO from <code>answer_quality</code>. Alert at >2% extrinsic hallucination rate.</li><li>Build a <strong>golden test set</strong> of 200–500 source+summary pairs with human-labeled faithfulness scores; run it on every model version before deployment.</li></ul></div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="section-label">Example / Tradeoff</div>
+  <div class="card card-accent"><div class="rich-text"><p>At a financial document summarizer handling 10K earnings calls/day:</p>
+<ul class="styled-list"><li>Stack: PyMuPDF extraction → 512-token recursive chunks → GPT-4o-mini with closed-world prompt at T=0 → async RAGAS faithfulness check (gpt-4o-mini-as-judge) on 10% sample.</li><li>Switching from GPT-4o (full context stuffing) to Map-Reduce with GPT-4o-mini reduced intrinsic error rate from 8% → 1.8% while cutting cost by 70%.</li><li>RAGAS faithfulness gate caught a batch where currency normalization failed (model invented "amounts in millions" when source said "thousands") — prevented a compliance incident.</li></ul>
+<p><strong>Tradeoff table:</strong></p>
+<div class="table-wrap"><table class="data-table"><tr><th>Technique</th><th>Latency cost</th><th>Error reduction</th><th>Best for</th></tr><tr><td>T=0 + grounding prompt</td><td>None</td><td>~30–40%</td><td>All summarization</td></tr><tr><td>Map-Reduce chunking</td><td>+20–40%</td><td>~50–60% for long docs</td><td>>4K token sources</td></tr><tr><td>RAGAS faithfulness async</td><td>Negligible (async)</td><td>Detects remaining 1–3%</td><td>Production monitoring</td></tr><tr><td>NLI entailment sync</td><td>+80–200ms</td><td>High recall</td><td>Regulated domains</td></tr></table></div>| Human review gate | High | Near-perfect | High-stakes outputs |</div></div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="accordion">
+    <div class="accordion-header">
+      <span class="accordion-title">🎙 Verbal Script (3–5 min)</span>
+      <span class="accordion-chevron">▾</span>
+    </div>
+    <div class="accordion-body">
+      <div class="script-block"><div class="script-label">Opening (30s)</div><p>"Factual errors in summarization come from two distinct failure modes — the model adding facts from its training data that aren't in the source, which I call extrinsic hallucination, and the model contradicting the source due to attention drift on long documents, which is intrinsic. I'd tackle these with a defense-in-depth approach across prompt design, chunking strategy, and post-generation validation."</p></div>
+      <div class="script-block"><div class="script-label">Core explanation (2–3 min)</div><p>"At the prompt layer, I'd use a strict closed-world grounding instruction — something like 'summarize only information present in the document below, do not use prior knowledge' — and set temperature to zero. These two changes alone eliminate a large fraction of extrinsic errors.</p>
+<p>For long documents, the single biggest win is switching from context-stuffing to Map-Reduce: summarize each 512-token chunk independently, then synthesize. This prevents the 'lost in the middle' attention failure where the model stops faithfully attending to middle sections and starts filling gaps with parametric knowledge.</p>
+<p>For post-generation validation, I'd run RAGAS faithfulness asynchronously on a 5–10% sample. It scores each claim in the summary against the source using an LLM judge. For regulated domains like healthcare or legal, I'd swap in a DeBERTa NLI model — it's cheaper, faster, and auditable. Any summary sentence labeled 'contradiction' gets flagged or regenerated.</p>
+<p>A concrete example: at a financial document summarizer I worked on, switching from full-context GPT-4o to Map-Reduce with GPT-4o-mini dropped intrinsic error rate from 8% to under 2%, while reducing cost by 70%. The async RAGAS gate then caught the tail of remaining errors before they reached users."</p></div>
+      <div class="script-block"><div class="script-label">Tradeoff / production angle (1 min)</div><p>"The main tradeoff is latency vs coverage. Synchronous NLI validation adds 80–200ms per summary; async is better for throughput but means some hallucinations reach users before detection. For high-stakes outputs — insurance claim summaries, medical notes — I'd accept the sync latency. For consumer-facing content summaries, async monitoring with a human-review queue for flagged outputs is the right balance.</p>
+<p>Also, RAGAS faithfulness uses an LLM judge which itself can hallucinate — so it's important to calibrate it on your domain's golden test set, not just trust the raw score."</p></div>
+      <div class="script-block"><div class="script-label">Wrap-up (30s)</div><p>"So the layered approach is: grounding prompt at T=0 → Map-Reduce for long docs → RAGAS/NLI faithfulness gate → production monitoring with a hallucination-rate SLO. Each layer is cheap enough to run in production and together they push factual error rates below 2%. Happy to go deeper on any layer."</p></div>
+    </div>
+  </div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="section-label">Pitfalls</div>
+  <div class="pitfall-card">
+    <div class="pitfall-mistake"><strong>✗ Mistake</strong> Saying &quot;just lower the temperature to 0 and it&#x27;ll stop hallucinating&quot;</div>
+    <div class="pitfall-better"><strong>✓ Better</strong> Explain that T=0 reduces stochastic errors but not attention-drift intrinsic errors; Map-Reduce chunking is essential for documents &gt;4K tokens, and post-generation faithfulness validation catches what prompting misses.</div>
+  </div>
+  <div class="pitfall-card">
+    <div class="pitfall-mistake"><strong>✗ Mistake</strong> Treating RAGAS faithfulness as synchronous blocking middleware</div>
+    <div class="pitfall-better"><strong>✓ Better</strong> Explain that running it synchronously adds 500ms–2s latency per summary; async sampling on 5–10% of traffic with a human-review queue for flagged outputs is the production-safe pattern.</div>
+  </div>
+  <div class="pitfall-card">
+    <div class="pitfall-mistake"><strong>✗ Mistake</strong> Using BLEU/ROUGE to measure summarization accuracy</div>
+    <div class="pitfall-better"><strong>✓ Better</strong> Explain that n-gram overlap rewards copying and penalizes paraphrase; RAGAS faithfulness and NLI entailment actually measure whether claims are grounded in the source.
+
+---</div>
+  </div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="section-label">Related Questions</div>
+  <div class="related-pills">
+    <div class="related-pill" data-slug="05-003">
+      <span class="related-pill-icon">→</span>
+      <div class="related-pill-text">
+        <div class="related-pill-q">Q3: Detect and mitigate hallucinations in production</div>
+        <div class="related-pill-rel">Parent concept — general hallucination stack; this Q is the summarization-specific specialization</div>
+      </div>
+    </div>
+    <div class="related-pill" data-slug="05-005">
+      <span class="related-pill-icon">→</span>
+      <div class="related-pill-text">
+        <div class="related-pill-q">Q5: Reduce hallucinations in a medical chatbot</div>
+        <div class="related-pill-rel">Same defense-in-depth pattern applied to a domain-specific use case</div>
+      </div>
+    </div>
+    <div class="related-pill" data-slug="05-009">
+      <span class="related-pill-icon">→</span>
+      <div class="related-pill-text">
+        <div class="related-pill-q">Q9: Perplexity, ROUGE, BLEU — pitfalls of n-gram metrics</div>
+        <div class="related-pill-rel">Why ROUGE/BLEU are wrong metrics for faithfulness; what to use instead</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="section-label">One-liner recall</div>
+  <div class="oneliner-box">
+    <div class="oneliner-label">▸ Reconstruct from memory</div>
+    <div class="oneliner-text" data-text="Prevent summarization hallucinations with a three-layer stack: closed-world grounding prompt at T=0, Map-Reduce chunking for long docs to avoid attention drift, and async RAGAS faithfulness / NLI entailment gate to catch what prompting misses.">Prevent summarization hallucinations with a three-layer stack: closed-world grounding prompt at T=0, Map-Reduce chunking for long docs to avoid attention drift, and async RAGAS faithfulness / NLI entailment gate to catch what prompting misses.</div>
+  </div>
+</div>

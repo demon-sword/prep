@@ -1,0 +1,153 @@
+<div class="answer-header reveal">
+  <div class="answer-meta">
+    <span class="meta-badge meta-category">06-ml-fundamentals</span>
+    <span class="meta-badge meta-num">Q018</span>
+    <span class="meta-badge meta-status-review">review</span>
+  </div>
+  <h1 class="answer-title">Implement cosine similarity in NumPy (Amazon)</h1>
+</div>
+
+<div class="answer-section reveal">
+  <div class="accordion">
+    <div class="accordion-header">
+      <span class="accordion-title">⟁ Framing — Why this is asked</span>
+      <span class="accordion-chevron">▾</span>
+    </div>
+    <div class="accordion-body">
+      <div class="framing-grid">
+        <div><div class="framing-card">
+          <div class="framing-card-title">Why asked</div>
+          <p style="font-size:13.5px;line-height:1.7;color:var(--text-dim)">This is a classic ML coding screen question at Amazon and similar companies. It tests whether you understand the mathematical definition of cosine similarity (not just that it &quot;measures vector closeness&quot;), whether you can translate the formula into correct NumPy without bugs (zero-division, broadcasting, shape issues), and whether you know when cosine similarity is preferred over Euclidean distance or dot product. It&#x27;s also a signal for how you approach embeddings in RAG/semantic-search contexts.</p>
+        </div></div>
+        <div><div class="framing-card">
+          <div class="framing-card-title">Trigger phrases</div>
+          <div class="trigger-list">
+              <div class="trigger-phrase">Implement cosine similarity in NumPy from scratch</div>
+              <div class="trigger-phrase">Without using sklearn, how would you compute cosine similarity between two vectors?</div>
+              <div class="trigger-phrase">Write a function that computes pairwise cosine similarity between two sets of embeddings</div>
+          </div>
+        </div></div>
+      </div>
+      <div class="tests-block">
+        <span style="font-family:var(--mono);font-size:10px;letter-spacing:0.1em;text-transform:uppercase;color:var(--purple);margin-right:8px">Tests:</span>Ability to translate vector-math into idiomatic, numerically-safe NumPy and articulate why cosine similarity is the right metric for normalized embedding spaces.
+
+---
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="section-label">Concept</div>
+  <div class="concept-block"><p>Cosine similarity measures the cosine of the angle between two vectors, ignoring magnitude — so two documents with identical word proportions but very different lengths score 1.0. The formula is:</p>
+<div class="code-block-wrap"><pre class="code-block"><code>cos(A, B) = (A · B) / (||A|| × ||B||)</code></pre><button class="copy-btn">copy</button></div>
+<p>Values range from −1 (opposite) to 1 (identical direction); in embedding spaces with non-negative activations the practical range is [0, 1].</p></div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="section-label">Mechanism</div>
+  <div class="card"><p><strong>Single-pair implementation:</strong></p>
+<div class="code-block-wrap"><pre class="code-block"><code>import numpy as np
+
+def cosine_similarity(a: np.ndarray, b: np.ndarray) -&gt; float:
+    &quot;&quot;&quot;Cosine similarity between two 1-D vectors.&quot;&quot;&quot;
+    dot = np.dot(a, b)
+    norm_a = np.linalg.norm(a)
+    norm_b = np.linalg.norm(b)
+    if norm_a == 0 or norm_b == 0:
+        return 0.0          # convention: zero vector has no direction
+    return dot / (norm_a * norm_b)</code></pre><button class="copy-btn">copy</button></div>
+<p><strong>Batch / pairwise implementation (matrix form):</strong></p>
+<div class="code-block-wrap"><pre class="code-block"><code>def cosine_similarity_matrix(A: np.ndarray, B: np.ndarray) -&gt; np.ndarray:
+    &quot;&quot;&quot;
+    Compute cosine similarity between every row of A and every row of B.
+    A: shape (m, d), B: shape (n, d)
+    Returns: shape (m, n)
+    &quot;&quot;&quot;
+    # Normalize each row to unit length
+    A_norm = A / (np.linalg.norm(A, axis=1, keepdims=True) + 1e-10)
+    B_norm = B / (np.linalg.norm(B, axis=1, keepdims=True) + 1e-10)
+    return A_norm @ B_norm.T   # (m, d) @ (d, n) → (m, n)</code></pre><button class="copy-btn">copy</button></div>
+<p>Key implementation notes:</p>
+<ul class="styled-list"><li>Add <code>1e-10</code> (epsilon) to norms instead of an <code>if</code> check — vectorised and avoids zero-division without branching.</li><li>Use <code>axis=1, keepdims=True</code> for row-wise normalization; without <code>keepdims=True</code> broadcasting will silently fail on shape <code>(m, 1)</code> vs <code>(m,)</code>.</li><li>Once rows are unit-normalized, cosine similarity reduces to the dot product — this is why FAISS's IndexFlatIP (inner product) is equivalent to cosine similarity when you pre-normalize embeddings at ingestion time.</li></ul></div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="section-label">Example / Tradeoff</div>
+  <div class="card card-accent"><div class="rich-text"><p>In a RAG pipeline using OpenAI <code>text-embedding-3-small</code> (1536-d vectors), every document chunk and every query is L2-normalized at ingestion. FAISS IndexFlatIP then retrieves the top-k nearest by inner product, which is mathematically identical to cosine similarity — no per-query norm computation needed at search time. This is 10–20% faster than computing norms on the fly.</p>
+<p><strong>Why cosine over Euclidean?</strong> Euclidean distance conflates magnitude with direction. A 1-sentence chunk and a 10-page document about the same topic will have very different magnitudes, but similar cosine values. In embedding spaces this bias-toward-length is undesirable.</p>
+<p><strong>Why not always dot product?</strong> Raw dot product favors high-magnitude vectors, which tends to favor frequent or long texts. Cosine (or pre-normalized dot product) removes that confound.</p></div></div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="accordion">
+    <div class="accordion-header">
+      <span class="accordion-title">🎙 Verbal Script (3–5 min)</span>
+      <span class="accordion-chevron">▾</span>
+    </div>
+    <div class="accordion-body">
+      <div class="script-block"><div class="script-label">Opening (30s)</div><p>"I'd frame this as two sub-questions: implementing the formula correctly in NumPy, and understanding when cosine similarity is the right choice. Let me start with the implementation, then talk about the production angle."</p></div>
+      <div class="script-block"><div class="script-label">Core explanation (2–3 min)</div><p>"Cosine similarity is A dot B divided by the product of their L2 norms — it's the cosine of the angle between the two vectors, so it ranges from −1 to 1.</p>
+<p>For a single pair, I'd write:</p>
+<p>``<code>python dot = np.dot(a, b) norm_a = np.linalg.norm(a) norm_b = np.linalg.norm(b) return dot / (norm_a * norm_b) if norm_a and norm_b else 0.0 </code>``</p>
+<p>For a matrix of queries against a matrix of documents — which is the real production case — I'd normalize each row first and then do a matrix multiply:</p>
+<p>``<code>python A_norm = A / (np.linalg.norm(A, axis=1, keepdims=True) + 1e-10) B_norm = B / (np.linalg.norm(B, axis=1, keepdims=True) + 1e-10) return A_norm @ B_norm.T </code>``</p>
+<p>The epsilon avoids zero-division without branching, and once vectors are unit-normalized, cosine similarity is just an inner product — which is why FAISS's IndexFlatIP with pre-normalized vectors is equivalent and faster than computing cosine on the fly."</p></div>
+      <div class="script-block"><div class="script-label">Tradeoff / production angle (1 min)</div><p>"Cosine is preferred over Euclidean in embedding spaces because it ignores magnitude — a short and long document about the same topic will have similar cosine scores but very different L2 distances. The tradeoff is that cosine is slightly more expensive to compute for raw vectors, so in production I always pre-normalize at ingestion time and use inner-product indices. The downside of cosine is it fails for zero vectors — convention is to return 0.0."</p></div>
+      <div class="script-block"><div class="script-label">Wrap-up (30s)</div><p>"To summarize: implement via dot-product divided by norm-product, handle zero vectors, vectorise with a normalize-then-matmul pattern for batch cases, and in production pre-normalize embeddings so inner-product indices can be used directly. Happy to go deeper on FAISS index types or the broader RAG retrieval stack."</p></div>
+    </div>
+  </div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="section-label">Pitfalls</div>
+  <div class="pitfall-card">
+    <div class="pitfall-mistake"><strong>✗ Mistake</strong> Dividing by norms without guarding against zero vectors, causing <code>nan</code> or <code>ZeroDivisionError</code></div>
+    <div class="pitfall-better"><strong>✓ Better</strong> Add a zero-check or epsilon <code>+ 1e-10</code> to the denominator so the function handles degenerate inputs gracefully.</div>
+  </div>
+  <div class="pitfall-card">
+    <div class="pitfall-mistake"><strong>✗ Mistake</strong> Using <code>np.linalg.norm(A, axis=1)</code> without <code>keepdims=True</code> in the batch case, causing a silent shape mismatch <code>(m,)</code> vs <code>(m, d)</code> that either crashes or broadcasts incorrectly</div>
+    <div class="pitfall-better"><strong>✓ Better</strong> Always use <code>keepdims=True</code> for row-wise normalization: <code>A / np.linalg.norm(A, axis=1, keepdims=True)</code>.</div>
+  </div>
+  <div class="pitfall-card">
+    <div class="pitfall-mistake"><strong>✗ Mistake</strong> Not explaining <em>why</em> cosine over Euclidean — just implementing the formula without context</div>
+    <div class="pitfall-better"><strong>✓ Better</strong> Explicitly note that cosine is magnitude-invariant, making it the right choice for embedding similarity where document length shouldn&#x27;t dominate the score.
+
+---</div>
+  </div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="section-label">Related Questions</div>
+  <div class="related-pills">
+    <div class="related-pill" data-slug="01-041">
+      <span class="related-pill-icon">→</span>
+      <div class="related-pill-text">
+        <div class="related-pill-q">Q13: What are embeddings, and how are they used in RAG?</div>
+        <div class="related-pill-rel">Embeddings are the vectors cosine similarity operates on</div>
+      </div>
+    </div>
+    <div class="related-pill" data-slug="02-023">
+      <span class="related-pill-icon">→</span>
+      <div class="related-pill-text">
+        <div class="related-pill-q">Q23: How does ANN search work? HNSW indexing?</div>
+        <div class="related-pill-rel">FAISS/HNSW use inner-product (equivalent to cosine on normalized vecs) for ANN retrieval</div>
+      </div>
+    </div>
+    <div class="related-pill" data-slug="06-017">
+      <span class="related-pill-icon">→</span>
+      <div class="related-pill-text">
+        <div class="related-pill-q">Q17: Feature scaling — normalization vs standardization?</div>
+        <div class="related-pill-rel">L2 normalization is the prerequisite for using inner product as cosine similarity</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="section-label">One-liner recall</div>
+  <div class="oneliner-box">
+    <div class="oneliner-label">▸ Reconstruct from memory</div>
+    <div class="oneliner-text" data-text="Cosine similarity = dot(A,B) / (||A|| × ||B||); in NumPy, normalize rows with `keepdims=True` then matmul — and in production pre-normalize embeddings at ingestion so FAISS IndexFlatIP is equivalent and free of per-query norm computation.">Cosine similarity = dot(A,B) / (||A|| × ||B||); in NumPy, normalize rows with `keepdims=True` then matmul — and in production pre-normalize embeddings at ingestion so FAISS IndexFlatIP is equivalent and free of per-query norm computation.</div>
+  </div>
+</div>

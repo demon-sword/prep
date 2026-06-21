@@ -1,0 +1,135 @@
+<div class="answer-header reveal">
+  <div class="answer-meta">
+    <span class="meta-badge meta-category">02-rag-systems</span>
+    <span class="meta-badge meta-num">Q023</span>
+    <span class="meta-badge meta-status-review">review</span>
+  </div>
+  <h1 class="answer-title">How does ANN search work? HNSW indexing?</h1>
+</div>
+
+<div class="answer-section reveal">
+  <div class="accordion">
+    <div class="accordion-header">
+      <span class="accordion-title">⟁ Framing — Why this is asked</span>
+      <span class="accordion-chevron">▾</span>
+    </div>
+    <div class="accordion-body">
+      <div class="framing-grid">
+        <div><div class="framing-card">
+          <div class="framing-card-title">Why asked</div>
+          <p style="font-size:13.5px;line-height:1.7;color:var(--text-dim)">ANN (Approximate Nearest Neighbor) search is the core engine powering every vector database used in RAG. Interviewers ask this to verify you understand <em>why</em> brute-force cosine search doesn&#x27;t scale, what HNSW actually does structurally, and how to tune it — because bad index parameters directly cause retrieval failures and latency spikes in production.</p>
+        </div></div>
+        <div><div class="framing-card">
+          <div class="framing-card-title">Trigger phrases</div>
+          <div class="trigger-list">
+              <div class="trigger-phrase">How does the vector search actually work under the hood?</div>
+              <div class="trigger-phrase">How does HNSW indexing work?</div>
+              <div class="trigger-phrase">How do you find similar embeddings at scale?</div>
+              <div class="trigger-phrase">What&#x27;s the tradeoff between exact search and approximate search?</div>
+          </div>
+        </div></div>
+      </div>
+      <div class="tests-block">
+        <span style="font-family:var(--mono);font-size:10px;letter-spacing:0.1em;text-transform:uppercase;color:var(--purple);margin-right:8px">Tests:</span>Understanding of ANN data structures (graph vs tree vs quantization), HNSW mechanics (layered skip-graph navigation), and production parameter tuning (<code>ef_construction</code>, <code>M</code>, <code>ef_search</code>) — not just &quot;it finds nearest neighbors fast.&quot;
+
+---
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="section-label">Concept</div>
+  <div class="concept-block"><p>ANN search finds vectors that are <em>approximately</em> nearest (within a small error margin) to a query vector in sub-linear time, sacrificing a bounded amount of recall for dramatic speed gains. HNSW (Hierarchical Navigable Small World) is the dominant ANN algorithm in production: it builds a multi-layer graph where each layer is a sparser skip-list, allowing logarithmic-time greedy traversal to find nearest neighbors.</p></div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="section-label">Mechanism</div>
+  <div class="card"><p><strong>Why brute force doesn't scale:</strong> For 10M 1536-dim vectors (OpenAI ada-002), exact cosine search requires 10M dot products × 1536 floats ≈ 15.36B multiply-accumulate ops per query. At a GPU throughput of ~10 TFLOPS, that's ~1.5ms per query — but in practice with memory bandwidth constraints it exceeds 100ms, and it scales linearly with corpus size.</p>
+<p><strong>HNSW structure:</strong></p>
+<div class="code-block-wrap"><pre class="code-block"><code>Layer 2 (very sparse):  [A] ——————————————— [G]
+Layer 1 (sparser):      [A] —— [C] —— [E] — [G]
+Layer 0 (full graph):   [A]-[B]-[C]-[D]-[E]-[F]-[G]  (max M neighbors each)</code></pre><button class="copy-btn">copy</button></div>
+<ol class="mechanism-steps"><li><strong>Graph construction:</strong> Each inserted vector is assigned a random max layer (exponential decay probability). At each layer, the algorithm connects the new node to its <code>M</code> nearest neighbors (found by greedy search starting from the entry point). The bottom layer (layer 0) stores all nodes with up to <code>2M</code> connections.</li></ol>
+<ol class="mechanism-steps"><li><strong>Query (search):</strong> Enter at the top layer with the entry point. Greedily navigate to the nearest neighbor at that layer. Descend to the next layer and repeat, using the current closest node as the new entry point. At layer 0, expand the candidate set to <code>ef_search</code> nodes and return the top-k.</li></ol>
+<p><strong>Key hyperparameters:</strong></p>
+<div class="table-wrap"><table class="data-table"><tr><th>Parameter</th><th>Default</th><th>Effect</th></tr><tr><td><code>M</code></td><td>16</td><td>Max connections per node; higher → better recall, more memory (O(M × N) edges)</td></tr><tr><td><code>ef_construction</code></td><td>200</td><td>Candidate list size at build time; higher → better graph quality, slower indexing</td></tr><tr><td><code>ef_search</code></td><td>50–200</td><td>Candidate list at query time; higher → better recall, higher latency</td></tr></table></div>
+<p><strong>Recall vs latency:</strong>   Pinecone's benchmarks (ANN-benchmarks): HNSW at <code>ef_search=100</code> achieves ~99% Recall@10 at ~2–5ms p99 on 1M vectors. Brute force achieves 100% recall at ~50–200ms.</p></div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="section-label">Example / Tradeoff</div>
+  <div class="card card-accent"><div class="rich-text"><p><strong>FAISS:</strong> <code>IndexHNSWFlat</code> — stores raw vectors + HNSW graph, no compression. Fast for research, high memory.   <strong>FAISS:</strong> <code>IndexIVFPQ</code> — inverted file index + product quantization, 4-32× memory compression, ~2–5% recall drop.   <strong>Pinecone / Qdrant / Weaviate:</strong> All default to HNSW under the hood; Pinecone adds horizontal sharding across replicas.</p>
+<p><strong>Production tradeoff:</strong></p>
+<ul class="styled-list"><li><strong>Recall vs latency dial:</strong> Raise <code>ef_search</code> for recall-critical search (legal, medical), lower for high-throughput chat (50ms budget).</li><li><strong>Memory pressure:</strong> Each HNSW node uses ~M × 4 bytes of pointers. At 10M vectors with M=16, that's ~640 MB overhead on top of vector storage.</li><li><strong>IVF alternative:</strong> IVF (Inverted File Index) clusters vectors into Voronoi cells (k-means); at query time probes <code>nprobe</code> cells. Faster build, lower memory, worse recall at high QPS — good for batch pipelines, not real-time RAG.</li><li><strong>Hybrid scenario:</strong> Qdrant supports filtered HNSW with payload indexes — pre-filter by metadata (e.g., <code>department=engineering</code>) before ANN, avoiding post-filter recall collapse on skewed distributions.</li></ul></div></div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="accordion">
+    <div class="accordion-header">
+      <span class="accordion-title">🎙 Verbal Script (3–5 min)</span>
+      <span class="accordion-chevron">▾</span>
+    </div>
+    <div class="accordion-body">
+      <div class="script-block"><div class="script-label">Opening (30s)</div><p>"ANN search is the retrieval engine inside every vector database. The naive approach — comparing the query embedding against all stored vectors — is exact but scales linearly. At 10M vectors that's too slow for real-time RAG. HNSW is the algorithm most production systems use to get approximate nearest neighbors in log time. Let me walk through how it works and the tradeoffs that matter in practice."</p></div>
+      <div class="script-block"><div class="script-label">Core explanation (2–3 min)</div><p>"HNSW builds a multi-layer graph — think of it like a skip list extended into high-dimensional space. At the bottom layer, every vector is a node connected to its M nearest neighbors. Higher layers are progressively sparser; vectors are randomly promoted to higher layers with exponential decay probability. At insert time, the algorithm does a greedy graph search at each layer to find the best M neighbors to connect to.</p>
+<p>At query time, you enter the graph at the top layer via a single entry point and greedily hop to whichever neighbor is closest to your query vector. You descend layer by layer, using your current best candidate as the start point for the next layer. At layer 0, you expand to <code>ef_search</code> candidates and return the top-k. This greedy descent takes O(log N) hops at the upper layers and O(ef_search) work at the bottom.</p>
+<p>The two parameters that matter most in production are <code>M</code> — the number of edges per node, which controls graph connectivity and memory use — and <code>ef_search</code>, which is a runtime knob: higher values find more candidates and improve recall but increase latency. For a customer support RAG, I'd typically set <code>ef_search</code> around 100–150 for ~99% Recall@10 at under 5ms p99."</p></div>
+      <div class="script-block"><div class="script-label">Tradeoff / production angle (1 min)</div><p>"The key production tradeoffs are: HNSW consumes significant memory for the graph edges — at 10M vectors with M=16 that's roughly 640 MB of pointer overhead on top of 60 GB of vector storage for 1536-dim float32. If memory is tight, I'd switch to IVF+PQ (product quantization) which gives 8–16× compression with ~2–5% recall loss — acceptable for most chat applications, not for high-stakes retrieval. A second issue is filtered search: if you need metadata filters (e.g., only search documents owned by this user), you need a vector DB that supports pre-filtering at the index layer like Qdrant or Weaviate — otherwise post-filtering collapses recall when the filter is restrictive."</p></div>
+      <div class="script-block"><div class="script-label">Wrap-up (30s)</div><p>"In summary: HNSW achieves sub-linear ANN search via a layered navigable graph, with <code>M</code> and <code>ef_search</code> as the main levers for the recall-latency-memory tradeoff. For production RAG I default to HNSW (Pinecone or Qdrant) with ef_search tuned to hit target recall, and add metadata pre-filtering for ACL-restricted corpora. Happy to go deeper on IVF-PQ or the filtered HNSW implementation if useful."</p></div>
+    </div>
+  </div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="section-label">Pitfalls</div>
+  <div class="pitfall-card">
+    <div class="pitfall-mistake"><strong>✗ Mistake</strong> Saying &quot;ANN is just approximate cosine similarity&quot; without explaining <em>how</em> it achieves sub-linear complexity</div>
+    <div class="pitfall-better"><strong>✓ Better</strong> Explain the graph structure: greedy multi-layer navigation reduces candidate evaluation from O(N) to O(log N) hops before the dense bottom-layer scan.</div>
+  </div>
+  <div class="pitfall-card">
+    <div class="pitfall-mistake"><strong>✗ Mistake</strong> Treating <code>ef_search</code> as a build-time constant and not mentioning it&#x27;s a per-query runtime knob</div>
+    <div class="pitfall-better"><strong>✓ Better</strong> Emphasize that <code>ef_search</code> can be tuned per query or per SLO tier: lower for high-QPS chat, higher for precision-critical legal/medical retrieval.</div>
+  </div>
+  <div class="pitfall-card">
+    <div class="pitfall-mistake"><strong>✗ Mistake</strong> Ignoring filtered search and its recall collapse</div>
+    <div class="pitfall-better"><strong>✓ Better</strong> Note that post-filter ANN (filter after retrieving top-K) collapses recall when filters are selective; Qdrant&#x27;s and Weaviate&#x27;s payload-indexed pre-filtering avoids this, and this is a real production failure mode.
+
+---</div>
+  </div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="section-label">Related Questions</div>
+  <div class="related-pills">
+    <div class="related-pill" data-slug="02-012">
+      <span class="related-pill-icon">→</span>
+      <div class="related-pill-text">
+        <div class="related-pill-q">Q12: Compare sparse vs dense retrieval. When use each?</div>
+        <div class="related-pill-rel">Dense retrieval uses HNSW ANN under the hood — prerequisite</div>
+      </div>
+    </div>
+    <div class="related-pill" data-slug="02-015">
+      <span class="related-pill-icon">→</span>
+      <div class="related-pill-text">
+        <div class="related-pill-q">Q15: What vector databases have you used? Which and why?</div>
+        <div class="related-pill-rel">Vector DBs are essentially HNSW + storage + serving layer — same concept</div>
+      </div>
+    </div>
+    <div class="related-pill" data-slug="02-019">
+      <span class="related-pill-icon">→</span>
+      <div class="related-pill-text">
+        <div class="related-pill-q">Q19: Scale RAG to 10M+ articles — sharding, caching, retrieval optimization</div>
+        <div class="related-pill-rel">HNSW sharding and `ef_search` tuning are the retrieval levers at scale</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="section-label">One-liner recall</div>
+  <div class="oneliner-box">
+    <div class="oneliner-label">▸ Reconstruct from memory</div>
+    <div class="oneliner-text" data-text="HNSW builds a multi-layer skip-graph where query traversal descends greedily from sparse upper layers to the dense bottom layer — achieving O(log N) approximate nearest-neighbor search, with `M` (graph connectivity) and `ef_search` (candidate list size) as the recall-latency-memory knobs.">HNSW builds a multi-layer skip-graph where query traversal descends greedily from sparse upper layers to the dense bottom layer — achieving O(log N) approximate nearest-neighbor search, with `M` (graph connectivity) and `ef_search` (candidate list size) as the recall-latency-memory knobs.</div>
+  </div>
+</div>

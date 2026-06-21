@@ -1,0 +1,135 @@
+<div class="answer-header reveal">
+  <div class="answer-meta">
+    <span class="meta-badge meta-category">02-rag-systems</span>
+    <span class="meta-badge meta-num">Q020</span>
+    <span class="meta-badge meta-status-review">review</span>
+  </div>
+  <h1 class="answer-title">RAG returns relevant docs but users can&#x27;t find the answer — search engine vs answer engine</h1>
+</div>
+
+<div class="answer-section reveal">
+  <div class="accordion">
+    <div class="accordion-header">
+      <span class="accordion-title">⟁ Framing — Why this is asked</span>
+      <span class="accordion-chevron">▾</span>
+    </div>
+    <div class="accordion-body">
+      <div class="framing-grid">
+        <div><div class="framing-card">
+          <div class="framing-card-title">Why asked</div>
+          <p style="font-size:13.5px;line-height:1.7;color:var(--text-dim)">The interviewer is probing whether you understand the fundamental product design distinction between <em>retrieval</em> (surface the right document) and <em>generation</em> (synthesize a direct answer). Many RAG systems are built by ML engineers thinking about retrieval quality, but users think in terms of answers — &quot;tell me what to do,&quot; not &quot;here&#x27;s a document that might help.&quot; This question tests debugging instinct and user-centric product thinking in AI systems.</p>
+        </div></div>
+        <div><div class="framing-card">
+          <div class="framing-card-title">Trigger phrases</div>
+          <div class="trigger-list">
+              <div class="trigger-phrase">Our retrieval metrics look great but user satisfaction is low — what&#x27;s happening?</div>
+              <div class="trigger-phrase">Users say they can&#x27;t find what they&#x27;re looking for even when the right docs are returned.</div>
+              <div class="trigger-phrase">How do you tell when you have a retrieval problem vs a generation problem?</div>
+              <div class="trigger-phrase">Search engine vs answer engine — what&#x27;s the difference?</div>
+          </div>
+        </div></div>
+      </div>
+      <div class="tests-block">
+        <span style="font-family:var(--mono);font-size:10px;letter-spacing:0.1em;text-transform:uppercase;color:var(--purple);margin-right:8px">Tests:</span>Whether you can diagnose the retrieval-vs-generation gap and redesign the answer synthesis layer to close it.
+
+---
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="section-label">Concept</div>
+  <div class="concept-block"><p>A <strong>search engine</strong> returns a ranked list of relevant documents — the user's job is to read and extract the answer themselves. An <strong>answer engine</strong> (what RAG should be) synthesizes a direct, grounded answer from those documents. When retrieval succeeds but users still can't find answers, the pipeline has retrieved well but generated poorly: the generation layer is acting like a search engine (quoting passages) rather than an answer engine (synthesizing conclusions).</p></div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="section-label">Mechanism</div>
+  <div class="card"><p>The gap typically manifests in one or more of these failure patterns:</p>
+<ol class="mechanism-steps"><li><strong>Context dumping</strong> — the LLM returns verbatim passages instead of synthesizing a concise answer. Fix: strengthen the system prompt — explicitly instruct <code>"Synthesize a direct answer in 2–3 sentences. Do NOT copy-paste the source. Cite the source doc by title."</code>.</li></ol>
+<ol class="mechanism-steps"><li><strong>Answer buried in long context</strong> — the LLM receives 5–10 chunks and the user-relevant fact is in chunk 4 of 8; the LLM either buries it or hedges. Fix: reduce top-k (3 instead of 8), and use cross-encoder reranking to put the best chunk first. Also apply the "lost in the middle" placement heuristic — most relevant chunk first or last, never in the middle.</li></ol>
+<ol class="mechanism-steps"><li><strong>Reformulation gap</strong> — the retrieved doc answers a slightly different question than the user asked (vocabulary mismatch in question framing). Fix: add query rewriting (HyDE or LLM-generated sub-questions) before retrieval so the query better matches how the documents are phrased.</li></ol>
+<ol class="mechanism-steps"><li><strong>Missing explicit abstention</strong> — when retrieved context is partially relevant, the LLM hedges with "this might be related…" rather than telling the user what it doesn't know. Fix: prompt with explicit abstention instructions (<code>"If the context doesn't directly answer the question, say so and suggest what the user should look for."</code>).</li></ol>
+<ol class="mechanism-steps"><li><strong>No answer consolidation for multi-doc questions</strong> — the answer spans multiple chunks from different docs; without consolidation the LLM writes a disjointed response. Fix: Map-Reduce synthesis or a dedicated consolidation pass over top-N retrieved chunks.</li></ol>
+<p><strong>Diagnostic split using RAGAS:</strong></p>
+<ul class="styled-list"><li>High <code>context_recall</code> + low <code>answer_relevancy</code> → generation problem (retrieved docs have the info but the answer doesn't use it)</li><li>Low <code>context_recall</code> → retrieval problem (wrong docs returned)</li><li>Low <code>faithfulness</code> → hallucination (answer invents facts not in retrieved context)</li></ul></div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="section-label">Example / Tradeoff</div>
+  <div class="card card-accent"><div class="rich-text"><p>In a customer support RAG at a fintech company, retrieval NDCG@5 was 0.82 (excellent) but CSAT was 55%. Post-mortem: the LLM was returning paragraphs starting with "According to our policy document…" followed by 200-word excerpts. Users wanted a one-line answer like "Yes, you can dispute charges within 60 days by calling 1-800-XXX." Fix:</p>
+<ol class="mechanism-steps"><li>Reduced top-k from 8→3, added Cohere Rerank to sharpen the single best chunk.</li><li>Rewrote system prompt: <code>"Answer in 1–3 sentences, first person ('You can…'), cite the source title, offer next steps."</code>.</li><li>Added answer_relevancy RAGAS check — gated answers below 0.75 to a "I found these related articles: [link1] [link2]" fallback (graceful search-engine degradation).</li></ol>
+<p>Result: CSAT improved from 55% to 71% within 2 weeks with no retrieval changes.</p>
+<p><strong>Key tradeoff:</strong> Shorter, synthesized answers feel confident but increase hallucination risk; longer, quoted answers are safer but frustrating. The right balance is: synthesize the answer, cite the source, offer to show the full document. This gives users a direct answer with a trust escape hatch.</p></div></div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="accordion">
+    <div class="accordion-header">
+      <span class="accordion-title">🎙 Verbal Script (3–5 min)</span>
+      <span class="accordion-chevron">▾</span>
+    </div>
+    <div class="accordion-body">
+      <div class="script-block"><div class="script-label">Opening (30s)</div><p>"This is a really common failure mode I've seen in production RAG — the retrieval is working fine, but users still feel like they're not getting answers. The root cause is usually a product design gap: we built a search engine but users expected an answer engine. Let me walk through how I'd diagnose and fix it."</p></div>
+      <div class="script-block"><div class="script-label">Core explanation (2–3 min)</div><p>"I'd start by splitting the RAGAS metrics. If <code>context_recall</code> is high — meaning the right documents are being retrieved — but <code>answer_relevancy</code> is low — meaning the generated answer doesn't actually address the user's question — that's a clear signal the problem is in the generation layer, not retrieval.</p>
+<p>The most common generation failure is what I call 'context dumping' — the LLM copies chunks verbatim instead of synthesizing a direct answer. The fix is prompt engineering: explicitly tell the model to answer in 2–3 sentences, synthesize rather than quote, cite the source by title.</p>
+<p>The second failure is the 'lost in the middle' problem — with 8 retrieved chunks, the relevant fact ends up in chunk 4, and the LLM either buries or ignores it. Fix: reduce top-k from 8 to 3, use cross-encoder reranking to promote the best chunk, and place it first in the context.</p>
+<p>Third: query reformulation gaps. If the user says 'can I get a refund?' but the doc says 'return policy states…', the vocabulary mismatch means even a semantically-retrieved doc isn't phrased in a way the LLM uses to answer directly. Fix: add query rewriting before retrieval — HyDE or an LLM-generated sub-question expansion."</p></div>
+      <div class="script-block"><div class="script-label">Tradeoff / production angle (1 min)</div><p>"The tradeoff here is directness vs safety. A highly synthesized answer sounds confident but risks hallucination if the retrieved chunks are partially relevant. My production pattern: synthesize the answer (satisfy the 'answer engine' expectation), cite the source doc title, and add a graceful fallback — if answer_relevancy < 0.75, return 'Here are the most relevant articles' links instead of a synthesized answer. This gives you answer-engine UX on confident cases, search-engine UX when uncertain."</p></div>
+      <div class="script-block"><div class="script-label">Wrap-up (30s)</div><p>"So the core insight is: retrieval quality and answer quality are separate problems. RAGAS gives you the diagnostic split — context_recall tells you if retrieval is working, answer_relevancy tells you if generation is working. Fix the right layer. Happy to go deeper on any of the specific fixes."</p></div>
+    </div>
+  </div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="section-label">Pitfalls</div>
+  <div class="pitfall-card">
+    <div class="pitfall-mistake"><strong>✗ Mistake</strong> Assuming &quot;users can&#x27;t find the answer&quot; means retrieval is broken and immediately retuning embeddings or increasing top-k</div>
+    <div class="pitfall-better"><strong>✓ Better</strong> First split the RAGAS metrics (context_recall vs answer_relevancy vs faithfulness) to determine which layer is failing before touching retrieval; most of the time it&#x27;s a generation/prompt problem.</div>
+  </div>
+  <div class="pitfall-card">
+    <div class="pitfall-mistake"><strong>✗ Mistake</strong> Increasing top-k to &quot;give the LLM more context&quot; as a fix</div>
+    <div class="pitfall-better"><strong>✓ Better</strong> More context exacerbates lost-in-the-middle and context pollution; the fix is usually reducing top-k and reranking better, plus improving the synthesis prompt.</div>
+  </div>
+  <div class="pitfall-card">
+    <div class="pitfall-mistake"><strong>✗ Mistake</strong> Not distinguishing between the retrieval SLO and the user-facing answer SLO</div>
+    <div class="pitfall-better"><strong>✓ Better</strong> Articulate that retrieval metrics (NDCG, MRR, Recall@k) and user-experience metrics (CSAT, task completion, answer_relevancy) are distinct, and production monitoring needs both.
+
+---</div>
+  </div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="section-label">Related Questions</div>
+  <div class="related-pills">
+    <div class="related-pill" data-slug="02-013">
+      <span class="related-pill-icon">→</span>
+      <div class="related-pill-text">
+        <div class="related-pill-q">Q13: Common RAG failure points — how debug them?</div>
+        <div class="related-pill-rel">broader failure taxonomy including retrieval vs generation split</div>
+      </div>
+    </div>
+    <div class="related-pill" data-slug="02-021">
+      <span class="related-pill-icon">→</span>
+      <div class="related-pill-text">
+        <div class="related-pill-q">Q21: How evaluate a RAG pipeline? NDCG, MRR, precision@k, recall?</div>
+        <div class="related-pill-rel">evaluation metrics used to diagnose the search-vs-answer gap</div>
+      </div>
+    </div>
+    <div class="related-pill" data-slug="01-044">
+      <span class="related-pill-icon">→</span>
+      <div class="related-pill-text">
+        <div class="related-pill-q">Q44: What is the &#x27;lost in the middle&#x27; problem?</div>
+        <div class="related-pill-rel">core mechanism behind context-position failures in generation</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="section-label">One-liner recall</div>
+  <div class="oneliner-box">
+    <div class="oneliner-label">▸ Reconstruct from memory</div>
+    <div class="oneliner-text" data-text="When retrieval succeeds but users can&#x27;t find answers, the generation layer is acting like a search engine (quoting passages) rather than an answer engine (synthesizing conclusions) — diagnose with RAGAS `context_recall` vs `answer_relevancy`, then fix the synthesis prompt, reduce top-k, and rerank.">When retrieval succeeds but users can&#x27;t find answers, the generation layer is acting like a search engine (quoting passages) rather than an answer engine (synthesizing conclusions) — diagnose with RAGAS `context_recall` vs `answer_relevancy`, then fix the synthesis prompt, reduce top-k, and rerank.</div>
+  </div>
+</div>

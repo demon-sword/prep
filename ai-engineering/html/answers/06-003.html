@@ -1,0 +1,136 @@
+<div class="answer-header reveal">
+  <div class="answer-meta">
+    <span class="meta-badge meta-category">06-ml-fundamentals</span>
+    <span class="meta-badge meta-num">Q003</span>
+    <span class="meta-badge meta-status-review">review</span>
+  </div>
+  <h1 class="answer-title">Diagnose performance bugs in a model?</h1>
+</div>
+
+<div class="answer-section reveal">
+  <div class="accordion">
+    <div class="accordion-header">
+      <span class="accordion-title">⟁ Framing — Why this is asked</span>
+      <span class="accordion-chevron">▾</span>
+    </div>
+    <div class="accordion-body">
+      <div class="framing-grid">
+        <div><div class="framing-card">
+          <div class="framing-card-title">Why asked</div>
+          <p style="font-size:13.5px;line-height:1.7;color:var(--text-dim)">Interviewers want to see systematic debugging instinct — not guesswork. Strong candidates follow a structured diagnostic ladder from data → training loop → architecture → evaluation, rather than immediately jumping to &quot;retrain with more data.&quot; This is heavily probed in mid-to-senior ML interviews because poor debuggers waste GPU-months.</p>
+        </div></div>
+        <div><div class="framing-card">
+          <div class="framing-card-title">Trigger phrases</div>
+          <div class="trigger-list">
+              <div class="trigger-phrase">Your model&#x27;s validation loss is stagnating — how do you debug it?</div>
+              <div class="trigger-phrase">A model that was working dropped 10 points of accuracy in production — where do you start?</div>
+              <div class="trigger-phrase">Diagnose performance bugs in a model?</div>
+          </div>
+        </div></div>
+      </div>
+      <div class="tests-block">
+        <span style="font-family:var(--mono);font-size:10px;letter-spacing:0.1em;text-transform:uppercase;color:var(--purple);margin-right:8px">Tests:</span>Ability to isolate root cause across the full ML pipeline — data quality, training dynamics, architecture, and evaluation — using structured hypotheses rather than trial-and-error.
+
+---
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="section-label">Concept</div>
+  <div class="concept-block"><p>Model performance bugs fall into five root-cause buckets: <strong>data issues</strong> (leakage, distribution shift, label noise), <strong>training dynamics issues</strong> (wrong learning rate, vanishing/exploding gradients, underfitting/overfitting), <strong>architecture mismatches</strong> (wrong inductive bias for the task), <strong>evaluation bugs</strong> (metric doesn't match business goal, test set contamination), and <strong>production drift</strong> (train/serve feature skew). Diagnosing systematically means ruling out each layer before touching the next.</p></div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="section-label">Mechanism</div>
+  <div class="card"><p><strong>5-step diagnostic ladder:</strong></p>
+<ol class="mechanism-steps"><li><strong>Validate the eval metric first.</strong> Check if validation loss and the business metric are aligned. A classification model with <code>accuracy</code> as the metric on an imbalanced dataset will appear 98% accurate while being useless — swap to PR-AUC or F1 immediately.</li></ol>
+<ol class="mechanism-steps"><li><strong>Check the data.</strong> Run a data audit:</li></ol>
+<ul class="styled-list"><li>Label noise: sample 200 random examples and manually inspect labels.</li><li>Train/test leakage: verify timestamps, shuffle seeds, feature construction pipelines.</li><li>Distribution shift: compare <code>train_X.describe()</code> vs <code>val_X.describe()</code> / production feature distributions.</li><li>Class imbalance: <code>value_counts()</code> on target; if >10:1 imbalance, accuracy is misleading.</li></ul>
+<ol class="mechanism-steps"><li><strong>Sanity-check the training loop.</strong> Overfit a single mini-batch (32 examples) on purpose — if the model can't reach near-zero training loss on 32 examples with high learning rate, the architecture or loss function is broken. Common bugs:</li></ol>
+<ul class="styled-list"><li>Gradient not flowing: check <code>requires_grad</code>, detached tensors, frozen layers not intended to be frozen.</li><li>Dimension mismatch causing silent broadcasting: print <code>tensor.shape</code> at every layer; use <code>assert</code> guards.</li><li>Loss is NaN: learning rate too high, log(0), inf in features — add gradient clipping (<code>clip_grad_norm_(1.0)</code>).</li><li>Wrong loss function: using CrossEntropyLoss with sigmoid output (expects raw logits) or BCELoss with multi-class.</li></ul>
+<ol class="mechanism-steps"><li><strong>Plot learning curves.</strong> Compare train loss vs val loss over epochs:</li></ol>
+<ul class="styled-list"><li>Both high → <strong>underfitting</strong> (model capacity too low, learning rate too low, not enough epochs)</li><li>Train low, val high → <strong>overfitting</strong> (add dropout/L2, reduce model size, get more data)</li><li>Val loss decreasing then spiking → <strong>learning rate too high or batch norm issue</strong></li><li>Val loss never decreases → data/label bug or architectural mismatch</li></ul>
+<ol class="mechanism-steps"><li><strong>Profile inference vs training for production bugs.</strong> If accuracy was fine offline but degraded in production, check:</li></ol>
+<ul class="styled-list"><li>Feature skew: production features computed differently than training (different time windows, imputation logic).</li><li>Model/data staleness: embedding models updated but downstream classifier not retrained.</li><li>Batch norm inference mode: <code>model.eval()</code> not called, so batch statistics differ.</li></ul></div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="section-label">Example / Tradeoff</div>
+  <div class="card card-accent"><div class="rich-text"><p><strong>Concrete incident:</strong> A fine-tuned BERT classifier for intent detection dropped from 91% to 79% accuracy after a data pipeline update. Diagnosis ladder:</p>
+<ol class="mechanism-steps"><li>Metric aligned (accuracy fine for balanced 10-class problem) ✓</li><li>Data audit: the pipeline started lowercasing text at ingestion — but the fine-tuned BERT tokenizer was case-sensitive (bert-base-cased). Token-ID mismatch caused OOV on proper nouns.</li><li>Fix: unified preprocessing contract in the feature pipeline, pinned the tokenizer type in metadata.</li><li>Result: accuracy recovered to 90% after reprocessing — no retraining needed.</li></ol>
+<p><strong>Tool stack for PyTorch debugging:</strong> <code>torch.autograd.set_detect_anomaly(True)</code> for NaN gradient location, <code>torchinfo</code> for shape tracing, TensorBoard or W&B for loss curves, <code>torch.testing.assert_close</code> for numerical precision checks.</p></div></div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="accordion">
+    <div class="accordion-header">
+      <span class="accordion-title">🎙 Verbal Script (3–5 min)</span>
+      <span class="accordion-chevron">▾</span>
+    </div>
+    <div class="accordion-body">
+      <div class="script-block"><div class="script-label">Opening (30s)</div><p>"I approach model debugging with a five-layer diagnostic ladder — I never start by retraining, because the bug could be in evaluation, data, or the training loop itself. Let me walk through how I'd systematically rule out each layer."</p></div>
+      <div class="script-block"><div class="script-label">Core explanation (2–3 min)</div><p>"First, I validate the evaluation metric. If I'm looking at accuracy on an imbalanced dataset, I might be measuring the wrong thing entirely — I'd switch to PR-AUC or F1 before drawing any conclusions.</p>
+<p>Second, I audit the data: sample 200 examples to inspect label quality, check for train/test leakage (wrong shuffling, timestamp issues), and compare feature distributions between train and validation to catch any preprocessing bugs.</p>
+<p>Third, I run a single mini-batch overfit test — force the model to memorize 32 examples with a high learning rate. If it can't reach near-zero loss on 32 samples, something is architecturally broken: a detached tensor, wrong loss function, or dimension broadcasting issue. In PyTorch I'd use <code>set_detect_anomaly(True)</code> and print tensor shapes at each layer.</p>
+<p>Fourth, I plot training curves. High train and val loss → underfitting. Low train, high val → overfitting. Val loss spiking after decreasing → learning rate or batch norm issue. The shape of those curves tells me exactly which lever to pull.</p>
+<p>Fifth, for production degradation specifically, I check for feature skew — the production pipeline computing features differently than training — and make sure <code>model.eval()</code> is called so batch norm uses population statistics, not mini-batch statistics."</p></div>
+      <div class="script-block"><div class="script-label">Tradeoff / production angle (1 min)</div><p>"The key tradeoff is time: the mini-batch overfit test is fast (under a minute) and rules out training-loop bugs before burning GPU-hours on a full rerun. The place candidates get stuck is skipping the data audit because it's 'boring' — but label noise or train/test leakage is often the root cause, and no amount of architecture tuning will fix it. In production, feature skew between serving and training is the single most common silent killer of deployed models."</p></div>
+      <div class="script-block"><div class="script-label">Wrap-up (30s)</div><p>"So in summary: validate the metric → audit data → sanity-check the training loop → read the learning curves → check train/serve skew for production bugs. Happy to go deeper on any specific layer — gradient debugging, data leakage detection patterns, or overfitting diagnostics."</p></div>
+    </div>
+  </div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="section-label">Pitfalls</div>
+  <div class="pitfall-card">
+    <div class="pitfall-mistake"><strong>✗ Mistake</strong> Immediately retraining with more data or tweaking the architecture when accuracy drops</div>
+    <div class="pitfall-better"><strong>✓ Better</strong> First check if the eval metric is correct and run a data audit; the bug is often in preprocessing or label noise, not model capacity.</div>
+  </div>
+  <div class="pitfall-card">
+    <div class="pitfall-mistake"><strong>✗ Mistake</strong> Ignoring the difference between training loss and validation loss curves and only reporting final accuracy</div>
+    <div class="pitfall-better"><strong>✓ Better</strong> Plot both curves over epochs; the shape reveals underfitting vs overfitting vs a learning rate issue, each with a different fix.</div>
+  </div>
+  <div class="pitfall-card">
+    <div class="pitfall-mistake"><strong>✗ Mistake</strong> Assuming a production accuracy drop means the model degraded</div>
+    <div class="pitfall-better"><strong>✓ Better</strong> Check for feature skew (production features computed differently) and confirm <code>model.eval()</code> is called; these are more common causes than actual model rot.
+
+---</div>
+  </div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="section-label">Related Questions</div>
+  <div class="related-pills">
+    <div class="related-pill" data-slug="06-009">
+      <span class="related-pill-icon">→</span>
+      <div class="related-pill-text">
+        <div class="related-pill-q">Q9: Bias-variance tradeoff?</div>
+        <div class="related-pill-rel">Underfitting vs overfitting is the core diagnostic axis from learning curves</div>
+      </div>
+    </div>
+    <div class="related-pill" data-slug="06-013">
+      <span class="related-pill-icon">→</span>
+      <div class="related-pill-text">
+        <div class="related-pill-q">Q13: Debug model that runs but doesn&#x27;t learn — broadcasting, dimension mismatches?</div>
+        <div class="related-pill-rel">Deeper dive on training-loop-specific bugs</div>
+      </div>
+    </div>
+    <div class="related-pill" data-slug="06-001">
+      <span class="related-pill-icon">→</span>
+      <div class="related-pill-text">
+        <div class="related-pill-q">Q1: Data pre-processing and feature engineering?</div>
+        <div class="related-pill-rel">Data audit and leakage detection are the first two diagnostic steps</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="section-label">One-liner recall</div>
+  <div class="oneliner-box">
+    <div class="oneliner-label">▸ Reconstruct from memory</div>
+    <div class="oneliner-text" data-text="Diagnose in order: validate the metric → audit data for leakage/noise/shift → mini-batch overfit test to catch training-loop bugs → read learning curves for under/overfitting → check train/serve feature skew for production drops.">Diagnose in order: validate the metric → audit data for leakage/noise/shift → mini-batch overfit test to catch training-loop bugs → read learning curves for under/overfitting → check train/serve feature skew for production drops.</div>
+  </div>
+</div>

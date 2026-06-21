@@ -1,0 +1,134 @@
+<div class="answer-header reveal">
+  <div class="answer-meta">
+    <span class="meta-badge meta-category">06-ml-fundamentals</span>
+    <span class="meta-badge meta-num">Q008</span>
+    <span class="meta-badge meta-status-review">review</span>
+  </div>
+  <h1 class="answer-title">Ingest structured, unstructured, event data?</h1>
+</div>
+
+<div class="answer-section reveal">
+  <div class="accordion">
+    <div class="accordion-header">
+      <span class="accordion-title">⟁ Framing — Why this is asked</span>
+      <span class="accordion-chevron">▾</span>
+    </div>
+    <div class="accordion-body">
+      <div class="framing-grid">
+        <div><div class="framing-card">
+          <div class="framing-card-title">Why asked</div>
+          <p style="font-size:13.5px;line-height:1.7;color:var(--text-dim)">Interviewers probe whether you can architect a heterogeneous data pipeline that feeds an ML system — not just a single-source ETL. In 2025–2026 AI apps, models ingest CSVs, PDFs, Slack threads, and Kafka streams simultaneously. The interviewer wants to see that you understand <strong>source-specific extraction</strong>, <strong>schema harmonisation</strong>, <strong>latency tiers</strong> (batch vs stream), and <strong>quality gating</strong> before data reaches the model or feature store.</p>
+        </div></div>
+        <div><div class="framing-card">
+          <div class="framing-card-title">Trigger phrases</div>
+          <div class="trigger-list">
+              <div class="trigger-phrase">How would you ingest data from multiple sources into your AI system?</div>
+              <div class="trigger-phrase">Our data comes from databases, PDFs, and a Kafka event stream — how do you unify that?</div>
+              <div class="trigger-phrase">Walk me through a data pipeline for an AI application at scale.</div>
+          </div>
+        </div></div>
+      </div>
+      <div class="tests-block">
+        <span style="font-family:var(--mono);font-size:10px;letter-spacing:0.1em;text-transform:uppercase;color:var(--purple);margin-right:8px">Tests:</span>Ability to design a production-grade, multi-modal ingestion architecture with appropriate tooling, latency SLAs, and quality controls for each data class.
+
+---
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="section-label">Concept</div>
+  <div class="concept-block"><p>AI systems consume three fundamentally different data classes — <strong>structured</strong> (rows, schema, SQL), <strong>unstructured</strong> (text, PDFs, images, audio — no fixed schema), and <strong>event/streaming</strong> (real-time signals: clickstreams, logs, sensor readings) — each requiring different extraction, transformation, and routing strategies before reaching a feature store, vector index, or training dataset.</p></div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="section-label">Mechanism</div>
+  <div class="card"><p><strong>1. Structured data (databases, CSVs, data warehouses)</strong></p>
+<ul class="styled-list"><li>Source: PostgreSQL, MySQL, Snowflake, BigQuery, S3 Parquet.</li><li>Ingest pattern: full-load for small tables; CDC (Change Data Capture) via <strong>Debezium</strong> + <strong>Kafka</strong> for live OLTP tables.</li><li>Transform: normalise types, fill nulls, encode categoricals; land in feature store (Feast/Tecton) for online serving or Parquet in S3 for offline training.</li><li>Key concern: <strong>train/serve feature skew</strong> — the same transformation code must run at training time and serving time.</li></ul>
+<p><strong>2. Unstructured data (documents, PDFs, images, audio)</strong></p>
+<ul class="styled-list"><li>Source: S3, SharePoint, Google Drive, email, web crawl.</li><li>Extract: <strong>PyMuPDF</strong> / <strong>pdfplumber</strong> for native PDFs; <strong>AWS Textract</strong> / <strong>Azure Form Recognizer</strong> for scanned docs (OCR confidence threshold ≥ 0.85); <strong>Whisper</strong> for audio transcription; <strong>GPT-4o vision</strong> for charts/figures.</li><li>Transform: structure-aware chunking (parent-child: 1024-token parent, 256-token child); strip boilerplate; add metadata (source, doc_id, page, timestamp).</li><li>Route: embed via <strong>text-embedding-3-large</strong> or <strong>BGE-M3</strong>; index in <strong>Pinecone/Qdrant</strong> for semantic search; store raw in S3.</li><li>Key concern: document heterogeneity — tables need row-to-Markdown conversion; headers/footers must be stripped.</li></ul>
+<p><strong>3. Event/streaming data (clickstreams, logs, IoT, user actions)</strong></p>
+<ul class="styled-list"><li>Source: <strong>Apache Kafka</strong>, <strong>AWS Kinesis</strong>, <strong>Pub/Sub</strong>.</li><li>Process: <strong>Apache Flink</strong> or <strong>Spark Structured Streaming</strong> for windowed aggregations (e.g., clicks-per-session in last 5 min); <strong>Kafka Streams</strong> for lightweight transformations.</li><li>Sink: real-time features → Redis (online feature store, sub-10ms reads); historical aggregations → Parquet/BigQuery for training; alerts → PagerDuty.</li><li>Key concern: <strong>late-arriving events</strong> — use watermarking (Flink: <code>.withIdleness(5 minutes)</code>) to handle out-of-order data without indefinite state.</li></ul>
+<p><strong>Unified quality gates (all three classes)</strong></p>
+<ul class="styled-list"><li>Schema validation: <strong>Great Expectations</strong> / Pydantic checks at ingestion.</li><li>PII scrubbing: <strong>Presidio</strong> detect-and-redact before any LLM or storage write.</li><li>Deduplication: MinHash for documents; idempotency keys (SHA-256 hash of content) for events.</li><li>Observability: row-count / null-rate / latency metrics published to Grafana; alert on anomalies.</li></ul></div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="section-label">Example / Tradeoff</div>
+  <div class="card card-accent"><div class="rich-text"><p><strong>Enterprise knowledge-base RAG system (concrete stack):</strong></p>
+<div class="table-wrap"><table class="data-table"><tr><th>Data class</th><th>Source</th><th>Ingest tool</th><th>Sink</th></tr><tr><td>Structured</td><td>PostgreSQL (product metadata)</td><td>Debezium CDC → Kafka</td><td>Feast feature store + Pinecone metadata filter</td></tr><tr><td>Unstructured</td><td>Confluence PDFs</td><td>PyMuPDF + Textract (scanned)</td><td>Pinecone (vector) + S3 (raw)</td></tr><tr><td>Events</td><td>User search queries (Kafka)</td><td>Flink 5-min window → Redis</td><td>Real-time ranking features</td></tr></table></div>
+<p><strong>Latency tradeoff:</strong>   Streaming (Kafka+Flink) gives <1s freshness but adds operational complexity (state management, watermarking, exactly-once semantics). Batch (Airflow DAG, hourly) is far simpler and sufficient when hour-old data is acceptable — e.g., nightly document re-indexing. Always ask: <strong>"What's the staleness SLA?"</strong> before reaching for streaming.</p>
+<p><strong>Exactly-once semantics</strong> in Flink requires idempotent sinks and checkpointing — adds ~10–20% throughput overhead vs at-least-once; worth it only when downstream impact of duplicates is costly (financial transactions, billing events).</p></div></div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="accordion">
+    <div class="accordion-header">
+      <span class="accordion-title">🎙 Verbal Script (3–5 min)</span>
+      <span class="accordion-chevron">▾</span>
+    </div>
+    <div class="accordion-body">
+      <div class="script-block"><div class="script-label">Opening (30s)</div><p>"I'd frame this around three data classes that need different handling — structured relational data, unstructured documents, and real-time event streams — and then a shared quality layer that applies across all three before anything reaches the model."</p></div>
+      <div class="script-block"><div class="script-label">Core explanation (2–3 min)</div><p>"For structured data, the main question is freshness vs simplicity. If hour-old data is fine, a nightly Airflow job pulling from Postgres or Snowflake into Parquet works great. If I need near-real-time, I'd use Debezium to capture Postgres WAL events into Kafka, then land them into a feature store like Feast for online serving. The critical thing is making sure the same transformation logic runs at training time and serving time — train/serve skew is a silent accuracy killer.</p>
+<p>For unstructured data — PDFs, Word docs, emails — I'd route by MIME type. Native-digital PDFs go through PyMuPDF; scanned docs go through Textract or Azure Form Recognizer with an OCR confidence gate. Tables get converted to Markdown before chunking. I'd use a parent-child chunking strategy — 1024-token parent for context, 256-token child for retrieval precision — and embed with text-embedding-3-large into Pinecone.</p>
+<p>For event streams — clickstreams, user actions, logs — I'd use Kafka as the backbone with Flink for windowed aggregations. For example, clicks-per-session in the last five minutes lands in Redis for sub-10ms feature reads at serving time. Historical data goes to BigQuery for training. The main nuance here is late-arriving events — Flink watermarking prevents infinite state accumulation.</p>
+<p>Across all three, I'd add shared quality gates: Great Expectations for schema validation, Presidio for PII scrubbing before any LLM sees the data, MinHash dedup for documents, and idempotency keys for events."</p></div>
+      <div class="script-block"><div class="script-label">Tradeoff / production angle (1 min)</div><p>"The biggest tradeoff is streaming complexity vs freshness. Streaming infrastructure — Kafka, Flink, exactly-once checkpointing — is operationally expensive. I'd default to batch unless the staleness SLA is under an hour. For a RAG knowledge base, documents can be re-indexed nightly; that's batch. For real-time personalisation ranking features, I need Kafka+Flink. Getting that threshold wrong — streaming everything by default — leads to over-engineered pipelines that are fragile and hard to debug."</p></div>
+      <div class="script-block"><div class="script-label">Wrap-up (30s)</div><p>"So the mental model is: classify data by class, match each to the right extraction tool and latency tier, then apply shared quality gates. Happy to go deeper on any layer — the Flink windowing semantics, the chunking strategy for unstructured docs, or the feature store design."</p></div>
+    </div>
+  </div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="section-label">Pitfalls</div>
+  <div class="pitfall-card">
+    <div class="pitfall-mistake"><strong>✗ Mistake</strong> Describing only batch ETL (&quot;we pull from the DB into S3 nightly&quot;) without addressing streaming or unstructured sources</div>
+    <div class="pitfall-better"><strong>✓ Better</strong> Segment your answer by data class (structured/unstructured/event) and choose the latency tier appropriate to each; name the staleness SLA before recommending a pattern.</div>
+  </div>
+  <div class="pitfall-card">
+    <div class="pitfall-mistake"><strong>✗ Mistake</strong> Saying &quot;we&#x27;d use Kafka for everything&quot; without mentioning the operational complexity of exactly-once semantics, watermarking, or state management</div>
+    <div class="pitfall-better"><strong>✓ Better</strong> Explain that streaming adds complexity (Flink checkpointing, late-event watermarks, ~10–20% throughput overhead for exactly-once), and justify it only when the staleness SLA demands &lt;1s freshness.</div>
+  </div>
+  <div class="pitfall-card">
+    <div class="pitfall-mistake"><strong>✗ Mistake</strong> Forgetting the quality layer — schema validation, PII scrubbing, deduplication — and jumping straight to storage</div>
+    <div class="pitfall-better"><strong>✓ Better</strong> Explicitly call out Great Expectations/Pydantic validation, Presidio PII scrubbing, and MinHash/idempotency-key dedup as gates that apply before any data reaches the model or feature store.
+
+---</div>
+  </div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="section-label">Related Questions</div>
+  <div class="related-pills">
+    <div class="related-pill" data-slug="06-007">
+      <span class="related-pill-icon">→</span>
+      <div class="related-pill-text">
+        <div class="related-pill-q">Q7: Real-time vs batch processing for data updates</div>
+        <div class="related-pill-rel">Direct prerequisite — streaming vs batch decision framework</div>
+      </div>
+    </div>
+    <div class="related-pill" data-slug="06-001">
+      <span class="related-pill-icon">→</span>
+      <div class="related-pill-text">
+        <div class="related-pill-q">Q1: Data pre-processing and feature engineering</div>
+        <div class="related-pill-rel">Follow-up — once ingested, how to transform and featurise</div>
+      </div>
+    </div>
+    <div class="related-pill" data-slug="02-003">
+      <span class="related-pill-icon">→</span>
+      <div class="related-pill-text">
+        <div class="related-pill-q">Q3: Design a GenAI document-processing pipeline for unstructured data</div>
+        <div class="related-pill-rel">Cross-category deeper dive on unstructured doc ingestion</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="section-label">One-liner recall</div>
+  <div class="oneliner-box">
+    <div class="oneliner-label">▸ Reconstruct from memory</div>
+    <div class="oneliner-text" data-text="Segment by data class — structured (Debezium CDC → Feast), unstructured (PyMuPDF/Textract → parent-child chunks → Pinecone), events (Kafka+Flink → Redis feature store) — with shared Presidio PII scrubbing, Great Expectations validation, and dedup gates at every entry point; choose batch vs stream by staleness SLA, not by default.">Segment by data class — structured (Debezium CDC → Feast), unstructured (PyMuPDF/Textract → parent-child chunks → Pinecone), events (Kafka+Flink → Redis feature store) — with shared Presidio PII scrubbing, Great Expectations validation, and dedup gates at every entry point; choose batch vs stream by staleness SLA, not by default.</div>
+  </div>
+</div>

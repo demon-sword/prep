@@ -1,0 +1,610 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>05 — Performance &amp; Core Web Vitals | System Design Answers</title>
+  <meta name="description" content="Interview-depth answers for Payments-System frontend system design.">
+  <style>
+    :root {
+      --bg: #f8f9fb; --surface: #ffffff; --text: #1a1d26; --text-muted: #5c6370;
+      --border: #e2e6ed; --accent: #3d5a80; --accent-soft: #eef2f7;
+      --code-bg: #f0f2f6; --pre-bg: #1e2433; --pre-text: #e8ecf4;
+      --nav-bg: rgba(248, 249, 251, 0.92); --shadow: 0 1px 3px rgba(0, 0, 0, 0.06);
+    }
+    @media (prefers-color-scheme: dark) {
+      :root {
+        --bg: #12151c; --surface: #1a1f2a; --text: #e8ecf4; --text-muted: #9aa3b2;
+        --border: #2d3548; --accent: #8cb4d9; --accent-soft: #232a38;
+        --code-bg: #252d3d; --pre-bg: #0d1017; --pre-text: #d4dae6;
+        --nav-bg: rgba(18, 21, 28, 0.94); --shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
+      }
+    }
+    *, *::before, *::after { box-sizing: border-box; }
+    html { scroll-behavior: smooth; scroll-padding-top: 5.5rem; }
+    body { margin: 0; font-family: "Segoe UI", system-ui, sans-serif; font-size: 1.0625rem;
+      line-height: 1.65; color: var(--text); background: var(--bg); }
+    .site-nav { position: sticky; top: 0; z-index: 100; background: var(--nav-bg);
+      backdrop-filter: blur(10px); border-bottom: 1px solid var(--border); box-shadow: var(--shadow); }
+    .site-nav-inner { max-width: 900px; margin: 0 auto; padding: 0.75rem 1.5rem; }
+    .site-nav-title { font-size: 0.8125rem; font-weight: 600; text-transform: uppercase;
+      letter-spacing: 0.04em; color: var(--text-muted); margin: 0 0 0.5rem; }
+    .toc { display: flex; flex-wrap: wrap; gap: 0.35rem 0.75rem; margin: 0; padding: 0;
+      list-style: none; font-size: 0.8125rem; }
+    .toc a { color: var(--accent); text-decoration: none; white-space: nowrap; }
+    .toc a:hover { text-decoration: underline; }
+    .page { max-width: 900px; margin: 0 auto; padding: 2rem 1.5rem 4rem; }
+    header.page-header { margin-bottom: 2.5rem; padding-bottom: 1.5rem; border-bottom: 1px solid var(--border); }
+    h1 { font-size: 1.75rem; font-weight: 700; margin: 0 0 0.75rem; }
+    .lead { margin: 0; color: var(--text-muted); font-size: 1.05rem; }
+    h2.section { font-size: 1.35rem; font-weight: 700; margin: 2.5rem 0 1.25rem;
+      color: var(--accent); border-bottom: 2px solid var(--accent-soft); padding-bottom: 0.35rem; }
+    article.qa { margin-bottom: 2.75rem; background: var(--surface); border: 1px solid var(--border);
+      border-radius: 10px; padding: 1.5rem 1.75rem; box-shadow: var(--shadow); }
+    h3.question { font-size: 1.2rem; font-weight: 600; margin: 0 0 1rem; }
+    article.qa p { margin: 0 0 1rem; }
+    ol, ul { margin: 0 0 1rem; padding-left: 1.35rem; }
+    table { width: 100%; border-collapse: collapse; margin: 0 0 1rem; font-size: 0.95rem; }
+    th, td { border: 1px solid var(--border); padding: 0.55rem 0.75rem; text-align: left; }
+    th { background: var(--accent-soft); font-weight: 600; }
+    code { font-family: ui-monospace, Menlo, Consolas, monospace; font-size: 0.88em;
+      background: var(--code-bg); padding: 0.15em 0.4em; border-radius: 4px; }
+    pre { margin: 0 0 1rem; padding: 1rem; background: var(--pre-bg); color: var(--pre-text);
+      border-radius: 8px; overflow-x: auto; font-size: 0.875rem; }
+    pre code { background: none; padding: 0; color: inherit; }
+    .mermaid-wrap { margin: 0 0 1rem; padding: 1rem; background: var(--surface);
+      border: 1px solid var(--border); border-radius: 8px; overflow-x: auto; }
+    footer.page-footer { max-width: 900px; margin: 0 auto; padding: 1.5rem;
+      border-top: 1px solid var(--border); font-size: 0.9375rem; }
+    footer.page-footer a { color: var(--accent); text-decoration: none; font-weight: 500; }
+  </style>
+  <link rel="stylesheet" href="assets/interactive.css">
+</head>
+<body>
+  <nav class="site-nav" aria-label="Table of contents">
+    <div class="site-nav-inner">
+      <p class="site-nav-title">On this page</p>
+      <ol class="toc"><li><a href="#q1-stripejs-loading-strategy-every-page-vs-checkout-page-only">Q1. Stripe.js loading strategy — eve</a></li><li><a href="#q2-stripe-elements-iframe-and-cumulative-layout-shift-cls">Q2. Stripe Elements iframe and Cumul</a></li><li><a href="#q3-bundle-splitting-strategy-for-a-checkout-page">Q3. Bundle-splitting strategy for a </a></li><li><a href="#q4-third-party-payment-sdks-and-tbtinp">Q4. Third-party payment SDKs and TBT</a></li><li><a href="#q5-optimizing-time-to-interactive-tti-for-checkout">Q5. Optimizing Time to Interactive (</a></li><li><a href="#q6-resource-hints-for-a-checkout-page">Q6. Resource hints for a checkout pa</a></li><li><a href="#q7-ssr-vs-ssg-vs-csr-for-a-checkout-page">Q7. SSR vs. SSG vs. CSR for a checko</a></li><li><a href="#q8-systematic-performance-audit-for-lcp-42s-on-3g-mobile">Q8. Systematic performance audit for</a></li><li><a href="#q9-network-connection-sequence-for-stripe-elements-on-mobile">Q9. Network connection sequence for </a></li><li><a href="#q10-one-click-checkout-performance-architecture-2-seconds">Q10. One-click checkout performance </a></li></ol>
+    </div>
+  </nav>
+  <main class="page">
+    <header class="page-header">
+      <h1>05 — Performance &amp; Core Web Vitals</h1>
+      <p class="lead">Interview-depth answers for Payments-System frontend system design.</p>
+    </header>
+    <h1 id="05-performance-core-web-vitals">05 — Performance &amp; Core Web Vitals</h1>
+<p>A checkout page&#x27;s performance is directly coupled to revenue. Every 100ms of added latency costs measurable conversion — Google&#x27;s data puts it at ~1% per 100ms for e-commerce. This section covers the specific performance challenges of a payments frontend: loading heavy third-party SDKs (Stripe.js, PayPal), managing iframe mount jank, optimizing the critical path to card entry, and building one-click experiences that feel instant. The recurring theme is that checkout has a uniquely strict performance budget because the user is mid-transaction and has high intent — you lose them to a slow page the moment friction exceeds their patience.</p>
+<hr>
+<h2 class="section" id="core-questions">Core Questions</h2>
+<article class="qa" id="q1-stripejs-loading-strategy-every-page-vs-checkout-page-only">
+<h3 class="question">Q1. Stripe.js loading strategy — every page vs. checkout page only</h3>
+<p><strong>Problem framing:</strong> Stripe.js is approximately 300KB of third-party JavaScript. Loading it on every page incurs a bandwidth and parse cost for users who never reach checkout. Loading it only on the checkout page means the user pays the full load cost at the worst possible moment — when they&#x27;re about to pay. Stripe&#x27;s documentation explicitly recommends loading on every page of the site. Understanding why — and when to deviate — is the question.</p>
+<p><strong>Approach:</strong></p>
+<p>Stripe recommends loading on every page primarily for <strong>fraud detection and machine learning</strong>. Stripe.js instruments browser signals (device fingerprinting, behavioral biometrics, timing patterns) from the moment it loads. By the time the user reaches checkout, Stripe has collected session-level signals that inform its fraud models. Loading only on checkout means Stripe sees only the last 30 seconds of a session — a cold signal.</p>
+<p>Secondary benefit: <strong>connection pre-warming</strong>. Stripe.js initiates a connection to <code>js.stripe.com</code> and <code>q.stripe.com</code> (the telemetry endpoint) on first load. Subsequent navigations can reuse that connection or hit the browser cache.</p>
+<pre><code>// In your root layout or _app.tsx (Next.js example)
+&lt;script src=&quot;https://js.stripe.com/v3/&quot; async&gt;&lt;/script&gt;</code></pre>
+<p>Loading with <code>async</code> is critical — it prevents render-blocking. The script is also heavily cached by Stripe&#x27;s CDN (long <code>Cache-Control</code> headers), so repeat page loads cost only a cache hit.</p>
+<p><strong>Strategy comparison:</strong></p>
+<table>
+<thead><tr>
+<th>Approach</th>
+<th>LCP impact</th>
+<th>Fraud signal quality</th>
+<th>Time-to-card-entry</th>
+</tr></thead><tbody>
+<tr>
+<td>Load on every page (<code>async</code>)</td>
+<td>Minimal (async, cached)</td>
+<td>High (full session)</td>
+<td>Fast (already warm)</td>
+</tr>
+<tr>
+<td>Load on checkout only (<code>async</code>)</td>
+<td>Small (async)</td>
+<td>Low (cold start)</td>
+<td>~300–500ms slower</td>
+</tr>
+<tr>
+<td>Load on checkout only (<code>defer</code>)</td>
+<td>None</td>
+<td>Low</td>
+<td>As above</td>
+</tr>
+<tr>
+<td>Inline/bundle Stripe.js</td>
+<td>Violates Stripe TOS</td>
+<td>N/A</td>
+<td>N/A</td>
+</tr>
+</tbody></table>
+<p>You cannot bundle Stripe.js — Stripe&#x27;s TOS prohibits it, and the SDK self-updates from Stripe&#x27;s CDN to pick up security patches. If you must limit the every-page approach (strict performance budget), preconnect on all pages and load the script on the cart/product pages that precede checkout.</p>
+<p><strong>Tradeoffs:</strong></p>
+<ul><li>Every-page approach increases your main-thread parse work on non-checkout pages, but the script is async so it only competes during idle time.</li><li>If your site has a very large non-checkout audience (e.g., a blog with an embedded store), the every-page approach wastes bandwidth for most users. The pragmatic compromise is to load on <code>product</code>, <code>cart</code>, and <code>checkout</code> pages but not on marketing/content pages.</li><li>The fraud signal benefit is real but not measurable in your own RUM — Stripe internalizes it. Don&#x27;t skip this optimization just because you can&#x27;t A/B test it locally.</li></ul>
+<hr>
+</article>
+<article class="qa" id="q2-stripe-elements-iframe-and-cumulative-layout-shift-cls">
+<h3 class="question">Q2. Stripe Elements iframe and Cumulative Layout Shift (CLS)</h3>
+<p><strong>Problem framing:</strong> CLS measures unexpected layout shifts — elements moving after the page renders. Stripe Elements mounts card input fields inside cross-origin iframes. When the iframe first renders, it may have no size, causing the surrounding layout to reflow as it settles to its final height. A poor CLS score (above 0.25) directly impacts both user experience and Google&#x27;s SEO signals.</p>
+<p><strong>Approach:</strong></p>
+<p>The root cause of CLS from Elements is that the iframe&#x27;s intrinsic height is unknown until mount. The browser has to wait for the iframe content to load and the SDK to call <code>resize</code> on the parent, which triggers a layout recalculation.</p>
+<p><strong>Prevention techniques:</strong></p>
+<ol><li><strong>Reserve space with a fixed-height container before mount:</strong></li></ol>
+<pre><code>.card-element-container {
+  min-height: 40px;   /* matches the default Elements height */
+  width: 100%;
+  /* Prevents collapse while iframe loads */
+}</code></pre>
+<ol><li><strong>Use skeleton/placeholder content:</strong></li></ol>
+<pre><code>function CardInput() {
+  const [ready, setReady] = useState(false);
+
+  return (
+    &lt;div className=&quot;card-element-container&quot; style={{ minHeight: &#x27;40px&#x27; }}&gt;
+      {!ready &amp;&amp; &lt;CardSkeleton /&gt;}  {/* same height as Elements */}
+      &lt;CardElement
+        onReady={() =&gt; setReady(true)}
+        options={{ style: { base: { fontSize: &#x27;16px&#x27;, lineHeight: &#x27;40px&#x27; } } }}
+      /&gt;
+    &lt;/div&gt;
+  );
+}</code></pre>
+<ol><li><strong>Use Elements&#x27; <code>onReady</code> callback to do a single swap</strong> (not a reflow). The skeleton and the mounted element should occupy the same box — no layout shift, just a paint.</li></ol>
+<ol><li><strong>Avoid <code>display: none</code> → <code>display: block</code> on the container.</strong> Toggling display triggers a full layout. Instead toggle <code>visibility: hidden</code> → <code>visibility: visible</code>, which only triggers paint.</li></ol>
+<ol><li><strong>For the <code>PaymentElement</code> (newer, multi-method):</strong> Stripe&#x27;s PaymentElement can have variable height depending on the selected payment method. Give it a <code>min-height</code> matching your tallest expected configuration and use <code>overflow: hidden</code> to prevent content below from jumping.</li></ol>
+<p><strong>CLS budget:</strong> Core Web Vitals &quot;Good&quot; threshold is CLS &lt; 0.1. A single unmounted Elements frame can easily push you past 0.25 without these guards.</p>
+<p><strong>Tradeoffs:</strong></p>
+<ul><li>Fixed <code>min-height</code> may look slightly off if Stripe changes its default element height in a future SDK update. Monitor the rendered iframe height in your E2E tests.</li><li>Skeleton components add complexity; if your design team insists on exact brand-matching, negotiate a static placeholder (grey rectangle) over a fully designed skeleton.</li></ul>
+<hr>
+</article>
+<article class="qa" id="q3-bundle-splitting-strategy-for-a-checkout-page">
+<h3 class="question">Q3. Bundle-splitting strategy for a checkout page</h3>
+<p><strong>Problem framing:</strong> A checkout page has a complex dependency graph: form libraries, validation, Stripe React wrapper, address autocomplete, analytics, A/B testing SDKs. Loading everything upfront pushes Time to Interactive far past what the user needs to start filling in their name. The goal is to define what is critical-path and what can load after first interaction.</p>
+<p><strong>Approach:</strong></p>
+<p><strong>Critical path (inline or synchronously loaded):</strong></p>
+<ul><li>HTML shell with form structure (SSR-rendered — zero client JS needed to display the form)</li><li>CSS for above-the-fold layout (inlined in <code>&lt;head&gt;</code> — avoids render-blocking stylesheet request)</li><li>Authentication state (resolved server-side via cookie — no client fetch required)</li><li>React core + router hydration (~50–80KB gzipped)</li></ul>
+<p><strong>Deferred — load after <code>DOMContentLoaded</code> or after first paint:</strong></p>
+<ul><li>Stripe.js (async script tag — should already be warm from previous pages)</li><li><code>@stripe/react-stripe-js</code> and <code>CardElement</code> wrapper (~20KB gzipped)</li><li>Address autocomplete (dynamic import triggered when user focuses address field)</li><li>PayPal button (dynamic import triggered when PayPal tab is selected)</li></ul>
+<p><strong>Lazy — load on user interaction:</strong></p>
+<ul><li>Apple Pay / Google Pay detection and button render (triggered by payment method selection)</li><li>Installment/BNPL options (triggered by cart value threshold crossing)</li><li>Order history sidebar (triggered by &quot;View past orders&quot; click)</li></ul>
+<pre><code>// Next.js dynamic import pattern for address autocomplete
+const AddressAutocomplete = dynamic(
+  () =&gt; import(&#x27;@/components/AddressAutocomplete&#x27;),
+  {
+    loading: () =&gt; &lt;input placeholder=&quot;Start typing your address...&quot; /&gt;,
+    ssr: false,  // Only needed client-side
+  }
+);</code></pre>
+<p><strong>Inline in HTML (not a separate request):</strong></p>
+<ul><li>Critical CSS (above-the-fold layout, form structure)</li><li>Analytics initialization snippet (tiny, must fire before user interaction to avoid losing events)</li><li>Feature flag values (injected via <code>__NEXT_DATA__</code> or equivalent — avoids a fetch)</li></ul>
+<p><strong>Tradeoffs:</strong></p>
+<ul><li>Aggressive deferring of Stripe.js means if the user navigates directly to checkout (from an email link), they pay the full Stripe load cost. Mitigate with a <code>&lt;link rel=&quot;preload&quot;&gt;</code> on the cart page pointing to <code>https://js.stripe.com/v3/</code>.</li><li>Dynamic importing the Stripe wrapper adds ~200ms of latency for the first user who reaches the card field. If your users commonly deep-link to checkout, consider eager-loading the wrapper and only lazy-loading the lower-priority SDKs.</li></ul>
+<hr>
+</article>
+<article class="qa" id="q4-third-party-payment-sdks-and-tbtinp">
+<h3 class="question">Q4. Third-party payment SDKs and TBT/INP</h3>
+<p><strong>Problem framing:</strong> Total Blocking Time (TBT) measures how long the main thread is blocked (tasks &gt; 50ms) between First Contentful Paint and Time to Interactive. Interaction to Next Paint (INP) measures the worst-case response latency for user interactions. Payment SDKs are large scripts that run complex initialization (fingerprinting, SDK bootstrapping, DOM injection) which can cause long tasks and directly harm both metrics.</p>
+<p><strong>Approach:</strong></p>
+<p><strong>Stripe.js:</strong> Load with <code>async</code> — the script tag won&#x27;t block the parser, and the SDK&#x27;s initialization runs in the background. The actual Elements mount (<code>stripe.elements()</code>, <code>elements.create()</code>) runs synchronously on the main thread — keep this to after initial paint.</p>
+<p><strong>PayPal button:</strong> PayPal&#x27;s SDK is particularly aggressive about blocking initialization. Use their <code>data-namespace</code> and <code>data-components</code> attributes to load only the button component, not the full SDK:</p>
+<pre><code>&lt;script
+  src=&quot;https://www.paypal.com/sdk/js?client-id=xxx&amp;components=buttons&amp;currency=USD&quot;
+  async
+  data-namespace=&quot;paypal_sdk&quot;
+&gt;&lt;/script&gt;</code></pre>
+<p>Mount it lazily — only inject the script tag when the user selects PayPal as their payment method. This avoids running the SDK&#x27;s long initialization task entirely for users who pay by card.</p>
+<p><strong>Apple Pay / Google Pay:</strong> Use the Payment Request API directly instead of the vendor SDKs for a lighter-weight integration:</p>
+<pre><code>const pr = stripe.paymentRequest({
+  country: &#x27;US&#x27;,
+  currency: &#x27;usd&#x27;,
+  total: { label: &#x27;Order total&#x27;, amount: cartTotal },
+});
+
+const canMakePayment = await pr.canMakePayment();
+if (canMakePayment?.applePay || canMakePayment?.googlePay) {
+  // Only now create and mount the PaymentRequestButton element
+  mountWalletButton(pr);
+}</code></pre>
+<p><code>stripe.paymentRequest</code> wraps both Apple Pay and Google Pay through the W3C Payment Request API — single SDK, zero additional script load.</p>
+<p><strong>Measuring impact:</strong> Use Lighthouse with CPU 4x throttle and <code>--preset=mobile</code> to see TBT from your SDKs. Chrome DevTools Performance panel → &quot;Main thread&quot; shows individual long tasks. Look for tasks &gt; 50ms labeled with SDK script names.</p>
+<p><strong>Tradeoffs:</strong></p>
+<ul><li>Lazy-loading the PayPal SDK means a ~400–600ms delay when the user first selects PayPal. Add a spinner on the payment method tab so the transition feels intentional, not broken.</li><li>The Payment Request API for Apple Pay requires serving the page over HTTPS with an Apple-verified domain. Budget time for the domain verification step in your PSP&#x27;s dashboard.</li></ul>
+<hr>
+</article>
+<article class="qa" id="q5-optimizing-time-to-interactive-tti-for-checkout">
+<h3 class="question">Q5. Optimizing Time to Interactive (TTI) for checkout</h3>
+<p><strong>Problem framing:</strong> A checkout page with the full requirement set — auth state check, cart data fetch, Stripe.js load, address form render — has four sequential or parallel blockers before the user can type a card number. TTI measures when the main thread is quiet enough for the page to reliably respond to user input. Each unoptimized dependency adds directly to TTI.</p>
+<p><strong>Approach:</strong></p>
+<p><strong>Make dependencies parallel, not sequential:</strong></p>
+<pre><code>// BEFORE (sequential): 1.8s total
+Auth check (400ms) → Cart fetch (600ms) → Stripe.js load (600ms) → Elements mount (200ms) = 1.8s
+
+// AFTER (parallel): 600ms total  
+Auth check (400ms) ─────────────────────────────────┐
+Cart fetch (600ms) ─────────────────────────────────┤→ Elements mount (200ms)
+Stripe.js load (500ms, cached) ─────────────────────┘</code></pre>
+<p>Implementation with <code>Promise.all</code>:</p>
+<pre><code>export async function getServerSideProps({ req }) {
+  // Parallel server fetches
+  const [session, cart] = await Promise.all([
+    getSession(req),
+    getCart(req.cookies.cartId),
+  ]);
+  
+  return {
+    props: {
+      user: session?.user ?? null,
+      cart,
+      stripePublishableKey: process.env.NEXT_PUBLIC_STRIPE_KEY,
+    }
+  };
+}</code></pre>
+<p>By handling auth and cart server-side, the client receives both in a single TTFB — eliminating two waterfall round trips.</p>
+<p><strong>Stripe.js:</strong> Already loaded on previous pages — should be a cache hit. If not, use <code>&lt;link rel=&quot;preload&quot;&gt;</code> on the cart page.</p>
+<p><strong>Elements mount:</strong> Call <code>stripe.elements()</code> and <code>elements.create()</code> as early as possible in the React lifecycle — ideally in a <code>useEffect</code> that runs immediately after the Stripe instance is ready, before the user scrolls to the card field.</p>
+<p><strong>Address form:</strong> Render the address form with SSR — it&#x27;s pure HTML inputs, no JS required to display. The address autocomplete library can be a dynamic import triggered on first focus.</p>
+<p><strong>Result sequence after optimization:</strong></p>
+<ol><li>TTFB: server returns HTML with cart + auth embedded (~100–200ms)</li><li>FCP: page paints (form visible, no JS interaction yet)</li><li>Stripe.js: cache hit, re-executed (~100–200ms of main thread parse)</li><li>Elements mount: card field ready (~200ms after Stripe init)</li><li>TTI: ~600ms after navigation (vs. 1.8s sequential)</li></ol>
+<p><strong>Tradeoffs:</strong></p>
+<ul><li>Server-side cart fetch adds server latency. If your cart service is slow (&gt; 400ms p95), consider serving a stale cart from a cache and refreshing client-side — accepting a brief stale price display over blocking the initial HTML.</li><li>Parallel initialization means you waste Stripe init work on users who abandon at the shipping step. This is acceptable — the JS is cached and the initialization cost is low compared to the conversion improvement.</li></ul>
+<hr>
+</article>
+<article class="qa" id="q6-resource-hints-for-a-checkout-page">
+<h3 class="question">Q6. Resource hints for a checkout page</h3>
+<p><strong>Problem framing:</strong> Resource hints (<code>preconnect</code>, <code>dns-prefetch</code>, <code>prefetch</code>, <code>preload</code>) allow the browser to warm up connections or fetch resources before they&#x27;re explicitly needed. On a checkout page with three distinct third-party origins (Stripe, Google Fonts, your image CDN), the wrong sequence of hints wastes the page&#x27;s early network budget; the right sequence eliminates 200–400ms of waterfall latency.</p>
+<p><strong>Approach:</strong></p>
+<p><strong><code>preconnect</code></strong> — perform DNS lookup + TCP handshake + TLS negotiation for origins you&#x27;ll use immediately:</p>
+<pre><code>&lt;!-- Stripe: required for Stripe.js and the Elements iframe --&gt;
+&lt;link rel=&quot;preconnect&quot; href=&quot;https://js.stripe.com&quot;&gt;
+&lt;link rel=&quot;preconnect&quot; href=&quot;https://q.stripe.com&quot;&gt;   &lt;!-- telemetry --&gt;
+&lt;link rel=&quot;preconnect&quot; href=&quot;https://api.stripe.com&quot;&gt; &lt;!-- confirmCardPayment --&gt;
+
+&lt;!-- Google Fonts: two separate origins required by Google&#x27;s serving architecture --&gt;
+&lt;link rel=&quot;preconnect&quot; href=&quot;https://fonts.googleapis.com&quot;&gt;
+&lt;link rel=&quot;preconnect&quot; href=&quot;https://fonts.gstatic.com&quot; crossorigin&gt;
+
+&lt;!-- Your image CDN: for product/hero images above the fold --&gt;
+&lt;link rel=&quot;preconnect&quot; href=&quot;https://images.yourcdn.com&quot;&gt;</code></pre>
+<p><code>crossorigin</code> is required for <code>fonts.gstatic.com</code> because fonts are fetched with CORS credentials.</p>
+<p><strong><code>preload</code></strong> — fetch a specific critical resource as early as possible:</p>
+<pre><code>&lt;!-- Stripe.js: preload if not already on page from earlier pages --&gt;
+&lt;link rel=&quot;preload&quot; href=&quot;https://js.stripe.com/v3/&quot; as=&quot;script&quot;&gt;
+
+&lt;!-- Critical CSS: if not inlined --&gt;
+&lt;link rel=&quot;preload&quot; href=&quot;/checkout.css&quot; as=&quot;style&quot;&gt;
+
+&lt;!-- LCP image (hero product image): preload with correct sizes --&gt;
+&lt;link rel=&quot;preload&quot; href=&quot;https://images.yourcdn.com/product.jpg&quot; 
+      as=&quot;image&quot; 
+      imagesrcset=&quot;product-400.jpg 400w, product-800.jpg 800w&quot;
+      imagesizes=&quot;(max-width: 600px) 100vw, 50vw&quot;&gt;</code></pre>
+<p><strong><code>dns-prefetch</code></strong> — lighter version of <code>preconnect</code> for origins you won&#x27;t connect to for another few seconds (analytics, error monitoring):</p>
+<pre><code>&lt;link rel=&quot;dns-prefetch&quot; href=&quot;https://sentry.io&quot;&gt;
+&lt;link rel=&quot;dns-prefetch&quot; href=&quot;https://amplitude.com&quot;&gt;</code></pre>
+<p><strong>Priority order reasoning:</strong></p>
+<ol><li><code>preconnect</code> for Stripe origins — card field cannot initialize without this</li><li><code>preconnect</code> for Google Fonts (if fonts are embedded in Elements via Stripe&#x27;s <code>fonts</code> config)</li><li><code>preload</code> for LCP image — directly impacts LCP score</li><li><code>dns-prefetch</code> for analytics — important but not on the critical rendering path</li></ol>
+<p><strong>Tradeoffs:</strong></p>
+<ul><li>Do not <code>preconnect</code> to more than 6 origins — each preconnect holds an open socket for 10 seconds consuming memory and network resources. If you have more origins, use <code>dns-prefetch</code> for the lower-priority ones.</li><li><code>preload</code> with incorrect <code>as</code> attribute type causes double-fetching — the browser fetches for preload, then fetches again for the actual resource because it doesn&#x27;t recognize the cached version. Always set <code>as</code> correctly.</li><li>If Stripe.js is already loaded from a previous page visit (recommended strategy), the <code>preload</code> for it is wasteful. Guard it: only emit the <code>preload</code> hint on direct-to-checkout entry paths.</li></ul>
+<hr>
+</article>
+<article class="qa" id="q7-ssr-vs-ssg-vs-csr-for-a-checkout-page">
+<h3 class="question">Q7. SSR vs. SSG vs. CSR for a checkout page</h3>
+<p><strong>Problem framing:</strong> The choice of rendering strategy fundamentally affects TTFB (when the browser receives HTML), FCP (when the user sees the form), and TTI (when the form is interactive). Checkout pages are unique — they require authenticated user state and real-time cart data, which limits static generation, but they also benefit from fast first paints to reduce abandonment.</p>
+<p><strong>Approach:</strong></p>
+<p><strong>Server-Side Rendering (SSR) — recommended for checkout:</strong></p>
+<p>The checkout page requires per-user, per-session data: cart contents, auth state, pre-created PaymentIntent client secret. SSR resolves all of these server-side before the first byte is sent. The user receives a fully hydrated HTML page that renders the cart and form shell without any client-side data fetches.</p>
+<p>TTFB: 100–300ms (server processing).</p>
+<p>FCP: immediately after TTFB (HTML contains rendered content).</p>
+<p>TTI: FCP + hydration time (~200–400ms for checkout bundle).</p>
+<p><strong>Static Site Generation (SSG) — not suitable for checkout:</strong></p>
+<p>SSG pre-renders at build time. Since cart and user data change per-request, SSG cannot be used for the checkout page itself. It can be used for adjacent pages (product listing, FAQ, marketing pages) that feed into checkout.</p>
+<p><strong>Client-Side Rendering (CSR) — suboptimal for checkout:</strong></p>
+<p>With CSR, the browser receives a near-empty HTML shell and must execute JS, fetch auth, fetch cart, and initialize Stripe before rendering the form. This creates a waterfall:</p>
+<pre><code>HTML shell (fast) → JS bundle download → Auth fetch → Cart fetch → Stripe init → Form render</code></pre>
+<p>FCP is early (blank shell with spinner), but TTI is 1–3 seconds later — users see a loading state for longer than with SSR.</p>
+<p><strong>Hybrid: SSR shell + client-side enrichment:</strong></p>
+<pre><code>// Server-rendered shell with pre-fetched data
+export async function getServerSideProps({ req }) {
+  const [session, cart, paymentIntent] = await Promise.all([
+    getSession(req),
+    getCart(req.cookies.cartId),
+    stripe.paymentIntents.create({ amount: cartTotal, currency: &#x27;usd&#x27; }),
+  ]);
+
+  return {
+    props: {
+      cart,
+      clientSecret: paymentIntent.client_secret,
+      user: session?.user ?? null,
+    },
+  };
+}</code></pre>
+<p>This gives SSR&#x27;s fast first paint while letting the client enhance dynamically (address autocomplete, live cart updates).</p>
+<p><strong>Summary:</strong></p>
+<table>
+<thead><tr>
+<th>Strategy</th>
+<th>TTFB</th>
+<th>FCP</th>
+<th>TTI</th>
+<th>User data</th>
+<th>Suitable</th>
+</tr></thead><tbody>
+<tr>
+<td>SSR</td>
+<td>Medium</td>
+<td>Fast</td>
+<td>Fast</td>
+<td>✅</td>
+<td>✅ Recommended</td>
+</tr>
+<tr>
+<td>SSG</td>
+<td>Instant</td>
+<td>Instant</td>
+<td>Fast</td>
+<td>❌</td>
+<td>❌ Checkout</td>
+</tr>
+<tr>
+<td>CSR</td>
+<td>Fast</td>
+<td>Medium</td>
+<td>Slow</td>
+<td>✅ (delayed)</td>
+<td>⚠️ Avoid for checkout</td>
+</tr>
+<tr>
+<td>SSR + CSR</td>
+<td>Medium</td>
+<td>Fast</td>
+<td>Fast</td>
+<td>✅</td>
+<td>✅ Best of both</td>
+</tr>
+</tbody></table>
+<p><strong>Tradeoffs:</strong></p>
+<ul><li>SSR increases server costs and adds latency risk if your data sources (cart service, Stripe) are slow. Set aggressive server-side timeouts and fall back to a client-side fetch if they exceed 1 second.</li><li>SSR can create a &quot;hydration mismatch&quot; if the rendered HTML doesn&#x27;t exactly match what React would render client-side (e.g., different locale data). Use <code>suppressHydrationWarning</code> carefully and test with SSR disabled.</li></ul>
+<hr>
+</article>
+<h2 class="section" id="deep-questions">Deep Questions</h2>
+<article class="qa" id="q8-systematic-performance-audit-for-lcp-42s-on-3g-mobile">
+<h3 class="question">Q8. Systematic performance audit for LCP 4.2s on 3G mobile</h3>
+<p><strong>Problem framing:</strong> A 4.2s LCP on 3G with a 15% higher bounce rate than competitors is a real revenue problem. LCP should be under 2.5s for &quot;Good&quot; classification. The challenge is diagnosing which specific asset (Stripe SDK, hero image, form render) is the bottleneck on 3G — these perform very differently than on fast connections because the bandwidth constraint moves the bottleneck from CPU to network.</p>
+<p><strong>Approach:</strong></p>
+<p><strong>Step 1 — Establish baseline with real 3G conditions:</strong></p>
+<p>Use Chrome DevTools → Network throttling → &quot;Slow 3G&quot; (400 Kbps down, 400ms RTT) + CPU 4x slowdown. Run Lighthouse in this mode. The LCP element will be highlighted — this tells you what the bottleneck is.</p>
+<p>Common suspects:</p>
+<ul><li>Render-blocking Stripe.js (loaded without <code>async</code>)</li><li>Unoptimized hero product image (no WebP, no <code>srcset</code>, no <code>loading=&quot;eager&quot;</code> + <code>fetchpriority=&quot;high&quot;</code>)</li><li>Large above-the-fold CSS bundle</li></ul>
+<p><strong>Step 2 — Form hypotheses from Lighthouse audit:</strong></p>
+<table>
+<thead><tr>
+<th>LCP element</th>
+<th>Root cause</th>
+<th>Fix</th>
+</tr></thead><tbody>
+<tr>
+<td>Product image</td>
+<td>No <code>fetchpriority=&quot;high&quot;</code>, loaded via CSS <code>background-image</code></td>
+<td>Move to <code>&lt;img&gt;</code>, add <code>fetchpriority=&quot;high&quot;</code></td>
+</tr>
+<tr>
+<td>Hero text</td>
+<td>Render-blocked by Stripe.js</td>
+<td>Add <code>async</code> to Stripe script tag</td>
+</tr>
+<tr>
+<td>Card input frame</td>
+<td>Elements mount blocking FCP</td>
+<td>Defer Elements init until after FCP</td>
+</tr>
+</tbody></table>
+<p><strong>Step 3 — Stripe SDK optimizations for 3G:</strong></p>
+<p>On 3G, 300KB at 400 Kbps takes ~6 seconds uncompressed. Stripe.js is served gzipped (~85KB) but still costs ~1.7 seconds on 3G. Mitigations:</p>
+<ul><li>Ensure Stripe.js is loaded on the cart page (previous page) — by the time the user navigates to checkout, it&#x27;s cached.</li><li>Add <code>&lt;link rel=&quot;preload&quot; href=&quot;https://js.stripe.com/v3/&quot; as=&quot;script&quot;&gt;</code> on the cart page. This uses the cart page&#x27;s idle bandwidth to pre-fetch the script.</li><li>If Stripe.js loads on checkout for the first time: use <code>async</code> so it doesn&#x27;t block the form HTML from rendering.</li></ul>
+<p><strong>Step 4 — Hero image optimizations:</strong></p>
+<pre><code>&lt;!-- BEFORE: LCP bottleneck --&gt;
+&lt;div style=&quot;background-image: url(&#x27;/hero.jpg&#x27;)&quot;&gt;&lt;/div&gt;
+
+&lt;!-- AFTER: LCP optimized --&gt;
+&lt;img
+  src=&quot;/hero-800.webp&quot;
+  srcset=&quot;/hero-400.webp 400w, /hero-800.webp 800w&quot;
+  sizes=&quot;(max-width: 600px) 100vw, 50vw&quot;
+  fetchpriority=&quot;high&quot;
+  loading=&quot;eager&quot;
+  decoding=&quot;async&quot;
+  alt=&quot;Product image&quot;
+/&gt;</code></pre>
+<p>WebP vs JPEG on 3G: typically 25–35% smaller file size, directly reducing download time.</p>
+<p><strong>Step 5 — Above-the-fold form render:</strong></p>
+<p>Inline critical CSS for the form skeleton. On 3G, an external CSS file costs a full round-trip (~400ms RTT × 2 for TCP + TLS). Inlining 5–10KB of critical CSS in <code>&lt;head&gt;</code> eliminates this bottleneck.</p>
+<p><strong>Expected results after fixes:</strong></p>
+<ul><li>Hero image: 4.2s LCP → ~2.1s (WebP + <code>fetchpriority</code> + preload)</li><li>Stripe.js: no longer blocking LCP (async + cached)</li><li>Critical CSS inlined: eliminates one round-trip</li></ul>
+<p><strong>Tradeoffs:</strong></p>
+<ul><li><code>fetchpriority=&quot;high&quot;</code> on the image instructs the browser to deprioritize other resources — including Stripe.js. On 3G this is the right tradeoff (LCP is revenue-critical), but monitor TBT to ensure Stripe init isn&#x27;t pushed too late.</li><li>Inlining CSS increases HTML payload size and uncacheable bytes. Keep inlined CSS &lt; 15KB and move the rest to a cached external stylesheet.</li></ul>
+<hr>
+</article>
+<article class="qa" id="q9-network-connection-sequence-for-stripe-elements-on-mobile">
+<h3 class="question">Q9. Network connection sequence for Stripe Elements on mobile</h3>
+<p><strong>Problem framing:</strong> Stripe Elements renders card input fields inside a cross-origin iframe hosted at <code>js.stripe.com</code>. This means the browser must establish a separate network connection to that origin — independent of the connection to your server. On a 50ms RTT mobile connection, every round-trip has a visible cost. Understanding the exact sequence reveals where you can optimize and what the irreducible minimum is.</p>
+<p><strong>Approach:</strong></p>
+<div class="mermaid-wrap"><pre class="mermaid">sequenceDiagram
+    participant Browser
+    participant YourDNS as DNS (your server)
+    participant StripeDNS as DNS (js.stripe.com)
+    participant YourServer as Your Server
+    participant StripeServer as js.stripe.com
+
+    Note over Browser: User navigates to checkout
+
+    Browser->>YourDNS: DNS lookup: yoursite.com [~20ms on mobile]
+    YourDNS-->>Browser: IP address
+    Browser->>YourServer: TCP SYN [50ms RTT]
+    YourServer-->>Browser: SYN-ACK
+    Browser->>YourServer: TLS ClientHello [50ms RTT]
+    YourServer-->>Browser: TLS ServerHello + cert
+    Browser->>YourServer: TLS Finished [50ms RTT]
+    Browser->>YourServer: HTTP GET / [50ms RTT]
+    YourServer-->>Browser: HTML (with <script src="js.stripe.com/v3/">)
+
+    Note over Browser: Parse HTML, encounter Stripe script tag
+
+    Browser->>StripeDNS: DNS lookup: js.stripe.com [~20ms]
+    StripeDNS-->>Browser: IP address
+    Browser->>StripeServer: TCP SYN [50ms RTT]
+    StripeServer-->>Browser: SYN-ACK
+    Browser->>StripeServer: TLS ClientHello [50ms RTT]
+    StripeServer-->>Browser: TLS ServerHello
+    Browser->>StripeServer: TLS Finished [50ms RTT]
+    Browser->>StripeServer: HTTP GET /v3/ [50ms RTT]
+    StripeServer-->>Browser: stripe.js (gzipped ~85KB) [~1.7s on 3G]
+
+    Note over Browser: stripe.elements() called — iframe injected
+
+    Browser->>StripeDNS: DNS lookup: js.stripe.com (cached) [~0ms]
+    Note over Browser: TCP conn to StripeServer reused (HTTP/2)
+    Browser->>StripeServer: GET iframe HTML [50ms RTT]
+    StripeServer-->>Browser: iframe HTML + inline CSS
+    Note over Browser: Card input field renders in iframe</pre></div>
+<p><strong>Breakdown by phase:</strong></p>
+<table>
+<thead><tr>
+<th>Phase</th>
+<th>Latency on 50ms RTT</th>
+<th>Optimization opportunity</th>
+</tr></thead><tbody>
+<tr>
+<td>DNS for your server</td>
+<td>~20ms</td>
+<td>DNS TTL tuning (minor)</td>
+</tr>
+<tr>
+<td>TCP + TLS to your server</td>
+<td>~150ms (3 round trips)</td>
+<td>Use TLS 1.3 (saves 1 RTT vs 1.2)</td>
+</tr>
+<tr>
+<td>HTML fetch</td>
+<td>~50ms RTT</td>
+<td>CDN edge termination (reduces RTT to 10ms)</td>
+</tr>
+<tr>
+<td>DNS for js.stripe.com</td>
+<td>~20ms</td>
+<td><code>&lt;link rel=&quot;dns-prefetch&quot;&gt;</code> eliminates this</td>
+</tr>
+<tr>
+<td>TCP + TLS to js.stripe.com</td>
+<td>~150ms</td>
+<td><code>&lt;link rel=&quot;preconnect&quot;&gt;</code> eliminates this</td>
+</tr>
+<tr>
+<td>Stripe.js download</td>
+<td>~1.7s on 3G, ~100ms on 4G</td>
+<td>Caching (loaded on prior pages)</td>
+</tr>
+<tr>
+<td>iframe resource load</td>
+<td>~50ms RTT (HTTP/2 reuses conn)</td>
+<td>Already optimal</td>
+</tr>
+</tbody></table>
+<p><strong>Optimization opportunities:</strong></p>
+<ol><li><code>&lt;link rel=&quot;preconnect&quot; href=&quot;https://js.stripe.com&quot;&gt;</code> — eliminates DNS + TCP + TLS for Stripe (~190ms saved)</li><li>Load Stripe.js on previous pages — converts a 1.7s download to a cache hit</li><li>CDN edge termination for your server — reduces RTT from 50ms to 10–15ms for first request</li><li>TLS 1.3 — reduces your server&#x27;s TLS handshake from 2 RTTs to 1 RTT</li><li>HTTP/2 — Stripe&#x27;s CDN uses it; the iframe reuses the existing connection with no extra handshake</li></ol>
+<p><strong>Irreducible minimum latency floor:</strong></p>
+<p>Even with all optimizations applied:</p>
+<ul><li>Stripe.js must be fetched at least once per device (cache miss on first visit): ~1.7s on 3G</li><li>iframe content requires at least 1 RTT after Stripe.js runs (the <code>stripe.elements()</code> call must execute first)</li><li>On 50ms RTT after all optimizations: ~250ms for preconnected Stripe.js download (from CDN, cached) + 50ms for iframe request = ~300ms minimum floor before the card input is interactive</li></ul>
+<p><strong>Tradeoffs:</strong></p>
+<ul><li><code>preconnect</code> uses a real TCP connection that expires after 10 seconds unused. If the user spends more than 10 seconds on the page before the card field appears, you&#x27;ve wasted the preconnect. In practice this is rare on a checkout page.</li><li>HTTP/2 multiplexing means the iframe HTML request doesn&#x27;t block other requests, but the iframe&#x27;s JavaScript parse happens on the renderer process, not the main thread — meaning it doesn&#x27;t contribute to TBT.</li></ul>
+<hr>
+</article>
+<article class="qa" id="q10-one-click-checkout-performance-architecture-2-seconds">
+<h3 class="question">Q10. One-click checkout performance architecture (&lt; 2 seconds)</h3>
+<p><strong>Problem framing:</strong> A one-click checkout experience (Shop Pay, Amazon 1-Click) must complete a full purchase in under 2 seconds for a returning user. The challenge is that a standard checkout flow involves: loading the form, entering card details, calling <code>confirmCardPayment</code>, waiting for the server to confirm — each step taking 300ms–1s. The only way to hit &lt; 2s is to pre-compute everything that can be pre-computed before the user clicks &quot;Buy.&quot;</p>
+<p><strong>Approach:</strong></p>
+<p><strong>Phase 1 — Pre-fetch on product page (before user signals intent):</strong></p>
+<p>As soon as the product page loads, prefetch assets and data that will be needed at checkout:</p>
+<ul><li>Stripe.js: already loaded (every-page strategy)</li><li><code>savedPaymentMethod</code>: fetch the user&#x27;s saved default payment method from <code>/api/user/payment-methods</code> and cache in memory</li><li>Cart total: already known from product price</li><li>Shipping estimate: pre-calculate for the user&#x27;s saved address</li></ul>
+<p><strong>Phase 2 — Pre-create PaymentIntent on hover/tap (user signals intent):</strong></p>
+<pre><code>// On product page — trigger when user hovers or touches &quot;Buy Now&quot;
+async function onBuyNowHover() {
+  if (paymentIntentCache) return; // Already pre-created
+
+  // Pre-create PaymentIntent server-side
+  const { clientSecret } = await fetch(&#x27;/api/payment-intent/pre-create&#x27;, {
+    method: &#x27;POST&#x27;,
+    body: JSON.stringify({ productId, quantity }),
+  }).then(r =&gt; r.json());
+
+  paymentIntentCache = clientSecret;
+}</code></pre>
+<p>The <code>PaymentIntent</code> is created server-side (requires Stripe API call ~200ms). Doing this on hover gives you ~300–500ms of pre-computation before the click.</p>
+<p><strong>Phase 3 — Critical rendering path on &quot;Buy Now&quot; click:</strong></p>
+<pre><code>User clicks &quot;Buy Now&quot; → Show confirmation modal (~0ms, already in DOM)
+                     → stripe.confirmCardPayment(paymentIntentCache, { 
+                           payment_method: savedPaymentMethodId 
+                        })     (~300–500ms)
+                     → Server confirms via webhook poll    (~200–500ms)
+                     → Show success screen    (~50ms)</code></pre>
+<p>Total: ~550–1050ms — comfortably under 2 seconds.</p>
+<p><strong>The confirmation modal:</strong></p>
+<ul><li>Pre-render hidden in the DOM on product page load with the saved card last 4 digits, amount, and address</li><li>On click: <code>display: block</code> — zero paint latency, user sees the confirmation instantly</li></ul>
+<p><strong>Critical implementation detail — <code>confirmCardPayment</code> without re-entering card details:</strong></p>
+<p>For a saved payment method, pass <code>payment_method</code> directly (no CardElement needed):</p>
+<pre><code>const { paymentIntent, error } = await stripe.confirmCardPayment(
+  paymentIntentCache,
+  { payment_method: user.savedPaymentMethodId }
+);</code></pre>
+<p>No iframe needed, no user input — the call goes directly from Stripe.js to Stripe&#x27;s API.</p>
+<p><strong>Timeline breakdown for &lt; 2s target:</strong></p>
+<table>
+<thead><tr>
+<th>Step</th>
+<th>Duration</th>
+<th>Optimization</th>
+</tr></thead><tbody>
+<tr>
+<td>PaymentIntent pre-created</td>
+<td>0ms (done on hover)</td>
+<td>Pre-create on hover</td>
+</tr>
+<tr>
+<td>Modal renders</td>
+<td>0ms</td>
+<td>Pre-rendered in DOM</td>
+</tr>
+<tr>
+<td><code>confirmCardPayment</code></td>
+<td>300–500ms</td>
+<td>Saved PM — no challenge</td>
+</tr>
+<tr>
+<td>Server webhook confirm poll</td>
+<td>200–500ms</td>
+<td>First poll at 300ms</td>
+</tr>
+<tr>
+<td>Success screen paint</td>
+<td>50ms</td>
+<td>Pre-built component</td>
+</tr>
+<tr>
+<td><strong>Total</strong></td>
+<td><strong>550–1050ms</strong></td>
+<td><strong>&lt; 2s ✅</strong></td>
+</tr>
+</tbody></table>
+<p><strong>Failure modes:</strong></p>
+<ul><li>Saved payment method requires 3DS challenge — must show the challenge UI, adding 15–60s. Detect via <code>paymentIntent.status === &#x27;requires_action&#x27;</code> and fall back to the full checkout flow.</li><li>PaymentIntent pre-created but user doesn&#x27;t click within 5 minutes — PaymentIntent expires or amount changes (discount expires). Catch <code>payment_intent_unexpected_state</code> error and create a new one.</li><li>User&#x27;s saved payment method was deleted since last session — <code>payment_method_not_found</code>. Fall back to full checkout.</li></ul>
+<p><strong>Tradeoffs:</strong></p>
+<ul><li>Pre-creating PaymentIntents on hover increases your Stripe API call volume — each hover (including mis-hovers) costs a Stripe API request. Rate-limit with a 200ms hover debounce and cancel the request if the user exits within the debounce window.</li><li>This architecture assumes a saved payment method exists. For new users, you cannot hit &lt; 2s on the first purchase — the form entry and Stripe.js boot are irreducible. One-click checkout is a retention feature, not an acquisition feature.</li><li>The pre-rendered confirmation modal is shown before the PaymentIntent confirms. If <code>confirmCardPayment</code> fails (card declined), you must animate the modal to an error state — design for this upfront.</li></ul>
+</article>
+  </main>
+  <footer class="page-footer">
+    <a href="index.html">← All sections</a> ·
+    <a href="../payments-system-frontend-architecture.html">Architecture map</a>
+  </footer>
+  <script src="assets/interactive.js" defer></script>
+</body>
+</html>

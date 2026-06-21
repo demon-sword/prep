@@ -1,0 +1,143 @@
+<div class="answer-header reveal">
+  <div class="answer-meta">
+    <span class="meta-badge meta-category">02-rag-systems</span>
+    <span class="meta-badge meta-num">Q018</span>
+    <span class="meta-badge meta-status-review">review</span>
+  </div>
+  <h1 class="answer-title">What is re-ranking? Cross-encoder vs bi-encoder?</h1>
+</div>
+
+<div class="answer-section reveal">
+  <div class="accordion">
+    <div class="accordion-header">
+      <span class="accordion-title">⟁ Framing — Why this is asked</span>
+      <span class="accordion-chevron">▾</span>
+    </div>
+    <div class="accordion-body">
+      <div class="framing-grid">
+        <div><div class="framing-card">
+          <div class="framing-card-title">Why asked</div>
+          <p style="font-size:13.5px;line-height:1.7;color:var(--text-dim)">Re-ranking sits at the intersection of retrieval quality and latency/cost tradeoffs — a hallmark senior RAG topic. Interviewers want to know whether you understand <em>why</em> a two-stage pipeline outperforms a single retrieval pass, and whether you can articulate the architectural cost of running a cross-encoder at scale versus the cheaper bi-encoder shortcut.</p>
+        </div></div>
+        <div><div class="framing-card">
+          <div class="framing-card-title">Trigger phrases</div>
+          <div class="trigger-list">
+              <div class="trigger-phrase">How would you improve retrieval precision in your RAG system?</div>
+              <div class="trigger-phrase">What is re-ranking and why do you need it?</div>
+              <div class="trigger-phrase">Cross-encoder vs bi-encoder — when use each?</div>
+              <div class="trigger-phrase">Our top-k results are relevant but the answer is never in position 1 — how do you fix that?</div>
+          </div>
+        </div></div>
+      </div>
+      <div class="tests-block">
+        <span style="font-family:var(--mono);font-size:10px;letter-spacing:0.1em;text-transform:uppercase;color:var(--purple);margin-right:8px">Tests:</span>Knowledge of the two-stage retrieve-then-rerank architecture, the accuracy/latency tradeoff between bi-encoders and cross-encoders, and when to apply each in production.
+
+---
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="section-label">Concept</div>
+  <div class="concept-block"><p>Re-ranking is a second-pass scoring step that takes the top-N candidates returned by a fast first-stage retriever (bi-encoder or BM25) and re-scores them using a slower but more accurate model (cross-encoder), then reorders before passing the top-k to the LLM. The first stage optimizes for <em>recall</em> (don't miss relevant docs); the second stage optimizes for <em>precision</em> (surface the best ones first).</p></div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="section-label">Mechanism</div>
+  <div class="card"><p><strong>Stage 1 — Bi-encoder retrieval (fast, approximate):</strong></p>
+<ul class="styled-list"><li>A bi-encoder encodes query and document <em>independently</em> into dense vectors: <code>q = E(query)</code>, <code>d = E(doc)</code>.</li><li>Similarity is computed as cosine or dot product: <code>score = q · d</code>.</li><li>Documents are pre-indexed (HNSW in Pinecone, Qdrant, or FAISS); at query time only the query is encoded → O(log N) ANN lookup.</li><li>Weakness: the query and document never attend to each other, so the model cannot reason about their <em>interaction</em> — e.g., matching "bank" (financial) to a doc about "river bank."</li></ul>
+<p><strong>Stage 2 — Cross-encoder reranking (slower, accurate):</strong></p>
+<ul class="styled-list"><li>A cross-encoder concatenates query + document and runs them through a single BERT-style encoder together: <code>score = CE([query; doc])</code>.</li><li>Full cross-attention over both sequences lets the model capture fine-grained relevance signals: negation, domain jargon, implicit relationships.</li><li>Cannot pre-index (score is query-doc specific) → must run at query time for every candidate → latency is O(N × inference_cost).</li><li>Used <em>only</em> on the top-N candidates (typically N=50–200) from stage 1 to bound cost.</li></ul>
+<p><strong>Two-stage pipeline in practice:</strong></p>
+<div class="code-block-wrap"><pre class="code-block"><code>Query
+  │
+  ▼
+BM25 / bi-encoder HNSW → top-50 candidates  (fast: ~10–20ms)
+  │
+  ▼
+Cross-encoder re-ranker → top-5 reranked     (slower: ~100–300ms on CPU; 20–50ms GPU)
+  │
+  ▼
+LLM generation with top-5 as context</code></pre><button class="copy-btn">copy</button></div></div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="section-label">Example / Tradeoff</div>
+  <div class="card card-accent"><div class="rich-text"><p><strong>Production tools:</strong></p>
+<ul class="styled-list"><li><strong>Cohere Rerank</strong> (API): <code>co.rerank(query=q, documents=top_50, top_n=5)</code> — no GPU required; ~$1/1K rerank calls.</li><li><strong>BGE-Reranker-v2</strong> (open-source, BAAI): runs on single GPU; self-hosted latency ~30ms/50 docs.</li><li><strong>ms-marco-MiniLM-L-6-v2</strong> (sentence-transformers): lightweight cross-encoder for on-prem setups.</li><li><strong>Jina Reranker v2</strong>: multilingual, 512-token window.</li></ul>
+<p><strong>Concrete metric:</strong> In a customer support RAG system, switching from bi-encoder top-5 → bi-encoder top-50 + cross-encoder top-5 raised RAGAS context_precision from 0.61 to 0.82 (a 34% improvement), at a cost of +80ms p95 latency per query. At 1M queries/day using Cohere Rerank, additional cost ≈ $1,000/day — acceptable when deflection rate improvement saves 3× in support agent costs.</p>
+<p><strong>Tradeoff table:</strong></p>
+<div class="table-wrap"><table class="data-table"><tr><th>Dimension</th><th>Bi-encoder only</th><th>Cross-encoder rerank</th></tr><tr><td>Latency</td><td>~10–20ms</td><td>+80–300ms</td></tr><tr><td>Accuracy</td><td>Moderate (misses interaction)</td><td>High (full cross-attention)</td></tr><tr><td>Scalability</td><td>Pre-indexed, scales to billions</td><td>Only top-N candidates; N ≤ 200</td></tr><tr><td>Cost</td><td>Index storage + ANN query</td><td>Inference per candidate</td></tr></table></div>| When to use | First-stage retrieval, real-time | Second-stage rerank, quality-critical |</div></div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="accordion">
+    <div class="accordion-header">
+      <span class="accordion-title">🎙 Verbal Script (3–5 min)</span>
+      <span class="accordion-chevron">▾</span>
+    </div>
+    <div class="accordion-body">
+      <div class="script-block"><div class="script-label">Opening (30s)</div><p>"Re-ranking is a classic two-stage design pattern in RAG. The key insight is that the models best suited for <em>finding</em> relevant documents are different from the models best suited for <em>ordering</em> them precisely. A bi-encoder is fast enough to search millions of docs, but a cross-encoder is more accurate because it can reason about the <em>interaction</em> between the query and each document. So we use both — one to recall, one to rank."</p></div>
+      <div class="script-block"><div class="script-label">Core explanation (2–3 min)</div><p>"Let me walk through both models. A bi-encoder encodes query and document completely independently into dense vectors. At query time you just encode the query, compute a dot product against pre-indexed document vectors, and do an ANN lookup — that's O(log N), very fast. The downside is the model never <em>sees</em> the query and document together, so it misses subtle relevance signals.</p>
+<p>A cross-encoder takes the query and document concatenated as a single input and runs full cross-attention over both. This lets it capture things like negation, domain-specific jargon, and implicit relationships. But because the score is query-document specific, you can't pre-compute it — you have to run inference at query time for every candidate, which is expensive.</p>
+<p>So the production pattern is: bi-encoder (or BM25) retrieves a cheap, high-recall top-N — say 50 or 100 documents — and then the cross-encoder re-scores just those N documents and reorders them before we pass the top-5 into the LLM context. We pay the cross-encoder cost only on a small candidate set, not the full index.</p>
+<p>For tooling: Cohere Rerank is the managed option — you send it query + documents and get back a sorted list. For self-hosted I'd use BGE-Reranker or the ms-marco-MiniLM family from sentence-transformers. On a single GPU, cross-encoding 50 docs takes roughly 20–50ms."</p></div>
+      <div class="script-block"><div class="script-label">Tradeoff / production angle (1 min)</div><p>"The tradeoff to call out is latency vs precision. Re-ranking adds 80–300ms depending on candidate count and hardware. At 1M queries/day, Cohere Rerank costs about $1K/day. You have to justify that against the quality improvement — in support chatbot contexts, a 20-point improvement in context precision often translates directly to higher deflection rate, which is measurable in dollars. If latency is the harder constraint, I'd profile first: is the bottleneck in the LLM call or the reranker? Usually it's the LLM, so the reranker cost is already hidden. If not, I'd reduce N (top-50 → top-25) or use a smaller cross-encoder."</p></div>
+      <div class="script-block"><div class="script-label">Wrap-up (30s)</div><p>"In short: bi-encoder for recall at scale, cross-encoder for precision on a small candidate set. The two-stage pattern is the industry standard — Cohere, BGE-Reranker, or ms-marco are the go-to tools. Happy to go deeper on hybrid search feeding into re-ranking, or on how you evaluate reranker quality with NDCG."</p></div>
+    </div>
+  </div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="section-label">Pitfalls</div>
+  <div class="pitfall-card">
+    <div class="pitfall-mistake"><strong>✗ Mistake</strong> Saying &quot;re-ranking is just running the embedding model again on the results&quot;</div>
+    <div class="pitfall-better"><strong>✓ Better</strong> Clarify that a cross-encoder is a <em>different architecture</em> from a bi-encoder: it takes query + doc as a <em>single</em> concatenated input through full cross-attention, which is why it&#x27;s more accurate but cannot be pre-indexed.</div>
+  </div>
+  <div class="pitfall-card">
+    <div class="pitfall-mistake"><strong>✗ Mistake</strong> Not mentioning the two-stage structure — describing cross-encoders as if they&#x27;re used to search the full index</div>
+    <div class="pitfall-better"><strong>✓ Better</strong> Explicitly say the cross-encoder only operates on the top-N candidates from a fast first-stage retriever (bi-encoder or BM25); running a cross-encoder against millions of docs would be prohibitively slow.</div>
+  </div>
+  <div class="pitfall-card">
+    <div class="pitfall-mistake"><strong>✗ Mistake</strong> Ignoring latency impact and just saying &quot;use a cross-encoder for better results&quot;</div>
+    <div class="pitfall-better"><strong>✓ Better</strong> Quantify the cost: cross-encoding 50 candidates adds ~80–200ms; name the N tradeoff (50 is common; 200 is the upper bound before latency dominates).
+
+---</div>
+  </div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="section-label">Related Questions</div>
+  <div class="related-pills">
+    <div class="related-pill" data-slug="02-017">
+      <span class="related-pill-icon">→</span>
+      <div class="related-pill-text">
+        <div class="related-pill-q">Q17: What is hybrid search? When combine vector + BM25?</div>
+        <div class="related-pill-rel">Prerequisite — hybrid search is the first-stage retrieval that feeds into re-ranking</div>
+      </div>
+    </div>
+    <div class="related-pill" data-slug="02-021">
+      <span class="related-pill-icon">→</span>
+      <div class="related-pill-text">
+        <div class="related-pill-q">Q21: How evaluate a RAG pipeline? NDCG, MRR, precision@k, recall?</div>
+        <div class="related-pill-rel">Follow-up — NDCG and MRR measure the quality gain from re-ranking</div>
+      </div>
+    </div>
+    <div class="related-pill" data-slug="02-012">
+      <span class="related-pill-icon">→</span>
+      <div class="related-pill-text">
+        <div class="related-pill-q">Q12: Compare sparse vs dense retrieval. When use each?</div>
+        <div class="related-pill-rel">Same concept cluster — bi-encoder is dense retrieval; re-ranking extends it</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="section-label">One-liner recall</div>
+  <div class="oneliner-box">
+    <div class="oneliner-label">▸ Reconstruct from memory</div>
+    <div class="oneliner-text" data-text="Re-ranking uses a slow, accurate **cross-encoder** (full cross-attention over query+doc) to re-score the top-N candidates returned by a fast **bi-encoder** ANN retrieval, trading ~80–200ms latency for a 20–30 point precision improvement before passing top-k to the LLM.">Re-ranking uses a slow, accurate **cross-encoder** (full cross-attention over query+doc) to re-score the top-N candidates returned by a fast **bi-encoder** ANN retrieval, trading ~80–200ms latency for a 20–30 point precision improvement before passing top-k to the LLM.</div>
+  </div>
+</div>

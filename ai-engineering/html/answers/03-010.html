@@ -1,0 +1,169 @@
+<div class="answer-header reveal">
+  <div class="answer-meta">
+    <span class="meta-badge meta-category">03-agents-tool-use</span>
+    <span class="meta-badge meta-num">Q010</span>
+    <span class="meta-badge meta-status-review">review</span>
+  </div>
+  <h1 class="answer-title">Design a safe and debuggable agent loop.</h1>
+</div>
+
+<div class="answer-section reveal">
+  <div class="accordion">
+    <div class="accordion-header">
+      <span class="accordion-title">⟁ Framing — Why this is asked</span>
+      <span class="accordion-chevron">▾</span>
+    </div>
+    <div class="accordion-body">
+      <div class="framing-grid">
+        <div><div class="framing-card">
+          <div class="framing-card-title">Why asked</div>
+          <p style="font-size:13.5px;line-height:1.7;color:var(--text-dim)">This question tests whether the candidate can move beyond &quot;just call the LLM in a loop&quot; and articulate the production-grade controls that prevent runaway costs, infinite loops, silent failures, and unauditable behavior. Interviewers want to see concrete engineering decisions — not just conceptual awareness.</p>
+        </div></div>
+        <div><div class="framing-card">
+          <div class="framing-card-title">Trigger phrases</div>
+          <div class="trigger-list">
+              <div class="trigger-phrase">How would you design an agent loop that&#x27;s safe enough to run in production?</div>
+              <div class="trigger-phrase">Walk me through how you&#x27;d make an agent system debuggable.</div>
+              <div class="trigger-phrase">What guardrails do you put around an autonomous agent?</div>
+          </div>
+        </div></div>
+      </div>
+      <div class="tests-block">
+        <span style="font-family:var(--mono);font-size:10px;letter-spacing:0.1em;text-transform:uppercase;color:var(--purple);margin-right:8px">Tests:</span>Whether the candidate can engineer a loop that is bounded, observable, and recoverable — applying deterministic controls at the orchestrator layer so the stochastic LLM can&#x27;t cause unauditable or unbounded behavior.
+
+---
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="section-label">Concept</div>
+  <div class="concept-block"><p>A <strong>safe and debuggable agent loop</strong> is a structured execution harness that wraps LLM calls with hard limits, structured logging, idempotent tool execution, and human-in-the-loop (HITL) gates — so that any run can be replayed, audited, and interrupted without side effects. Safety and debuggability are two sides of the same coin: a loop that is observable is inherently safer because deviations are caught early.</p></div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="section-label">Mechanism</div>
+  <div class="card"><p>The loop has five layers:</p>
+<p><strong>1. Bounded execution (hard limits in orchestrator code)</strong></p>
+<div class="code-block-wrap"><pre class="code-block"><code>max_iterations = 10          # absolute step ceiling
+wall_clock_timeout = 30s     # kills hung tool calls
+max_tokens_per_step = 2000   # prevents context bloat per turn
+cumulative_token_budget = 20K # total session ceiling</code></pre><button class="copy-btn">copy</button></div>
+<p>These limits live in orchestrator code, not the prompt — the LLM cannot override them.</p>
+<p><strong>2. Structured trace logging (every turn)</strong> Each iteration emits a structured JSON event:</p>
+<div class="code-block-wrap"><pre class="code-block"><code>{
+  &quot;run_id&quot;: &quot;uuid&quot;,
+  &quot;step&quot;: 3,
+  &quot;thought&quot;: &quot;...&quot;,
+  &quot;action&quot;: {&quot;tool&quot;: &quot;search_kb&quot;, &quot;args&quot;: {...}},
+  &quot;observation&quot;: &quot;...&quot;,
+  &quot;token_count&quot;: 312,
+  &quot;latency_ms&quot;: 420
+}</code></pre><button class="copy-btn">copy</button></div>
+<p><code>run_id</code> is threaded through every LLM call and tool execution — this is the key to replaying or debugging any run in LangSmith / OpenTelemetry.</p>
+<p><strong>3. HITL gates before irreversible actions</strong> The orchestrator classifies tools as <em>read</em> vs <em>write</em>:</p>
+<ul class="styled-list"><li>Read tools (search_kb, get_order) → proceed automatically</li><li>Write tools (send_email, charge_card, delete_record) → emit a HITL checkpoint</li></ul>
+<p>In LangGraph: <code>interrupt_before(["send_email", "charge_card"])</code> pauses the graph, persists state to Redis/Postgres, and surfaces the pending action to a human approval queue. The graph resumes once approved or is cancelled.</p>
+<p><strong>4. Idempotent tool execution with retries</strong> Tools must be safe to call twice (idempotent) — either by nature (reads) or by design (upserts, deduplication keys). The orchestrator wraps tool calls:</p>
+<div class="code-block-wrap"><pre class="code-block"><code>try:
+    result = call_tool(action, timeout=5s)
+except ToolTimeout:
+    result = call_tool(action, timeout=5s)  # single retry
+except ToolError:
+    return structured_error_to_llm(action, error)  # LLM corrects next turn</code></pre><button class="copy-btn">copy</button></div>
+<p>Tool failures return a structured error to the LLM rather than raising to the user — the LLM can attempt recovery (different args, different tool) before the orchestrator gives up.</p>
+<p><strong>5. Checkpointed state persistence</strong> After every step, the full agent state (messages, tool_results, step_count) is written to Redis (or Postgres for durable runs). This enables:</p>
+<ul class="styled-list"><li><strong>Resumability</strong> — restart after crash without re-running completed steps</li><li><strong>Replay</strong> — reproduce any past run from the checkpoint log</li><li><strong>Observability</strong> — ops team can inspect in-flight agent state</li></ul>
+<p>LangGraph's built-in checkpointer (<code>SqliteSaver</code> / <code>PostgresSaver</code>) implements this natively.</p></div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="section-label">Example / Tradeoff</div>
+  <div class="card card-accent"><div class="rich-text"><p><strong>Support-ticket agent (LangGraph + LangSmith):</strong></p>
+<div class="code-block-wrap"><pre class="code-block"><code>Loop iteration (LangGraph node):
+  1. LLM call (GPT-4o-mini, T=0, ReAct format)  ← traced with LangSmith run_id
+  2. Orchestrator parses tool call JSON
+  3. Allowlist check: tool ∈ {search_kb, get_order, escalate}?  ← rejects unknown tools
+  4. HITL gate: is tool &quot;escalate&quot;?  → interrupt_before, await human
+  5. Tool execution (timeout=5s, one retry)
+  6. Observation appended to message history
+  7. Step counter incremented; check max_iterations, wall_clock, token budget
+  8. Checkpoint written to Redis
+  → repeat or terminate</code></pre><button class="copy-btn">copy</button></div>
+<p><strong>Tradeoff — safety vs throughput:</strong></p>
+<ul class="styled-list"><li>HITL gates add latency (minutes for human approval vs milliseconds). Scope them tightly — only irreversible, high-stakes actions.</li><li>Checkpointing adds ~5–20ms per step (Redis round-trip). Acceptable for agent workloads; skip for latency-critical sub-second chains.</li><li>Structured logging doubles the token and storage overhead per run. Use sampling (log 100% of errors, 10% of successes) for cost control at scale.</li></ul></div></div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="accordion">
+    <div class="accordion-header">
+      <span class="accordion-title">🎙 Verbal Script (3–5 min)</span>
+      <span class="accordion-chevron">▾</span>
+    </div>
+    <div class="accordion-body">
+      <div class="script-block"><div class="script-label">Opening (30s)</div><p>"Designing a safe agent loop is really about preventing four failure modes: runaway cost, infinite loops, unauditable behavior, and irreversible side effects. I'll walk through the five layers I put around any production agent loop."</p></div>
+      <div class="script-block"><div class="script-label">Core explanation (2–3 min)</div><p>"Layer one is hard limits in orchestrator code — <code>max_iterations</code>, a wall-clock timeout, a per-step token cap, and a cumulative session token budget. These are enforced in Python, not in the prompt, so the LLM can never negotiate its way past them.</p>
+<p>Layer two is structured trace logging. Every iteration emits a JSON event with the run ID, step number, the LLM's thought, the action it chose, the tool observation, and token counts. Threading a <code>run_id</code> through every call means I can pull the entire trace for any run in LangSmith and replay it step by step.</p>
+<p>Layer three is HITL gates. I classify all tools as read (safe to auto-execute) or write (irreversible). Write tools — send email, charge card, delete record — trigger an <code>interrupt_before</code> in LangGraph that pauses the graph, persists state to Redis, and puts the pending action into an approval queue. The graph only resumes once a human approves or cancels.</p>
+<p>Layer four is idempotent tool execution with retries. Every tool call has a 5-second timeout and a single retry. On failure, I return a structured error message to the LLM — it gets a chance to recover — rather than surfacing to the user immediately.</p>
+<p>Layer five is checkpointed state. After every step, the full agent state is written to Redis or Postgres. This means a crashed agent can resume from the last checkpoint, and ops can inspect any in-flight run."</p></div>
+      <div class="script-block"><div class="script-label">Tradeoff / production angle (1 min)</div><p>"The tradeoffs are real. HITL gates can add minutes of latency — so I scope them tightly to genuinely irreversible actions. Checkpointing adds 5–20ms per step, which is fine for agent workloads but I'd skip it for sub-second chains. And full trace logging can be expensive — at scale I sample: log 100% of errors and 10% of successful runs.</p>
+<p>The deeper tradeoff is debuggability vs throughput. Rich logging, HITL gates, and checkpointing all add overhead. But in production the cost of an undebuggable or out-of-control agent is far higher than the overhead of observability."</p></div>
+      <div class="script-block"><div class="script-label">Wrap-up (30s)</div><p>"So the pattern is: bound it with hard limits in code, make it observable with structured traces and a run ID, gate irreversible actions behind HITL, make tools idempotent with retries, and checkpoint state so any run is resumable and replayable. LangGraph plus LangSmith implements most of this natively. Happy to go deeper on any layer."</p></div>
+    </div>
+  </div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="section-label">Pitfalls</div>
+  <div class="pitfall-card">
+    <div class="pitfall-mistake"><strong>✗ Mistake</strong> Relying on the prompt to enforce safety (&quot;only escalate if the user confirms&quot;)</div>
+    <div class="pitfall-better"><strong>✓ Better</strong> Irreversible-action gates must live in the orchestrator as <code>interrupt_before</code> nodes or equivalent code; the LLM can be jailbroken or simply hallucinate, so policy enforcement must be outside the LLM&#x27;s control path.</div>
+  </div>
+  <div class="pitfall-card">
+    <div class="pitfall-mistake"><strong>✗ Mistake</strong> No run ID or structured logging — debugging by reading raw LLM message histories</div>
+    <div class="pitfall-better"><strong>✓ Better</strong> Thread a <code>run_id</code> (UUID) through every LLM call, tool call, and checkpoint; every step emits a structured JSON event so any run can be replayed or filtered in LangSmith/OpenTelemetry without manually reconstructing what happened.</div>
+  </div>
+  <div class="pitfall-card">
+    <div class="pitfall-mistake"><strong>✗ Mistake</strong> Non-idempotent tools without retry handling — tool failure raises directly to the user</div>
+    <div class="pitfall-better"><strong>✓ Better</strong> Wrap every tool call with a timeout and a single retry; on persistent failure, return a structured error object to the LLM so it can attempt recovery (different args, fallback tool) before the orchestrator escalates.
+
+---</div>
+  </div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="section-label">Related Questions</div>
+  <div class="related-pills">
+    <div class="related-pill" data-slug="03-009">
+      <span class="related-pill-icon">→</span>
+      <div class="related-pill-text">
+        <div class="related-pill-q">Q9: What logic belongs in orchestrator vs LLM?</div>
+        <div class="related-pill-rel">Prerequisite — the principle behind where loop controls live</div>
+      </div>
+    </div>
+    <div class="related-pill" data-slug="03-014">
+      <span class="related-pill-icon">→</span>
+      <div class="related-pill-text">
+        <div class="related-pill-q">Q14: Detect and stop infinite planning loops</div>
+        <div class="related-pill-rel">Follow-up — specific mechanisms for loop detection</div>
+      </div>
+    </div>
+    <div class="related-pill" data-slug="03-029">
+      <span class="related-pill-icon">→</span>
+      <div class="related-pill-text">
+        <div class="related-pill-q">Q29: Human-in-the-loop patterns — when trigger human review?</div>
+        <div class="related-pill-rel">Follow-up — HITL gate design in detail</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="section-label">One-liner recall</div>
+  <div class="oneliner-box">
+    <div class="oneliner-label">▸ Reconstruct from memory</div>
+    <div class="oneliner-text" data-text="A safe agent loop has five layers: hard limits in orchestrator code (max_iterations, wall-clock, token budget), structured trace logging with a threaded run_id, HITL interrupt_before gates on irreversible tools, idempotent tool execution with retries, and checkpointed state for resumability — all enforced in the orchestrator, never in the prompt.">A safe agent loop has five layers: hard limits in orchestrator code (max_iterations, wall-clock, token budget), structured trace logging with a threaded run_id, HITL interrupt_before gates on irreversible tools, idempotent tool execution with retries, and checkpointed state for resumability — all enforced in the orchestrator, never in the prompt.</div>
+  </div>
+</div>

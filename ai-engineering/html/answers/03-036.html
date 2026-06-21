@@ -1,0 +1,151 @@
+<div class="answer-header reveal">
+  <div class="answer-meta">
+    <span class="meta-badge meta-category">03-agents-tool-use</span>
+    <span class="meta-badge meta-num">Q036</span>
+    <span class="meta-badge meta-status-review">review</span>
+  </div>
+  <h1 class="answer-title">Agent analyzing support tickets, drafting responses, escalating</h1>
+</div>
+
+<div class="answer-section reveal">
+  <div class="accordion">
+    <div class="accordion-header">
+      <span class="accordion-title">⟁ Framing — Why this is asked</span>
+      <span class="accordion-chevron">▾</span>
+    </div>
+    <div class="accordion-body">
+      <div class="framing-grid">
+        <div><div class="framing-card">
+          <div class="framing-card-title">Why asked</div>
+          <p style="font-size:13.5px;line-height:1.7;color:var(--text-dim)">This is a design question disguised as a scenario prompt. The interviewer wants to see whether you can translate a realistic business workflow — support ticket triage — into a concrete agentic architecture with tool definitions, memory, escalation logic, and cost/safety controls. It tests whether you think about the happy path only or also about failure modes, human-in-the-loop triggers, latency SLOs, and eval.</p>
+        </div></div>
+        <div><div class="framing-card">
+          <div class="framing-card-title">Trigger phrases</div>
+          <div class="trigger-list">
+              <div class="trigger-phrase">Design an agent that handles customer support tickets end-to-end.</div>
+              <div class="trigger-phrase">How would an agent triage, respond to, and escalate support requests?</div>
+              <div class="trigger-phrase">Walk me through a real-world agentic workflow for customer service automation.</div>
+          </div>
+        </div></div>
+      </div>
+      <div class="tests-block">
+        <span style="font-family:var(--mono);font-size:10px;letter-spacing:0.1em;text-transform:uppercase;color:var(--purple);margin-right:8px">Tests:</span>Ability to decompose a multi-stage business workflow into an agentic architecture with clear tool schemas, HITL triggers, memory strategy, and production quality controls.
+
+---
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="section-label">Concept</div>
+  <div class="concept-block"><p>A support-ticket agent sits in a ReAct or Plan-and-Execute loop: it reads an incoming ticket, retrieves relevant knowledge (RAG over docs + ticket history), classifies intent and urgency, drafts a response, and either sends it automatically or escalates to a human agent — governed by confidence thresholds and risk rules rather than hard-coded routing.</p></div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="section-label">Mechanism</div>
+  <div class="card"><p><strong>Pipeline stages:</strong></p>
+<div class="code-block-wrap"><pre class="code-block"><code>Ticket arrives (webhook / queue)
+  → [classify_ticket] — intent, urgency, customer tier (GPT-4o-mini, T=0)
+  → [retrieve_context] — RAG: KB docs + similar resolved tickets (Pinecone + BM25 hybrid)
+  → [draft_response]  — GPT-4o-mini with grounding prompt, citation requirement
+  → [score_confidence] — RAGAS faithfulness + self-assessed confidence field
+  → decision gate ──┬── confidence ≥ 0.85 AND urgency ≠ &quot;critical&quot; → [send_response]
+                    └── else → [escalate_to_human] with draft pre-filled
+  → [update_ticket_state] — log action, tag resolution path, write episodic memory</code></pre><button class="copy-btn">copy</button></div>
+<p><strong>Tool schemas (simplified):</strong></p>
+<div class="code-block-wrap"><pre class="code-block"><code>classify_ticket(ticket_id, text) → {intent, urgency: low|medium|high|critical, customer_tier}
+retrieve_context(query, filters) → [{chunk, source, score}]
+draft_response(ticket, context, tone) → {response_text, citations, confidence}
+send_response(ticket_id, response_text) → {status, sent_at}
+escalate_to_human(ticket_id, draft, reason) → {queue, agent_assigned}
+update_ticket_state(ticket_id, action, metadata) → {ok}</code></pre><button class="copy-btn">copy</button></div>
+<p><strong>Memory strategy:</strong></p>
+<ul class="styled-list"><li><strong>Working memory:</strong> current ticket + retrieved context in-context window</li><li><strong>Episodic memory:</strong> resolved ticket summaries in Redis (TTL 90 days) — retrieved for similar-ticket lookup</li><li><strong>Semantic memory:</strong> KB product docs in Pinecone — shared across all agent runs</li><li><strong>Procedural memory:</strong> escalation rules and tone guidelines in system prompt (updated weekly)</li></ul>
+<p><strong>Escalation triggers (in orchestrator code, not prompts):</strong></p>
+<ol class="mechanism-steps"><li>Urgency = <code>critical</code> (always sync HITL)</li><li>Agent confidence < 0.85</li><li>Sentiment classifier detects extreme negativity / threat</li><li>Customer tier = enterprise AND intent = billing dispute</li><li>Agent used >4 tool calls without convergence (loop detection)</li></ol>
+<p><strong>Observability:</strong> LangSmith traces per ticket; dashboards for deflection rate, CSAT, draft-acceptance rate, p95 latency per stage.</p></div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="section-label">Example / Tradeoff</div>
+  <div class="card card-accent"><div class="rich-text"><p><strong>Concrete stack:</strong> LangGraph for the agent loop, GPT-4o-mini for classification + drafting, Pinecone (hybrid BM25+dense) for KB retrieval, Cohere Rerank for top-5 context selection, Zendesk API for ticket read/write, Redis for episodic session state, LangSmith for tracing.</p>
+<p><strong>Cost math (1M tickets/day):</strong></p>
+<ul class="styled-list"><li>Classification + draft: ~800 tokens avg → GPT-4o-mini: ~$0.12/1K → ~$100/day</li><li>RAG retrieval (Pinecone): ~$40/day at that volume</li><li>~20% escalations skip generation cost savings</li><li>vs. human agents at $0.50–2.00/ticket: automation saves ~$400K–1.9M/day at 1M volume</li></ul>
+<p><strong>Key tradeoff:</strong> Confidence threshold controls the deflection vs escalation rate. Too high (0.95) → most tickets escalate → low ROI. Too low (0.70) → hallucinated responses go out → CSAT/churn damage. Tune on a golden set of 200–500 labeled tickets; track by intent cluster.</p></div></div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="accordion">
+    <div class="accordion-header">
+      <span class="accordion-title">🎙 Verbal Script (3–5 min)</span>
+      <span class="accordion-chevron">▾</span>
+    </div>
+    <div class="accordion-body">
+      <div class="script-block"><div class="script-label">Opening (30s)</div><p>"I'd approach this as a multi-tool ReAct agent with a structured escalation gate. The core loop is: classify the ticket → retrieve KB context → draft a response → score confidence → either send automatically or escalate with the draft pre-filled. Let me walk through each piece."</p></div>
+      <div class="script-block"><div class="script-label">Core explanation (2–3 min)</div><p>"The agent has five tools — classify_ticket, retrieve_context, draft_response, send_response, and escalate_to_human — each with a typed JSON schema so the LLM's tool selection is highly constrained and predictable.</p>
+<p>For retrieval, I'd use a hybrid RAG setup: Pinecone for dense semantic search over KB articles, BM25 for exact product-name matching, and RRF fusion to merge results, then Cohere Rerank to pick the top 5 chunks. This is important because support tickets often have exact model numbers or error codes that dense-only retrieval misses.</p>
+<p>The response is drafted with GPT-4o-mini at temperature zero, with a grounding prompt that says 'only use the provided context, cite sources, abstain if unsure.' Then I run a confidence check — either a self-assessed confidence field in the structured output or an async RAGAS faithfulness pass.</p>
+<p>The escalation gate lives in the orchestrator code, not in the prompt. If urgency is critical, confidence below 0.85, or it's an enterprise billing dispute, we route to a human queue via the escalate_to_human tool, passing the pre-drafted response so the agent's work still has value even when escalated."</p></div>
+      <div class="script-block"><div class="script-label">Tradeoff / production angle (1 min)</div><p>"The key production challenge is calibrating the confidence threshold. I'd tune it on a golden set of 200+ labeled tickets — annotated with 'correct to send' vs 'should escalate' — and plot deflection rate vs CSAT at different thresholds. Separately, I'd monitor draft_acceptance_rate: if human agents are editing >40% of pre-filled drafts, the drafting quality needs improvement. Also, episodic memory is important for recurring customers — pulling their last 3–5 resolved tickets from Redis gives the agent context to not repeat solutions or acknowledge a pattern, which dramatically improves CSAT."</p></div>
+      <div class="script-block"><div class="script-label">Wrap-up (30s)</div><p>"So the key design decisions are: typed tool schemas for predictable LLM calls, confidence-gated escalation in orchestrator code, hybrid RAG for support-domain vocabulary, and LangSmith tracing for every ticket to measure deflection rate and spot regressions. Happy to go deeper on the escalation logic or the eval framework."</p></div>
+    </div>
+  </div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="section-label">Pitfalls</div>
+  <div class="pitfall-card">
+    <div class="pitfall-mistake"><strong>✗ Mistake</strong> Describing the agent as &quot;reads the ticket and replies&quot; with no mention of escalation, confidence gating, or HITL triggers</div>
+    <div class="pitfall-better"><strong>✓ Better</strong> Explain the escalation gate explicitly (confidence threshold, urgency classifier, customer tier rules) as orchestrator-enforced logic, not prompt instructions, because an agent that never escalates is a liability in production.</div>
+  </div>
+  <div class="pitfall-card">
+    <div class="pitfall-mistake"><strong>✗ Mistake</strong> Using temperature &gt; 0 for response drafting or omitting a grounding prompt</div>
+    <div class="pitfall-better"><strong>✓ Better</strong> Set T=0 for the draft_response tool call and include an explicit &quot;only use provided context, cite sources, abstain if unsure&quot; instruction; ungrounded responses at scale cause CSAT damage that&#x27;s hard to recover from.</div>
+  </div>
+  <div class="pitfall-card">
+    <div class="pitfall-mistake"><strong>✗ Mistake</strong> Relying on a single dense vector retrieval without BM25</div>
+    <div class="pitfall-better"><strong>✓ Better</strong> Support tickets contain product codes, error IDs, and SKUs that dense-only retrieval misses; hybrid BM25+dense with RRF fusion is the production default for support domains.</div>
+  </div>
+  <div class="pitfall-card">
+    <div class="pitfall-mistake"><strong>✗ Mistake</strong> Not mentioning how to evaluate the agent</div>
+    <div class="pitfall-better"><strong>✓ Better</strong> Define draft_acceptance_rate (human edits), deflection_rate (auto-sent), and CSAT delta vs baseline as the three core production SLOs, and tune the confidence threshold on a golden labeled dataset.
+
+---</div>
+  </div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="section-label">Related Questions</div>
+  <div class="related-pills">
+    <div class="related-pill" data-slug="03-008">
+      <span class="related-pill-icon">→</span>
+      <div class="related-pill-text">
+        <div class="related-pill-q">Q8: Walk through a production-ready agent architecture</div>
+        <div class="related-pill-rel">Foundation architecture this design builds on</div>
+      </div>
+    </div>
+    <div class="related-pill" data-slug="03-029">
+      <span class="related-pill-icon">→</span>
+      <div class="related-pill-text">
+        <div class="related-pill-q">Q29: Human-in-the-loop patterns — when trigger human review?</div>
+        <div class="related-pill-rel">Escalation trigger design — confidence, urgency, domain rules</div>
+      </div>
+    </div>
+    <div class="related-pill" data-slug="02-001">
+      <span class="related-pill-icon">→</span>
+      <div class="related-pill-text">
+        <div class="related-pill-q">Q1: Design a RAG system for a customer support chatbot</div>
+        <div class="related-pill-rel">RAG layer within this agent — same stack, more detail on retrieval eval</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="section-label">One-liner recall</div>
+  <div class="oneliner-box">
+    <div class="oneliner-label">▸ Reconstruct from memory</div>
+    <div class="oneliner-text" data-text="A support-ticket agent runs classify → RAG-retrieve → draft → confidence-gate → auto-send or escalate-with-draft, with typed tool schemas, hybrid BM25+dense retrieval, T=0 grounding, and threshold tuned on a golden labeled set tracked via deflection rate and CSAT.">A support-ticket agent runs classify → RAG-retrieve → draft → confidence-gate → auto-send or escalate-with-draft, with typed tool schemas, hybrid BM25+dense retrieval, T=0 grounding, and threshold tuned on a golden labeled set tracked via deflection rate and CSAT.</div>
+  </div>
+</div>

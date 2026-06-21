@@ -1,0 +1,130 @@
+<div class="answer-header reveal">
+  <div class="answer-meta">
+    <span class="meta-badge meta-category">01-llm-fundamentals</span>
+    <span class="meta-badge meta-num">Q005</span>
+    <span class="meta-badge meta-status-review">review</span>
+  </div>
+  <h1 class="answer-title">Explain context windows and their limitations</h1>
+</div>
+
+<div class="answer-section reveal">
+  <div class="accordion">
+    <div class="accordion-header">
+      <span class="accordion-title">⟁ Framing — Why this is asked</span>
+      <span class="accordion-chevron">▾</span>
+    </div>
+    <div class="accordion-body">
+      <div class="framing-grid">
+        <div><div class="framing-card">
+          <div class="framing-card-title">Why asked</div>
+          <p style="font-size:13.5px;line-height:1.7;color:var(--text-dim)">Interviewers want to know whether you understand a fundamental constraint that shapes almost every LLM architectural decision — from RAG chunking strategies to multi-turn memory to long-document processing. Strong candidates treat the context window not as a spec-sheet number but as a first-class engineering constraint with cost, latency, accuracy, and architectural implications.</p>
+        </div></div>
+        <div><div class="framing-card">
+          <div class="framing-card-title">Trigger phrases</div>
+          <div class="trigger-list">
+              <div class="trigger-phrase">How do you handle long documents with LLMs?</div>
+              <div class="trigger-phrase">What happens when a user&#x27;s conversation history gets too long?</div>
+              <div class="trigger-phrase">Explain context windows and their limitations.</div>
+              <div class="trigger-phrase">How would you process a 200-page PDF with GPT-4?</div>
+          </div>
+        </div></div>
+      </div>
+      <div class="tests-block">
+        <span style="font-family:var(--mono);font-size:10px;letter-spacing:0.1em;text-transform:uppercase;color:var(--purple);margin-right:8px">Tests:</span>Whether the candidate understands context windows as a hard engineering constraint and can describe practical mitigation strategies (RAG, summarization, sliding window, hierarchical retrieval) rather than just citing a token number.
+
+---
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="section-label">Concept</div>
+  <div class="concept-block"><p>A context window is the maximum number of tokens an LLM can attend to in a single forward pass — input + output combined. It is the model's working memory: anything outside the window is invisible to the model. As of 2025–2026, windows range from 8K (legacy GPT-3.5) to 200K (Claude 3.5 Sonnet) to 1M+ (Gemini 1.5 Pro), but larger does not mean "problem solved" — cost, latency, and accuracy all degrade with window size.</p></div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="section-label">Mechanism</div>
+  <div class="card"><p><strong>How the limit arises:</strong> Self-attention has O(n²) memory complexity in the sequence length n. Doubling the context ≈ 4× the attention computation and memory. KV cache stores K and V matrices for every token, so a 128K-token context with a 70B-parameter model can consume 10s of GBs of GPU VRAM just for the cache.</p>
+<p><strong>What breaks near the limit:</strong></p>
+<ol class="mechanism-steps"><li><strong>Lost in the middle</strong> — empirical research (Liu et al., 2023) shows LLMs reliably recall content at the beginning and end of a long context but forget material buried in the middle. Retrieval accuracy for information at position 10K–50K in a 128K window drops measurably.</li><li><strong>Cost scales linearly</strong> — pricing on APIs like Claude and GPT-4o is per input token. A 100K-token prompt for 1M queries/day is a massive cost multiplier.</li><li><strong>Latency (TTFT)</strong> — time-to-first-token scales with prompt length because the prefill phase must process all input tokens before generation begins. A 100K prompt may add 5–15s of TTFT.</li><li><strong>Attention dilution</strong> — with very long contexts, attention heads spread across millions of candidate positions and may fail to focus on the most relevant span.</li></ol>
+<p><strong>Mitigation strategies (production):</strong></p>
+<ul class="styled-list"><li><strong>RAG</strong> — retrieve only the top-k relevant chunks (e.g. 5–20 chunks × 512 tokens = 2.5–10K tokens) instead of loading the whole document. This is almost always the right answer for long documents.</li><li><strong>Sliding window / chunked summarization</strong> — process document in overlapping windows (e.g. 2K stride over 4K chunks) and summarize each; feed summaries into a final pass.</li><li><strong>Hierarchical indexing</strong> — store both full chunks and their summaries; retrieve summaries first, then fetch full chunks if needed.</li><li><strong>Prompt compression</strong> — LLMLingua / Selective Context compress prompts by 2–10× with minimal accuracy loss.</li><li><strong>Long-context models as a last resort</strong> — use Gemini 1.5 Pro (1M) or Claude 3.5 Sonnet (200K) only when structure genuinely requires it (e.g. whole-codebase reasoning, legal contract cross-referencing), and budget accordingly.</li></ul></div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="section-label">Example / Tradeoff</div>
+  <div class="card card-accent"><div class="rich-text"><p>A customer support RAG system at Intercom processes support tickets averaging 500 tokens and a knowledge base of 50K articles. Naively dumping all articles into a 200K context would cost ~$0.50/query at GPT-4o pricing and hit 8s TTFT. Instead: embed + HNSW index in Pinecone, retrieve top-5 chunks (~2.5K tokens), total cost drops to ~$0.003/query — 160× cheaper — with lower latency and often higher faithfulness (less noise).</p>
+<p>The real production tradeoff: larger context ≠ better answers. More tokens in the prompt introduce noise and can actually hurt recall for the specific relevant passage (lost-in-the-middle effect). The right engineering answer is almost always "retrieve less, more precisely" rather than "use a bigger context window."</p></div></div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="accordion">
+    <div class="accordion-header">
+      <span class="accordion-title">🎙 Verbal Script (3–5 min)</span>
+      <span class="accordion-chevron">▾</span>
+    </div>
+    <div class="accordion-body">
+      <div class="script-block"><div class="script-label">Opening (30s)</div><p>"Context windows are one of the most fundamental constraints in LLM engineering — and one of the most misunderstood. The naive answer is 'just use a model with a bigger context window,' but that ignores cost, latency, and the lost-in-the-middle effect, which are all real production problems. Let me walk through what context windows actually are, why they're limiting, and what I'd do about it in practice."</p></div>
+      <div class="script-block"><div class="script-label">Core explanation (2–3 min)</div><p>"A context window is the maximum number of tokens a model can attend to in a single forward pass — input plus output combined. This matters because LLMs have no external memory: anything not in the window simply doesn't exist for the model.</p>
+<p>The limit exists for a physical reason: self-attention is O(n²) in sequence length, so memory and compute grow quadratically as you add tokens. A 128K-token context requires storing a KV cache that can easily be tens of gigabytes on GPU.</p>
+<p>Even if you have the VRAM, three problems remain. First, cost — cloud APIs charge per token, so sending 100K tokens per query gets expensive fast. Second, latency — the prefill phase (processing all input tokens before generation starts) adds seconds at long context lengths. Third, and most subtle, is the lost-in-the-middle effect: empirical research shows LLMs reliably recall content at the start and end of a long context, but forget things buried in the middle. So filling the context window does not guarantee the model will use everything you put in it.</p>
+<p>The production mitigation hierarchy I use is: RAG first — retrieve only the 5–15 most relevant chunks rather than loading the full document. If the document structure genuinely requires cross-referencing across the full text — like legal contracts or large codebases — then I'd look at hierarchical summarization or, as a last resort, a long-context model like Gemini 1.5 Pro or Claude 3.5 Sonnet with explicit prompt structure that puts the most critical content at the beginning and end."</p></div>
+      <div class="script-block"><div class="script-label">Tradeoff / production angle (1 min)</div><p>"The key tradeoff is precision vs. completeness. A larger context window feels safer — you can include more — but it often hurts faithfulness because the model attends weakly to material in the middle. At 1M queries/day, even a 10K-token average prompt is 10B tokens of API spend daily. That's a significant cost center. My default is always: make retrieval better and more precise before reaching for a bigger context window. Semantic caching and prompt compression (like LLMLingua) are also worth layering in before paying for long-context inference."</p></div>
+      <div class="script-block"><div class="script-label">Wrap-up (30s)</div><p>"So the short answer: context window = working memory, it's expensive and has an accuracy cliff in the middle, and the right fix is almost always tighter retrieval rather than a bigger window. Happy to go deeper on RAG strategies, KV cache mechanics, or how you'd handle something like a 200-page PDF specifically."</p></div>
+    </div>
+  </div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="section-label">Pitfalls</div>
+  <div class="pitfall-card">
+    <div class="pitfall-mistake"><strong>✗ Mistake</strong> Saying &quot;just use Claude or Gemini with a 1M token context&quot; as the solution to long documents</div>
+    <div class="pitfall-better"><strong>✓ Better</strong> Acknowledge that long-context models are more expensive and slower (TTFT), and that the lost-in-the-middle effect means a 100K-token context often has lower accuracy on middle-position content than a well-tuned RAG pipeline with a 4K window.</div>
+  </div>
+  <div class="pitfall-card">
+    <div class="pitfall-mistake"><strong>✗ Mistake</strong> Conflating context window size with model capability — e.g. &quot;GPT-4o is better because it has a 128K context&quot;</div>
+    <div class="pitfall-better"><strong>✓ Better</strong> Explain that context window is an architectural constraint, not a quality metric; a smaller, precisely-targeted context often outperforms a bloated one.</div>
+  </div>
+  <div class="pitfall-card">
+    <div class="pitfall-mistake"><strong>✗ Mistake</strong> Forgetting to mention the cost dimension — stating &quot;I&#x27;d use long-context models&quot; without cost/latency numbers</div>
+    <div class="pitfall-better"><strong>✓ Better</strong> Quantify: at $15/1M input tokens (GPT-4o), 100K tokens = $1.50/query; at 1M queries/day that&#x27;s $1.5M/day.
+
+---</div>
+  </div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="section-label">Related Questions</div>
+  <div class="related-pills">
+    <div class="related-pill" data-slug="01-009">
+      <span class="related-pill-icon">→</span>
+      <div class="related-pill-text">
+        <div class="related-pill-q">Q9: What is KV cache? How does it help in LLM inference?</div>
+        <div class="related-pill-rel">KV cache is the mechanism that makes long contexts expensive — prerequisite</div>
+      </div>
+    </div>
+    <div class="related-pill" data-slug="01-044">
+      <span class="related-pill-icon">→</span>
+      <div class="related-pill-text">
+        <div class="related-pill-q">Q44: What is the &quot;lost in the middle&quot; problem?</div>
+        <div class="related-pill-rel">Core limitation of long contexts — direct follow-up</div>
+      </div>
+    </div>
+    <div class="related-pill" data-slug="01-036">
+      <span class="related-pill-icon">→</span>
+      <div class="related-pill-text">
+        <div class="related-pill-q">Q36: What happens when you exceed the context window? How handle long documents?</div>
+        <div class="related-pill-rel">Production mitigation strategies — same concept, production angle</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="section-label">One-liner recall</div>
+  <div class="oneliner-box">
+    <div class="oneliner-label">▸ Reconstruct from memory</div>
+    <div class="oneliner-text" data-text="Context windows are the model&#x27;s finite working memory (O(n²) attention cost, lost-in-the-middle accuracy cliff, linear cost scaling) — the fix is tighter RAG retrieval, not a bigger window.">Context windows are the model&#x27;s finite working memory (O(n²) attention cost, lost-in-the-middle accuracy cliff, linear cost scaling) — the fix is tighter RAG retrieval, not a bigger window.</div>
+  </div>
+</div>

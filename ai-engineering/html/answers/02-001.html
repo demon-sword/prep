@@ -1,0 +1,143 @@
+<div class="answer-header reveal">
+  <div class="answer-meta">
+    <span class="meta-badge meta-category">02-rag-systems</span>
+    <span class="meta-badge meta-num">Q001</span>
+    <span class="meta-badge meta-status-review">review</span>
+  </div>
+  <h1 class="answer-title">Design a RAG system for a customer support chatbot. How do you evaluate it?</h1>
+</div>
+
+<div class="answer-section reveal">
+  <div class="accordion">
+    <div class="accordion-header">
+      <span class="accordion-title">⟁ Framing — Why this is asked</span>
+      <span class="accordion-chevron">▾</span>
+    </div>
+    <div class="accordion-body">
+      <div class="framing-grid">
+        <div><div class="framing-card">
+          <div class="framing-card-title">Why asked</div>
+          <p style="font-size:13.5px;line-height:1.7;color:var(--text-dim)">This is the #1 pattern in AI engineering interviews (2024–2026). The interviewer is probing whether you understand RAG as a <strong>production engineering discipline</strong> — not an academic sketch. They want to see: (1) end-to-end pipeline thinking across all 9 stages, (2) awareness of where each stage fails and how failures cascade, (3) concrete evaluation strategy with both offline and production metrics, and (4) cost/latency tradeoffs at real scale. It is also a proxy for system design skill — how you structure a complex distributed system with multiple interacting components.</p>
+        </div></div>
+        <div><div class="framing-card">
+          <div class="framing-card-title">Trigger phrases</div>
+          <div class="trigger-list">
+              <div class="trigger-phrase">Design a RAG system for a customer support chatbot. How do you evaluate it?</div>
+              <div class="trigger-phrase">Walk me through how you&#x27;d build an LLM-powered support assistant from scratch.</div>
+              <div class="trigger-phrase">How would you architect a chatbot that answers from our documentation?</div>
+              <div class="trigger-phrase">If I gave you a corpus of 100K support tickets and a KB, how would you build a Q&amp;A system?</div>
+          </div>
+        </div></div>
+      </div>
+      <div class="tests-block">
+        <span style="font-family:var(--mono);font-size:10px;letter-spacing:0.1em;text-transform:uppercase;color:var(--purple);margin-right:8px">Tests:</span>End-to-end production RAG pipeline design — from ingestion through evaluation — including retrieval strategy, failure modes, and measurable eval framework.
+
+---
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="section-label">Concept</div>
+  <div class="concept-block"><p>RAG (Retrieval-Augmented Generation) is an architecture that grounds LLM responses in a retrieved document corpus, preventing hallucination and enabling the model to answer questions about proprietary or frequently-updated knowledge without fine-tuning. For a customer support chatbot, RAG retrieves the most relevant support articles, product docs, or past tickets, then passes them as context to the LLM to synthesize a grounded answer.</p></div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="section-label">Mechanism</div>
+  <div class="card"><p>The production pipeline has <strong>9 stages</strong>:</p>
+<p><strong>Ingestion (offline)</strong></p>
+<div class="table-wrap"><table class="data-table"><tr><th>Stage</th><th>What happens</th><th>Key decisions</th></tr><tr><td><strong>1. Ingest</strong></td><td>Pull docs from Confluence, Zendesk, Notion, S3, PDFs</td><td>Change detection (webhooks or hash-diff); partial re-index on update</td></tr><tr><td><strong>2. Chunk</strong></td><td>Split into retrievable units</td><td>Recursive character chunking (512 tokens, 10% overlap) for prose; parent-child for long PDFs; semantic chunking for rich-structure docs</td></tr><tr><td><strong>3. Embed</strong></td><td>Encode each chunk into a dense vector</td><td><code>text-embedding-3-large</code> (OpenAI) or <code>bge-large-en-v1.5</code> (BAAI) for self-hosted; run async batch embed pipeline</td></tr><tr><td><strong>4. Index</strong></td><td>Store vectors + metadata</td><td>Pinecone (managed) or Qdrant/Weaviate (self-hosted); HNSW index; also maintain BM25 index (Elasticsearch or OpenSearch) for hybrid</td></tr></table></div>
+<p><strong>Retrieval (online, per query)</strong></p>
+<div class="table-wrap"><table class="data-table"><tr><th>Stage</th><th>What happens</th><th>Key decisions</th></tr><tr><td><strong>5. Retrieve</strong></td><td>Dual-retrieval: BM25 + dense HNSW; fuse with Reciprocal Rank Fusion (RRF)</td><td>Top-50 candidates; metadata filters (product line, language, ticket type) applied pre-retrieval to narrow search space</td></tr><tr><td><strong>6. Rerank</strong></td><td>Cross-encoder on top-50 → top-5</td><td><code>ms-marco-MiniLM-L-12-v2</code> (open-source) or Cohere Rerank API; this is the biggest single precision lever</td></tr></table></div>
+<p><strong>Generation</strong></p>
+<div class="table-wrap"><table class="data-table"><tr><th>Stage</th><th>What happens</th><th>Key decisions</th></tr><tr><td><strong>7. Generate</strong></td><td>Construct prompt: system instructions + retrieved chunks (most relevant first and last) + user query; call LLM</td><td><code>gpt-4o-mini</code> for cost/latency; <code>gpt-4o</code> for complex multi-step; temperature=0 for determinism; include citations</td></tr></table></div>
+<p><strong>Eval + Observe (continuous)</strong></p>
+<div class="table-wrap"><table class="data-table"><tr><th>Stage</th><th>What happens</th><th>Key decisions</th></tr><tr><td><strong>8. Evaluate</strong></td><td>RAGAS suite: faithfulness, answer_relevancy, context_recall, context_precision on golden dataset</td><td>Build 200-question golden set from real support tickets; gate deploys on regression</td></tr></table></div>| **9. Observe** | Production metrics + tracing | LangSmith or Langfuse for trace-level visibility; Prometheus for p95 latency, cost/query, deflection rate |</div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="section-label">Example / Tradeoff</div>
+  <div class="card card-accent"><div class="rich-text"><p><strong>Concrete stack for a 50K-article support KB:</strong></p>
+<ul class="styled-list"><li>Pinecone (1536-dim vectors) + Elasticsearch BM25, RRF fusion</li><li>Cohere Rerank v3 on top-50 → top-5</li><li>GPT-4o-mini at temperature=0</li><li>RAGAS eval on 200 golden Q&A pairs (real support tickets with verified answers)</li></ul>
+<p><strong>Production numbers to anchor the story:</strong></p>
+<ul class="styled-list"><li>Retrieval p95: ~80ms (HNSW) + ~200ms (cross-encoder rerank) = ~280ms retrieval</li><li>LLM generation: ~600ms p50 (gpt-4o-mini streaming)</li><li>Total TTFB: ~400ms with streaming</li><li>Cost: ~$0.003/query at 50K questions/day = ~$150/day before semantic caching</li><li>Semantic cache (GPTCache, cosine threshold 0.95): ~35–40% cache hit rate → ~$90/day</li></ul>
+<p><strong>The tradeoff interviewers probe:</strong> "Why rerank instead of just increasing top-k?"</p>
+<ul class="styled-list"><li>Increasing top-k without reranking introduces the <strong>"lost in the middle"</strong> problem (Liu et al. 2023) — accuracy drops from ~70% → ~45% when the relevant chunk sits in the middle of a 20-chunk context window</li><li>Cross-encoder reranking on a small candidate set (top-50) adds ~150ms latency but improves precision@5 by 15–25% — a clear win</li></ul></div></div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="accordion">
+    <div class="accordion-header">
+      <span class="accordion-title">🎙 Verbal Script (3–5 min)</span>
+      <span class="accordion-chevron">▾</span>
+    </div>
+    <div class="accordion-body">
+      <div class="script-block"><div class="script-label">Opening (30s)</div><p>"I'd approach this as a 9-stage production pipeline — the naive sketch of 'embed docs, do semantic search, pass to the LLM' misses where real systems actually fail. Let me walk through it end-to-end, and then I'll talk about how I'd evaluate it in production."</p></div>
+      <div class="script-block"><div class="script-label">Core explanation (2–3 min)</div><p>"The pipeline has two phases: offline ingestion and online retrieval-generation.</p>
+<p>For ingestion, I'd pull docs from wherever they live — Confluence, Zendesk, PDFs — using a change-detection system so we re-index only what's changed. The chunking strategy matters a lot: for support articles that are mostly prose, I'd use recursive character chunking at about 512 tokens with 10% overlap. For longer structured docs like manuals, I'd use parent-child chunking — small retrieval chunks pointing to larger parent sections — so we get precise retrieval without losing surrounding context. Then I'd embed with something like <code>text-embedding-3-large</code> or <code>bge-large-en-v1.5</code> for self-hosted. I'd maintain two indexes: a vector index in Pinecone or Qdrant using HNSW, and a BM25 index in Elasticsearch.</p>
+<p>On the retrieval side, production RAG always needs hybrid retrieval. Dense embeddings fail on exact-match queries — product IDs, model numbers, codes — which are extremely common in support. BM25 handles those. I'd fuse the two result lists using Reciprocal Rank Fusion to get top-50 candidates, then run a cross-encoder reranker — something like ms-marco-MiniLM or Cohere Rerank — to reorder to top-5. Reranking is the single biggest precision lever I've seen in production.</p>
+<p>For generation, I'd call GPT-4o-mini at temperature=0, with a grounding prompt that says 'Answer only based on the provided context; if the answer isn't there, say so.' I'd place the most relevant chunks first and last in the context window to avoid the lost-in-the-middle problem."</p></div>
+      <div class="script-block"><div class="script-label">Tradeoff / production angle (1 min)</div><p>"For evaluation, I separate retrieval quality from generation quality. I'd build a golden dataset of 200 real support questions with verified answers and the ground-truth docs that contain those answers. Then I'd run RAGAS: <code>context_recall</code> tells me whether my retrieval is finding the right chunks; <code>faithfulness</code> tells me whether the LLM is staying grounded in what was retrieved. These can diverge — you can have high faithfulness but low recall, which means the model is confidently wrong because it never retrieved the right doc.</p>
+<p>In production, I'd track: deflection rate (did the user resolve without escalating?), thumbs-down rate, p95 latency, and cost per query. I'd gate every model or prompt change on the RAGAS golden set to catch regressions before they ship."</p></div>
+      <div class="script-block"><div class="script-label">Wrap-up (30s)</div><p>"The key insight is that retrieval is the load-bearing wall. If your retrieval is broken, no amount of prompt tuning will fix it. Measure them separately, fix retrieval first, and never ship without a golden regression dataset. Happy to go deeper on any stage — chunking strategy, the reranking tradeoff, or how I'd scale this to 10M articles."</p></div>
+    </div>
+  </div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="section-label">Pitfalls</div>
+  <div class="pitfall-card">
+    <div class="pitfall-mistake"><strong>✗ Mistake</strong> Describing RAG as &quot;embed your docs and do semantic search&quot; — stopping after 2 stages</div>
+    <div class="pitfall-better"><strong>✓ Better</strong> Walk the full 9-stage pipeline; name chunking, hybrid retrieval, reranking, and evaluation as distinct engineering decisions, not afterthoughts</div>
+  </div>
+  <div class="pitfall-card">
+    <div class="pitfall-mistake"><strong>✗ Mistake</strong> Saying &quot;I&#x27;d use GPT-4&quot; without discussing cost, latency, or when to use a smaller model</div>
+    <div class="pitfall-better"><strong>✓ Better</strong> &quot;I&#x27;d default to gpt-4o-mini at temperature=0 for ~3× cost savings; escalate to gpt-4o for complex multi-step queries where reasoning quality matters&quot;</div>
+  </div>
+  <div class="pitfall-card">
+    <div class="pitfall-mistake"><strong>✗ Mistake</strong> Proposing &quot;increase top-k&quot; as the fix when answers are wrong</div>
+    <div class="pitfall-better"><strong>✓ Better</strong> &quot;Increasing top-k without reranking causes &#x27;lost in the middle&#x27; degradation — I&#x27;d add a cross-encoder reranker on the existing top-50 candidates instead&quot;</div>
+  </div>
+  <div class="pitfall-card">
+    <div class="pitfall-mistake"><strong>✗ Mistake</strong> Conflating retrieval failures with generation failures in evaluation</div>
+    <div class="pitfall-better"><strong>✓ Better</strong> &quot;I separate RAGAS <code>context_recall</code> (did we retrieve the right chunks?) from <code>faithfulness</code> (did the LLM stay grounded?) — they fail for different reasons&quot;
+
+---</div>
+  </div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="section-label">Related Questions</div>
+  <div class="related-pills">
+    <div class="related-pill" data-slug="02-021">
+      <span class="related-pill-icon">→</span>
+      <div class="related-pill-text">
+        <div class="related-pill-q">Q21: How evaluate a RAG pipeline? NDCG, MRR, precision@k, recall?</div>
+        <div class="related-pill-rel">Deep-dive on the eval metrics introduced here</div>
+      </div>
+    </div>
+    <div class="related-pill" data-slug="02-017">
+      <span class="related-pill-icon">→</span>
+      <div class="related-pill-text">
+        <div class="related-pill-q">Q17: What is hybrid search? When combine vector + BM25?</div>
+        <div class="related-pill-rel">Expands on the retrieval strategy recommended in this answer</div>
+      </div>
+    </div>
+    <div class="related-pill" data-slug="02-018">
+      <span class="related-pill-icon">→</span>
+      <div class="related-pill-text">
+        <div class="related-pill-q">Q18: What is re-ranking? Cross-encoder vs bi-encoder?</div>
+        <div class="related-pill-rel">Expands on the reranking stage — the biggest precision lever</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="section-label">One-liner recall</div>
+  <div class="oneliner-box">
+    <div class="oneliner-label">▸ Reconstruct from memory</div>
+    <div class="oneliner-text" data-text="RAG for customer support = 9-stage pipeline (ingest→chunk→embed→index→hybrid-retrieve→cross-encoder-rerank→generate@T=0→RAGAS-evaluate→observe); retrieval is the load-bearing stage — measure context_recall separately from faithfulness and fix retrieval first.">RAG for customer support = 9-stage pipeline (ingest→chunk→embed→index→hybrid-retrieve→cross-encoder-rerank→generate@T=0→RAGAS-evaluate→observe); retrieval is the load-bearing stage — measure context_recall separately from faithfulness and fix retrieval first.</div>
+  </div>
+</div>

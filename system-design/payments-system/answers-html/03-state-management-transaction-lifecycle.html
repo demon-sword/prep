@@ -1,0 +1,704 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Section 3: State Management &amp; Transaction Lifecycle | System Design Answers</title>
+  <meta name="description" content="Interview-depth answers for Payments-System frontend system design.">
+  <style>
+    :root {
+      --bg: #f8f9fb; --surface: #ffffff; --text: #1a1d26; --text-muted: #5c6370;
+      --border: #e2e6ed; --accent: #3d5a80; --accent-soft: #eef2f7;
+      --code-bg: #f0f2f6; --pre-bg: #1e2433; --pre-text: #e8ecf4;
+      --nav-bg: rgba(248, 249, 251, 0.92); --shadow: 0 1px 3px rgba(0, 0, 0, 0.06);
+    }
+    @media (prefers-color-scheme: dark) {
+      :root {
+        --bg: #12151c; --surface: #1a1f2a; --text: #e8ecf4; --text-muted: #9aa3b2;
+        --border: #2d3548; --accent: #8cb4d9; --accent-soft: #232a38;
+        --code-bg: #252d3d; --pre-bg: #0d1017; --pre-text: #d4dae6;
+        --nav-bg: rgba(18, 21, 28, 0.94); --shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
+      }
+    }
+    *, *::before, *::after { box-sizing: border-box; }
+    html { scroll-behavior: smooth; scroll-padding-top: 5.5rem; }
+    body { margin: 0; font-family: "Segoe UI", system-ui, sans-serif; font-size: 1.0625rem;
+      line-height: 1.65; color: var(--text); background: var(--bg); }
+    .site-nav { position: sticky; top: 0; z-index: 100; background: var(--nav-bg);
+      backdrop-filter: blur(10px); border-bottom: 1px solid var(--border); box-shadow: var(--shadow); }
+    .site-nav-inner { max-width: 900px; margin: 0 auto; padding: 0.75rem 1.5rem; }
+    .site-nav-title { font-size: 0.8125rem; font-weight: 600; text-transform: uppercase;
+      letter-spacing: 0.04em; color: var(--text-muted); margin: 0 0 0.5rem; }
+    .toc { display: flex; flex-wrap: wrap; gap: 0.35rem 0.75rem; margin: 0; padding: 0;
+      list-style: none; font-size: 0.8125rem; }
+    .toc a { color: var(--accent); text-decoration: none; white-space: nowrap; }
+    .toc a:hover { text-decoration: underline; }
+    .page { max-width: 900px; margin: 0 auto; padding: 2rem 1.5rem 4rem; }
+    header.page-header { margin-bottom: 2.5rem; padding-bottom: 1.5rem; border-bottom: 1px solid var(--border); }
+    h1 { font-size: 1.75rem; font-weight: 700; margin: 0 0 0.75rem; }
+    .lead { margin: 0; color: var(--text-muted); font-size: 1.05rem; }
+    h2.section { font-size: 1.35rem; font-weight: 700; margin: 2.5rem 0 1.25rem;
+      color: var(--accent); border-bottom: 2px solid var(--accent-soft); padding-bottom: 0.35rem; }
+    article.qa { margin-bottom: 2.75rem; background: var(--surface); border: 1px solid var(--border);
+      border-radius: 10px; padding: 1.5rem 1.75rem; box-shadow: var(--shadow); }
+    h3.question { font-size: 1.2rem; font-weight: 600; margin: 0 0 1rem; }
+    article.qa p { margin: 0 0 1rem; }
+    ol, ul { margin: 0 0 1rem; padding-left: 1.35rem; }
+    table { width: 100%; border-collapse: collapse; margin: 0 0 1rem; font-size: 0.95rem; }
+    th, td { border: 1px solid var(--border); padding: 0.55rem 0.75rem; text-align: left; }
+    th { background: var(--accent-soft); font-weight: 600; }
+    code { font-family: ui-monospace, Menlo, Consolas, monospace; font-size: 0.88em;
+      background: var(--code-bg); padding: 0.15em 0.4em; border-radius: 4px; }
+    pre { margin: 0 0 1rem; padding: 1rem; background: var(--pre-bg); color: var(--pre-text);
+      border-radius: 8px; overflow-x: auto; font-size: 0.875rem; }
+    pre code { background: none; padding: 0; color: inherit; }
+    .mermaid-wrap { margin: 0 0 1rem; padding: 1rem; background: var(--surface);
+      border: 1px solid var(--border); border-radius: 8px; overflow-x: auto; }
+    footer.page-footer { max-width: 900px; margin: 0 auto; padding: 1.5rem;
+      border-top: 1px solid var(--border); font-size: 0.9375rem; }
+    footer.page-footer a { color: var(--accent); text-decoration: none; font-weight: 500; }
+  </style>
+  <link rel="stylesheet" href="assets/interactive.css">
+</head>
+<body>
+  <nav class="site-nav" aria-label="Table of contents">
+    <div class="site-nav-inner">
+      <p class="site-nav-title">On this page</p>
+      <ol class="toc"><li><a href="#q-a-stripe-paymentintent-moves-through-states-requires-payment-method-requires-confirmation-requires-action-processing-succeeded-or-requires-capture-canceled-how-does-your-frontend-model-this-state-machine-and-how-do-you-decide-which-ui-to-render-at-each-transition">Q: A Stripe `PaymentIntent` moves th</a></li><li><a href="#q-what-is-idempotency-in-the-context-of-payment-requests-and-how-do-you-implement-it-on-the-frontend-specifically-if-a-user-clicks-pay-and-the-request-times-out-before-you-receive-a-response-how-do-you-safely-retry-without-charging-the-user-twice">Q: What is idempotency in the contex</a></li><li><a href="#q-how-do-you-handle-optimistic-ui-in-a-payment-flow-unlike-a-social-media-like-a-payment-has-real-monetary-consequence-if-the-optimistic-update-is-wrong-where-do-you-draw-the-line-between-responsiveness-and-correctness">Q: How do you handle optimistic UI i</a></li><li><a href="#q-describe-how-you-would-manage-the-state-of-a-multi-step-checkout-form-across-a-full-page-refresh-what-should-be-persisted-to-sessionstorage-a-url-param-or-a-server-side-cart-session-and-what-should-be-intentionally-discarded-to-avoid-security-issues">Q: Describe how you would manage the</a></li><li><a href="#q-what-happens-to-an-in-flight-payment-confirmation-if-the-users-browser-tab-is-closed-or-the-device-loses-power-during-the-processing-state-how-does-your-frontend-handle-re-entry-eg-the-user-re-opens-the-tab-or-returns-to-the-site-10-minutes-later">Q: What happens to an in-flight paym</a></li><li><a href="#q-how-do-you-handle-concurrent-modifications-to-a-shared-cart-eg-the-same-user-opens-checkout-in-two-browser-tabs-simultaneously-how-do-you-detect-the-conflict-on-the-frontend-and-recover-gracefully">Q: How do you handle concurrent modi</a></li><li><a href="#q-a-user-completes-payment-but-the-success-redirect-is-intercepted-by-an-ad-blocker-or-a-browser-extension-that-strips-query-params-how-do-you-design-the-confirmation-flow-so-the-user-reaches-a-correct-success-state-even-if-your-payment-intentpi-xxxredirect-statussucceeded-url-param-never-arrives">Q: A user completes payment but the </a></li><li><a href="#q-walk-me-through-implementing-a-robust-payment-retry-loop-on-the-frontend-the-users-card-was-declined-soft-decline-you-want-to-1-allow-the-user-to-update-their-card-details-2-re-confirm-the-same-paymentintent-rather-than-creating-a-new-one-and-3-cap-retries-at-a-safe-limit-to-avoid-locking-the-card-how-do-you-manage-the-state-transitions-and-what-data-do-you-pass-back-to-the-confirmcardpayment-call-on-a-retry">Q: Walk me through implementing a ro</a></li><li><a href="#q-describe-how-you-would-architect-a-frontend-payment-state-machine-using-xstate-or-a-comparable-library-define-the-states-events-guards-and-side-effects-for-the-full-lifecycle-including-3ds-authentication-network-errors-and-soft-declines-what-are-the-advantages-of-this-approach-over-ad-hoc-ifelse-logic-in-react-component-state">Q: Describe how you would architect </a></li><li><a href="#q-your-checkout-frontend-runs-inside-a-mobile-webview-embedded-in-a-native-iosandroid-app-the-native-app-and-the-webview-both-need-to-know-the-payment-outcome-walk-through-the-communication-architecture-how-does-a-payment-confirmation-event-travel-from-the-stripe-sdk-inside-the-webview-through-the-postmessage-bridge-to-the-native-layer-what-are-the-failure-modes-and-how-do-you-ensure-exactly-once-delivery-of-the-success-event-to-the-native-app">Q: Your checkout frontend runs insid</a></li></ol>
+    </div>
+  </nav>
+  <main class="page">
+    <header class="page-header">
+      <h1>Section 3: State Management &amp; Transaction Lifecycle</h1>
+      <p class="lead">Interview-depth answers for Payments-System frontend system design.</p>
+    </header>
+    <h1 id="section-3-state-management-transaction-lifecycle">Section 3: State Management &amp; Transaction Lifecycle</h1>
+<p>Payment flows are among the most state-sensitive surfaces in frontend engineering. Unlike a social feed or a search results page, a payment UI must be simultaneously correct (never show success when the charge failed), resilient (survive tab closes, network errors, 3DS redirects, and browser extensions), and responsive (don&#x27;t leave the user staring at a frozen button). This section covers the full lifecycle of a Stripe <code>PaymentIntent</code> — from initial state machine modeling through idempotency, optimistic UI tradeoffs, persistence strategy, re-entry recovery, cross-tab conflicts, redirect fragility, retry loops, XState architecture, and native WebView bridge communication.</p>
+<hr>
+<h2 class="section" id="core">Core</h2>
+<article class="qa" id="q-a-stripe-paymentintent-moves-through-states-requires-payment-method-requires-confirmation-requires-action-processing-succeeded-or-requires-capture-canceled-how-does-your-frontend-model-this-state-machine-and-how-do-you-decide-which-ui-to-render-at-each-transition">
+<h3 class="question">Q: A Stripe <code>PaymentIntent</code> moves through states: <code>requires_payment_method</code> → <code>requires_confirmation</code> → <code>requires_action</code> → <code>processing</code> → <code>succeeded</code> (or <code>requires_capture</code>, <code>canceled</code>). How does your frontend model this state machine, and how do you decide which UI to render at each transition?</h3>
+<p><strong>Problem framing:</strong> A <code>PaymentIntent</code> (PI) is a server-side object with a <code>status</code> field that acts as the authoritative state of a charge attempt. If your frontend doesn&#x27;t accurately model these transitions, you risk rendering the wrong UI — showing a success screen while the PI is still <code>processing</code>, or leaving the user stuck on a loading spinner when <code>requires_action</code> demands 3DS interaction. Race conditions compound this: a webhook may update the PI status on the server while the client is polling, and the two can briefly diverge. Modeling the PI as a finite state machine (FSM) on the frontend forces you to enumerate every valid state and every valid transition, making impossible states impossible to render.</p>
+<p><strong>Approach:</strong></p>
+<p>Map each <code>PaymentIntent.status</code> to a discrete UI component. The mapping should be exhaustive — every Stripe-documented status should have a handler, with a fallback for unexpected values:</p>
+<div class="mermaid-wrap"><pre class="mermaid">stateDiagram-v2
+    [*] --> requires_payment_method
+    requires_payment_method --> requires_confirmation : card collected
+    requires_confirmation --> requires_action : confirmCardPayment (3DS needed)
+    requires_confirmation --> processing : confirmCardPayment (no 3DS)
+    requires_confirmation --> requires_capture : confirmCardPayment (auth-only)
+    requires_action --> processing : 3DS completed
+    requires_action --> requires_payment_method : 3DS failed / canceled
+    processing --> succeeded : bank confirms
+    processing --> requires_payment_method : bank declines
+    requires_capture --> succeeded : merchant captures
+    requires_capture --> canceled : merchant voids
+    succeeded --> [*]
+    canceled --> [*]</pre></div>
+<p>React render function keyed to PI status:</p>
+<pre><code>function PaymentStatusView({ paymentIntent, clientSecret, stripe }) {
+  switch (paymentIntent.status) {
+    case &#x27;requires_payment_method&#x27;:
+      return &lt;CardForm clientSecret={clientSecret} stripe={stripe} /&gt;;
+
+    case &#x27;requires_confirmation&#x27;:
+      // Rare in client-side flows — Stripe.js handles this internally
+      return &lt;ConfirmingView /&gt;;
+
+    case &#x27;requires_action&#x27;:
+      // Trigger 3DS challenge immediately
+      stripe.handleNextAction(clientSecret).then(handleActionResult);
+      return &lt;ActionRequiredView message=&quot;Verifying with your bank...&quot; /&gt;;
+
+    case &#x27;processing&#x27;:
+      // Async — charge is in flight; poll for resolution
+      return &lt;ProcessingView onTimeout={handleProcessingTimeout} /&gt;;
+
+    case &#x27;requires_capture&#x27;:
+      // Auth-only mode — funds are held, not yet captured
+      return &lt;SuccessView message=&quot;Order confirmed — payment pending capture.&quot; /&gt;;
+
+    case &#x27;succeeded&#x27;:
+      return &lt;SuccessView message=&quot;Payment complete. Thank you!&quot; /&gt;;
+
+    case &#x27;canceled&#x27;:
+      return &lt;FailureView message=&quot;This payment was canceled. Please start over.&quot; /&gt;;
+
+    default:
+      return &lt;ErrorView message={`Unexpected payment state: ${paymentIntent.status}`} /&gt;;
+  }
+}</code></pre>
+<p><code>requires_action</code> is the most operationally significant state: it signals that Stripe needs to trigger a 3DS authentication challenge (or another next action like a redirect). Calling <code>stripe.handleNextAction(clientSecret)</code> opens the appropriate modal or redirect. On resolution it returns either a <code>paymentIntent</code> with <code>status: &#x27;succeeded&#x27;</code> or <code>processing&#x27;</code>, or an <code>error</code> indicating the user canceled or failed 3DS — in which case the PI returns to <code>requires_payment_method</code> and the user must retry with a different card or try again.</p>
+<p><code>requires_capture</code> is specific to manual-capture flows (common in travel/hospitality or marketplaces): the charge has been authorized but not settled. Your UI should show &quot;Order confirmed&quot; — the user&#x27;s experience is success — but your backend must capture within 7 days or the authorization expires.</p>
+<p>For the <code>processing</code> state: Stripe resolves this asynchronously (typically within seconds, but occasionally minutes for certain card networks). Poll by calling <code>stripe.retrievePaymentIntent(clientSecret)</code> every 3 seconds, with a cap of ~10 attempts before presenting a &quot;still processing&quot; message and advising the user to check their email.</p>
+<p><strong>Tradeoffs:</strong> Polling is simple to implement but creates server load and adds latency. Webhooks are canonical — Stripe sends <code>payment_intent.succeeded</code> or <code>payment_intent.payment_failed</code> server-side — but the user&#x27;s browser doesn&#x27;t receive webhooks directly. A hybrid approach (webhook updates server state; client polls a lightweight <code>/api/payment/status</code> endpoint instead of hitting Stripe directly) is both efficient and reliable. Never trust only the client-side status: a sophisticated user could manipulate local state; always confirm with server or Stripe before fulfilling an order.</p>
+<hr>
+</article>
+<article class="qa" id="q-what-is-idempotency-in-the-context-of-payment-requests-and-how-do-you-implement-it-on-the-frontend-specifically-if-a-user-clicks-pay-and-the-request-times-out-before-you-receive-a-response-how-do-you-safely-retry-without-charging-the-user-twice">
+<h3 class="question">Q: What is idempotency in the context of payment requests, and how do you implement it on the frontend? Specifically, if a user clicks &quot;Pay&quot; and the request times out before you receive a response, how do you safely retry without charging the user twice?</h3>
+<p><strong>Problem framing:</strong> HTTP has an inherent ambiguity problem with non-idempotent operations: if a POST request times out, you don&#x27;t know whether the server processed it before the connection dropped or never received it at all. For most API calls this is a minor inconvenience. For payments, it means the user could be charged twice if you naively retry the same POST. The core challenge is that from the client&#x27;s perspective, a timeout is indistinguishable from a server failure — both look like an unresponsive connection.</p>
+<p><strong>Approach:</strong></p>
+<p>Generate a stable idempotency key tied to the specific purchase intent — typically the cart ID or session ID — and persist it for the lifetime of that purchase attempt:</p>
+<pre><code>function getOrCreateIdempotencyKey(cartId) {
+  const storageKey = `idempotency_key_${cartId}`;
+  let key = sessionStorage.getItem(storageKey);
+  if (!key) {
+    key = crypto.randomUUID();
+    sessionStorage.setItem(storageKey, key);
+  }
+  return key;
+}</code></pre>
+<p>Send this key as an <code>Idempotency-Key</code> header on every payment request to your backend, which forwards it to Stripe on the charge or PaymentIntent creation call:</p>
+<pre><code>async function initiatePayment(cartId, paymentMethodId) {
+  const idempotencyKey = getOrCreateIdempotencyKey(cartId);
+
+  const response = await fetch(&#x27;/api/payments/confirm&#x27;, {
+    method: &#x27;POST&#x27;,
+    headers: {
+      &#x27;Content-Type&#x27;: &#x27;application/json&#x27;,
+      &#x27;Idempotency-Key&#x27;: idempotencyKey,
+    },
+    body: JSON.stringify({ cartId, paymentMethodId }),
+  });
+
+  if (!response.ok &amp;&amp; isRetriableError(response.status)) {
+    // Safe to retry — Stripe will deduplicate using the same key
+    return retryWithBackoff(() =&gt; initiatePayment(cartId, paymentMethodId));
+  }
+
+  return response.json();
+}</code></pre>
+<p>Stripe deduplicates requests bearing the same idempotency key within a 24-hour window. If the original request succeeded but the response was lost in transit, retrying with the same key returns the cached original response — no second charge occurs. If the original request was still in flight, Stripe queues the retry. If the original request failed, Stripe processes the retry as a new attempt.</p>
+<p>After confirmed success — when you receive a <code>paymentIntent.status === &#x27;succeeded&#x27;</code> response — clear the idempotency key from sessionStorage and from any server-side store. This ensures that a new purchase (e.g., same user, new cart) generates a new key:</p>
+<pre><code>function clearIdempotencyKey(cartId) {
+  sessionStorage.removeItem(`idempotency_key_${cartId}`);
+}</code></pre>
+<p>The even more robust approach with PaymentIntents is to not use a separate idempotency key mechanism at all for the confirmation step: because <code>stripe.confirmCardPayment(clientSecret)</code> operates on a single PI resource identified by its <code>clientSecret</code>, repeated calls are naturally idempotent — you&#x27;re confirming the same PaymentIntent, not creating new charges. Create the PI server-side (with an idempotency key on creation), then let the client call <code>confirmCardPayment</code> as many times as needed.</p>
+<p><strong>Tradeoffs:</strong> UUIDs are effectively unguessable, preventing key collisions, but they carry no semantic meaning — a hash of <code>(userId + cartId + amount + timestamp-rounded-to-minute)</code> is more debuggable in logs. <code>sessionStorage</code> survives page refreshes within the same tab but is wiped on tab close — if the user closes and reopens the tab, they&#x27;ll generate a new key. For most flows this is acceptable (the original charge either succeeded or didn&#x27;t). The 24-hour Stripe dedup window covers the vast majority of retry scenarios; if a user returns after 25 hours with the same cart, treat it as a new purchase.</p>
+<hr>
+</article>
+<article class="qa" id="q-how-do-you-handle-optimistic-ui-in-a-payment-flow-unlike-a-social-media-like-a-payment-has-real-monetary-consequence-if-the-optimistic-update-is-wrong-where-do-you-draw-the-line-between-responsiveness-and-correctness">
+<h3 class="question">Q: How do you handle optimistic UI in a payment flow? Unlike a social media &quot;like,&quot; a payment has real monetary consequence if the optimistic update is wrong. Where do you draw the line between responsiveness and correctness?</h3>
+<p><strong>Problem framing:</strong> Optimistic UI pre-renders the expected outcome of an action before the server confirms it, making the app feel instantaneous. This works beautifully for reversible, low-stakes operations — liking a post, reordering a list — because rolling back is cheap. Payments are different: showing a success screen before the charge is confirmed could mislead a user into believing they&#x27;ve purchased something they haven&#x27;t, leading to order fulfillment on unconfirmed funds, customer service disputes, and loss of trust. The question is not whether to use optimistic UI at all, but where in the checkout funnel it is safe to apply.</p>
+<p><strong>Approach:</strong></p>
+<p>Divide the checkout flow into steps by their risk level and reversibility:</p>
+<p><strong>Safe for optimistic UI (low stakes, easily reversible):</strong></p>
+<ul><li>Adding or removing items from cart</li><li>Applying a coupon code (show discount immediately; validate server-side; roll back with &quot;coupon expired&quot; if invalid)</li><li>Selecting a shipping method (show estimated delivery date immediately)</li><li>Address validation (mark address as valid optimistically; correct if geocoding fails)</li></ul>
+<p><strong>Never optimistic (high stakes, irreversible from user&#x27;s perspective):</strong></p>
+<ul><li>The payment confirmation step itself</li><li>Order creation post-payment</li><li>Any state that implies money has moved</li></ul>
+<p>For the payment button click specifically, use a &quot;pending&quot; intermediate state — not a &quot;success&quot; state:</p>
+<pre><code>function CheckoutButton({ clientSecret, stripe, cardElement }) {
+  const [status, setStatus] = useState(&#x27;idle&#x27;); // idle | pending | success | error
+
+  async function handlePay() {
+    setStatus(&#x27;pending&#x27;); // Disable button, show spinner — NOT showing success
+    
+    const { paymentIntent, error } = await stripe.confirmCardPayment(clientSecret, {
+      payment_method: { card: cardElement },
+    });
+
+    if (error) {
+      setStatus(&#x27;error&#x27;);
+      // Re-enable form, show error message, preserve cart state
+      return;
+    }
+
+    if (paymentIntent.status === &#x27;succeeded&#x27; || paymentIntent.status === &#x27;requires_capture&#x27;) {
+      setStatus(&#x27;success&#x27;); // Only now transition to success
+    }
+  }
+
+  return (
+    &lt;button onClick={handlePay} disabled={status === &#x27;pending&#x27;}&gt;
+      {status === &#x27;pending&#x27; ? &lt;Spinner /&gt; : &#x27;Pay Now&#x27;}
+    &lt;/button&gt;
+  );
+}</code></pre>
+<p>The <code>pending</code> state is UI responsiveness without claiming success. It shows the user &quot;something is happening&quot; — which is true — without asserting an outcome that hasn&#x27;t been confirmed. For 3DS flows (<code>requires_action</code>), display &quot;Verifying with your bank...&quot; to explain the delay without implying the charge has gone through.</p>
+<p>For rollback on failure: re-enable the payment form with an error message, but preserve all cart state. The user should not have to re-enter their shipping address because their card was declined.</p>
+<p><strong>Tradeoffs:</strong> Full optimistic (claim success before server confirms) is inappropriate for any step that involves money movement. Full pessimistic (no UI feedback until every server round-trip completes) creates a frustrating experience for low-stakes steps like applying coupons. The correct approach is a hybrid keyed to risk level: optimistic for cart mutations, pessimistic-with-pending-state for payment confirmation. This gives users the responsiveness they expect without the correctness risks they cannot afford.</p>
+<hr>
+</article>
+<article class="qa" id="q-describe-how-you-would-manage-the-state-of-a-multi-step-checkout-form-across-a-full-page-refresh-what-should-be-persisted-to-sessionstorage-a-url-param-or-a-server-side-cart-session-and-what-should-be-intentionally-discarded-to-avoid-security-issues">
+<h3 class="question">Q: Describe how you would manage the state of a multi-step checkout form across a full page refresh. What should be persisted (to <code>sessionStorage</code>, a URL param, or a server-side cart session), and what should be intentionally discarded to avoid security issues?</h3>
+<p><strong>Problem framing:</strong> Users accidentally refresh pages, browsers crash, and the back button is a first-class navigation gesture. A checkout flow that loses all state on refresh forces users to re-enter information they&#x27;ve already provided — a significant source of cart abandonment. At the same time, blindly persisting everything creates security vulnerabilities: raw card numbers, CVVs, or PaymentIntent <code>client_secret</code> values stored in <code>localStorage</code> are accessible to any XSS payload running on your domain.</p>
+<p><strong>Approach:</strong></p>
+<p>Use a three-tier persistence model keyed to sensitivity:</p>
+<p><strong>Tier 1 — URL parameters (public, shareable, not sensitive):</strong></p>
+<ul><li>Current checkout step (<code>?step=2</code>)</li><li>Cart ID (<code>?cart=abc123</code>)</li><li>These are safe to share, bookmarkable, and survive all forms of navigation. Never put pricing or discount amounts here — they can be manipulated.</li></ul>
+<p><strong>Tier 2 — <code>sessionStorage</code> (tab-scoped, not shareable, survives refresh):</strong></p>
+<ul><li>Form field values: name, email, shipping address</li><li>Selected shipping method</li><li>Applied coupon code (not the discount amount — re-validate from server)</li><li>UI preferences: &quot;bill to same address as shipping&quot;</li><li>NOT card data — Stripe Elements live in a sandboxed iframe; you never touch card numbers</li></ul>
+<p><strong>Tier 3 — Server-side cart session (authoritative, durable):</strong></p>
+<ul><li>Cart contents and quantities</li><li>Canonical pricing and applied discounts (never trust the client for price)</li><li>PaymentIntent ID (not <code>client_secret</code>) — so you can recover in-flight payments</li><li>Inventory reservations</li></ul>
+<div class="mermaid-wrap"><pre class="mermaid">flowchart TD
+    A[Page Load / Refresh] --> B{URL params present?}
+    B -- Yes --> C[Restore step from ?step=N]
+    B -- No --> D[Default to step 1]
+    C --> E[Read sessionStorage for UX fields]
+    D --> E
+    E --> F[Fetch cart from server]
+    F --> G[Merge: sessionStorage UX + server cart data]
+    G --> H[Render checkout at correct step]</pre></div>
+<p>Rehydration function:</p>
+<pre><code>function rehydrateCheckoutState(cartId) {
+  const saved = sessionStorage.getItem(`checkout_${cartId}`);
+  const localState = saved ? JSON.parse(saved) : {};
+  // Always re-fetch cart from server for canonical price/inventory
+  return fetchCart(cartId).then(serverCart =&gt; ({
+    ...localState,
+    cart: serverCart, // server is authoritative for price
+  }));
+}</code></pre>
+<p><strong>What to intentionally discard:</strong></p>
+<ul><li>Raw card numbers, CVV, full PAN — these should never exist in your JavaScript context; Stripe Elements keeps them in an iframe</li><li><code>PaymentIntent.client_secret</code> — avoid persisting to <code>localStorage</code> (XSS risk); acceptable in <code>sessionStorage</code> with awareness that it expires with the tab. Prefer storing only the PI ID server-side and re-fetching the <code>client_secret</code> on rehydration</li><li>Authentication tokens in URL params — these end up in server logs and browser history</li></ul>
+<p><strong>Tradeoffs:</strong> <code>localStorage</code> persists across tabs and browser restarts, making it more durable but more exposed to XSS and accidental cross-session bleed (e.g., two users sharing a computer). <code>sessionStorage</code> is scoped to the tab, which is the right lifetime for a checkout session. Server-side sessions are the most secure but add a round-trip on every rehydration; cache aggressively but always revalidate prices server-side before capture.</p>
+<hr>
+</article>
+<article class="qa" id="q-what-happens-to-an-in-flight-payment-confirmation-if-the-users-browser-tab-is-closed-or-the-device-loses-power-during-the-processing-state-how-does-your-frontend-handle-re-entry-eg-the-user-re-opens-the-tab-or-returns-to-the-site-10-minutes-later">
+<h3 class="question">Q: What happens to an in-flight payment confirmation if the user&#x27;s browser tab is closed or the device loses power during the <code>processing</code> state? How does your frontend handle re-entry — e.g., the user re-opens the tab or returns to the site 10 minutes later?</h3>
+<p><strong>Problem framing:</strong> The <code>processing</code> state is inherently asynchronous — Stripe has submitted the charge to the card network but hasn&#x27;t received a final response. If the user closes their browser at this exact moment, the charge may or may not complete. When they return, they are in an unknown state: the charge could have succeeded (in which case showing the payment form would be dangerous — they might pay again), failed (in which case they need to retry), or still be processing (in which case they need to wait). Getting this wrong means either a confused user or a double charge.</p>
+<p><strong>Approach:</strong></p>
+<p>The key architectural decision is where to store the PaymentIntent ID. Store it server-side (in the cart session, keyed to the user/cart) so it survives browser state loss entirely. On re-entry, your backend can look up the PI ID and retrieve its current status from Stripe.</p>
+<p>For the client-side path, if you stored the <code>client_secret</code> in <code>sessionStorage</code> before the browser closed (tab close wipes sessionStorage, but the user may have the same session if they just navigated away), call <code>stripe.retrievePaymentIntent(clientSecret)</code> and branch on status:</p>
+<pre><code>async function handleReEntry(clientSecret) {
+  const { paymentIntent, error } = await stripe.retrievePaymentIntent(clientSecret);
+  if (error) return { state: &#x27;error&#x27;, error };
+  switch (paymentIntent.status) {
+    case &#x27;succeeded&#x27;: return { state: &#x27;success&#x27;, paymentIntent };
+    case &#x27;processing&#x27;: return { state: &#x27;polling&#x27;, paymentIntent };
+    case &#x27;requires_action&#x27;: return { state: &#x27;action_required&#x27;, paymentIntent };
+    case &#x27;requires_payment_method&#x27;: return { state: &#x27;retry&#x27;, paymentIntent };
+    default: return { state: &#x27;unknown&#x27;, paymentIntent };
+  }
+}</code></pre>
+<p>Status-based recovery flows:</p>
+<ul><li><strong><code>succeeded</code></strong> → Navigate to success/order-confirmation page immediately</li><li><strong><code>requires_capture</code></strong> → Treat as success; order is confirmed, awaiting merchant capture</li><li><strong><code>processing</code></strong> → Show &quot;Your payment is still being processed...&quot; with auto-polling every 3s (up to ~10 polls, then present manual refresh option)</li><li><strong><code>requires_action</code></strong> → Re-trigger <code>stripe.handleNextAction(clientSecret)</code> — the 3DS challenge was never completed; user must finish it</li><li><strong><code>requires_payment_method</code></strong> → The charge failed during processing (e.g., card network decline after initial authorization); show error and payment retry form</li><li><strong><code>canceled</code></strong> → PI was voided; show failure message and start fresh</li></ul>
+<p>For polling in <code>processing</code>:</p>
+<pre><code>async function pollUntilResolved(clientSecret, maxAttempts = 10) {
+  for (let i = 0; i &lt; maxAttempts; i++) {
+    await delay(3000 * Math.pow(1.5, i)); // exponential backoff
+    const { paymentIntent } = await stripe.retrievePaymentIntent(clientSecret);
+    if (paymentIntent.status !== &#x27;processing&#x27;) {
+      return paymentIntent;
+    }
+  }
+  return null; // timed out — advise user to check email
+}</code></pre>
+<p><strong>Tradeoffs:</strong> Polling against Stripe is simple but creates unnecessary load if many users are polling simultaneously. A better architecture: your server receives the <code>payment_intent.succeeded</code> webhook from Stripe; the client polls your lightweight <code>/api/payment/status</code> endpoint instead, which reads from your database rather than calling Stripe on every poll. Server-Sent Events (SSE) or WebSockets push the update to the client as soon as the webhook arrives, eliminating polling latency entirely — but adds infrastructure complexity.</p>
+<hr>
+</article>
+<article class="qa" id="q-how-do-you-handle-concurrent-modifications-to-a-shared-cart-eg-the-same-user-opens-checkout-in-two-browser-tabs-simultaneously-how-do-you-detect-the-conflict-on-the-frontend-and-recover-gracefully">
+<h3 class="question">Q: How do you handle concurrent modifications to a shared cart — e.g., the same user opens checkout in two browser tabs simultaneously? How do you detect the conflict on the frontend and recover gracefully?</h3>
+<p><strong>Problem framing:</strong> A user opens their cart in a mobile browser tab, then opens the same URL on their desktop. Both tabs share the same server-side cart session. If Tab A applies a coupon and Tab B simultaneously removes an item, you have a classic read-modify-write race condition: whichever write arrives second overwrites the first without knowing the conflict occurred. Worse, if both tabs attempt to initiate payment, you could end up with two PaymentIntents for the same cart — one of which will be charged.</p>
+<p><strong>Approach:</strong></p>
+<p><strong>Server-side: optimistic locking with version numbers.</strong> Each cart has a <code>version</code> field. Every mutation request includes the version the client last saw; the server rejects mutations against a stale version with <code>409 Conflict</code> and returns the current cart state. This prevents the lost-update problem at the data layer.</p>
+<p><strong>Client-side: BroadcastChannel for cross-tab awareness.</strong> The <code>BroadcastChannel</code> API lets tabs in the same browser origin communicate without a server round-trip:</p>
+<pre><code>const channel = new BroadcastChannel(&#x27;checkout_cart&#x27;);
+channel.onmessage = (event) =&gt; {
+  if (event.data.type === &#x27;CART_UPDATED&#x27;) {
+    refetchCart(); // refresh from server
+  }
+  if (event.data.type === &#x27;PAYMENT_INITIATED&#x27;) {
+    // Another tab started checkout — disable this tab&#x27;s pay button
+    setCartLocked(true);
+    showBanner(&quot;Checkout is in progress in another tab.&quot;);
+  }
+};
+
+// Broadcast when making mutations
+function updateCart(item) {
+  return patchCart(item).then(result =&gt; {
+    channel.postMessage({ type: &#x27;CART_UPDATED&#x27;, cartId, version: result.version });
+    return result;
+  });
+}
+
+// Broadcast when initiating payment
+function initiatePayment() {
+  channel.postMessage({ type: &#x27;PAYMENT_INITIATED&#x27;, cartId });
+  return createPaymentIntent(cartId);
+}</code></pre>
+<p><strong>Conflict recovery:</strong> When a mutation returns <code>409 Conflict</code>, re-fetch the current cart from the server, diff the changes (&quot;Your cart was updated in another tab: Item X was removed&quot;), display the diff to the user, and ask them to confirm before proceeding. Never silently discard either write.</p>
+<p><strong>Payment initiation locking:</strong> Use first-write-wins for payment initiation — whichever tab creates the PaymentIntent first &quot;wins.&quot; The server should enforce that only one active PI can exist per cart. Broadcast <code>PAYMENT_INITIATED</code> so other tabs disable their checkout button immediately.</p>
+<p><strong>Tradeoffs:</strong> <code>BroadcastChannel</code> only works within the same browser on the same device — it does nothing for a user on two different devices. For multi-device conflicts, you need server-side locking (a <code>locked_by_payment_intent</code> field on the cart) and polling/WebSocket push to notify the second device. The <code>localStorage</code> <code>storage</code> event is an older cross-tab communication mechanism that works in older browsers but fires for every <code>localStorage</code> write — more noise. <code>BroadcastChannel</code> is purpose-built and cleaner for this use case.</p>
+<hr>
+</article>
+<article class="qa" id="q-a-user-completes-payment-but-the-success-redirect-is-intercepted-by-an-ad-blocker-or-a-browser-extension-that-strips-query-params-how-do-you-design-the-confirmation-flow-so-the-user-reaches-a-correct-success-state-even-if-your-payment-intentpi-xxxredirect-statussucceeded-url-param-never-arrives">
+<h3 class="question">Q: A user completes payment but the success redirect is intercepted by an ad blocker or a browser extension that strips query params. How do you design the confirmation flow so the user reaches a correct success state even if your <code>?payment_intent=pi_xxx&amp;redirect_status=succeeded</code> URL param never arrives?</h3>
+<p><strong>Problem framing:</strong> Stripe&#x27;s 3DS redirect flow works by redirecting the user to your <code>return_url</code> with query parameters: <code>payment_intent</code>, <code>payment_intent_client_secret</code>, and <code>redirect_status</code>. Privacy-focused browser extensions (uBlock Origin, Privacy Badger), corporate proxies, and some mobile browsers strip or block URL parameters containing tracking-like patterns. If your confirmation page only checks URL params, a significant fraction of users — especially enterprise users behind corporate proxies — will land on a blank or broken confirmation page even though their payment succeeded.</p>
+<p><strong>Approach:</strong></p>
+<p>Build a layered resolution strategy that uses URL params as the fast path but falls back to server-side lookup:</p>
+<pre><code>async function resolvePaymentStatus() {
+  const params = new URLSearchParams(window.location.search);
+  const redirectStatus = params.get(&#x27;redirect_status&#x27;);
+  const clientSecret = params.get(&#x27;payment_intent_client_secret&#x27;);
+  
+  if (redirectStatus === &#x27;succeeded&#x27; &amp;&amp; clientSecret) {
+    // Happy path: params arrived intact
+    return { source: &#x27;redirect_params&#x27;, status: &#x27;succeeded&#x27; };
+  }
+  
+  // Fallback: query server for canonical status
+  const response = await fetch(&#x27;/api/checkout/status&#x27;);
+  const { paymentIntentId, status } = await response.json();
+  return { source: &#x27;server_poll&#x27;, status };
+}</code></pre>
+<p>The server endpoint <code>/api/checkout/status</code> looks up the PaymentIntent ID stored in the user&#x27;s session (stored before payment was initiated), calls <code>stripe.paymentIntents.retrieve(piId)</code> via the Stripe server SDK, and returns the canonical status. This path works even if zero URL params arrived.</p>
+<p>As a third fallback: if you stored <code>client_secret</code> in <code>sessionStorage</code> before the 3DS redirect, call <code>stripe.retrievePaymentIntent(clientSecret)</code> client-side. Note: 3DS redirects navigate away from the page, so <code>sessionStorage</code> is cleared on iOS Safari in some configurations — don&#x27;t rely on this as the primary fallback.</p>
+<div class="mermaid-wrap"><pre class="mermaid">flowchart TD
+    A[User lands on return_url] --> B{URL params present?}
+    B -- Yes, redirect_status=succeeded --> C[Show success immediately]
+    B -- No or redirect_status != succeeded --> D[Show 'Confirming your payment...']
+    D --> E[GET /api/checkout/status]
+    E --> F{Server returns status}
+    F -- succeeded --> G[Show success]
+    F -- processing --> H[Poll every 3s]
+    F -- requires_action --> I[Re-trigger handleNextAction]
+    F -- failed --> J[Show failure + retry]
+    H --> F</pre></div>
+<p>Webhooks should make the server&#x27;s answer authoritative and fast: your backend receives <code>payment_intent.succeeded</code> from Stripe before or around the same time the user is redirected back. By the time the fallback server poll fires, the server already knows the outcome. Display &quot;Confirming your payment...&quot; while the resolution is in flight — this is honest, non-alarming, and covers the brief gap between redirect and server knowledge.</p>
+<p><strong>Tradeoffs:</strong> Relying solely on redirect params is brittle and increasingly unreliable as privacy tooling proliferates. Always-server-check adds ~200ms latency on the happy path but eliminates an entire class of &quot;payment succeeded but showed error&quot; bugs. The hybrid approach — fast path via params, reliable fallback via server — is the correct production design. The incremental cost of the server fallback call is trivial compared to the customer service cost of a user who paid but saw an error page.</p>
+<hr>
+</article>
+<h2 class="section" id="deep">Deep</h2>
+<article class="qa" id="q-walk-me-through-implementing-a-robust-payment-retry-loop-on-the-frontend-the-users-card-was-declined-soft-decline-you-want-to-1-allow-the-user-to-update-their-card-details-2-re-confirm-the-same-paymentintent-rather-than-creating-a-new-one-and-3-cap-retries-at-a-safe-limit-to-avoid-locking-the-card-how-do-you-manage-the-state-transitions-and-what-data-do-you-pass-back-to-the-confirmcardpayment-call-on-a-retry">
+<h3 class="question">Q: Walk me through implementing a robust payment retry loop on the frontend. The user&#x27;s card was declined (soft decline). You want to: (1) allow the user to update their card details, (2) re-confirm the same <code>PaymentIntent</code> rather than creating a new one, and (3) cap retries at a safe limit to avoid locking the card. How do you manage the state transitions, and what data do you pass back to the <code>confirmCardPayment</code> call on a retry?</h3>
+<p><strong>Problem framing:</strong> Card declines come in two flavors with fundamentally different retry semantics. Soft declines (<code>insufficient_funds</code>, <code>do_not_honor</code>, <code>card_velocity_exceeded</code>, <code>try_again_later</code>) are transient — the user may succeed with a different card, a different time, or after resolving their balance. Hard declines (<code>fraudulent</code>, <code>lost_card</code>, <code>stolen_card</code>, <code>pickup_card</code>) are permanent — retrying is not only futile but can trigger additional fraud signals and further lock the card. Presenting a retry UI for a hard decline is poor UX and potentially a compliance issue. The retry loop must distinguish these, cap attempts to avoid card lockouts (most issuers lock a card after 3–5 consecutive failures), and preserve the same PaymentIntent across attempts to avoid leaving dangling PI objects on Stripe&#x27;s side.</p>
+<p><strong>Approach:</strong></p>
+<p>Start with the error taxonomy. Stripe surfaces card errors as <code>error.type === &#x27;card_error&#x27;</code>. Check <code>error.code</code> and <code>error.decline_code</code> to classify:</p>
+<pre><code>const RETRY_CONFIG = {
+  maxAttempts: 3,
+  softDeclineCodes: new Set([&#x27;insufficient_funds&#x27;, &#x27;do_not_honor&#x27;, &#x27;card_velocity_exceeded&#x27;, &#x27;try_again_later&#x27;]),
+  hardDeclineCodes: new Set([&#x27;fraudulent&#x27;, &#x27;lost_card&#x27;, &#x27;stolen_card&#x27;, &#x27;pickup_card&#x27;]),
+};
+
+const retryState = {
+  attempts: 0,
+  paymentIntentId: null, // reuse same PI
+  clientSecret: null,
+  lastDeclineCode: null,
+};</code></pre>
+<p>After a decline, Stripe moves the PaymentIntent back to <code>requires_payment_method</code>. This is the key insight: you don&#x27;t create a new PI — you call <code>stripe.confirmCardPayment(clientSecret, { payment_method: newCardElement })</code> on the existing PI with the new payment method. The PI ID stays the same; only the payment method changes.</p>
+<p>Full retry loop:</p>
+<pre><code>async function attemptPayment(clientSecret, cardElement, retryState) {
+  if (retryState.attempts &gt;= RETRY_CONFIG.maxAttempts) {
+    return { success: false, reason: &#x27;max_retries_exceeded&#x27; };
+  }
+  
+  const { paymentIntent, error } = await stripe.confirmCardPayment(clientSecret, {
+    payment_method: { card: cardElement },
+  });
+  
+  if (!error &amp;&amp; paymentIntent.status === &#x27;succeeded&#x27;) {
+    return { success: true, paymentIntent };
+  }
+  
+  if (error?.type === &#x27;card_error&#x27;) {
+    const declineCode = error.decline_code || error.code;
+    retryState.lastDeclineCode = declineCode;
+    retryState.attempts++;
+    
+    if (RETRY_CONFIG.hardDeclineCodes.has(declineCode)) {
+      return { success: false, reason: &#x27;hard_decline&#x27;, error };
+    }
+    
+    if (RETRY_CONFIG.softDeclineCodes.has(declineCode)) {
+      // Allow user to update payment method and retry
+      return { success: false, reason: &#x27;soft_decline&#x27;, error, retriable: true };
+    }
+  }
+  
+  return { success: false, reason: &#x27;other_error&#x27;, error };
+}</code></pre>
+<p>UI flow on soft decline:</p>
+<ol><li>Show user-friendly message: &quot;Your card was declined: insufficient funds. Please try a different card.&quot;</li><li>Re-render Stripe Elements to accept a new card — do NOT create a new PI</li><li>Pass the same <code>clientSecret</code> to the next <code>confirmCardPayment</code> call</li><li>Pass the new <code>cardElement</code> as the <code>payment_method</code></li><li>Optionally pass <code>payment_method_data: { billing_details: { name, address } }</code> if the user updates billing details</li></ol>
+<p>State machine diagram for the retry flow:</p>
+<div class="mermaid-wrap"><pre class="mermaid">stateDiagram-v2
+    [*] --> idle
+    idle --> confirming : user clicks Pay
+    confirming --> succeeded : payment succeeded
+    confirming --> softDeclined : soft decline (retriable)
+    confirming --> hardDeclined : hard decline (terminal)
+    confirming --> requiresAction : 3DS needed
+    requiresAction --> confirming : 3DS completed
+    requiresAction --> softDeclined : 3DS failed/canceled
+    softDeclined --> awaitingNewCard : show retry form
+    awaitingNewCard --> confirming : user enters new card
+    awaitingNewCard --> hardDeclined : maxAttempts reached
+    succeeded --> [*]
+    hardDeclined --> [*]</pre></div>
+<p>Persist the retry counter in both component state and <code>sessionStorage</code> so a page refresh doesn&#x27;t reset it — a refresh shouldn&#x27;t grant the user additional retry attempts beyond what the cap allows. After <code>maxAttempts</code>, do not present another card entry form. Instead: advise the user to contact their bank, offer alternative payment methods (different card, PayPal, Apple Pay), or show a &quot;Try again tomorrow&quot; message for <code>card_velocity_exceeded</code>.</p>
+<p><code>requires_action</code> can appear mid-retry: if the user switches to a card that requires 3DS, <code>stripe.confirmCardPayment</code> will trigger <code>handleNextAction</code> internally (when using <code>confirmCardPayment</code> directly) or return <code>requires_action</code> for manual handling. Ensure your retry loop handles this state on every attempt, not just the first.</p>
+<p>Add a small delay between automated retries (1–2 seconds) to avoid rate limiting. For user-initiated retries (user clicks &quot;Try another card&quot;), no delay is needed — the user&#x27;s action is the natural throttle.</p>
+<p><strong>Tradeoffs:</strong> Creating a new PI on each retry is simpler to implement but leaves dangling PIs on Stripe&#x27;s dashboard and makes reconciliation harder. Stripe explicitly recommends reusing the same PI. The <code>maxAttempts</code> cap of 3 is conservative; real-world card networks typically allow 3–5 attempts before locking, so a frontend cap of 3 gives a margin of safety. A delay between retries is courteous to the card network but not strictly required for user-initiated retries with a different card.</p>
+<hr>
+</article>
+<article class="qa" id="q-describe-how-you-would-architect-a-frontend-payment-state-machine-using-xstate-or-a-comparable-library-define-the-states-events-guards-and-side-effects-for-the-full-lifecycle-including-3ds-authentication-network-errors-and-soft-declines-what-are-the-advantages-of-this-approach-over-ad-hoc-ifelse-logic-in-react-component-state">
+<h3 class="question">Q: Describe how you would architect a frontend payment state machine using XState (or a comparable library). Define the states, events, guards, and side effects for the full lifecycle including 3DS authentication, network errors, and soft declines. What are the advantages of this approach over ad-hoc <code>if/else</code> logic in React component state?</h3>
+<p><strong>Problem framing:</strong> Ad-hoc payment state management using <code>useState</code> and <code>if/else</code> chains has a fundamental flaw: state is implicit and distributed. A component with <code>isLoading</code>, <code>isError</code>, <code>isSuccess</code>, <code>isRetrying</code>, <code>requires3DS</code>, and <code>retryCount</code> variables can be in combinations that should be impossible — <code>isLoading: true</code> and <code>isSuccess: true</code> simultaneously — but React won&#x27;t prevent it. These impossible states cause bugs: a spinner that stays visible after success, an error message that flashes briefly during a successful 3DS flow, a retry button that appears during processing. As the number of boolean flags grows, the number of impossible state combinations grows combinatorially. XState makes the valid states explicit and the invalid states unreachable by construction.</p>
+<p><strong>Approach:</strong></p>
+<p>Define a complete XState v4 machine for the full payment lifecycle:</p>
+<pre><code>import { createMachine, assign } from &#x27;xstate&#x27;;
+
+const paymentMachine = createMachine({
+  id: &#x27;payment&#x27;,
+  initial: &#x27;idle&#x27;,
+  context: {
+    clientSecret: null,
+    retryCount: 0,
+    maxRetries: 3,
+    error: null,
+    paymentIntent: null,
+    declineCode: null,
+  },
+  states: {
+    idle: {
+      on: {
+        SUBMIT: {
+          target: &#x27;submitting&#x27;,
+          actions: assign({ error: null }),
+        },
+      },
+    },
+    submitting: {
+      invoke: {
+        src: &#x27;confirmPayment&#x27;,
+        onDone: [
+          { target: &#x27;succeeded&#x27;, cond: &#x27;isSucceeded&#x27;, actions: assign({ paymentIntent: (_, e) =&gt; e.data }) },
+          { target: &#x27;processing&#x27;, cond: &#x27;isProcessing&#x27; },
+          { target: &#x27;requiresAction&#x27;, cond: &#x27;requiresAction&#x27; },
+        ],
+        onError: [
+          { target: &#x27;softDeclined&#x27;, cond: &#x27;isSoftDecline&#x27;, actions: [&#x27;assignError&#x27;, &#x27;incrementRetry&#x27;] },
+          { target: &#x27;hardDeclined&#x27;, cond: &#x27;isHardDecline&#x27;, actions: &#x27;assignError&#x27; },
+          { target: &#x27;networkError&#x27;, actions: &#x27;assignError&#x27; },
+        ],
+      },
+    },
+    requiresAction: {
+      invoke: {
+        src: &#x27;handleNextAction&#x27;,
+        onDone: { target: &#x27;submitting&#x27; },
+        onError: { target: &#x27;softDeclined&#x27;, actions: &#x27;assignError&#x27; },
+      },
+    },
+    processing: {
+      invoke: {
+        src: &#x27;pollPaymentStatus&#x27;,
+        onDone: [
+          { target: &#x27;succeeded&#x27;, cond: &#x27;isSucceeded&#x27; },
+          { target: &#x27;softDeclined&#x27;, cond: &#x27;isSoftDecline&#x27; },
+        ],
+        onError: { target: &#x27;networkError&#x27;, actions: &#x27;assignError&#x27; },
+      },
+    },
+    softDeclined: {
+      on: {
+        RETRY: {
+          target: &#x27;submitting&#x27;,
+          cond: &#x27;canRetry&#x27;,
+        },
+        MAX_RETRIES_REACHED: &#x27;hardDeclined&#x27;,
+      },
+      always: {
+        target: &#x27;hardDeclined&#x27;,
+        cond: &#x27;maxRetriesExceeded&#x27;,
+      },
+    },
+    networkError: {
+      on: {
+        RETRY: &#x27;submitting&#x27;,
+      },
+    },
+    hardDeclined: { type: &#x27;final&#x27; },
+    succeeded: { type: &#x27;final&#x27; },
+  },
+}, {
+  guards: {
+    canRetry: (ctx) =&gt; ctx.retryCount &lt; ctx.maxRetries,
+    maxRetriesExceeded: (ctx) =&gt; ctx.retryCount &gt;= ctx.maxRetries,
+    isSoftDecline: (_, e) =&gt; RETRY_CONFIG.softDeclineCodes.has(e.data?.decline_code),
+    isHardDecline: (_, e) =&gt; RETRY_CONFIG.hardDeclineCodes.has(e.data?.decline_code),
+    isSucceeded: (_, e) =&gt; e.data?.status === &#x27;succeeded&#x27;,
+    isProcessing: (_, e) =&gt; e.data?.status === &#x27;processing&#x27;,
+    requiresAction: (_, e) =&gt; e.data?.status === &#x27;requires_action&#x27;,
+  },
+  actions: {
+    assignError: assign({ error: (_, e) =&gt; e.data }),
+    incrementRetry: assign({ retryCount: (ctx) =&gt; ctx.retryCount + 1 }),
+  },
+  services: {
+    confirmPayment: (ctx) =&gt; stripe.confirmCardPayment(ctx.clientSecret, { payment_method: { card: cardElement } }),
+    handleNextAction: (ctx) =&gt; stripe.handleNextAction(ctx.clientSecret),
+    pollPaymentStatus: (ctx) =&gt; pollUntilResolved(ctx.clientSecret),
+  },
+});</code></pre>
+<p>React integration with <code>useMachine</code>:</p>
+<pre><code>const [state, send] = useMachine(paymentMachine, {
+  context: { clientSecret: props.clientSecret }
+});
+
+// Render is a pure function of state.value — no if/else chains
+function PaymentUI() {
+  switch (state.value) {
+    case &#x27;idle&#x27;: return &lt;PayButton onClick={() =&gt; send(&#x27;SUBMIT&#x27;)} /&gt;;
+    case &#x27;submitting&#x27;: return &lt;Spinner label=&quot;Processing payment...&quot; /&gt;;
+    case &#x27;requiresAction&#x27;: return &lt;ActionView label=&quot;Verifying with your bank...&quot; /&gt;;
+    case &#x27;processing&#x27;: return &lt;Spinner label=&quot;Waiting for bank confirmation...&quot; /&gt;;
+    case &#x27;softDeclined&#x27;: return (
+      &lt;RetryForm 
+        error={state.context.error}
+        retriesLeft={state.context.maxRetries - state.context.retryCount}
+        onRetry={() =&gt; send(&#x27;RETRY&#x27;)}
+      /&gt;
+    );
+    case &#x27;networkError&#x27;: return &lt;NetworkErrorView onRetry={() =&gt; send(&#x27;RETRY&#x27;)} /&gt;;
+    case &#x27;hardDeclined&#x27;: return &lt;HardDeclineView error={state.context.error} /&gt;;
+    case &#x27;succeeded&#x27;: return &lt;SuccessView paymentIntent={state.context.paymentIntent} /&gt;;
+  }
+}</code></pre>
+<p>Full machine state diagram:</p>
+<div class="mermaid-wrap"><pre class="mermaid">stateDiagram-v2
+    [*] --> idle
+    idle --> submitting : SUBMIT
+    submitting --> succeeded : isSucceeded
+    submitting --> processing : isProcessing
+    submitting --> requiresAction : requiresAction
+    submitting --> softDeclined : isSoftDecline [error]
+    submitting --> hardDeclined : isHardDecline [error]
+    submitting --> networkError : other error
+    requiresAction --> submitting : action completed
+    requiresAction --> softDeclined : action failed
+    processing --> succeeded : isSucceeded
+    processing --> softDeclined : isSoftDecline
+    processing --> networkError : poll error
+    softDeclined --> submitting : RETRY [canRetry]
+    softDeclined --> hardDeclined : maxRetriesExceeded [always]
+    networkError --> submitting : RETRY
+    succeeded --> [*]
+    hardDeclined --> [*]</pre></div>
+<p><strong>Advantages over ad-hoc state:</strong></p>
+<ol><li><strong>No impossible states.</strong> The machine literally cannot be in <code>succeeded</code> and <code>softDeclined</code> simultaneously. Each state is a named node with explicit entry and exit conditions.</li><li><strong>All transitions are documented.</strong> Every valid <code>state → event → next state</code> path is enumerable. Code review and onboarding become dramatically easier.</li><li><strong>Side effects are isolated.</strong> <code>invoke</code>d services (API calls, polling) are attached to specific states. They start when the state is entered, are automatically canceled when the state is exited, and their results drive transitions. No dangling <code>useEffect</code> subscriptions.</li><li><strong>Testable in isolation.</strong> You can unit-test the state machine by sending events and asserting state transitions without rendering any UI.</li><li><strong>Visualizable.</strong> XState&#x27;s inspector and visualizer tools generate the state diagram automatically from the machine definition — the diagram is always in sync with the code.</li><li><strong>Guards prevent illegal transitions.</strong> The <code>canRetry</code> guard prevents a <code>RETRY</code> event from firing when <code>retryCount &gt;= maxRetries</code> — this is enforced by the machine, not by an <code>if</code> statement that might be missing from some code path.</li><li><strong>Predictable context.</strong> The <code>context</code> object is updated only via <code>assign</code> actions tied to specific transitions — no scattered <code>setState</code> calls that could apply in the wrong order.</li></ol>
+<p><strong>Tradeoffs:</strong> XState has a meaningful learning curve, particularly around invoked services and the v4→v5 API differences. The bundle adds ~15KB (gzipped). For a simple two-state payment form (idle → loading → success/error), XState is overkill. For a full checkout lifecycle with 3DS, retries, polling, network errors, and re-entry recovery, the structure it provides more than pays for itself in reduced bugs and maintainability.</p>
+<hr>
+</article>
+<article class="qa" id="q-your-checkout-frontend-runs-inside-a-mobile-webview-embedded-in-a-native-iosandroid-app-the-native-app-and-the-webview-both-need-to-know-the-payment-outcome-walk-through-the-communication-architecture-how-does-a-payment-confirmation-event-travel-from-the-stripe-sdk-inside-the-webview-through-the-postmessage-bridge-to-the-native-layer-what-are-the-failure-modes-and-how-do-you-ensure-exactly-once-delivery-of-the-success-event-to-the-native-app">
+<h3 class="question">Q: Your checkout frontend runs inside a mobile WebView embedded in a native iOS/Android app. The native app and the WebView both need to know the payment outcome. Walk through the communication architecture: how does a payment confirmation event travel from the Stripe SDK (inside the WebView) through the <code>postMessage</code> bridge to the native layer, what are the failure modes, and how do you ensure exactly-once delivery of the success event to the native app?</h3>
+<p><strong>Problem framing:</strong> Stripe.js is a browser-only SDK — it cannot run in native iOS or Android code. When a checkout flow runs inside a WKWebView (iOS) or WebView (Android), the payment confirmation happens inside the browser context, but the native app needs to know the outcome to update order state, dismiss the WebView, navigate to a native success screen, and trigger post-purchase flows (loyalty points, push notification receipts). The <code>postMessage</code> bridge between WebView and native is fire-and-forget with no built-in acknowledgment, and the WebView may be destroyed by the OS (memory pressure, user backgrounding the app) before the message is delivered.</p>
+<p><strong>Approach:</strong></p>
+<p>Architecture overview:</p>
+<div class="mermaid-wrap"><pre class="mermaid">flowchart TD
+    A[Stripe.js in WebView] -->|confirmCardPayment| B[Payment Result]
+    B -->|postMessage| C{Native Bridge}
+    C -->|WKScriptMessageHandler| D[iOS Native Layer]
+    C -->|JavascriptInterface| E[Android Native Layer]
+    D --> F[Handle Outcome]
+    E --> F
+    F -->|evaluateJavaScript ACK| G[WebView ACK Handler]
+    G -->|clearTimeout| H[Cancel Retry Timer]
+    F --> I[Update Order State]
+    I --> J[Navigate to Success Screen]</pre></div>
+<p><strong>Unified bridge abstraction:</strong></p>
+<pre><code>function postToNative(message) {
+  const payload = JSON.stringify(message);
+  if (window.webkit?.messageHandlers?.paymentBridge) {
+    // iOS WKWebView
+    window.webkit.messageHandlers.paymentBridge.postMessage(payload);
+  } else if (window.PaymentBridge?.postMessage) {
+    // Android JavascriptInterface
+    window.PaymentBridge.postMessage(payload);
+  } else {
+    // Fallback: running in browser (dev/test)
+    console.warn(&#x27;No native bridge found&#x27;, message);
+  }
+}</code></pre>
+<p><strong>Message schema — include a <code>requestId</code> for deduplication:</strong></p>
+<pre><code>const successMessage = {
+  type: &#x27;PAYMENT_RESULT&#x27;,
+  requestId: crypto.randomUUID(), // for dedup
+  status: &#x27;succeeded&#x27;, // | &#x27;failed&#x27; | &#x27;requires_action&#x27;
+  paymentIntentId: paymentIntent.id,
+  amount: paymentIntent.amount,
+  currency: paymentIntent.currency,
+  timestamp: Date.now(),
+};</code></pre>
+<p><strong>Exactly-once delivery via ACK protocol:</strong></p>
+<p><code>postMessage</code> is fire-and-forget. To guarantee delivery, implement a request/acknowledge loop:</p>
+<pre><code>const pendingAcks = new Map(); // requestId → { message, retryCount, timeoutId }
+
+function sendWithAck(message, maxRetries = 3) {
+  const { requestId } = message;
+  
+  function attempt(retryCount) {
+    postToNative(message);
+    const timeoutId = setTimeout(() =&gt; {
+      if (retryCount &lt; maxRetries) {
+        attempt(retryCount + 1);
+      } else {
+        // Give up — fall back to server-side notification
+        triggerServerSideOutcome(message);
+      }
+    }, 3000 * Math.pow(2, retryCount)); // exponential backoff: 3s, 6s, 12s
+    
+    pendingAcks.set(requestId, { message, retryCount, timeoutId });
+  }
+  
+  attempt(0);
+}
+
+window.onNativeAck = function(requestId) {
+  const pending = pendingAcks.get(requestId);
+  if (pending) {
+    clearTimeout(pending.timeoutId);
+    pendingAcks.delete(requestId);
+  }
+};</code></pre>
+<p>Native sends the ACK back to the WebView via <code>evaluateJavaScript</code>:</p>
+<pre><code>// iOS WKScriptMessageHandler
+func userContentController(_ userContentController: WKUserContentController,
+                           didReceive message: WKScriptMessage) {
+  guard let body = message.body as? String,
+        let data = body.data(using: .utf8),
+        let event = try? JSONDecoder().decode(PaymentEvent.self, from: data)
+  else { return }
+  
+  // Dedup: ignore messages we&#x27;ve already processed
+  guard !processedIds.contains(event.requestId) else { return }
+  processedIds.insert(event.requestId)
+  
+  // ACK back to WebView
+  webView.evaluateJavaScript(&quot;window.onNativeAck(&#x27;\(event.requestId)&#x27;)&quot;)
+  
+  // Handle outcome
+  handlePaymentOutcome(event)
+}</code></pre>
+<p><strong>Failure modes and mitigations:</strong></p>
+<ol><li><strong>WebView destroyed before postMessage fires</strong> (OS kills app while processing): Store the payment outcome in your server session at the moment of confirmation. Native app polls <code>GET /api/orders/{orderId}/status</code> on <code>UIApplicationDidBecomeActiveNotification</code> (iOS) or <code>onResume</code> (Android). Even if the WebView never delivers the message, the native app learns the outcome on next foreground.</li></ol>
+<ol><li><strong>Bridge not initialized when message fires</strong> (race condition on app cold start): Queue messages in a local array and flush them when the bridge becomes available. Detect bridge readiness via a native → WebView initialization message: <code>window.onBridgeReady = function() { flushMessageQueue(); }</code>.</li></ol>
+<ol><li><strong>Android JavascriptInterface not injected</strong> (timing issue or security settings): Feature-detect before sending. Fallback: navigate the WebView to a custom URL scheme like <code>myapp://payment/result?status=succeeded&amp;pi=pi_xxx</code>. The native layer intercepts navigation via <code>shouldOverrideUrlLoading</code> (Android) or <code>decidePolicyForNavigationAction</code> (iOS) and reads the outcome from the URL without actually loading it.</li></ol>
+<ol><li><strong>3DS opens external browser</strong> (Stripe opens SFSafariViewController on iOS or Custom Chrome Tab on Android): The WebView context is suspended. Stripe handles the return via universal links / app links configured in your <code>return_url</code>. The native app intercepts the universal link, relaunches or resumes the WebView with the 3DS result, and the WebView calls <code>stripe.retrievePaymentIntent</code> to get the final status — then sends the outcome via postMessage as normal.</li></ol>
+<ol><li><strong>Message ordering</strong> (network error event arrives after success event due to retry timing): Include a <code>sequence</code> number in each message. Native tracks the last seen sequence per payment and discards out-of-order duplicates that carry an older sequence than the most recent processed event.</li></ol>
+<p><strong>Deep link / URL scheme as a simpler alternative:</strong></p>
+<p>For teams that find the ACK protocol complex, the URL scheme interception pattern is simpler and more reliable for one-way outcome delivery:</p>
+<pre><code>// WebView navigates to custom scheme — never loads, just signals outcome
+function notifyNativeViaScheme(paymentIntent) {
+  const params = new URLSearchParams({
+    status: paymentIntent.status,
+    pi: paymentIntent.id,
+    amount: paymentIntent.amount,
+  });
+  window.location.href = `myapp://payment/result?${params}`;
+}</code></pre>
+<p>Native intercepts the navigation before it loads, reads the params, handles the outcome, and dismisses the WebView. This is unidirectional (no ACK possible), carries limited data (URL length constraints), and requires no bridge setup — but loses the exactly-once guarantee and cannot carry complex payloads.</p>
+<p><strong>Server-side fallback (belt and suspenders):</strong></p>
+<p>Regardless of bridge strategy, configure your backend to receive Stripe webhooks and update order state. The native app&#x27;s <code>onResume</code> handler should always call <code>GET /api/orders/{orderId}/status</code> after a payment session. This ensures the native app converges to the correct state even if every client-side communication channel fails.</p>
+<p><strong>Tradeoffs:</strong> The postMessage+ACK approach is robust but adds implementation complexity on both the WebView and native sides, and requires coordination between web and native engineering teams. URL scheme interception is simpler but unidirectional and limited. Shared server state is the most reliable channel but adds latency. Native WebView frameworks like Capacitor/Ionic or React Native&#x27;s WebView component have built-in bridge abstractions that handle much of this boilerplate — if you&#x27;re already using one, prefer their native bridge APIs over rolling your own. For first-party WebViews in otherwise native apps, the ACK protocol with server-side fallback is the production-grade choice.</p>
+</article>
+  </main>
+  <footer class="page-footer">
+    <a href="index.html">← All sections</a> ·
+    <a href="../payments-system-frontend-architecture.html">Architecture map</a>
+  </footer>
+  <script src="assets/interactive.js" defer></script>
+</body>
+</html>

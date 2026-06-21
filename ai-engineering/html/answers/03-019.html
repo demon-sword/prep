@@ -1,0 +1,137 @@
+<div class="answer-header reveal">
+  <div class="answer-meta">
+    <span class="meta-badge meta-category">03-agents-tool-use</span>
+    <span class="meta-badge meta-num">Q019</span>
+    <span class="meta-badge meta-status-review">review</span>
+  </div>
+  <h1 class="answer-title">Version and roll back agent behavior?</h1>
+</div>
+
+<div class="answer-section reveal">
+  <div class="accordion">
+    <div class="accordion-header">
+      <span class="accordion-title">⟁ Framing — Why this is asked</span>
+      <span class="accordion-chevron">▾</span>
+    </div>
+    <div class="accordion-body">
+      <div class="framing-grid">
+        <div><div class="framing-card">
+          <div class="framing-card-title">Why asked</div>
+          <p style="font-size:13.5px;line-height:1.7;color:var(--text-dim)">This tests whether the candidate treats agent behavior as production software — with the same deployment rigor as APIs or models. Interviewers probe for GitOps fluency, feature-flag discipline, canary/shadow deployment patterns, and rollback SLAs. Weak candidates talk only about model versioning and miss that agent behavior lives in prompts, tool schemas, orchestration logic, and memory structures — all of which must be independently versioned and rolled back.</p>
+        </div></div>
+        <div><div class="framing-card">
+          <div class="framing-card-title">Trigger phrases</div>
+          <div class="trigger-list">
+              <div class="trigger-phrase">How would you safely deploy a prompt change to a production agent?</div>
+              <div class="trigger-phrase">Agent behavior regressed in production — how do you roll back?</div>
+              <div class="trigger-phrase">How do you version your agent?</div>
+              <div class="trigger-phrase">What&#x27;s your deployment strategy for agentic systems?</div>
+          </div>
+        </div></div>
+      </div>
+      <div class="tests-block">
+        <span style="font-family:var(--mono);font-size:10px;letter-spacing:0.1em;text-transform:uppercase;color:var(--purple);margin-right:8px">Tests:</span>Ability to apply production deployment discipline (versioning, canary, rollback, observability) to all three layers of agent behavior — prompts, tools, and orchestration logic.
+
+---
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="section-label">Concept</div>
+  <div class="concept-block"><p>Agent behavior is a composite of at least four independently mutable layers: system prompts, tool schemas, orchestration logic (graph/loop code), and model weights. Versioning and rollback means tracking changes across all four layers and having a path to restore any of them to a known-good state without full redeployment.</p></div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="section-label">Mechanism</div>
+  <div class="card"><p><strong>Layer 1 — Prompts (highest change velocity)</strong></p>
+<ul class="styled-list"><li>Store prompts in a versioned artifact store (LangSmith prompt hub, Promptflow, or Git-backed config). Each prompt has a <code>version_id</code> (e.g. <code>support-agent-v1.4.2</code>).</li><li>At agent startup, the orchestrator loads prompts by version tag. Production uses <code>stable</code>; staging uses <code>canary</code>.</li><li>Rollback: update <code>stable</code> tag to point to previous version — no code deploy required. Change propagates in <1 min via config reload.</li></ul>
+<p><strong>Layer 2 — Tool schemas</strong></p>
+<ul class="styled-list"><li>Tool definitions (JSON schema + function signature) are versioned in the same config store. Tool version is pinned in the agent config: <code>{"tool": "search_kb", "version": "v2"}</code>.</li><li>Breaking schema changes (parameter rename, type change) require a new tool version; old version stays registered until all agents drain.</li></ul>
+<p><strong>Layer 3 — Orchestration logic (graph/loop code)</strong></p>
+<ul class="styled-list"><li>Agent graph (LangGraph DAG, ReAct loop) is versioned via Git tags and deployed as a Docker image with a semantic version.</li><li>Use a blue-green deployment: route 5% of traffic to the new image, observe metrics (success rate, avg turns, cost/query) for 30 min, then flip 100% or roll back to the previous image.</li></ul>
+<p><strong>Layer 4 — Model</strong></p>
+<ul class="styled-list"><li>Pin <code>model_version</code> in agent config (e.g. <code>gpt-4o-2024-11-20</code>). When a provider releases a new snapshot, run golden-dataset regression before promoting to production. If regression fails, keep the pinned old snapshot.</li></ul>
+<p><strong>Canary / shadow deployment flow:</strong></p>
+<ol class="mechanism-steps"><li>Tag new agent config version → deploy to <code>canary</code> slot (5% traffic).</li><li>Route real queries to both canary and prod (shadow mode for irreversible tools).</li><li>Compare metrics: turn count, tool-call distribution, success signal rate, error rate, cost/query.</li><li>If p95 latency or success rate regresses by >5% vs baseline → auto-rollback: flip <code>stable</code> tag back; alert on-call.</li><li>If metrics hold for 30 min (or N=500 queries) → promote canary to stable.</li></ol>
+<p><strong>Rollback SLA targets:</strong></p>
+<ul class="styled-list"><li>Prompt/config change: <2 min (config reload, no redeploy)</li><li>Tool schema change: <5 min (config reload + drain window)</li><li>Orchestration code change: <10 min (blue-green image swap)</li><li>Model version change: <15 min (model snapshot rollback + cache clear)</li></ul></div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="section-label">Example / Tradeoff</div>
+  <div class="card card-accent"><div class="rich-text"><p>At a real support-agent rollout: prompt v1.5 increased avg turns from 3.2 to 5.8 (cost doubled) on canary. Auto-rollback fired after 200 queries when turn-count SLO breached. The <code>stable</code> tag was reverted in 90 seconds with zero user-facing disruption. The culprit was an ambiguous tool-use instruction that caused the agent to call <code>lookup_order</code> twice — fixed with an explicit idempotency instruction in the prompt before re-promoting.</p>
+<p><strong>Key tradeoff:</strong> Separate prompt versioning from code versioning dramatically reduces time-to-rollback for the highest-change-velocity layer (prompts), but adds configuration management complexity. At small scale (1–2 agents), a single Git repo for prompts + code is fine. At scale (10+ agents, multiple teams), a dedicated prompt registry (LangSmith / Promptflow) pays for itself.</p></div></div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="accordion">
+    <div class="accordion-header">
+      <span class="accordion-title">🎙 Verbal Script (3–5 min)</span>
+      <span class="accordion-chevron">▾</span>
+    </div>
+    <div class="accordion-body">
+      <div class="script-block"><div class="script-label">Opening (30s)</div><p>"Agent behavior lives in at least four independently mutable layers: system prompts, tool schemas, orchestration logic, and model version. I treat each one like a production microservice dependency — every layer is versioned, changes go through canary or shadow deployment, and rollback SLAs are defined before promoting anything to stable."</p></div>
+      <div class="script-block"><div class="script-label">Core explanation (2–3 min)</div><p>"I'd start by separating prompt versioning from code versioning, because prompts change far more often than orchestration code. Prompts live in a versioned artifact store — LangSmith's prompt hub or a Git-backed config — each tagged with a semantic version. The orchestrator loads prompts by tag at startup: production reads from <code>stable</code>, canary gets a new tag. Rolling back a prompt means flipping the <code>stable</code> tag back to the previous version — that propagates in under two minutes with no code deploy.</p>
+<p>Tool schemas get versioned the same way. If I rename a parameter or add a required field, I register it as a new tool version and keep the old one alive until all agents drain. This avoids a situation where a live agent calls a tool with a schema it wasn't trained on.</p>
+<p>Orchestration logic — the actual LangGraph DAG or ReAct loop code — is Docker-image-tagged and deployed blue-green. I route 5% of real traffic to the new image, measure turn count, success-signal rate, and cost-per-query, and auto-promote or auto-rollback based on thresholds. If p95 turn count increases by more than 20% on canary, we roll back the image automatically.</p>
+<p>Model versions are pinned explicitly in the agent config — <code>gpt-4o-2024-11-20</code> — and I run a golden-dataset regression before promoting any model snapshot change. This avoids surprises when OpenAI silently updates a model."</p></div>
+      <div class="script-block"><div class="script-label">Tradeoff / production angle (1 min)</div><p>"The main tension is configuration complexity vs rollback speed. A single flat Git repo works for one or two agents, but with ten agents across three teams, you need a dedicated prompt registry and per-agent config namespacing or you get prompt version collisions. The other gotcha is that shadow mode for irreversible tools — like sending emails or calling external APIs — requires mock interceptors in canary, otherwise you shadow-blast customers. That's a runtime safety concern that's easy to forget during deployment."</p></div>
+      <div class="script-block"><div class="script-label">Wrap-up (30s)</div><p>"The key insight is that most agent regressions trace back to prompt changes, so investing in fast, prompt-only rollback — under two minutes — gives you 80% of the safety with 20% of the infrastructure overhead. Happy to go deeper on the golden-dataset regression gate or the shadow-mode tool interceptor pattern."</p></div>
+    </div>
+  </div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="section-label">Pitfalls</div>
+  <div class="pitfall-card">
+    <div class="pitfall-mistake"><strong>✗ Mistake</strong> Treating agent versioning as equivalent to model versioning only — saying &quot;we pin the model version and that&#x27;s it&quot;</div>
+    <div class="pitfall-better"><strong>✓ Better</strong> Explain that prompts, tool schemas, and orchestration logic each change independently and need separate versioning + rollback paths; prompt changes have the highest velocity and the fastest rollback SLA.</div>
+  </div>
+  <div class="pitfall-card">
+    <div class="pitfall-mistake"><strong>✗ Mistake</strong> Claiming blue-green deployment is sufficient without addressing irreversible tool calls in canary</div>
+    <div class="pitfall-better"><strong>✓ Better</strong> Describe shadow-mode interceptors or mock backends for canary traffic so tools like <code>send_email</code> or <code>process_payment</code> don&#x27;t execute twice during a shadow test.</div>
+  </div>
+  <div class="pitfall-card">
+    <div class="pitfall-mistake"><strong>✗ Mistake</strong> Skipping rollback SLA definition — just saying &quot;we can roll back&quot;</div>
+    <div class="pitfall-better"><strong>✓ Better</strong> Commit to concrete targets: &lt;2 min for prompt/config, &lt;10 min for orchestration code, and explain how each is achieved (tag flip vs image swap vs model snapshot restore).
+
+---</div>
+  </div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="section-label">Related Questions</div>
+  <div class="related-pills">
+    <div class="related-pill" data-slug="03-008">
+      <span class="related-pill-icon">→</span>
+      <div class="related-pill-text">
+        <div class="related-pill-q">Q8: Walk through a production-ready agent architecture</div>
+        <div class="related-pill-rel">Prerequisite — the architecture this versioning strategy operates on</div>
+      </div>
+    </div>
+    <div class="related-pill" data-slug="03-009">
+      <span class="related-pill-icon">→</span>
+      <div class="related-pill-text">
+        <div class="related-pill-q">Q9: What logic belongs in orchestrator vs LLM</div>
+        <div class="related-pill-rel">Related — versioning strategy mirrors the orchestrator/LLM boundary</div>
+      </div>
+    </div>
+    <div class="related-pill" data-slug="03-030">
+      <span class="related-pill-icon">→</span>
+      <div class="related-pill-text">
+        <div class="related-pill-q">Q30: Monitor autonomous agent behavior in production</div>
+        <div class="related-pill-rel">Follow-up — monitoring feeds the rollback trigger signals</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="section-label">One-liner recall</div>
+  <div class="oneliner-box">
+    <div class="oneliner-label">▸ Reconstruct from memory</div>
+    <div class="oneliner-text" data-text="Version agents across four independent layers (prompts, tool schemas, orchestration code, model snapshot), deploy changes via canary/shadow with per-layer rollback SLAs — prompt flips in &lt;2 min, image swaps in &lt;10 min — and auto-roll back when turn-count or success-rate SLOs breach.">Version agents across four independent layers (prompts, tool schemas, orchestration code, model snapshot), deploy changes via canary/shadow with per-layer rollback SLAs — prompt flips in &lt;2 min, image swaps in &lt;10 min — and auto-roll back when turn-count or success-rate SLOs breach.</div>
+  </div>
+</div>

@@ -1,0 +1,132 @@
+<div class="answer-header reveal">
+  <div class="answer-meta">
+    <span class="meta-badge meta-category">01-llm-fundamentals</span>
+    <span class="meta-badge meta-num">Q031</span>
+    <span class="meta-badge meta-status-review">review</span>
+  </div>
+  <h1 class="answer-title">How do LLMs generate text? Autoregressive decoding process.</h1>
+</div>
+
+<div class="answer-section reveal">
+  <div class="accordion">
+    <div class="accordion-header">
+      <span class="accordion-title">⟁ Framing — Why this is asked</span>
+      <span class="accordion-chevron">▾</span>
+    </div>
+    <div class="accordion-body">
+      <div class="framing-grid">
+        <div><div class="framing-card">
+          <div class="framing-card-title">Why asked</div>
+          <p style="font-size:13.5px;line-height:1.7;color:var(--text-dim)">The interviewer wants to confirm you understand <em>how</em> text generation actually works under the hood — not just that &quot;the model predicts the next token.&quot; Strong candidates explain the prefill/decode split, the token-by-token loop, the role of sampling, and why this architecture drives the cost and latency profiles you care about in production.</p>
+        </div></div>
+        <div><div class="framing-card">
+          <div class="framing-card-title">Trigger phrases</div>
+          <div class="trigger-list">
+              <div class="trigger-phrase">Walk me through how an LLM actually generates text.</div>
+              <div class="trigger-phrase">What happens mechanically when I call the OpenAI API?</div>
+              <div class="trigger-phrase">Why is generation slow compared to the prompt processing?</div>
+          </div>
+        </div></div>
+      </div>
+      <div class="tests-block">
+        <span style="font-family:var(--mono);font-size:10px;letter-spacing:0.1em;text-transform:uppercase;color:var(--purple);margin-right:8px">Tests:</span>Understanding of autoregressive decoding mechanics and their direct production consequences (latency, throughput, KV cache, streaming).
+
+---
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="section-label">Concept</div>
+  <div class="concept-block"><p>LLMs generate text <strong>one token at a time in a left-to-right loop</strong>: at each step the model takes the full sequence of tokens seen so far (prompt + all previously generated tokens), runs a forward pass through the transformer, and samples the next token from the resulting probability distribution over the vocabulary. This is called <strong>autoregressive</strong> (or <strong>causal</strong>) decoding because each output token is conditioned on all prior tokens.</p></div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="section-label">Mechanism</div>
+  <div class="card"><p><strong>Two phases — prefill and decode:</strong></p>
+<div class="table-wrap"><table class="data-table"><tr><th>Phase</th><th>What happens</th><th>Characteristics</th></tr><tr><td><strong>Prefill</strong></td><td>All prompt tokens are processed in one parallel forward pass; the KV cache is populated for every prompt token.</td><td>Compute-bound; fast (batched matrix multiply across all positions simultaneously)</td></tr><tr><td><strong>Decode</strong></td><td>One new token is generated per forward pass; the KV cache is extended by one row each step.</td><td>Memory-bandwidth-bound; sequential; slow relative to prefill</td></tr></table></div>
+<p><strong>The decode loop in detail:</strong></p>
+<ol class="mechanism-steps"><li><strong>Forward pass</strong> — the transformer runs with causal masking: each token can attend only to itself and all preceding tokens. The final hidden state at the last position is projected to a logits vector of size <code>V</code> (vocabulary size, e.g. 128 K for Llama 3).</li><li><strong>Sampling</strong> — a sampling strategy converts logits to a token: greedy (argmax), top-k, top-p (nucleus), or temperature-scaled. (See Q32 for detail.)</li><li><strong>Append and loop</strong> — the sampled token is appended to the sequence, and the loop repeats until a stop token (<code><|endoftext|></code>, <code><|eot_id|></code>) or max-length is reached.</li><li><strong>KV cache</strong> — rather than recomputing K and V matrices for all previous tokens on every decode step, they are cached. Each decode step only computes Q/K/V for the <em>new</em> token, reads cached K/V for all prior tokens, and updates the cache. Memory cost: <code>2 × layers × heads × d_head × seq_len × dtype_bytes</code> per sequence.</li></ol>
+<p><strong>Token → text:</strong> after generation, the token IDs are decoded back to text using the tokenizer's vocabulary (e.g. tiktoken BPE for GPT-4, SentencePiece for Llama). Partial UTF-8 characters may be buffered until a full codepoint is assembled — relevant for streaming UX.</p></div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="section-label">Example / Tradeoff</div>
+  <div class="card card-accent"><div class="rich-text"><p><strong>Production numbers (Llama 3 70B, A100 80 GB, FP16):</strong></p>
+<ul class="styled-list"><li>Prefill: ~5,000 tokens/s for a 512-token prompt (compute-bound)</li><li>Decode: ~20–30 tokens/s (memory-bandwidth-bound — KV cache reads dominate)</li><li>TTFT (time to first token) ≈ 100–300 ms; heavily influenced by prompt length and batch size</li></ul>
+<p><strong>vLLM's PagedAttention</strong> addresses the memory bottleneck by storing KV cache in non-contiguous "pages" (like OS virtual memory), enabling higher batch sizes and thus higher decode throughput without OOM.</p>
+<p><strong>Streaming:</strong> most production APIs (OpenAI, Anthropic) stream tokens as they are generated via SSE. This improves perceived latency (users see text appearing) even though total generation time is unchanged.</p>
+<p><strong>Autoregressive cost:</strong> generating 1,000 output tokens requires 1,000 sequential forward passes (decode steps). This is why output tokens are typically 3–4× more expensive than input tokens per API pricing — and why long generation tasks (e.g. writing a 5,000-word essay) are costly.</p></div></div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="accordion">
+    <div class="accordion-header">
+      <span class="accordion-title">🎙 Verbal Script (3–5 min)</span>
+      <span class="accordion-chevron">▾</span>
+    </div>
+    <div class="accordion-body">
+      <div class="script-block"><div class="script-label">Opening (30s)</div><p>"LLMs generate text autoregressively — one token at a time in a loop. There are actually two distinct phases: prefill, where the prompt is processed in parallel, and decode, where each new token requires its own sequential forward pass. Understanding this split explains most of the cost and latency behavior you see in production."</p></div>
+      <div class="script-block"><div class="script-label">Core explanation (2–3 min)</div><p>"In the prefill phase, all prompt tokens are processed simultaneously in one big matrix multiply — it's compute-bound and fast. The output is the KV cache: stored key-value pairs for every prompt token, so we don't recompute them on every decode step.</p>
+<p>Then decode begins. Each step: run a forward pass with causal masking (each token can only see prior tokens), project the last hidden state to a logit vector over the vocabulary — for Llama 3, that's 128K tokens. Apply your sampling strategy: temperature scaling, then maybe top-k or top-p nucleus sampling to cap the distribution. Sample a token, append it to the sequence, extend the KV cache by one row, and repeat.</p>
+<p>Stop conditions are: the model emits a special end-of-sequence token like <code><|eot_id|></code>, you hit a configured stop sequence, or you hit max tokens.</p>
+<p>On Llama 3 70B running on an A100, you see prefill at roughly 5,000 tokens per second but decode dropping to 20–30 tokens per second — because decode is memory-bandwidth-bound, reading those growing KV caches on every step. That's why vLLM uses PagedAttention: non-contiguous KV cache blocks that let you pack more sequences per GPU and increase effective throughput."</p></div>
+      <div class="script-block"><div class="script-label">Tradeoff / production angle (1 min)</div><p>"The autoregressive nature creates a fundamental cost asymmetry: output tokens cost 3–4× more than input tokens because each one requires a serial decode step. This drives several production decisions — prompt compression to minimize input cost, output length limits to control generation cost, and streaming (SSE) to mask the decode latency with progressive display. For very long outputs, speculative decoding (a smaller draft model proposes multiple tokens; the large model verifies in parallel) can cut wall-clock time by 2–3×."</p></div>
+      <div class="script-block"><div class="script-label">Wrap-up (30s)</div><p>"So in short: prefill processes the prompt in one parallel pass and fills the KV cache; decode is a serial token-by-token loop constrained by memory bandwidth. The KV cache is what makes decode tractable, and tools like vLLM's PagedAttention are what make it scalable. Happy to go deeper on sampling strategies, speculative decoding, or the KV cache memory math."</p></div>
+    </div>
+  </div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="section-label">Pitfalls</div>
+  <div class="pitfall-card">
+    <div class="pitfall-mistake"><strong>✗ Mistake</strong> Saying &quot;the model reads the prompt and generates an answer&quot; without distinguishing prefill from decode</div>
+    <div class="pitfall-better"><strong>✓ Better</strong> Explicitly name both phases, explain why decode is sequential and memory-bound, and connect this to why TTFT and throughput are different optimization targets.</div>
+  </div>
+  <div class="pitfall-card">
+    <div class="pitfall-mistake"><strong>✗ Mistake</strong> Treating generation as a single forward pass</div>
+    <div class="pitfall-better"><strong>✓ Better</strong> Clarify that N output tokens require N decode forward passes (each adding one token), which is why output length directly drives latency and cost.</div>
+  </div>
+  <div class="pitfall-card">
+    <div class="pitfall-mistake"><strong>✗ Mistake</strong> Not mentioning the KV cache when asked about generation</div>
+    <div class="pitfall-better"><strong>✓ Better</strong> Explain that without the KV cache, every decode step would recompute attention over the full growing sequence (O(n²) in time and memory), making long generation impractical; the cache is what makes it O(n) per step.
+
+---</div>
+  </div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="section-label">Related Questions</div>
+  <div class="related-pills">
+    <div class="related-pill" data-slug="01-009">
+      <span class="related-pill-icon">→</span>
+      <div class="related-pill-text">
+        <div class="related-pill-q">Q9: What is KV cache? How does it help in LLM inference?</div>
+        <div class="related-pill-rel">KV cache is the key mechanism enabling efficient autoregressive decode</div>
+      </div>
+    </div>
+    <div class="related-pill" data-slug="01-032">
+      <span class="related-pill-icon">→</span>
+      <div class="related-pill-text">
+        <div class="related-pill-q">Q32: Beam search, top-k, top-p — when use each?</div>
+        <div class="related-pill-rel">Sampling strategies applied at each decode step</div>
+      </div>
+    </div>
+    <div class="related-pill" data-slug="01-007">
+      <span class="related-pill-icon">→</span>
+      <div class="related-pill-text">
+        <div class="related-pill-q">Q7: What is temperature and top-p sampling?</div>
+        <div class="related-pill-rel">Deep dive into the token selection step within the decode loop</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="section-label">One-liner recall</div>
+  <div class="oneliner-box">
+    <div class="oneliner-label">▸ Reconstruct from memory</div>
+    <div class="oneliner-text" data-text="LLMs generate text in two phases — a parallel prefill pass that builds the KV cache, then a sequential token-by-token decode loop where each step is memory-bandwidth-bound and costs one full forward pass.">LLMs generate text in two phases — a parallel prefill pass that builds the KV cache, then a sequential token-by-token decode loop where each step is memory-bandwidth-bound and costs one full forward pass.</div>
+  </div>
+</div>

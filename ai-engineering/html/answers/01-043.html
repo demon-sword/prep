@@ -1,0 +1,137 @@
+<div class="answer-header reveal">
+  <div class="answer-meta">
+    <span class="meta-badge meta-category">01-llm-fundamentals</span>
+    <span class="meta-badge meta-num">Q043</span>
+    <span class="meta-badge meta-status-review">review</span>
+  </div>
+  <h1 class="answer-title">How do you reduce hallucinations in LLM outputs?</h1>
+</div>
+
+<div class="answer-section reveal">
+  <div class="accordion">
+    <div class="accordion-header">
+      <span class="accordion-title">⟁ Framing — Why this is asked</span>
+      <span class="accordion-chevron">▾</span>
+    </div>
+    <div class="accordion-body">
+      <div class="framing-grid">
+        <div><div class="framing-card">
+          <div class="framing-card-title">Why asked</div>
+          <p style="font-size:13.5px;line-height:1.7;color:var(--text-dim)">Hallucination is the #1 reliability problem in production LLM systems. Interviewers want to know whether you understand the <em>root causes</em> (not just that hallucinations exist), can layer defenses, and have closed-loop production monitoring to detect regressions. It probes depth-of-production-experience — junior candidates cite &quot;use RAG&quot;; senior candidates describe multi-layer mitigation with measurable outcomes.</p>
+        </div></div>
+        <div><div class="framing-card">
+          <div class="framing-card-title">Trigger phrases</div>
+          <div class="trigger-list">
+              <div class="trigger-phrase">How do you reduce hallucinations in LLM outputs?</div>
+              <div class="trigger-phrase">Your chatbot is confidently giving wrong answers — what do you do?</div>
+              <div class="trigger-phrase">How do you ensure factual accuracy in a customer-facing LLM?</div>
+              <div class="trigger-phrase">Walk me through your hallucination mitigation strategy.</div>
+          </div>
+        </div></div>
+      </div>
+      <div class="tests-block">
+        <span style="font-family:var(--mono);font-size:10px;letter-spacing:0.1em;text-transform:uppercase;color:var(--purple);margin-right:8px">Tests:</span>The candidate&#x27;s ability to diagnose hallucination root causes and apply layered, measurable mitigations across retrieval, generation, and post-processing.
+
+---
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="section-label">Concept</div>
+  <div class="concept-block"><p>Hallucination occurs when an LLM generates fluent text that is factually wrong or ungrounded — either fabricating facts not in its training data (<em>intrinsic</em> hallucination) or contradicting information present in the provided context (<em>extrinsic</em> hallucination). Mitigation is multi-layered: fix the <em>retrieval</em> first, constrain <em>generation</em>, then validate <em>outputs</em>.</p></div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="section-label">Mechanism</div>
+  <div class="card"><p><strong>Layer 1 — Fix retrieval (most impactful)</strong></p>
+<ul class="styled-list"><li>Improve chunk quality: semantic chunking, parent-child retrieval, metadata filtering</li><li>Add hybrid search (BM25 + dense vectors via Reciprocal Rank Fusion) to catch exact-match failures</li><li>Add a cross-encoder re-ranker (e.g., <code>cross-encoder/ms-marco-MiniLM-L6-v2</code>) to surface truly relevant passages</li><li>Retrieve more candidates, re-rank to top-3, so the generator has high-quality context</li></ul>
+<p><strong>Layer 2 — Constrain generation</strong></p>
+<ul class="styled-list"><li>Set <code>temperature=0</code> for factual tasks (eliminates random token sampling)</li><li>Use grounding prompts: <em>"Answer only from the provided context. If the context doesn't contain the answer, say 'I don't know'."</em></li><li>Return citations with every claim — forces the model to anchor to retrieved text; allows post-hoc verification</li><li>Use structured output (Instructor + Pydantic) for predictable, validatable responses</li></ul>
+<p><strong>Layer 3 — Post-generation validation</strong></p>
+<ul class="styled-list"><li><strong>Faithfulness check</strong>: compute RAGAS <code>faithfulness</code> score — for each claim in the response, verify it is entailed by the retrieved context using an LLM-as-judge; threshold at 0.8</li><li><strong>NLI/entailment guard</strong>: pass (response, source_doc) through a lightweight NLI model (e.g., <code>cross-encoder/nli-deberta-v3-small</code>) — reject responses where entailment score < threshold</li><li><strong>Self-consistency</strong>: sample N responses at temperature > 0, accept only if ≥ 60% agree on the key claim (expensive; use for high-stakes paths only)</li><li><strong>HITL escalation</strong>: route low-confidence responses (faithfulness < 0.7 or no relevant context retrieved) to a human queue</li></ul>
+<p><strong>Layer 4 — Observe and regress</strong></p>
+<ul class="styled-list"><li>Maintain a golden dataset of 200–500 question/answer pairs with known ground truth</li><li>Track <code>hallucination_rate</code> (flagged by RAGAS faithfulness < 0.8) as a production metric in your observability stack (LangSmith, Weights & Biases, Arize)</li><li>Set alerts when hallucination rate exceeds SLO (e.g., > 5%); block deployment if regression detected on golden set</li></ul></div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="section-label">Example / Tradeoff</div>
+  <div class="card card-accent"><div class="rich-text"><p>At a customer support deployment, baseline GPT-4 RAG at temperature=0.7 had ~18% hallucination rate (RAGAS faithfulness). Adding hybrid search + cross-encoder reranker dropped it to ~9%; grounding prompt + temperature=0 dropped it to ~5%; RAGAS faithfulness gate (auto-flag + HITL) reduced user-visible errors to < 2%. Full NLI post-processing added ~120ms latency per response — a tradeoff that's only viable on high-stakes queries (e.g., medical dosage, legal contract terms) rather than general Q&A.</p>
+<p><strong>Key tradeoff:</strong> Faithfulness gates reduce hallucinations but increase "I don't know" rate (deflection). Monitor both; optimizing only faithfulness can make the system feel useless.</p></div></div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="accordion">
+    <div class="accordion-header">
+      <span class="accordion-title">🎙 Verbal Script (3–5 min)</span>
+      <span class="accordion-chevron">▾</span>
+    </div>
+    <div class="accordion-body">
+      <div class="script-block"><div class="script-label">Opening (30s)</div><p>"Hallucination is really a multi-layer problem — there's no single fix. I think about it across three stages: <em>retrieval</em>, <em>generation</em>, and <em>post-processing</em>. In my experience, the biggest wins come from fixing retrieval first, because if the context is garbage, the model has no choice but to hallucinate."</p></div>
+      <div class="script-block"><div class="script-label">Core explanation (2–3 min)</div><p>"On the retrieval side, I'd start with hybrid search — combining BM25 and dense embeddings with Reciprocal Rank Fusion. Dense search alone misses exact-match queries like product codes or drug names. Then I'd add a cross-encoder re-ranker to pick the top 3 truly relevant passages from a larger candidate pool. Better context = fewer hallucinations downstream.</p>
+<p>On generation, temperature=0 for factual tasks eliminates randomness. A grounding prompt — 'answer only from the provided context, say I don't know if it's not there' — gives the model an explicit fallback. I also add citation anchors: the model must quote the source passage, which forces it to stay grounded and gives users a way to verify.</p>
+<p>For post-processing, I use RAGAS faithfulness scoring — for each claim in the response, an LLM judge checks if it's supported by the retrieved context. Anything below 0.8 gets flagged. On high-stakes paths like medical or financial queries, I'll add an NLI model to do entailment checking as a second gate. Both add latency — RAGAS faithfulness is maybe 200ms, NLI is 50–100ms — so I tier these by query risk.</p>
+<p>Finally, production monitoring: a golden dataset of 500 Q&A pairs with known answers, RAGAS faithfulness tracked as a production SLO, alerts if it exceeds 5%, and gate deployments on golden-set regression."</p></div>
+      <div class="script-block"><div class="script-label">Tradeoff / production angle (1 min)</div><p>"The key tension is between faithfulness and deflection rate. If the faithfulness gate is too aggressive, the system says 'I don't know' too often and frustrates users. I've found that tracking both metrics and setting balanced SLOs — e.g., hallucination rate < 5%, deflection rate < 15% — gives the right tension. The other tradeoff is latency: full NLI post-processing adds ~120ms, which matters at p95. I'd only apply that on high-stakes query paths."</p></div>
+      <div class="script-block"><div class="script-label">Wrap-up (30s)</div><p>"So the answer isn't one thing — it's a stack: better retrieval, constrained generation, faithfulness gating, and production monitoring. Happy to go deeper on any layer — retrieval, the RAGAS metrics, or the golden-set regression setup."</p></div>
+    </div>
+  </div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="section-label">Pitfalls</div>
+  <div class="pitfall-card">
+    <div class="pitfall-mistake"><strong>✗ Mistake</strong> Saying &quot;just use RAG and it solves hallucinations&quot;</div>
+    <div class="pitfall-better"><strong>✓ Better</strong> RAG reduces but doesn&#x27;t eliminate hallucination; the model can still misinterpret retrieved context or hallucinate when context is insufficient; you need the full mitigation stack.</div>
+  </div>
+  <div class="pitfall-card">
+    <div class="pitfall-mistake"><strong>✗ Mistake</strong> Only mentioning generation-side fixes (temperature=0, prompting) and ignoring retrieval quality</div>
+    <div class="pitfall-better"><strong>✓ Better</strong> Lead with retrieval as the highest-leverage fix; poor context means the model has nothing to ground on regardless of generation settings.</div>
+  </div>
+  <div class="pitfall-card">
+    <div class="pitfall-mistake"><strong>✗ Mistake</strong> Not mentioning <em>how to measure</em> hallucination rate in production</div>
+    <div class="pitfall-better"><strong>✓ Better</strong> Specify RAGAS <code>faithfulness</code>, golden datasets, LLM-as-judge scoring, and production SLOs with alert thresholds.</div>
+  </div>
+  <div class="pitfall-card">
+    <div class="pitfall-mistake"><strong>✗ Mistake</strong> Treating hallucination mitigation as binary (on/off) rather than tiered</div>
+    <div class="pitfall-better"><strong>✓ Better</strong> Explain that mitigation intensity should match query risk: general Q&amp;A gets faithfulness scoring; medical/legal paths get NLI + HITL.
+
+---</div>
+  </div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="section-label">Related Questions</div>
+  <div class="related-pills">
+    <div class="related-pill" data-slug="05-005">
+      <span class="related-pill-icon">→</span>
+      <div class="related-pill-text">
+        <div class="related-pill-q">Q9: Detect and mitigate hallucinations in production</div>
+        <div class="related-pill-rel">Follow-up: production monitoring and metrics layer</div>
+      </div>
+    </div>
+    <div class="related-pill" data-slug="01-005">
+      <span class="related-pill-icon">→</span>
+      <div class="related-pill-text">
+        <div class="related-pill-q">Q5: Explain context windows and their limitations</div>
+        <div class="related-pill-rel">Prerequisite: lost-in-the-middle problem worsens hallucination</div>
+      </div>
+    </div>
+    <div class="related-pill" data-slug="01-012">
+      <span class="related-pill-icon">→</span>
+      <div class="related-pill-text">
+        <div class="related-pill-q">Q12: What&#x27;s an RAG model? Explain the complete process</div>
+        <div class="related-pill-rel">Prerequisite: RAG is the primary architectural defense</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="section-label">One-liner recall</div>
+  <div class="oneliner-box">
+    <div class="oneliner-label">▸ Reconstruct from memory</div>
+    <div class="oneliner-text" data-text="Reduce hallucinations in layers: fix retrieval with hybrid search + re-ranking → constrain generation with temperature=0 and grounding prompts → validate outputs with RAGAS faithfulness gating → monitor with a golden dataset and production SLOs.">Reduce hallucinations in layers: fix retrieval with hybrid search + re-ranking → constrain generation with temperature=0 and grounding prompts → validate outputs with RAGAS faithfulness gating → monitor with a golden dataset and production SLOs.</div>
+  </div>
+</div>

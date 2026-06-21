@@ -1,0 +1,148 @@
+<div class="answer-header reveal">
+  <div class="answer-meta">
+    <span class="meta-badge meta-category">03-agents-tool-use</span>
+    <span class="meta-badge meta-num">Q023</span>
+    <span class="meta-badge meta-status-review">review</span>
+  </div>
+  <h1 class="answer-title">Sandbox tool execution safely?</h1>
+</div>
+
+<div class="answer-section reveal">
+  <div class="accordion">
+    <div class="accordion-header">
+      <span class="accordion-title">⟁ Framing — Why this is asked</span>
+      <span class="accordion-chevron">▾</span>
+    </div>
+    <div class="accordion-body">
+      <div class="framing-grid">
+        <div><div class="framing-card">
+          <div class="framing-card-title">Why asked</div>
+          <p style="font-size:13.5px;line-height:1.7;color:var(--text-dim)">Interviewers ask this because tool-calling agents that execute code, run shell commands, or make write API calls are a significant production risk surface. The question probes whether you understand that security and safety are architectural concerns built into the agent loop — not afterthoughts. Strong candidates differentiate between sandboxing strategies by risk level, understand the performance cost of isolation, and know which off-the-shelf tooling to reach for.</p>
+        </div></div>
+        <div><div class="framing-card">
+          <div class="framing-card-title">Trigger phrases</div>
+          <div class="trigger-list">
+              <div class="trigger-phrase">How do you safely run code an agent generates?</div>
+              <div class="trigger-phrase">What happens if an agent calls a destructive tool?</div>
+              <div class="trigger-phrase">How do you prevent an agent from doing something irreversible?</div>
+          </div>
+        </div></div>
+      </div>
+      <div class="tests-block">
+        <span style="font-family:var(--mono);font-size:10px;letter-spacing:0.1em;text-transform:uppercase;color:var(--purple);margin-right:8px">Tests:</span>Whether you can design a layered execution sandbox that balances agent autonomy against containment — with concrete tooling choices and risk-tier reasoning.
+
+---
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="section-label">Concept</div>
+  <div class="concept-block"><p>Sandboxing tool execution means running agent-issued tool calls in an isolated environment where the blast radius of a bad action (malicious code, runaway process, destructive write) is bounded and reversible. It is not a single technique — it is a <strong>risk-tier framework</strong>: read-only APIs need no sandbox, shell/code execution needs a container, financial/irreversible actions need a HITL gate regardless of sandbox.</p></div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="section-label">Mechanism</div>
+  <div class="card"><p><strong>Three-tier risk model:</strong></p>
+<div class="table-wrap"><table class="data-table"><tr><th>Tier</th><th>Tool type</th><th>Sandbox approach</th></tr><tr><td><strong>Low</strong></td><td>Read-only: web search, DB SELECT, knowledge base lookup</td><td>No container — validate inputs with jsonschema, enforce timeouts only</td></tr><tr><td><strong>Medium</strong></td><td>Stateful writes: DB INSERT/UPDATE, email send, file write</td><td>Docker container with network egress blocklist, filesystem mount limited to temp dir, timeout 30s</td></tr><tr><td><strong>High</strong></td><td>Code execution, shell commands, payment/delete operations</td><td>E2B / Modal ephemeral microVM, no persistent storage, CPU/memory limits, HITL confirmation before execution, result inspection before commit</td></tr></table></div>
+<p><strong>Execution flow (medium/high tier):</strong></p>
+<ol class="mechanism-steps"><li><strong>Input sanitization</strong> — validate tool args against JSON schema (required fields, allowed patterns); reject args containing SQL metacharacters, path traversal (<code>../</code>), shell metacharacters (<code>; |</code>).</li><li><strong>Container/VM spin-up</strong> — E2B (<code>from e2b import Sandbox</code>) or Docker (<code>docker run --rm --network=none --memory=512m --cpus=0.5</code>). E2B cold-starts in ~200ms; Docker in ~500ms.</li><li><strong>Execute with timeout</strong> — wall-clock cap (e.g., 30s). Kill on timeout; return structured <code>{"status": "timeout"}</code> to agent loop.</li><li><strong>Output capture + inspection</strong> — capture stdout/stderr; strip secrets/PII from output before returning to the LLM context. Flag large outputs (>50KB) as potentially problematic.</li><li><strong>Idempotency check</strong> — for write tools, record a <code>tool_call_id</code> + hash before execution; on retry, check if side-effect already committed before re-running.</li><li><strong>Audit log</strong> — append <code>{run_id, tool, args_hash, result_summary, duration_ms}</code> to append-only log (S3/Postgres) for forensics.</li></ol></div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="section-label">Example / Tradeoff</div>
+  <div class="card card-accent"><div class="rich-text"><p><strong>E2B for code execution (GitHub Copilot Workspace pattern):</strong></p>
+<div class="code-block-wrap"><pre class="code-block"><code>from e2b import Sandbox
+
+async def run_code_safely(code: str, timeout: int = 30) -&gt; dict:
+    async with Sandbox(timeout=timeout) as sbx:
+        execution = sbx.run_code(code)
+        return {
+            &quot;stdout&quot;: execution.logs.stdout[:4096],  # cap output size
+            &quot;stderr&quot;: execution.logs.stderr[:2048],
+            &quot;exit_code&quot;: execution.exit_code,
+        }</code></pre><button class="copy-btn">copy</button></div>
+<p>E2B spins up a gVisor-backed microVM per call, isolating filesystem, network, and process tree. Cost: ~$0.000225/min per VM. For 10K code executions/day at avg 5s each, cost is ~$0.19/day — negligible vs LLM token cost.</p>
+<p><strong>Docker alternative (self-hosted):</strong></p>
+<div class="code-block-wrap"><pre class="code-block"><code>docker run --rm \
+  --network=none \
+  --memory=512m --memory-swap=512m \
+  --cpus=0.5 \
+  --read-only \
+  --tmpfs /tmp:size=64m \
+  my-sandbox-image python -c &quot;$CODE&quot;</code></pre><button class="copy-btn">copy</button></div>
+<p><code>--network=none</code> blocks exfiltration. <code>--read-only</code> prevents filesystem persistence. Cold-start is ~500ms; acceptable if tool use is infrequent.</p>
+<p><strong>Tradeoff:</strong> E2B is managed and fast (~200ms cold-start) but is a vendor dependency and costs per minute. Docker is self-hosted and free but requires container management and has higher cold-start. For very high-frequency code execution (>1M/day), a warm pool of pre-started containers amortizes cold-start cost.</p></div></div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="accordion">
+    <div class="accordion-header">
+      <span class="accordion-title">🎙 Verbal Script (3–5 min)</span>
+      <span class="accordion-chevron">▾</span>
+    </div>
+    <div class="accordion-body">
+      <div class="script-block"><div class="script-label">Opening (30s)</div><p>"Sandboxing tool execution is one of those things that's easy to skip in a demo and catastrophic to skip in production. I think of it as a risk-tier problem: the right sandbox depends entirely on what damage a bad tool call can do — read-only lookups need only input validation, but any code execution or write operation needs real isolation."</p></div>
+      <div class="script-block"><div class="script-label">Core explanation (2–3 min)</div><p>"I'd design three tiers. Tier one is read-only tools — web search, vector DB queries, SELECT statements. Here I just validate tool args against a strict JSON schema and enforce a timeout. No container needed; the blast radius is zero.</p>
+<p>Tier two is stateful writes — INSERT/UPDATE, email sends, file writes. These get a Docker container with <code>--network=none</code> to block egress, a readonly filesystem except for a tmpfs at <code>/tmp</code>, and memory/CPU limits. The key detail is idempotency: I record a <code>tool_call_id</code> hash before execution, and on any retry I check whether the side-effect was already committed before re-running.</p>
+<p>Tier three is the high-risk category: code execution, shell commands, payments, deletes. Here I use E2B or Modal — managed ephemeral microVMs that give me filesystem, network, and process isolation in about 200 milliseconds. Before the VM even starts, I apply input sanitization to reject path traversal, shell injection metacharacters, and SQL metacharacters. After execution, I cap stdout size, strip PII from the output, and write an append-only audit log entry before passing results back to the agent.</p>
+<p>For truly irreversible actions — deleting records, sending external communications — I also require a HITL gate regardless of tier. The sandbox limits technical damage; HITL is the human check on logical errors."</p></div>
+      <div class="script-block"><div class="script-label">Tradeoff / production angle (1 min)</div><p>"The main tension is latency vs isolation. E2B's 200ms cold-start is fine for background tasks but painful for interactive agents where users see each step. Warm container pools solve this at the cost of infrastructure complexity. The other tension is output size — a code execution might return megabytes of data; I always cap stdout and have the agent work with summaries, not raw output. And sandboxing doesn't eliminate prompt injection: a malicious document could inject instructions into the code the agent writes. Input sanitization and output inspection are both needed."</p></div>
+      <div class="script-block"><div class="script-label">Wrap-up (30s)</div><p>"So the pattern is: classify tool risk tier → apply appropriate isolation → add idempotency for writes → HITL gate for irreversibles → audit log everything. Happy to go deeper on any tier or talk through how this integrates with the agent loop controller."</p></div>
+    </div>
+  </div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="section-label">Pitfalls</div>
+  <div class="pitfall-card">
+    <div class="pitfall-mistake"><strong>✗ Mistake</strong> &quot;I&#x27;d just run it in a subprocess with <code>subprocess.run()</code>&quot; without mentioning network isolation, filesystem limits, or timeouts</div>
+    <div class="pitfall-better"><strong>✓ Better</strong> Explain that subprocess isolation on the host shares the same network and filesystem as the agent process; use Docker <code>--network=none</code> or E2B for real isolation, and always enforce a wall-clock timeout to prevent runaway processes.</div>
+  </div>
+  <div class="pitfall-card">
+    <div class="pitfall-mistake"><strong>✗ Mistake</strong> Treating sandboxing as the only safety layer and ignoring input sanitization</div>
+    <div class="pitfall-better"><strong>✓ Better</strong> Explain that sandbox escapes are possible (gVisor is not impenetrable); input sanitization (schema validation, metacharacter rejection) is a defense-in-depth first layer that stops most attacks before code ever runs.</div>
+  </div>
+  <div class="pitfall-card">
+    <div class="pitfall-mistake"><strong>✗ Mistake</strong> Forgetting idempotency on tool retries</div>
+    <div class="pitfall-better"><strong>✓ Better</strong> If the agent retries a write tool after a timeout, it may double-commit. Always record a <code>tool_call_id</code> hash before execution and check for existing side-effects before re-running.
+
+---</div>
+  </div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="section-label">Related Questions</div>
+  <div class="related-pills">
+    <div class="related-pill" data-slug="03-025">
+      <span class="related-pill-icon">→</span>
+      <div class="related-pill-text">
+        <div class="related-pill-q">Q25: Biggest security risks with tool-using agents?</div>
+        <div class="related-pill-rel">Follow-up — sandboxing is one mitigation layer in the broader security threat model</div>
+      </div>
+    </div>
+    <div class="related-pill" data-slug="03-024">
+      <span class="related-pill-icon">→</span>
+      <div class="related-pill-text">
+        <div class="related-pill-q">Q24: Tool failures, retries, idempotency?</div>
+        <div class="related-pill-rel">Companion — retry safety depends on idempotency patterns built alongside sandboxing</div>
+      </div>
+    </div>
+    <div class="related-pill" data-slug="03-010">
+      <span class="related-pill-icon">→</span>
+      <div class="related-pill-text">
+        <div class="related-pill-q">Q10: Design a safe and debuggable agent loop?</div>
+        <div class="related-pill-rel">Parent architecture — sandboxed tool execution is one component of the overall safe agent loop</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="section-label">One-liner recall</div>
+  <div class="oneliner-box">
+    <div class="oneliner-label">▸ Reconstruct from memory</div>
+    <div class="oneliner-text" data-text="Sandbox tool execution with a three-tier risk model: read-only tools need only schema validation + timeout; stateful writes get Docker with `--network=none` + idempotency checks; code/shell execution uses E2B ephemeral microVMs with input sanitization, output capping, and an append-only audit log — plus HITL gates for all irreversible actions.">Sandbox tool execution with a three-tier risk model: read-only tools need only schema validation + timeout; stateful writes get Docker with `--network=none` + idempotency checks; code/shell execution uses E2B ephemeral microVMs with input sanitization, output capping, and an append-only audit log — plus HITL gates for all irreversible actions.</div>
+  </div>
+</div>

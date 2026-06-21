@@ -1,0 +1,144 @@
+<div class="answer-header reveal">
+  <div class="answer-meta">
+    <span class="meta-badge meta-category">02-rag-systems</span>
+    <span class="meta-badge meta-num">Q010</span>
+    <span class="meta-badge meta-status-review">review</span>
+  </div>
+  <h1 class="answer-title">Design a Q&amp;A system over internal documentation.</h1>
+</div>
+
+<div class="answer-section reveal">
+  <div class="accordion">
+    <div class="accordion-header">
+      <span class="accordion-title">⟁ Framing — Why this is asked</span>
+      <span class="accordion-chevron">▾</span>
+    </div>
+    <div class="accordion-body">
+      <div class="framing-grid">
+        <div><div class="framing-card">
+          <div class="framing-card-title">Why asked</div>
+          <p style="font-size:13.5px;line-height:1.7;color:var(--text-dim)">This is a scoped variant of the flagship RAG design question, filtered to the internal-docs context (Confluence, Notion, GitHub wikis, Google Docs). The interviewer is probing whether you can translate the generic 9-stage RAG pipeline into a concrete production system with access control, freshness, heterogeneous formats, and measurable quality — not just define RAG in the abstract.</p>
+        </div></div>
+        <div><div class="framing-card">
+          <div class="framing-card-title">Trigger phrases</div>
+          <div class="trigger-list">
+              <div class="trigger-phrase">Design a Q&amp;A system over our internal documentation.</div>
+              <div class="trigger-phrase">Build a Slack bot that answers questions from our Confluence / Notion.</div>
+              <div class="trigger-phrase">How would you let employees search company knowledge?</div>
+              <div class="trigger-phrase">We have 50K engineering docs — how do we make them queryable?</div>
+          </div>
+        </div></div>
+      </div>
+      <div class="tests-block">
+        <span style="font-family:var(--mono);font-size:10px;letter-spacing:0.1em;text-transform:uppercase;color:var(--purple);margin-right:8px">Tests:</span>Ability to architect a production RAG pipeline tailored to internal knowledge bases — including ACL enforcement, connector freshness, hybrid retrieval, and a measurable evaluation framework.
+
+---
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="section-label">Concept</div>
+  <div class="concept-block"><p>An internal-docs Q&A system is a RAG pipeline that ingests heterogeneous company knowledge (wikis, runbooks, Slack threads, PDFs), maintains access-controlled vector and keyword indexes, retrieves the most relevant passages for each query, and generates cited, grounded answers — replacing "grep the wiki" with a conversational interface.</p></div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="section-label">Mechanism</div>
+  <div class="card"><p><strong>1. Ingestion & connectors</strong></p>
+<div class="table-wrap"><table class="data-table"><tr><th>Source</th><th>Connector</th><th>Update cadence</th></tr><tr><td>Confluence</td><td>Atlassian REST API v2</td><td>Webhook on page update</td></tr><tr><td>Notion</td><td>Notion API</td><td>Polling every 15 min</td></tr><tr><td>GitHub wikis / Markdown repos</td><td>GitHub webhook</td><td>Push event</td></tr><tr><td>Google Docs</td><td>Drive API + push notifications</td><td>Push notification</td></tr><tr><td>PDFs / uploaded files</td><td>S3 trigger → extraction queue</td><td>On upload</td></tr></table></div>
+<p>Each connector extracts: raw text, <code>doc_id</code>, <code>space_id</code> (for ACL), <code>author</code>, <code>last_modified</code>, <code>url</code>.</p>
+<p><strong>2. Preprocessing</strong></p>
+<ul class="styled-list"><li>Markdown / HTML → plain text via <code>markdownify</code> or <code>BeautifulSoup</code>.</li><li>Table extraction: Pandas or Unstructured.io → Markdown table string.</li><li>Recursive/semantic chunking: 512-token chunks with 64-token overlap, preserving heading hierarchy as metadata (<code>h1</code>, <code>h2</code> fields).</li><li>Parent-child: store full page as parent (for citation link), 512-token children as retrieval units.</li></ul>
+<p><strong>3. Embedding & indexing</strong></p>
+<ul class="styled-list"><li>Embedder: <code>text-embedding-3-small</code> (1536-dim) or <code>bge-large-en-v1.5</code> (self-hosted, ~40% cost reduction at scale).</li><li>Vector index: Pinecone or Qdrant — namespaced by <code>space_id</code> / team for ACL isolation.</li><li>Keyword index: Elasticsearch BM25 on same chunks — critical for exact-match queries (error codes, function names, acronyms).</li><li>Metadata stored per chunk: <code>doc_id</code>, <code>space_id</code>, <code>acl_group_ids[]</code>, <code>last_modified</code>, <code>heading_path</code>.</li></ul>
+<p><strong>4. ACL enforcement</strong></p>
+<ul class="styled-list"><li>At query time: extract the requesting user's <code>group_ids</code> from SSO (Okta / Azure AD).</li><li>Vector DB filter: <code>acl_group_ids</code> intersection with user groups (Pinecone metadata filter, Qdrant payload filter).</li><li>Never rely on post-retrieval ACL filtering alone — enforce at retrieval to prevent data leakage.</li></ul>
+<p><strong>5. Query processing</strong></p>
+<ul class="styled-list"><li>Optional query rewrite: <code>"how do I deploy?"</code> → <code>"deployment process steps production environment"</code> via a lightweight rewrite LLM call.</li><li>Hybrid search: dense retrieval (top-20) + BM25 (top-20), fused via Reciprocal Rank Fusion (RRF).</li><li>Cross-encoder reranking: Cohere Rerank or <code>cross-encoder/ms-marco-MiniLM-L-6-v2</code> over top-40 → select top-5.</li></ul>
+<p><strong>6. Generation</strong></p>
+<ul class="styled-list"><li>System prompt: "Answer using only the provided context. If the answer is not in the context, say 'I don't have that information.' Cite sources with [doc title](url)."</li><li>Temperature: 0 for factual grounding.</li><li>Model: GPT-4o-mini for standard queries (~$0.15/1M input tokens); escalate to GPT-4o for complex multi-part questions (routed on query complexity score).</li><li>Response includes inline citations with source URL and last-modified date.</li></ul>
+<p><strong>7. Evaluation</strong></p>
+<ul class="styled-list"><li>RAGAS: <code>faithfulness</code> (answer grounded in retrieved docs), <code>context_recall</code> (does retrieval surface the right docs), <code>answer_relevancy</code>.</li><li>Golden dataset: 50–100 curated (question, expected answer, expected source) tuples — run on every index rebuild.</li><li>Business metrics: answer acceptance rate (thumbs up/down), query deflection from support tickets, p95 latency.</li></ul>
+<p><strong>8. Observability</strong></p>
+<ul class="styled-list"><li>Trace each query: retrieval scores, reranker scores, tokens used, model selected.</li><li>Alert on: <code>faithfulness < 0.8</code> on golden set, retrieval latency p99 > 500ms, ACL filter returning 0 results (likely SSO misconfiguration).</li></ul></div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="section-label">Example / Tradeoff</div>
+  <div class="card card-accent"><div class="rich-text"><p>A concrete stack for a 500-person engineering org with ~30K Confluence pages:</p>
+<div class="table-wrap"><table class="data-table"><tr><th>Component</th><th>Choice</th><th>Why</th></tr><tr><td>Connectors</td><td>Atlassian webhooks + Notion polling</td><td>Real-time for Confluence, acceptable lag for Notion</td></tr><tr><td>Embedder</td><td><code>text-embedding-3-small</code></td><td>$0.02/1M tokens, 1536-dim, strong on technical English</td></tr><tr><td>Vector DB</td><td>Qdrant (self-hosted)</td><td>Cost control at 30K docs, Okta group payload filters</td></tr><tr><td>Keyword index</td><td>Elasticsearch 8.x</td><td>BM25 for function names, error codes, acronyms</td></tr><tr><td>Reranker</td><td>Cohere Rerank API</td><td>10ms p99 add, +15% answer accuracy vs no rerank</td></tr><tr><td>Generator</td><td>GPT-4o-mini (default) / GPT-4o (escalated)</td><td>Cost: ~$40/day at 5K queries/day</td></tr><tr><td>Delivery</td><td>Slack <code>/ask</code> command + web UI</td><td>Meets users where they work</td></tr></table></div>
+<p><strong>Key tradeoff — freshness vs cost:</strong> Webhook-driven ingestion keeps docs current but adds connector complexity. For a first version, nightly batch re-index is simpler but risks stale answers. Use webhooks only for high-churn spaces (e.g., engineering runbooks) and batch for archival content.</p></div></div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="accordion">
+    <div class="accordion-header">
+      <span class="accordion-title">🎙 Verbal Script (3–5 min)</span>
+      <span class="accordion-chevron">▾</span>
+    </div>
+    <div class="accordion-body">
+      <div class="script-block"><div class="script-label">Opening (30s)</div><p>"I'd frame this as a specialized RAG system optimized for three things the generic case often ignores: access control, document freshness, and heterogeneous source formats. Let me walk through the key design decisions."</p></div>
+      <div class="script-block"><div class="script-label">Core explanation (2–3 min)</div><p>"I'd start with connectors — one per source type. For Confluence I'd use their REST API v2 with webhook notifications so updates propagate within seconds. For Notion I'd poll every 15 minutes since their webhook support is less reliable. Each connector extracts text, metadata, and crucially the ACL groups that can see the document.</p>
+<p>For chunking, I'd use recursive chunking at ~512 tokens with 64-token overlap, preserving the heading hierarchy as metadata. This matters because a question about 'deploying the payment service' should surface the H2 section inside a larger runbook, not a random 512-token window.</p>
+<p>The index is dual: a vector store — I'd use Qdrant or Pinecone — namespaced by team space, and an Elasticsearch BM25 index. The keyword index is non-negotiable for internal docs because users query exact error codes, function names, and product acronyms that embeddings struggle with.</p>
+<p>ACL enforcement happens at the retrieval layer: I extract the user's Okta groups, pass them as a metadata filter to Qdrant, and the BM25 query also filters by <code>acl_group_ids</code>. Never do post-retrieval ACL filtering — you risk leaking document titles or snippets from unauthorized sources.</p>
+<p>At generation, I use GPT-4o-mini with temperature=0 and a grounding prompt that instructs the model to cite sources with URL and last-modified date. If the retrieved context doesn't contain the answer, the model says so explicitly rather than hallucinating."</p></div>
+      <div class="script-block"><div class="script-label">Tradeoff / production angle (1 min)</div><p>"The big tension I've seen in practice is freshness vs. simplicity. Webhooks give you near-real-time updates but each connector is a failure surface. For v1, I'd do nightly batch re-ingestion for stable docs and webhooks only for the highest-churn spaces. The second tension is retrieval coverage vs. noise — bigger top-k catches more relevant docs but pollutes the context window and inflates cost. A cross-encoder reranker lets you cast a wide net at retrieval (top-40) then narrow to top-5, keeping answer quality high without ballooning prompt size."</p></div>
+      <div class="script-block"><div class="script-label">Wrap-up (30s)</div><p>"The north star metric I'd track is answer acceptance rate — thumbs up/down from users — alongside a RAGAS golden dataset run on every index rebuild. That combination catches both retrieval failures and hallucinations before they erode user trust. Happy to go deeper on ACL patterns, evaluation setup, or the reranker choice."</p></div>
+    </div>
+  </div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="section-label">Pitfalls</div>
+  <div class="pitfall-card">
+    <div class="pitfall-mistake"><strong>✗ Mistake</strong> Describing the system without mentioning ACL/access control at all</div>
+    <div class="pitfall-better"><strong>✓ Better</strong> Explicitly cover per-user group filtering at the retrieval layer (Qdrant payload filter, Pinecone metadata filter) and explain why post-retrieval filtering is insufficient.</div>
+  </div>
+  <div class="pitfall-card">
+    <div class="pitfall-mistake"><strong>✗ Mistake</strong> Using only dense vector search for an internal-docs system where users query exact error codes, function names, and acronyms</div>
+    <div class="pitfall-better"><strong>✓ Better</strong> Describe hybrid BM25+dense retrieval with RRF fusion; keyword search is critical for internal technical vocabulary that embeddings mangle.</div>
+  </div>
+  <div class="pitfall-card">
+    <div class="pitfall-mistake"><strong>✗ Mistake</strong> Proposing nightly batch re-index as a complete freshness solution without acknowledging the stale-answer failure mode</div>
+    <div class="pitfall-better"><strong>✓ Better</strong> Distinguish high-churn spaces (engineering runbooks → webhooks) from archival content (historical design docs → nightly batch), and mention surfacing <code>last_modified</code> in the answer citation so users can judge freshness themselves.
+
+---</div>
+  </div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="section-label">Related Questions</div>
+  <div class="related-pills">
+    <div class="related-pill" data-slug="02-001">
+      <span class="related-pill-icon">→</span>
+      <div class="related-pill-text">
+        <div class="related-pill-q">Q1: Design a RAG system for a customer support chatbot</div>
+        <div class="related-pill-rel">Parent pattern — same 9-stage pipeline, different domain and access-control requirements</div>
+      </div>
+    </div>
+    <div class="related-pill" data-slug="02-005">
+      <span class="related-pill-icon">→</span>
+      <div class="related-pill-text">
+        <div class="related-pill-q">Q5: Design a generative QA assistant for your company&#x27;s knowledge base</div>
+        <div class="related-pill-rel">Near-identical framing — compare ACL, freshness, and model-tiering strategies</div>
+      </div>
+    </div>
+    <div class="related-pill" data-slug="02-017">
+      <span class="related-pill-icon">→</span>
+      <div class="related-pill-text">
+        <div class="related-pill-q">Q17: What is hybrid search? When combine vector + BM25?</div>
+        <div class="related-pill-rel">Core retrieval mechanism — RRF fusion is central to internal-docs system quality</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="section-label">One-liner recall</div>
+  <div class="oneliner-box">
+    <div class="oneliner-label">▸ Reconstruct from memory</div>
+    <div class="oneliner-text" data-text="Internal-docs Q&amp;A = standard RAG pipeline plus three non-negotiables: per-user ACL filtering at retrieval time (not post-filter), hybrid BM25+dense search for exact internal terminology, and webhook-driven freshness for high-churn spaces.">Internal-docs Q&amp;A = standard RAG pipeline plus three non-negotiables: per-user ACL filtering at retrieval time (not post-filter), hybrid BM25+dense search for exact internal terminology, and webhook-driven freshness for high-churn spaces.</div>
+  </div>
+</div>

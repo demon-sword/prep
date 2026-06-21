@@ -1,0 +1,332 @@
+html = """<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>JS this Keyword - Study Card</title>
+  <style>
+    :root {
+      --bg: #0f1117;
+      --card: #1a1d27;
+      --text: #e2e8f0;
+      --muted: #94a3b8;
+      --accent: #38bdf8;
+      --success: #4ade80;
+      --warning: #fbbf24;
+      --danger: #f87171;
+      --border: rgba(255,255,255,0.1);
+    }
+    * { box-sizing: border-box; }
+    body {
+      font-family: system-ui, -apple-system, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      margin: 0;
+      padding: 20px;
+      line-height: 1.6;
+    }
+    .container { max-width: 900px; margin: 0 auto; }
+    h1 { text-align: center; color: var(--accent); margin-bottom: 4px; }
+    .subtitle { text-align: center; color: var(--muted); font-size: 14px; margin-bottom: 24px; }
+    .card {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      margin-bottom: 16px;
+      overflow: hidden;
+    }
+    .card-header {
+      padding: 16px 20px;
+      cursor: pointer;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      user-select: none;
+    }
+    .card-header:hover { background: rgba(56,189,248,0.05); }
+    .card-title { font-weight: 600; font-size: 16px; }
+    .card-body { padding: 0 20px 20px; display: none; }
+    .card.open .card-body { display: block; }
+    .chevron { transition: transform 0.2s; color: var(--muted); }
+    .card.open .chevron { transform: rotate(180deg); }
+    .code-block {
+      background: #0d1117;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 16px;
+      margin: 12px 0;
+      overflow-x: auto;
+      font-family: 'SF Mono', Monaco, monospace;
+      font-size: 13px;
+      line-height: 1.5;
+    }
+    .kw { color: #ff7b72; }
+    .fn { color: #d2a8ff; }
+    .str { color: #a5d6ff; }
+    .num { color: #79c0ff; }
+    .com { color: #8b949e; font-style: italic; }
+    table { width: 100%; border-collapse: collapse; margin: 12px 0; font-size: 14px; }
+    th, td { padding: 10px; text-align: left; border-bottom: 1px solid var(--border); }
+    th { color: var(--accent); font-weight: 600; }
+    td code { background: #0d1117; padding: 2px 6px; border-radius: 4px; font-size: 12px; }
+    .tag {
+      display: inline-block;
+      padding: 2px 8px;
+      border-radius: 4px;
+      font-size: 11px;
+      font-weight: 600;
+      margin-right: 6px;
+    }
+    .tag-red { background: rgba(248,113,113,0.2); color: var(--danger); }
+    .tag-yellow { background: rgba(251,191,36,0.2); color: var(--warning); }
+    .tag-green { background: rgba(74,222,128,0.2); color: var(--success); }
+    .highlight-box {
+      background: rgba(56,189,248,0.05);
+      border-left: 4px solid var(--accent);
+      padding: 16px;
+      border-radius: 0 8px 8px 0;
+      margin: 16px 0;
+    }
+    .highlight-box h4 { color: var(--accent); margin: 0 0 8px 0; }
+    .reveal-btn {
+      background: transparent;
+      color: var(--accent);
+      border: 1px solid var(--accent);
+      padding: 6px 12px;
+      border-radius: 6px;
+      font-size: 12px;
+      cursor: pointer;
+      margin-top: 8px;
+    }
+    .answer-reveal {
+      background: #0d1117;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 16px;
+      margin-top: 8px;
+      display: none;
+    }
+    .answer-reveal.show { display: block; }
+    .qa-q { font-weight: 600; color: var(--accent); margin-bottom: 8px; }
+    .qa-item { margin-bottom: 24px; }
+    ul li { margin-bottom: 8px; }
+    .rule-priority {
+      display: inline-block;
+      background: var(--accent);
+      color: var(--bg);
+      width: 24px;
+      height: 24px;
+      border-radius: 50%;
+      text-align: center;
+      line-height: 24px;
+      font-weight: 700;
+      font-size: 13px;
+      margin-right: 8px;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>JS this Keyword</h1>
+    <p class="subtitle">Implicit &middot; Explicit &middot; new Binding &middot; Arrow Functions &middot; Priority Rules</p>
+
+    <div class="card open">
+      <div class="card-header" onclick="toggle(this)">
+        <div>
+          <span class="tag tag-green">CORE CONCEPT</span>
+          <span class="card-title">What Determines this?</span>
+        </div>
+        <span class="chevron">&#9660;</span>
+      </div>
+      <div class="card-body">
+        <p>The value of <code>this</code> is determined by <strong>how a function is called</strong>, not where it is defined.</p>
+        <div class="highlight-box">
+          <h4>Quick Rule</h4>
+          <p style="margin:0;">Look to the <strong>left of the dot</strong> where the function is called: <code>obj.method()</code> means <code>this</code> is <code>obj</code>.</p>
+        </div>
+      </div>
+    </div>
+
+    <div class="card open">
+      <div class="card-header" onclick="toggle(this)">
+        <div>
+          <span class="tag tag-red">MUST KNOW</span>
+          <span class="card-title">The 4 Rules (Priority Order)</span>
+        </div>
+        <span class="chevron">&#9660;</span>
+      </div>
+      <div class="card-body">
+        <table>
+          <tr><th>Priority</th><th>Rule</th><th>Example</th><th>this Value</th></tr>
+          <tr>
+            <td><span class="rule-priority">1</span></td>
+            <td><strong>new binding</strong></td>
+            <td><code>new Person()</code></td>
+            <td>The new object instance</td>
+          </tr>
+          <tr>
+            <td><span class="rule-priority">2</span></td>
+            <td><strong>Explicit</strong></td>
+            <td><code>fn.call(obj)</code> / <code>fn.apply(obj)</code> / <code>fn.bind(obj)</code></td>
+            <td>The object passed as first arg</td>
+          </tr>
+          <tr>
+            <td><span class="rule-priority">3</span></td>
+            <td><strong>Implicit</strong></td>
+            <td><code>obj.method()</code></td>
+            <td>The object before the dot (<code>obj</code>)</td>
+          </tr>
+          <tr>
+            <td><span class="rule-priority">4</span></td>
+            <td><strong>Default</strong></td>
+            <td><code>func()</code></td>
+            <td><code>window</code> (browser) or <code>global</code> (Node.js). Strict mode: <code>undefined</code></td>
+          </tr>
+        </table>
+      </div>
+    </div>
+
+    <div class="card open">
+      <div class="card-header" onclick="toggle(this)">
+        <div>
+          <span class="tag tag-red">TRICKY</span>
+          <span class="card-title">Arrow Functions</span>
+        </div>
+        <span class="chevron">&#9660;</span>
+      </div>
+      <div class="card-body">
+        <p>Arrow functions <strong>do not have their own <code>this</code></strong>. They inherit <code>this</code> from the <strong>enclosing (parent) scope</strong>.</p>
+        <div class="code-block"><span class="kw">const</span> obj = {
+  <span class="str">'name'</span>: <span class="str">'Alice'</span>,
+  <span class="str">'regular'</span>: <span class="kw">function</span>() {
+    <span class="kw">console</span>.log(<span class="kw">this</span>.name);  <span class="com">// &quot;Alice&quot;</span>
+  },
+  <span class="str">'arrow'</span>: () => {
+    <span class="kw">console</span>.log(<span class="kw">this</span>.name);  <span class="com">// undefined (inherits from outer scope)</span>
+  }
+};</div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-header" onclick="toggle(this)">
+        <div>
+          <span class="tag tag-yellow">PRACTICE</span>
+          <span class="card-title">Interview Questions</span>
+        </div>
+        <span class="chevron">&#9660;</span>
+      </div>
+      <div class="card-body">
+        <div class="qa-item">
+          <div class="qa-q">Q1: What is logged?</div>
+          <div class="code-block"><span class="kw">const</span> obj = {
+  <span class="str">'value'</span>: <span class="num">42</span>,
+  <span class="str">'getValue'</span>: <span class="kw">function</span>() {
+    <span class="kw">return</span> <span class="kw">this</span>.value;
+  }
+};
+<span class="kw">const</span> getValue = obj.getValue;
+<span class="kw">console</span>.log(obj.getValue());  <span class="com">// ?</span>
+<span class="kw">console</span>.log(getValue());     <span class="com">// ?</span></div>
+          <button class="reveal-btn" onclick="reveal(this)">Show Answer</button>
+          <div class="answer-reveal">
+            <p><strong>obj.getValue()</strong> -- <code>42</code> (implicit binding)</p>
+            <p><strong>getValue()</strong> -- <code>undefined</code> (default binding)</p>
+          </div>
+        </div>
+
+        <div class="qa-item">
+          <div class="qa-q">Q2: Fix the setTimeout bug</div>
+          <div class="code-block"><span class="kw">const</span> button = {
+  <span class="str">'text'</span>: <span class="str">'Click me'</span>,
+  <span class="str">'click'</span>: <span class="kw">function</span>() {
+    <span class="fn">setTimeout</span>(<span class="kw">function</span>() {
+      <span class="kw">console</span>.log(<span class="kw">this</span>.text);  <span class="com">// undefined</span>
+    }, <span class="num">100</span>);
+  }
+};</div>
+          <button class="reveal-btn" onclick="reveal(this)">Show Answer</button>
+          <div class="answer-reveal">
+            <p><strong>Problem:</strong> Regular function in setTimeout has its own this (window).</p>
+            <p><strong>Fix:</strong> Use arrow function.</p>
+            <div class="code-block"><span class="fn">setTimeout</span>(() => {
+  <span class="kw">console</span>.log(<span class="kw">this</span>.text);  <span class="com">// &quot;Click me&quot;</span>
+}, <span class="num">100</span>);</div>
+          </div>
+        </div>
+
+        <div class="qa-item">
+          <div class="qa-q">Q3: What is the output?</div>
+          <div class="code-block"><span class="kw">const</span> person = {
+  <span class="str">'name'</span>: <span class="str">'John'</span>,
+  <span class="str">'sayHi'</span>: () => {
+    <span class="kw">console</span>.log(<span class="str">`Hi, I am ${this.name}`</span>);
+  }
+};
+person.sayHi();</div>
+          <button class="reveal-btn" onclick="reveal(this)">Show Answer</button>
+          <div class="answer-reveal">
+            <p><code>&quot;Hi, I am undefined&quot;</code></p>
+            <p>Arrow function does not bind its own this, so it looks to the outer scope.</p>
+          </div>
+        </div>
+
+        <div class="qa-item">
+          <div class="qa-q">Q4: What is the output?</div>
+          <div class="code-block"><span class="kw">function</span> User() {
+  <span class="kw">this</span>.name = <span class="str">'Alice'</span>;
+  <span class="fn">setTimeout</span>(<span class="kw">function</span>() {
+    <span class="kw">console</span>.log(<span class="kw">this</span>.name);
+  }, <span class="num">10</span>);
+}
+<span class="kw">new</span> User();</div>
+          <button class="reveal-btn" onclick="reveal(this)">Show Answer</button>
+          <div class="answer-reveal">
+            <p><code>undefined</code> -- setTimeout callback is a regular function, so this defaults to window. Fix with arrow function or .bind(this).</p>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-header" onclick="toggle(this)">
+        <div>
+          <span class="tag tag-green">CHEAT SHEET</span>
+          <span class="card-title">Quick Reference</span>
+        </div>
+        <span class="chevron">&#9660;</span>
+      </div>
+      <div class="card-body">
+        <table>
+          <tr><th>Context</th><th>this Value</th></tr>
+          <tr><td><code>func()</code> (regular)</td><td><code>window</code> / <code>global</code></td></tr>
+          <tr><td><code>obj.method()</code></td><td><code>obj</code></td></tr>
+          <tr><td><code>func.call(binding)</code></td><td>First argument</td></tr>
+          <tr><td><code>new Class()</code></td><td>New instance</td></tr>
+          <tr><td>Arrow function</td><td>Inherits from enclosing scope</td></tr>
+          <tr><td>setTimeout (regular callback)</td><td><code>window</code></td></tr>
+          <tr><td>setTimeout (arrow callback)</td><td>Inherits from parent function</td></tr>
+          <tr><td>DOM event handler</td><td>The element that fired the event</td></tr>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    function toggle(header) {
+      const card = header.parentElement;
+      card.classList.toggle('open');
+    }
+    function reveal(btn) {
+      const revealDiv = btn.nextElementSibling;
+      revealDiv.classList.toggle('show');
+      btn.textContent = revealDiv.classList.contains('show') ? 'Hide Answer' : 'Show Answer';
+    }
+  </script>
+</body>
+</html>"""
+
+with open('js-this-keyword-card.html', 'w') as f:
+    f.write(html)
+
+print('Successfully created js-this-keyword-card.html')

@@ -1,0 +1,1159 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>04 — Real-Time Updates &amp; Webhooks | System Design Answers</title>
+  <meta name="description" content="Interview-depth answers for Payments-System frontend system design.">
+  <style>
+    :root {
+      --bg: #f8f9fb; --surface: #ffffff; --text: #1a1d26; --text-muted: #5c6370;
+      --border: #e2e6ed; --accent: #3d5a80; --accent-soft: #eef2f7;
+      --code-bg: #f0f2f6; --pre-bg: #1e2433; --pre-text: #e8ecf4;
+      --nav-bg: rgba(248, 249, 251, 0.92); --shadow: 0 1px 3px rgba(0, 0, 0, 0.06);
+    }
+    @media (prefers-color-scheme: dark) {
+      :root {
+        --bg: #12151c; --surface: #1a1f2a; --text: #e8ecf4; --text-muted: #9aa3b2;
+        --border: #2d3548; --accent: #8cb4d9; --accent-soft: #232a38;
+        --code-bg: #252d3d; --pre-bg: #0d1017; --pre-text: #d4dae6;
+        --nav-bg: rgba(18, 21, 28, 0.94); --shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
+      }
+    }
+    *, *::before, *::after { box-sizing: border-box; }
+    html { scroll-behavior: smooth; scroll-padding-top: 5.5rem; }
+    body { margin: 0; font-family: "Segoe UI", system-ui, sans-serif; font-size: 1.0625rem;
+      line-height: 1.65; color: var(--text); background: var(--bg); }
+    .site-nav { position: sticky; top: 0; z-index: 100; background: var(--nav-bg);
+      backdrop-filter: blur(10px); border-bottom: 1px solid var(--border); box-shadow: var(--shadow); }
+    .site-nav-inner { max-width: 900px; margin: 0 auto; padding: 0.75rem 1.5rem; }
+    .site-nav-title { font-size: 0.8125rem; font-weight: 600; text-transform: uppercase;
+      letter-spacing: 0.04em; color: var(--text-muted); margin: 0 0 0.5rem; }
+    .toc { display: flex; flex-wrap: wrap; gap: 0.35rem 0.75rem; margin: 0; padding: 0;
+      list-style: none; font-size: 0.8125rem; }
+    .toc a { color: var(--accent); text-decoration: none; white-space: nowrap; }
+    .toc a:hover { text-decoration: underline; }
+    .page { max-width: 900px; margin: 0 auto; padding: 2rem 1.5rem 4rem; }
+    header.page-header { margin-bottom: 2.5rem; padding-bottom: 1.5rem; border-bottom: 1px solid var(--border); }
+    h1 { font-size: 1.75rem; font-weight: 700; margin: 0 0 0.75rem; }
+    .lead { margin: 0; color: var(--text-muted); font-size: 1.05rem; }
+    h2.section { font-size: 1.35rem; font-weight: 700; margin: 2.5rem 0 1.25rem;
+      color: var(--accent); border-bottom: 2px solid var(--accent-soft); padding-bottom: 0.35rem; }
+    article.qa { margin-bottom: 2.75rem; background: var(--surface); border: 1px solid var(--border);
+      border-radius: 10px; padding: 1.5rem 1.75rem; box-shadow: var(--shadow); }
+    h3.question { font-size: 1.2rem; font-weight: 600; margin: 0 0 1rem; }
+    article.qa p { margin: 0 0 1rem; }
+    ol, ul { margin: 0 0 1rem; padding-left: 1.35rem; }
+    table { width: 100%; border-collapse: collapse; margin: 0 0 1rem; font-size: 0.95rem; }
+    th, td { border: 1px solid var(--border); padding: 0.55rem 0.75rem; text-align: left; }
+    th { background: var(--accent-soft); font-weight: 600; }
+    code { font-family: ui-monospace, Menlo, Consolas, monospace; font-size: 0.88em;
+      background: var(--code-bg); padding: 0.15em 0.4em; border-radius: 4px; }
+    pre { margin: 0 0 1rem; padding: 1rem; background: var(--pre-bg); color: var(--pre-text);
+      border-radius: 8px; overflow-x: auto; font-size: 0.875rem; }
+    pre code { background: none; padding: 0; color: inherit; }
+    .mermaid-wrap { margin: 0 0 1rem; padding: 1rem; background: var(--surface);
+      border: 1px solid var(--border); border-radius: 8px; overflow-x: auto; }
+    footer.page-footer { max-width: 900px; margin: 0 auto; padding: 1.5rem;
+      border-top: 1px solid var(--border); font-size: 0.9375rem; }
+    footer.page-footer a { color: var(--accent); text-decoration: none; font-weight: 500; }
+  </style>
+  <link rel="stylesheet" href="assets/interactive.css">
+</head>
+<body>
+  <nav class="site-nav" aria-label="Table of contents">
+    <div class="site-nav-inner">
+      <p class="site-nav-title">On this page</p>
+      <ol class="toc"><li><a href="#q1-reconciling-confirmcardpayment-return-vs-webhook-ground-truth">Q1. Reconciling `confirmCardPayment`</a></li><li><a href="#q2-polling-vs-websockets-vs-sse-for-payment-status">Q2. Polling vs. WebSockets vs. SSE f</a></li><li><a href="#q3-resilient-polling-strategy-with-exponential-backoff">Q3. Resilient polling strategy with </a></li><li><a href="#q4-the-risk-of-trusting-confirmcardpayment-return-value-alone">Q4. The risk of trusting `confirmCar</a></li><li><a href="#q5-processing-state-ux-for-async-payment-methods">Q5. &quot;Processing&quot; state UX for async </a></li><li><a href="#q6-re-surfacing-payment-outcome-after-user-navigates-away">Q6. Re-surfacing payment outcome aft</a></li><li><a href="#q7-reconciling-a-failed-ui-with-a-later-arriving-payment-intentsucceeded-webhook">Q7. Reconciling a &quot;failed&quot; UI with a</a></li><li><a href="#q8-real-time-notification-system-across-all-frontend-contexts">Q8. Real-time notification system ac</a></li><li><a href="#q9-webhook-frontend-pipeline-consistency-and-no-stale-states">Q9. Webhook → frontend pipeline: con</a></li><li><a href="#q10-pos-dashboard-concurrent-payments-normalized-store-render-optimization">Q10. POS dashboard: concurrent payme</a></li></ol>
+    </div>
+  </nav>
+  <main class="page">
+    <header class="page-header">
+      <h1>04 — Real-Time Updates &amp; Webhooks</h1>
+      <p class="lead">Interview-depth answers for Payments-System frontend system design.</p>
+    </header>
+    <h1 id="04-real-time-updates-webhooks">04 — Real-Time Updates &amp; Webhooks</h1>
+<p>Payment status is never instantaneous. Stripe&#x27;s <code>confirmCardPayment</code> returns within milliseconds, but the authoritative settlement signal — the webhook — arrives asynchronously, sometimes seconds later, sometimes minutes, and for certain payment methods like SEPA debit or ACH, days. This gap between &quot;the user clicked Pay&quot; and &quot;the bank confirmed the charge&quot; is where most real-time complexity lives. This section covers the full architecture of delivering payment status updates reliably across every frontend context: active tabs, closed-and-reopened tabs, mobile apps in the background, and concurrent POS dashboards processing dozens of payments simultaneously. The recurring theme is that the webhook is ground truth — everything on the client is provisional until the server confirms it.</p>
+<hr>
+<h2 class="section" id="core-questions">Core Questions</h2>
+<article class="qa" id="q1-reconciling-confirmcardpayment-return-vs-webhook-ground-truth">
+<h3 class="question">Q1. Reconciling <code>confirmCardPayment</code> return vs. webhook ground truth</h3>
+<p><strong>Problem framing:</strong> <code>stripe.confirmCardPayment()</code> is a synchronous-feeling call that resolves with a <code>PaymentIntent</code> object whose <code>status</code> field says <code>succeeded</code>. This is not the same as the Stripe webhook event <code>payment_intent.succeeded</code>. The JS SDK call returns after Stripe&#x27;s API has created and confirmed the charge object, but &quot;confirmed&quot; here means Stripe accepted the request and it is in flight — not that the issuing bank has settled it. The webhook arrives after the issuing bank communicates the final outcome back through the card network. For most cards this gap is milliseconds to a few seconds. For certain card programs (deferred debit, some international networks) the gap is longer, and in all cases the webhook is what your backend actually acts on to fulfill the order. If a user sees a success screen based only on the client-side return value but the webhook never arrives (network failure, Stripe retry exhausted, your endpoint returned 500), you may fulfill an order with no settled funds.</p>
+<p><strong>Approach:</strong></p>
+<p>The reconciliation architecture works in two layers: client-side optimism gated by server confirmation.</p>
+<div class="mermaid-wrap"><pre class="mermaid">sequenceDiagram
+    participant Browser
+    participant YourAPI as Your Backend
+    participant Stripe
+
+    Browser->>Stripe: stripe.confirmCardPayment(clientSecret)
+    Stripe-->>Browser: PaymentIntent { status: "succeeded" }
+    Note over Browser: DO NOT show success yet
+    Browser->>YourAPI: POST /api/payment/confirm { paymentIntentId }
+    Stripe->>YourAPI: POST /webhooks/stripe (payment_intent.succeeded)
+    YourAPI->>YourAPI: Verify signature, write to DB, fulfill order
+    YourAPI-->>Browser: { status: "succeeded", orderId: "ord_xxx" }
+    Note over Browser: NOW show success screen</pre></div>
+<p>After <code>confirmCardPayment</code> resolves with <code>status: &quot;succeeded&quot;</code>, immediately call your own backend to confirm:</p>
+<pre><code>async function handlePaymentConfirmation(clientSecret, stripe) {
+  const { paymentIntent, error } = await stripe.confirmCardPayment(clientSecret, {
+    payment_method: { card: cardElement },
+  });
+
+  if (error) {
+    return { outcome: &#x27;failed&#x27;, error };
+  }
+
+  // Client-side says succeeded — now verify server-side
+  // Show &quot;Confirming your payment...&quot; — not success yet
+  setStatus(&#x27;verifying&#x27;);
+
+  const serverConfirmation = await pollServerStatus(paymentIntent.id, {
+    maxAttempts: 12,
+    initialDelayMs: 500,
+  });
+
+  if (serverConfirmation.status === &#x27;succeeded&#x27;) {
+    // Webhook was received and processed — safe to show success
+    return { outcome: &#x27;succeeded&#x27;, orderId: serverConfirmation.orderId };
+  }
+
+  return { outcome: &#x27;processing&#x27;, paymentIntentId: paymentIntent.id };
+}</code></pre>
+<p>Your backend <code>/api/payment/status/:piId</code> endpoint reads from your own database (which the webhook populates), not from Stripe directly on every poll. This is crucial: polling Stripe&#x27;s API directly on every client request is rate-limited, slow, and bypasses your own business logic (fulfillment, inventory, etc.).</p>
+<p><strong>The safe rule for showing a success screen:</strong> You may show success when your backend confirms the webhook has been processed <strong>and</strong> your fulfillment logic has run. Until then, show a &quot;verifying&quot; / &quot;confirming&quot; intermediate state. The user-visible delay is typically under 2 seconds.</p>
+<p><strong>Tradeoffs:</strong> A small percentage of payments will have the client-side <code>succeeded</code> status but the webhook delayed (Stripe retries webhooks over 72 hours if your endpoint returns errors). For these users, polling will eventually time out. The correct UX is to show a &quot;We&#x27;re confirming your payment — you&#x27;ll receive a confirmation email shortly&quot; message, not an error. The webhook always eventually arrives or Stripe notifies you of permanent failure. Do not make the user wait indefinitely — set them free after ~60 seconds of polling with the email-confirmation fallback.</p>
+<hr>
+</article>
+<article class="qa" id="q2-polling-vs-websockets-vs-sse-for-payment-status">
+<h3 class="question">Q2. Polling vs. WebSockets vs. SSE for payment status</h3>
+<p><strong>Problem framing:</strong> Once a payment enters an async state (sent for processing, waiting for webhook), the frontend needs a mechanism to receive the resolution without requiring the user to manually refresh. The three primary options — polling, WebSockets, and Server-Sent Events — have meaningfully different complexity, infrastructure, and reliability profiles. The choice matters especially in payment flows because the connection must be resilient (mobile networks are unreliable), the message stream is unidirectional (server → client), and the use case is ephemeral (one confirmation per session, not a persistent data stream).</p>
+<p><strong>Approach:</strong></p>
+<table>
+<thead><tr>
+<th>Dimension</th>
+<th>Polling</th>
+<th>SSE</th>
+<th>WebSocket</th>
+</tr></thead><tbody>
+<tr>
+<td>Direction</td>
+<td>Client-initiated</td>
+<td>Server-initiated (one-way)</td>
+<td>Bidirectional</td>
+</tr>
+<tr>
+<td>Protocol</td>
+<td>HTTP</td>
+<td>HTTP/2 (or HTTP/1.1)</td>
+<td>WS (TCP upgrade)</td>
+</tr>
+<tr>
+<td>Built-in reconnect</td>
+<td>❌ Manual</td>
+<td>✅ <code>EventSource</code> native</td>
+<td>❌ Manual</td>
+</tr>
+<tr>
+<td>Proxy/firewall friendly</td>
+<td>✅</td>
+<td>✅ (pure HTTP)</td>
+<td>⚠️ Some proxies strip WS</td>
+</tr>
+<tr>
+<td>Infrastructure complexity</td>
+<td>Low</td>
+<td>Low</td>
+<td>High (stateful server)</td>
+</tr>
+<tr>
+<td>Mobile battery impact</td>
+<td>High (keep-alive requests)</td>
+<td>Low (idle connection)</td>
+<td>Moderate</td>
+</tr>
+<tr>
+<td>Implementation effort</td>
+<td>Minimal</td>
+<td>Low</td>
+<td>High</td>
+</tr>
+<tr>
+<td>Right for payment status</td>
+<td>Fallback</td>
+<td>✅ Primary choice</td>
+<td>Overkill for one-way</td>
+</tr>
+</tbody></table>
+<p><strong>SSE is the right choice for payment confirmation flows.</strong> The reasons:</p>
+<ol><li><strong>Unidirectional fit:</strong> Payment status updates flow server → client. There is no reason the client needs to send data over the same channel. WebSockets&#x27; bidirectional capability is wasted here and adds overhead.</li></ol>
+<ol><li><strong>Native reconnection:</strong> <code>EventSource</code> reconnects automatically on connection drop, which is critical on mobile. The browser re-issues the request with a <code>Last-Event-ID</code> header so you can replay missed events.</li></ol>
+<ol><li><strong>HTTP semantics:</strong> SSE runs over plain HTTP/2. Load balancers, CDNs, and proxies that handle HTTP handle SSE without special configuration. WebSockets require explicit proxy support and upgraded connections.</li></ol>
+<ol><li><strong>Simple infrastructure:</strong> SSE is a long-lived HTTP response — your existing HTTP server handles it. WebSockets require either a dedicated WS server or a library like Socket.IO with room management.</li></ol>
+<p>SSE implementation for payment status:</p>
+<pre><code>// Client
+function subscribeToPaymentStatus(paymentIntentId, onUpdate) {
+  const url = `/api/payment-status/stream?pi=${paymentIntentId}`;
+  const source = new EventSource(url);
+
+  source.addEventListener(&#x27;payment.succeeded&#x27;, (event) =&gt; {
+    const data = JSON.parse(event.data);
+    onUpdate({ status: &#x27;succeeded&#x27;, orderId: data.orderId });
+    source.close(); // One-shot — close after resolution
+  });
+
+  source.addEventListener(&#x27;payment.failed&#x27;, (event) =&gt; {
+    const data = JSON.parse(event.data);
+    onUpdate({ status: &#x27;failed&#x27;, declineCode: data.decline_code });
+    source.close();
+  });
+
+  source.onerror = () =&gt; {
+    // EventSource reconnects automatically — onerror fires on temporary drops
+    // Only close if you want to give up entirely
+  };
+
+  // Return cleanup function for useEffect
+  return () =&gt; source.close();
+}</code></pre>
+<pre><code>// Server (Node/Express)
+app.get(&#x27;/api/payment-status/stream&#x27;, (req, res) =&gt; {
+  const { pi: paymentIntentId } = req.query;
+
+  res.writeHead(200, {
+    &#x27;Content-Type&#x27;: &#x27;text/event-stream&#x27;,
+    &#x27;Cache-Control&#x27;: &#x27;no-cache&#x27;,
+    &#x27;Connection&#x27;: &#x27;keep-alive&#x27;,
+    &#x27;X-Accel-Buffering&#x27;: &#x27;no&#x27;, // Disable nginx buffering
+  });
+
+  // Register this connection in your pub/sub store
+  const cleanup = pubSub.subscribe(`payment:${paymentIntentId}`, (event) =&gt; {
+    res.write(`event: ${event.type}\n`);
+    res.write(`data: ${JSON.stringify(event.data)}\n\n`);
+    res.end();
+  });
+
+  req.on(&#x27;close&#x27;, cleanup);
+});</code></pre>
+<p><strong>When to use polling instead:</strong> As a fallback when SSE is unavailable (HTTP/1.0 intermediaries, some corporate proxies that buffer chunked responses). Implement SSE as primary; detect connection failure and fall back to polling automatically.</p>
+<p><strong>When to use WebSockets:</strong> Multi-directional flows — a POS dashboard where the client also sends commands (void payment, split bill), or collaborative cart editing. Not appropriate for a simple payment confirmation screen.</p>
+<p><strong>Tradeoffs:</strong> SSE has a browser limit of 6 concurrent connections per origin (HTTP/1.1) — not an issue for a payment confirmation page with one connection, but a concern for dashboards with many concurrent streams. HTTP/2 multiplexing removes this limit. SSE also doesn&#x27;t work in Internet Explorer — acceptable for most modern payment contexts.</p>
+<hr>
+</article>
+<article class="qa" id="q3-resilient-polling-strategy-with-exponential-backoff">
+<h3 class="question">Q3. Resilient polling strategy with exponential backoff</h3>
+<p><strong>Problem framing:</strong> Simple interval-based polling (<code>setInterval(fetch, 3000)</code>) has three failure modes: it hammers the server uniformly under load (no backoff), it doesn&#x27;t handle the server being temporarily unavailable, and it runs indefinitely if the user leaves the page. A production-grade polling loop needs exponential backoff with jitter, a maximum attempt cap with graceful UX degradation, and cleanup on component unmount via <code>AbortController</code>.</p>
+<p><strong>Approach:</strong></p>
+<p>Complete polling implementation:</p>
+<pre><code>async function pollPaymentStatus(paymentIntentId, { onResolved, onTimeout, onError }) {
+  const MAX_ATTEMPTS = 12;        // ~2 minutes total with exponential backoff
+  const BASE_DELAY_MS = 1000;     // Start at 1s
+  const CAP_DELAY_MS = 30_000;    // Cap at 30s
+  const controller = new AbortController();
+
+  // Expose abort for cleanup
+  pollPaymentStatus.abort = () =&gt; controller.abort();
+
+  for (let attempt = 0; attempt &lt; MAX_ATTEMPTS; attempt++) {
+    // Delay before each poll (0ms on first attempt)
+    if (attempt &gt; 0) {
+      const exponentialDelay = BASE_DELAY_MS * Math.pow(2, attempt - 1);
+      const cappedDelay = Math.min(exponentialDelay, CAP_DELAY_MS);
+      // Add jitter: ±20% randomness to prevent thundering herd
+      const jitter = cappedDelay * 0.2 * (Math.random() - 0.5);
+      await sleep(cappedDelay + jitter, controller.signal);
+    }
+
+    if (controller.signal.aborted) return;
+
+    try {
+      const response = await fetch(`/api/payment/status/${paymentIntentId}`, {
+        signal: controller.signal,
+      });
+
+      if (!response.ok) {
+        // 5xx: server error — retry
+        if (response.status &gt;= 500) continue;
+        // 4xx: client error (404 = PI not found) — stop
+        onError({ type: &#x27;client_error&#x27;, status: response.status });
+        return;
+      }
+
+      const { status, orderId, declineCode } = await response.json();
+
+      if (status === &#x27;succeeded&#x27;) {
+        onResolved({ status, orderId });
+        return;
+      }
+
+      if (status === &#x27;failed&#x27; || status === &#x27;canceled&#x27;) {
+        onResolved({ status, declineCode });
+        return;
+      }
+
+      // status === &#x27;processing&#x27; — continue polling
+      // Update UI with attempt progress for transparency
+      onError?.({ type: &#x27;still_processing&#x27;, attempt, maxAttempts: MAX_ATTEMPTS });
+
+    } catch (err) {
+      if (err.name === &#x27;AbortError&#x27;) return; // Intentional cancellation
+
+      // Network error — retry (don&#x27;t stop)
+      console.warn(`Poll attempt ${attempt + 1} failed:`, err.message);
+    }
+  }
+
+  // Exhausted all attempts
+  onTimeout({ attempts: MAX_ATTEMPTS });
+}
+
+function sleep(ms, signal) {
+  return new Promise((resolve, reject) =&gt; {
+    const timer = setTimeout(resolve, ms);
+    signal?.addEventListener(&#x27;abort&#x27;, () =&gt; {
+      clearTimeout(timer);
+      reject(new DOMException(&#x27;Aborted&#x27;, &#x27;AbortError&#x27;));
+    });
+  });
+}</code></pre>
+<p><strong>Backoff schedule at each attempt:</strong></p>
+<table>
+<thead><tr>
+<th>Attempt</th>
+<th>Base delay</th>
+<th>With cap</th>
+<th>With ±20% jitter range</th>
+</tr></thead><tbody>
+<tr>
+<td>1</td>
+<td>0s</td>
+<td>0s</td>
+<td>0s</td>
+</tr>
+<tr>
+<td>2</td>
+<td>1s</td>
+<td>1s</td>
+<td>0.8s – 1.2s</td>
+</tr>
+<tr>
+<td>3</td>
+<td>2s</td>
+<td>2s</td>
+<td>1.6s – 2.4s</td>
+</tr>
+<tr>
+<td>4</td>
+<td>4s</td>
+<td>4s</td>
+<td>3.2s – 4.8s</td>
+</tr>
+<tr>
+<td>5</td>
+<td>8s</td>
+<td>8s</td>
+<td>6.4s – 9.6s</td>
+</tr>
+<tr>
+<td>6</td>
+<td>16s</td>
+<td>16s</td>
+<td>12.8s – 19.2s</td>
+</tr>
+<tr>
+<td>7+</td>
+<td>32s →</td>
+<td>30s (cap)</td>
+<td>24s – 36s</td>
+</tr>
+</tbody></table>
+<p>12 attempts ≈ 0 + 1 + 2 + 4 + 8 + 16 + 30 + 30 + 30 + 30 + 30 + 30 = ~211 seconds ≈ 3.5 minutes.</p>
+<p><strong>UX at each stage:</strong></p>
+<pre><code>Attempts 1–3 (0–3s):    &quot;Confirming your payment...&quot; + spinner
+Attempts 4–7 (3–30s):   &quot;Still confirming... this is taking a moment.&quot;
+Attempts 8–11 (30–90s): &quot;Almost there — your bank is still responding.&quot;
+                         + &quot;Having trouble? Check your email shortly.&quot;
+Attempt 12 / timeout:   &quot;We&#x27;re still waiting on confirmation.&quot;
+                         + &quot;You&#x27;ll receive an email when your payment is complete.&quot;
+                         + [Check Order Status] button</code></pre>
+<p><strong>React integration with cleanup:</strong></p>
+<pre><code>useEffect(() =&gt; {
+  pollPaymentStatus(paymentIntentId, {
+    onResolved: (result) =&gt; setPaymentResult(result),
+    onTimeout: () =&gt; setStatus(&#x27;email_pending&#x27;),
+    onError: ({ attempt }) =&gt; setProgress(attempt),
+  });
+
+  return () =&gt; pollPaymentStatus.abort(); // Cleanup on unmount
+}, [paymentIntentId]);</code></pre>
+<p><strong>Tradeoffs:</strong> The jitter is critical — without it, every user whose payment entered <code>processing</code> at the same time (a common pattern after a marketing email blast) polls at synchronized intervals, creating load spikes. The <code>AbortController</code> cleanup is not optional: without it, the polling loop fires into unmounted components, causing React&#x27;s &quot;setState on unmounted component&quot; warnings and wasted server requests. The 12-attempt / ~3.5-minute cap is generous; most resolutions happen within 30 seconds.</p>
+<hr>
+</article>
+<article class="qa" id="q4-the-risk-of-trusting-confirmcardpayment-return-value-alone">
+<h3 class="question">Q4. The risk of trusting <code>confirmCardPayment</code> return value alone</h3>
+<p><strong>Problem framing:</strong> A backend that fulfills orders based solely on what the frontend claims — rather than verifying via webhook or a server-side Stripe API call — is vulnerable to a category of fraud where the frontend&#x27;s report of success is fabricated or manipulated. This is not theoretical: client-side JavaScript is fully inspectable and modifiable.</p>
+<p><strong>Approach — the specific attack scenario:</strong></p>
+<p><strong>Client-side fake success attack:</strong></p>
+<pre><code>1. Attacker opens your checkout page
+2. They open DevTools → Network tab
+3. They add a Payment Method using a card they control (valid but with $0 balance)
+4. stripe.confirmCardPayment() returns { error: { code: &#x27;card_declined&#x27; } }
+5. Attacker sets a breakpoint in your payment confirmation handler BEFORE the
+   success check, or uses a Proxy (mitmproxy/Charles) to intercept the response
+6. They modify the response to appear as:
+   { paymentIntent: { status: &#x27;succeeded&#x27;, id: &#x27;pi_real_id_here&#x27; } }
+7. Your frontend reads paymentIntent.status === &#x27;succeeded&#x27; and:
+   - Calls POST /api/order/fulfill with the (real) paymentIntentId
+   - Your backend trusts the client&#x27;s claim, marks order as paid
+   - Fulfills the order (ships physical goods or grants digital access)
+8. Your Stripe dashboard shows the PaymentIntent as declined. No charge occurred.
+   Revenue loss = full order value.</code></pre>
+<p>This attack works because:</p>
+<ul><li>The PaymentIntent ID is real (it exists on Stripe, but in <code>requires_payment_method</code> status)</li><li>Your backend receives a real PI ID but never checks its actual status with Stripe</li><li>The fraud signal only appears in Stripe&#x27;s dashboard, not in your order system</li></ul>
+<p><strong>The correct server-side verification pattern:</strong></p>
+<pre><code>// ❌ VULNERABLE: Trusting client report
+app.post(&#x27;/api/order/fulfill&#x27;, async (req, res) =&gt; {
+  const { paymentIntentId } = req.body;
+  // Just trust whatever the client says
+  await fulfillOrder(req.body.orderId);
+  res.json({ success: true });
+});
+
+// ✅ CORRECT: Verify with Stripe directly or via webhook
+app.post(&#x27;/api/order/fulfill&#x27;, async (req, res) =&gt; {
+  const { paymentIntentId, orderId } = req.body;
+
+  // Option A: Verify directly (for cases where webhook hasn&#x27;t arrived yet)
+  const pi = await stripe.paymentIntents.retrieve(paymentIntentId);
+  if (pi.status !== &#x27;succeeded&#x27;) {
+    return res.status(402).json({ error: &#x27;Payment not confirmed&#x27;, status: pi.status });
+  }
+
+  // Option B (preferred): Check your own DB — only populated by verified webhook
+  const payment = await db.payments.findOne({ stripePaymentIntentId: paymentIntentId });
+  if (!payment || payment.status !== &#x27;succeeded&#x27;) {
+    return res.status(402).json({ error: &#x27;Payment not confirmed&#x27; });
+  }
+
+  await fulfillOrder(orderId);
+  res.json({ success: true });
+});</code></pre>
+<p><strong>The webhook-as-fulfillment-trigger pattern is more secure than direct API verify:</strong></p>
+<pre><code>// Webhook handler — the only path to order fulfillment
+app.post(&#x27;/webhooks/stripe&#x27;, async (req, res) =&gt; {
+  const sig = req.headers[&#x27;stripe-signature&#x27;];
+  let event;
+
+  try {
+    event = stripe.webhooks.constructEvent(req.body, sig, process.env.STRIPE_WEBHOOK_SECRET);
+  } catch (err) {
+    return res.status(400).send(`Webhook signature verification failed: ${err.message}`);
+  }
+
+  if (event.type === &#x27;payment_intent.succeeded&#x27;) {
+    const pi = event.data.object;
+    // This path is cryptographically signed — cannot be faked
+    await db.payments.updateStatus(pi.id, &#x27;succeeded&#x27;);
+    await fulfillOrder(pi.metadata.orderId); // orderId stored in PI metadata at creation
+  }
+
+  res.json({ received: true });
+});</code></pre>
+<p><strong>Second attack scenario — race condition exploit:</strong></p>
+<p>Even with server-side checking, a race condition attack is possible if you check Stripe immediately and the attacker&#x27;s PI is in <code>processing</code>:</p>
+<ol><li>Attacker initiates a real charge that immediately enters <code>processing</code></li><li>Frontend immediately calls <code>/api/order/fulfill</code></li><li>Your server calls <code>stripe.paymentIntents.retrieve()</code> — sees <code>processing</code></li><li>Your server (incorrectly) fulfills the order on <code>processing</code> rather than waiting for <code>succeeded</code></li><li>The charge eventually fails; you&#x27;ve already shipped</li></ol>
+<p><strong>Mitigation:</strong> Never fulfill on <code>processing</code>. Only fulfill on <code>payment_intent.succeeded</code> webhook. Treat <code>processing</code> as &quot;pending&quot; from your fulfillment system&#x27;s perspective.</p>
+<p><strong>Tradeoffs:</strong> Verifying directly with Stripe on every <code>/fulfill</code> call adds ~200ms latency and counts against your Stripe API rate limits. The webhook-driven fulfillment pattern is more scalable: webhooks are async and don&#x27;t add latency to the user&#x27;s checkout response. The tradeoff is the brief window between the user seeing success (client-side) and the webhook arriving to actually fulfill — which is why the &quot;verifying&quot; intermediate state is important: it gives the webhook time to arrive before showing the user a success screen.</p>
+<hr>
+</article>
+<article class="qa" id="q5-processing-state-ux-for-async-payment-methods">
+<h3 class="question">Q5. &quot;Processing&quot; state UX for async payment methods</h3>
+<p><strong>Problem framing:</strong> Bank transfers, SEPA Direct Debit, ACH, Bacs, and certain card networks (some deferred debit programs) return a <code>processing</code> status from <code>confirmCardPayment</code> that can persist for hours to days before resolving. Keeping a user on a spinner for 3 business days is not an option. The UX must gracefully release the user while maintaining the ability to resurface the outcome when it eventually arrives.</p>
+<p><strong>Approach:</strong></p>
+<p>The <code>processing</code> state requires a different UX contract than card payments: instead of &quot;wait for confirmation,&quot; the contract is &quot;we&#x27;ve received your payment, we&#x27;ll tell you when it settles.&quot;</p>
+<p><strong>Immediate screen (0–30 seconds):</strong></p>
+<p>Show a &quot;Payment received&quot; screen (not &quot;Payment confirmed&quot; — semantically different):</p>
+<pre><code>╔══════════════════════════════════════╗
+║  ⏳ Payment Received                  ║
+║                                      ║
+║  Your payment is being processed.    ║
+║  Bank transfers typically take       ║
+║  1–3 business days to confirm.       ║
+║                                      ║
+║  Order #12345 has been created.      ║
+║  We&#x27;ll email you at user@email.com   ║
+║  when payment is confirmed.          ║
+║                                      ║
+║  [View Order Details]  [Continue Shopping]  ║
+╚══════════════════════════════════════╝</code></pre>
+<p>Key UX decisions:</p>
+<ol><li><strong>Create the order immediately</strong> in <code>payment_pending</code> state — don&#x27;t wait for settlement. The user gets an order number they can reference with support.</li><li><strong>Set clear expectations</strong> about timeline based on payment method type.</li><li><strong>Give them an exit</strong> — &quot;Continue Shopping&quot; — so they don&#x27;t feel trapped.</li><li><strong>Commit to an email notification.</strong> This is the primary async notification channel.</li></ol>
+<p><strong>Timer-based state progression:</strong></p>
+<pre><code>function ProcessingPaymentScreen({ paymentIntentId, orderId, paymentMethod }) {
+  const [phase, setPhase] = useState(&#x27;initial&#x27;); // initial | polling | release
+
+  const timeouts = {
+    &#x27;card&#x27;: 60,        // 60s before releasing user
+    &#x27;sepa_debit&#x27;: 0,   // Release immediately — takes days
+    &#x27;ach&#x27;: 0,          // Release immediately — takes 1-3 days
+    &#x27;bank_transfer&#x27;: 0,
+  };
+
+  const holdDurationMs = (timeouts[paymentMethod] ?? 30) * 1000;
+
+  useEffect(() =&gt; {
+    if (holdDurationMs === 0) {
+      setPhase(&#x27;release&#x27;);
+      return;
+    }
+
+    // Brief polling window for card-based processing
+    const timer = setTimeout(() =&gt; setPhase(&#x27;release&#x27;), holdDurationMs);
+    return () =&gt; clearTimeout(timer);
+  }, [holdDurationMs]);
+
+  // ... render based on phase
+}</code></pre>
+<p><strong>What happens when the user closes the browser:</strong></p>
+<div class="mermaid-wrap"><pre class="mermaid">flowchart TD
+    A[User closes browser during 'processing'] --> B[Order exists in DB with status: payment_pending]
+    B --> C{Stripe webhook arrives later}
+    C -->|payment_intent.succeeded| D[Update order to payment_confirmed]
+    C -->|payment_intent.payment_failed| E[Update order to payment_failed]
+    D --> F[Send success email to user]
+    E --> G[Send failure email with retry link]
+    F --> H[Next time user visits site]
+    G --> H
+    H --> I[Check for pending orders in session/DB]
+    I --> J[Show banner: 'Your payment for Order #12345 was confirmed!']</pre></div>
+<p><strong>Email notification contract:</strong></p>
+<ul><li>On entering <code>processing</code>: send &quot;Payment received&quot; email with order number and timeline</li><li>On <code>payment_intent.succeeded</code> webhook: send &quot;Payment confirmed&quot; email with receipt</li><li>On <code>payment_intent.payment_failed</code>: send &quot;Payment failed&quot; email with a link to retry (<code>/orders/:id/retry-payment</code>)</li></ul>
+<p><strong>Tradeoffs:</strong> Creating the order immediately in <code>payment_pending</code> state means your inventory system must handle orders that may never convert (payment fails). Soft-reserve inventory during <code>payment_pending</code> with a TTL (7 days for bank transfers) and release it back if payment ultimately fails. Alternatively, use a two-stage model: &quot;payment pending&quot; creates a reservation but not an order, and the full order is created only on <code>succeeded</code>. The first approach is simpler and gives users a better experience (immediate order number); the second is safer for inventory-constrained businesses.</p>
+<hr>
+</article>
+<article class="qa" id="q6-re-surfacing-payment-outcome-after-user-navigates-away">
+<h3 class="question">Q6. Re-surfacing payment outcome after user navigates away</h3>
+<p><strong>Problem framing:</strong> The most common real-world scenario: user submits payment, browser shows &quot;processing,&quot; user opens a new tab to check email, then never returns to the checkout tab. The webhook arrives at your server 5 minutes later. How does the user learn the outcome?</p>
+<p><strong>Approach:</strong></p>
+<p>This requires a persistence layer on the server that outlives the browser session, and a check-on-visit mechanism that surfaces the result next time the user engages with your site.</p>
+<p><strong>Step 1: Persist the pending payment state server-side at checkout initiation</strong></p>
+<pre><code>// When creating PaymentIntent — store the pending state immediately
+async function createPaymentIntent(userId, cartId, amount) {
+  const pi = await stripe.paymentIntents.create({
+    amount,
+    currency: &#x27;usd&#x27;,
+    metadata: { userId, cartId, orderId: order.id },
+  });
+
+  // Store in DB immediately — before user confirms
+  await db.pendingPayments.upsert({
+    userId,
+    paymentIntentId: pi.id,
+    orderId: order.id,
+    status: &#x27;created&#x27;,
+    createdAt: new Date(),
+  });
+
+  return pi;
+}</code></pre>
+<p><strong>Step 2: Webhook handler updates the persistent record</strong></p>
+<pre><code>// payment_intent.succeeded webhook
+await db.pendingPayments.update(
+  { paymentIntentId: pi.id },
+  {
+    status: &#x27;succeeded&#x27;,
+    resolvedAt: new Date(),
+    notified: false, // Flag: user hasn&#x27;t seen this yet
+  }
+);
+
+// payment_intent.payment_failed webhook
+await db.pendingPayments.update(
+  { paymentIntentId: pi.id },
+  {
+    status: &#x27;failed&#x27;,
+    failureCode: event.data.object.last_payment_error?.code,
+    resolvedAt: new Date(),
+    notified: false,
+  }
+);</code></pre>
+<p><strong>Step 3: Check for unnotified outcomes on next page load / login</strong></p>
+<pre><code>// Middleware or layout component — runs on every page load for logged-in users
+async function checkPendingPaymentNotifications(userId) {
+  const pending = await db.pendingPayments.findFirst({
+    where: {
+      userId,
+      status: { in: [&#x27;succeeded&#x27;, &#x27;failed&#x27;] },
+      notified: false,
+    },
+    orderBy: { resolvedAt: &#x27;desc&#x27; },
+  });
+
+  return pending;
+}</code></pre>
+<p><strong>Step 4: Surface as a banner or modal on next visit</strong></p>
+<pre><code>// In your app&#x27;s layout/root component
+const pendingNotification = await checkPendingPaymentNotifications(userId);
+
+if (pendingNotification?.status === &#x27;succeeded&#x27;) {
+  showBanner({
+    type: &#x27;success&#x27;,
+    message: `Your payment for Order #${pendingNotification.orderId} was confirmed!`,
+    action: { label: &#x27;View Order&#x27;, href: `/orders/${pendingNotification.orderId}` },
+    onDismiss: () =&gt; markNotified(pendingNotification.id),
+  });
+}
+
+if (pendingNotification?.status === &#x27;failed&#x27;) {
+  showBanner({
+    type: &#x27;error&#x27;,
+    message: `Your payment for Order #${pendingNotification.orderId} failed.`,
+    action: { label: &#x27;Retry Payment&#x27;, href: `/orders/${pendingNotification.orderId}/retry` },
+    onDismiss: () =&gt; markNotified(pendingNotification.id),
+  });
+}</code></pre>
+<p><strong>Guest users (no login):</strong> Store the PaymentIntent ID in a long-lived cookie or <code>localStorage</code> at checkout initiation:</p>
+<pre><code>localStorage.setItem(&#x27;pending_payment&#x27;, JSON.stringify({
+  paymentIntentId: pi.id,
+  orderId: order.id,
+  expiresAt: Date.now() + (7 * 24 * 60 * 60 * 1000), // 7 days
+}));</code></pre>
+<p>On next visit, check <code>localStorage</code>, call <code>/api/payment/status/:piId</code>, and show the appropriate banner. Clean up after display.</p>
+<p><strong>Tradeoffs:</strong> The server-side persistence approach requires a <code>pendingPayments</code> table and a per-user query on every page load — low cost but non-zero. Cache the &quot;has pending notifications&quot; check in a Redis boolean keyed to userId, invalidated by the webhook handler. The localStorage approach for guests works but has edge cases: different device, cleared storage, or 7-day TTL expiry. Email is the most reliable fallback for guests — always send a confirmation or failure email regardless of frontend notification strategy.</p>
+<hr>
+</article>
+<article class="qa" id="q7-reconciling-a-failed-ui-with-a-later-arriving-payment-intentsucceeded-webhook">
+<h3 class="question">Q7. Reconciling a &quot;failed&quot; UI with a later-arriving <code>payment_intent.succeeded</code> webhook</h3>
+<p><strong>Problem framing:</strong> A common failure mode: the user&#x27;s <code>confirmCardPayment</code> call times out at the network layer (the HTTP request hangs for &gt;30 seconds and the browser gives up), the frontend shows an error, and the user sees a &quot;Payment failed&quot; screen. Meanwhile, Stripe did receive the request and the payment succeeds. The webhook arrives at your server, your server marks it succeeded, but the user is currently staring at an error message. This is a costly false negative — the user may try to pay again, creating a duplicate charge attempt, or abandon entirely.</p>
+<p><strong>Approach:</strong></p>
+<div class="mermaid-wrap"><pre class="mermaid">sequenceDiagram
+    participant Browser
+    participant YourAPI as Your Backend
+    participant Stripe
+
+    Browser->>Stripe: stripe.confirmCardPayment() [TIMES OUT]
+    Note over Browser: Shows "Payment failed" error
+    Stripe->>YourAPI: payment_intent.succeeded webhook
+    YourAPI->>YourAPI: Updates DB: pi.status = succeeded
+    YourAPI->>YourAPI: Publishes to pub/sub: payment:pi_xxx:succeeded
+    Note over Browser: If SSE connection still open:
+    YourAPI-->>Browser: SSE event: payment.succeeded
+    Browser->>Browser: Overrides error state, shows success</pre></div>
+<p><strong>The key architectural requirement:</strong> Your SSE/WebSocket connection must remain open even after the frontend shows an error — at least for a grace period.</p>
+<p><strong>Implementation:</strong></p>
+<pre><code>function PaymentConfirmationPage({ paymentIntentId }) {
+  const [uiStatus, setUiStatus] = useState(&#x27;confirming&#x27;);
+  const [webhookStatus, setWebhookStatus] = useState(null);
+
+  // The SSE subscription runs independently of the confirmCardPayment outcome
+  useEffect(() =&gt; {
+    const source = new EventSource(`/api/payment-status/stream?pi=${paymentIntentId}`);
+
+    source.addEventListener(&#x27;payment.succeeded&#x27;, () =&gt; {
+      // Override whatever the UI currently shows
+      setWebhookStatus(&#x27;succeeded&#x27;);
+    });
+
+    source.addEventListener(&#x27;payment.failed&#x27;, (event) =&gt; {
+      setWebhookStatus(&#x27;failed&#x27;);
+    });
+
+    // Keep SSE open for 5 minutes regardless of confirmCardPayment outcome
+    const timeout = setTimeout(() =&gt; source.close(), 5 * 60 * 1000);
+    return () =&gt; { source.close(); clearTimeout(timeout); };
+  }, [paymentIntentId]);
+
+  // confirmCardPayment result (may time out or fail transiently)
+  useEffect(() =&gt; {
+    stripe.confirmCardPayment(clientSecret, { payment_method: { card: cardElement } })
+      .then(({ paymentIntent, error }) =&gt; {
+        if (error?.type === &#x27;api_connection_error&#x27; || error?.type === &#x27;api_error&#x27;) {
+          // Transient — do NOT show permanent failure
+          // SSE will correct the state when webhook arrives
+          setUiStatus(&#x27;network_error_waiting&#x27;);
+        } else if (error) {
+          setUiStatus(&#x27;failed&#x27;);
+        } else if (paymentIntent.status === &#x27;succeeded&#x27;) {
+          setUiStatus(&#x27;awaiting_server_confirm&#x27;);
+        }
+      });
+  }, []);
+
+  // Webhook status overrides confirmCardPayment status
+  const displayStatus = webhookStatus ?? uiStatus;
+
+  // Render based on displayStatus
+}</code></pre>
+<p><strong>When the tab is closed (no SSE connection):</strong> The webhook arrives, server processes it, stores <code>status: succeeded</code> in DB. Next time the user visits (via the pending notification banner from Q6), they see the correct success state. Additionally, your fulfillment system processes the order — so even if the user never comes back, the order is fulfilled.</p>
+<p><strong>Showing the correction to the user:</strong> If the SSE delivers <code>payment.succeeded</code> while the screen shows a failure message:</p>
+<pre><code>if (webhookStatus === &#x27;succeeded&#x27; &amp;&amp; uiStatus === &#x27;failed&#x27;) {
+  // Don&#x27;t silently swap to success — this is jarring
+  // Show an explanatory transition
+  showModal({
+    title: &quot;Good news — your payment went through!&quot;,
+    body: &quot;We had a network hiccup earlier, but your payment was successfully processed.&quot;,
+    action: { label: &quot;View Order&quot;, href: `/orders/${orderId}` }
+  });
+}</code></pre>
+<p><strong>Tradeoffs:</strong> The 5-minute SSE grace period uses server resources (open connection) even for error states. This is a reasonable tradeoff: the cost per connection is very low (one file descriptor, minimal memory) and the benefit (catching the timeout-then-success scenario) is high. Alternatively, on network error, immediately start polling your server-side status endpoint instead of keeping SSE open — polling has higher latency but doesn&#x27;t require a persistent connection.</p>
+<hr>
+</article>
+<h2 class="section" id="deep-questions">Deep Questions</h2>
+<article class="qa" id="q8-real-time-notification-system-across-all-frontend-contexts">
+<h3 class="question">Q8. Real-time notification system across all frontend contexts</h3>
+<p><strong>Problem framing:</strong> A payment notification system must work correctly across three fundamentally different contexts that have radically different capabilities: (a) an active tab with a live SSE connection that can receive push events; (b) a tab that was closed and re-opened within a short window; and (c) a mobile app that has backgrounded — JavaScript is suspended, but the user&#x27;s device can receive push notifications. Each context requires a different delivery mechanism, but all three must show consistent data with no duplicates.</p>
+<p><strong>Approach:</strong></p>
+<p>Full architecture from Stripe webhook to each frontend context:</p>
+<div class="mermaid-wrap"><pre class="mermaid">flowchart TD
+    W[Stripe Webhook] --> V[Signature Verification]
+    V --> D[Write to DB: payments table]
+    D --> P[Publish to Pub/Sub: payment:pi_xxx]
+    P --> S1[SSE Hub: active connections]
+    P --> S2[Push Notification Service: FCM/APNs]
+    S1 --> C1[Active checkout tab]
+    D --> C2[DB poll on tab reopen]
+    S2 --> C3[Mobile background notification]</pre></div>
+<p><strong>Case A: Active checkout tab with SSE</strong></p>
+<p>The SSE connection is established when the payment confirmation page loads, keyed to the <code>paymentIntentId</code>. The connection is registered in an in-memory map (or Redis if horizontally scaled):</p>
+<pre><code>// Server: in-memory connection registry (use Redis for multi-instance)
+const sseConnections = new Map(); // paymentIntentId → Set&lt;Response&gt;
+
+// Register on SSE connect
+app.get(&#x27;/api/payment-status/stream&#x27;, (req, res) =&gt; {
+  const { pi } = req.query;
+
+  // SSE headers
+  res.writeHead(200, { &#x27;Content-Type&#x27;: &#x27;text/event-stream&#x27;, &#x27;Cache-Control&#x27;: &#x27;no-cache&#x27; });
+
+  if (!sseConnections.has(pi)) sseConnections.set(pi, new Set());
+  sseConnections.get(pi).add(res);
+
+  req.on(&#x27;close&#x27;, () =&gt; {
+    sseConnections.get(pi)?.delete(res);
+  });
+});
+
+// Called by webhook handler after writing to DB
+function pushToActiveTabs(paymentIntentId, event) {
+  const connections = sseConnections.get(paymentIntentId);
+  if (!connections?.size) return;
+
+  const payload = `event: ${event.type}\ndata: ${JSON.stringify(event.data)}\nid: ${event.id}\n\n`;
+  for (const res of connections) {
+    res.write(payload);
+    if (event.type.endsWith(&#x27;.succeeded&#x27;) || event.type.endsWith(&#x27;.failed&#x27;)) {
+      res.end(); // Close connection after terminal event
+    }
+  }
+}</code></pre>
+<p><strong>Event deduplication:</strong> Each SSE event carries a unique <code>id</code> (the DB event ID). The browser&#x27;s <code>EventSource</code> API tracks the last received <code>id</code> and sends it as <code>Last-Event-ID</code> on reconnect. Your server resends any events with ID greater than <code>Last-Event-ID</code>:</p>
+<pre><code>app.get(&#x27;/api/payment-status/stream&#x27;, (req, res) =&gt; {
+  const lastEventId = req.headers[&#x27;last-event-id&#x27;];
+  const { pi } = req.query;
+
+  // Replay missed events on reconnect
+  if (lastEventId) {
+    const missed = await db.paymentEvents.findMany({
+      where: { paymentIntentId: pi, id: { gt: parseInt(lastEventId) } },
+    });
+    for (const event of missed) {
+      res.write(`id: ${event.id}\nevent: ${event.type}\ndata: ${JSON.stringify(event.data)}\n\n`);
+    }
+  }
+
+  // Continue with live subscription...
+});</code></pre>
+<p><strong>Case B: Tab closed, re-opened within 10 minutes</strong></p>
+<p>On mount of the confirmation page (or any page that should check payment status), check the server directly:</p>
+<pre><code>async function checkPaymentStatusOnMount(paymentIntentId) {
+  // Simple REST call — no SSE needed yet
+  const response = await fetch(`/api/payment/status/${paymentIntentId}`);
+  const { status, orderId, resolvedAt } = await response.json();
+
+  if (status === &#x27;succeeded&#x27; || status === &#x27;failed&#x27;) {
+    // Already resolved during the tab&#x27;s absence
+    return { status, orderId, source: &#x27;db_poll&#x27; };
+  }
+
+  // Still processing — establish SSE for live updates
+  return { status: &#x27;processing&#x27;, source: &#x27;db_poll&#x27; };
+}</code></pre>
+<p>The key: this REST call reads from <strong>your DB</strong> (populated by the webhook), not from Stripe. Sub-millisecond response, no Stripe API rate limit consumption.</p>
+<p><strong>Case C: Mobile app backgrounded</strong></p>
+<p>When JavaScript is suspended (iOS background, Android doze mode), SSE connections are severed and polling is impossible. Use push notifications:</p>
+<pre><code>// At payment initiation, register device token
+async function initPaymentWithPushNotification(paymentIntentId, deviceToken) {
+  await db.paymentPushRegistrations.upsert({
+    paymentIntentId,
+    deviceToken,
+    platform: getPlatform(), // &#x27;ios&#x27; | &#x27;android&#x27; | &#x27;web&#x27;
+  });
+}
+
+// Webhook handler sends push notification
+async function notifyMobileBackground(paymentIntentId, event) {
+  const registrations = await db.paymentPushRegistrations.findMany({
+    where: { paymentIntentId },
+  });
+
+  for (const reg of registrations) {
+    if (reg.platform === &#x27;ios&#x27;) {
+      await apns.send(reg.deviceToken, {
+        alert: event.type === &#x27;payment_intent.succeeded&#x27;
+          ? &#x27;Payment confirmed! Your order is being prepared.&#x27;
+          : &#x27;Payment issue — tap to retry.&#x27;,
+        badge: 1,
+        payload: { paymentIntentId, orderId: event.data.object.metadata.orderId },
+      });
+    } else if (reg.platform === &#x27;android&#x27;) {
+      await fcm.send(reg.deviceToken, {
+        notification: { title: &#x27;Payment Update&#x27;, body: &#x27;...&#x27; },
+        data: { paymentIntentId },
+      });
+    }
+  }
+}</code></pre>
+<p><strong>Handling reconnection and missed events — unified sequence:</strong></p>
+<div class="mermaid-wrap"><pre class="mermaid">sequenceDiagram
+    participant Browser
+    participant SSEServer as SSE Server
+    participant DB
+
+    Browser->>SSEServer: GET /stream?pi=pi_xxx (Last-Event-ID: 42)
+    SSEServer->>DB: SELECT * FROM events WHERE pi_id=xxx AND id > 42
+    DB-->>SSEServer: [event id=43: payment.succeeded]
+    SSEServer-->>Browser: id: 43\nevent: payment.succeeded\ndata: {...}
+    Note over Browser: Replays missed event, shows success</pre></div>
+<p><strong>Tradeoffs:</strong> The in-memory <code>sseConnections</code> map works on a single server instance but fails in a horizontally-scaled deployment (multiple API servers). Replace with Redis pub/sub: each server instance subscribes to the payment&#x27;s Redis channel; the webhook handler publishes there; all instances receive it and push to their own local SSE connections. This is the standard pattern for scaling SSE.</p>
+<hr>
+</article>
+<article class="qa" id="q9-webhook-frontend-pipeline-consistency-and-no-stale-states">
+<h3 class="question">Q9. Webhook → frontend pipeline: consistency and no stale states</h3>
+<p><strong>Problem framing:</strong> The pipeline from &quot;Stripe sends webhook&quot; to &quot;user sees status update&quot; has multiple steps, each of which can fail, produce a partial write, or arrive out of order. If you push to the frontend before writing to the DB, the UI shows <code>succeeded</code> but a database crash leaves the DB in <code>processing</code> — permanently inconsistent. If you push after the DB write but before order fulfillment, the user sees success but the order isn&#x27;t fulfilled. This section is about ensuring the DB state and the frontend state are always consistent.</p>
+<p><strong>Approach:</strong></p>
+<p>The full pipeline with consistency guarantees at each step:</p>
+<div class="mermaid-wrap"><pre class="mermaid">sequenceDiagram
+    participant Stripe
+    participant WebhookReceiver as Webhook Receiver
+    participant DB
+    participant PubSub
+    participant SSEServer as SSE Server
+    participant Browser
+
+    Stripe->>WebhookReceiver: POST /webhooks/stripe
+    WebhookReceiver->>WebhookReceiver: Verify Stripe-Signature
+    Note over WebhookReceiver: STOP if signature invalid → 400
+    WebhookReceiver->>DB: BEGIN TRANSACTION
+    WebhookReceiver->>DB: Upsert payment record (idempotency: event_id)
+    WebhookReceiver->>DB: Create order fulfillment record
+    WebhookReceiver->>DB: COMMIT TRANSACTION
+    Note over WebhookReceiver: Only push AFTER successful commit
+    WebhookReceiver->>PubSub: Publish payment:pi_xxx event
+    WebhookReceiver-->>Stripe: 200 OK (fast — before push reaches browser)
+    PubSub->>SSEServer: Event notification
+    SSEServer->>DB: SELECT current_status WHERE pi_id=xxx
+    Note over SSEServer: Read from DB, not from event payload
+    SSEServer-->>Browser: SSE event: payment.succeeded</pre></div>
+<p><strong>Step 1: Signature verification</strong></p>
+<pre><code>app.post(&#x27;/webhooks/stripe&#x27;, express.raw({ type: &#x27;application/json&#x27; }), async (req, res) =&gt; {
+  const sig = req.headers[&#x27;stripe-signature&#x27;];
+
+  let event;
+  try {
+    // constructEvent requires raw body — never parse with JSON middleware first
+    event = stripe.webhooks.constructEvent(req.body, sig, process.env.STRIPE_WEBHOOK_SECRET);
+  } catch (err) {
+    console.error(&#x27;Webhook signature failed:&#x27;, err.message);
+    return res.status(400).send(&#x27;Invalid signature&#x27;);
+  }
+
+  // Event is now cryptographically verified — cannot be forged
+  await handleVerifiedEvent(event);
+  res.json({ received: true }); // Must respond quickly — Stripe has a 30s timeout
+});</code></pre>
+<p><strong>Step 2: Idempotent DB write inside a transaction</strong></p>
+<pre><code>async function handleVerifiedEvent(event) {
+  await db.transaction(async (tx) =&gt; {
+    // Idempotency check — Stripe may deliver the same event multiple times
+    const existing = await tx.processedWebhookEvents.findUnique({
+      where: { stripeEventId: event.id },
+    });
+    if (existing) return; // Already processed — skip
+
+    // Write event record first (for idempotency)
+    await tx.processedWebhookEvents.create({
+      data: { stripeEventId: event.id, type: event.type, processedAt: new Date() },
+    });
+
+    // Update payment status
+    await tx.payments.update({
+      where: { stripePaymentIntentId: event.data.object.id },
+      data: {
+        status: event.type === &#x27;payment_intent.succeeded&#x27; ? &#x27;succeeded&#x27; : &#x27;failed&#x27;,
+        resolvedAt: new Date(),
+      },
+    });
+
+    // Trigger fulfillment (within same transaction for atomicity)
+    if (event.type === &#x27;payment_intent.succeeded&#x27;) {
+      await tx.orders.update({
+        where: { paymentIntentId: event.data.object.id },
+        data: { status: &#x27;confirmed&#x27;, fulfilledAt: new Date() },
+      });
+    }
+  });
+
+  // ONLY after successful commit — push to pub/sub
+  await pubSub.publish(`payment:${event.data.object.id}`, {
+    type: event.type,
+    paymentIntentId: event.data.object.id,
+  });
+}</code></pre>
+<p><strong>Step 3: SSE server reads from DB before pushing to browser</strong></p>
+<p>This is the critical consistency guarantee — the SSE server does NOT push the event payload directly to the browser. It reads fresh from the DB:</p>
+<pre><code>pubSub.subscribe(`payment:${paymentIntentId}`, async (pubSubEvent) =&gt; {
+  // Re-read from DB — not from the pub/sub payload
+  const payment = await db.payments.findUnique({
+    where: { stripePaymentIntentId: paymentIntentId },
+    select: { status: true, orderId: true, resolvedAt: true },
+  });
+
+  // Push what the DB actually says — never a stale intermediate state
+  const ssePayload = {
+    type: `payment.${payment.status}`,
+    data: { status: payment.status, orderId: payment.orderId },
+    id: payment.eventId, // DB-generated sequential ID for Last-Event-ID
+  };
+
+  pushToActiveTabs(paymentIntentId, ssePayload);
+});</code></pre>
+<p><strong>Why DB-read-before-push prevents stale state:</strong></p>
+<ul><li>Pub/sub messages can arrive out of order (Kafka/Redis can reorder messages under load)</li><li>If a <code>payment_intent.payment_failed</code> message arrives before <code>payment_intent.succeeded</code> (race in your webhook processing), pushing the pub/sub payload directly could show &quot;failed&quot; to the user even though the DB has <code>succeeded</code></li><li>Reading from DB always shows the current committed state — the most recent write wins by DB constraints</li></ul>
+<p><strong>Stripe returns 200 immediately vs. fulfillment time:</strong> Return <code>200 OK</code> to Stripe as soon as signature verification succeeds. Don&#x27;t wait for the transaction to commit. This prevents Stripe from retrying the webhook (which has a 30-second timeout). Process asynchronously:</p>
+<pre><code>app.post(&#x27;/webhooks/stripe&#x27;, express.raw({ type: &#x27;application/json&#x27; }), async (req, res) =&gt; {
+  // Verify synchronously
+  const event = stripe.webhooks.constructEvent(req.body, sig, webhookSecret);
+
+  // Respond immediately
+  res.json({ received: true });
+
+  // Process asynchronously — outside the request handler
+  setImmediate(() =&gt; handleVerifiedEvent(event));
+});</code></pre>
+<p>Better: push to a queue (SQS, BullMQ) and process with a worker. This decouples Stripe&#x27;s 30-second timeout from your processing time.</p>
+<p><strong>Tradeoffs:</strong> The DB-read-before-push adds one extra DB read per push event. This is almost always acceptable — a single indexed read is microseconds. The alternative (push the event payload directly) is faster but opens the consistency gap. The transaction-per-event approach serializes webhook processing for the same payment intent — if two events arrive simultaneously, the second transaction&#x27;s idempotency check serializes behind the first, preventing race conditions.</p>
+<hr>
+</article>
+<article class="qa" id="q10-pos-dashboard-concurrent-payments-normalized-store-render-optimization">
+<h3 class="question">Q10. POS dashboard: concurrent payments, normalized store, render optimization</h3>
+<p><strong>Problem framing:</strong> A restaurant POS processing 20 simultaneous orders has different requirements than a single-user checkout: state is shared across multiple payments, events arrive continuously and potentially out of order, the UI must update individual order cards without re-rendering unrelated ones, and the WebSocket must handle reconnection without losing events. The standard &quot;array of payments in React state&quot; approach breaks down because any status update causes a full list re-render.</p>
+<p><strong>Approach:</strong></p>
+<p><strong>WebSocket message schema:</strong></p>
+<p>Design for idempotency, ordering, and partial updates:</p>
+<pre><code>interface PaymentStatusEvent {
+  // Routing
+  eventId: string;          // Globally unique — for deduplication
+  orderId: string;          // Which order this applies to
+  paymentIntentId: string;
+
+  // Ordering (handle out-of-order delivery)
+  sequenceNumber: number;   // Monotonically increasing per orderId
+  timestamp: number;        // Unix ms — for display only, not ordering
+
+  // Payload
+  type:
+    | &#x27;payment.created&#x27;
+    | &#x27;payment.processing&#x27;
+    | &#x27;payment.succeeded&#x27;
+    | &#x27;payment.failed&#x27;
+    | &#x27;payment.refunded&#x27;;
+
+  // Partial update — only include changed fields
+  patch: {
+    status?: OrderStatus;
+    amount?: number;
+    paymentMethod?: string;
+    failureCode?: string;
+    receiptUrl?: string;
+  };
+}</code></pre>
+<p>The <code>patch</code> design (sending only changed fields) reduces message size and simplifies the reducer:</p>
+<pre><code>// Server sends partial updates, not full order objects
+ws.send(JSON.stringify({
+  eventId: &#x27;evt_xxx&#x27;,
+  orderId: &#x27;ord_123&#x27;,
+  sequenceNumber: 7,
+  type: &#x27;payment.succeeded&#x27;,
+  patch: { status: &#x27;paid&#x27;, receiptUrl: &#x27;https://...&#x27; },
+  // NOT the entire order with 30 fields
+}));</code></pre>
+<p><strong>Client-side normalized store:</strong></p>
+<p>Use a <code>Map&lt;orderId, Order&gt;</code> instead of an array. Map updates are O(1) and don&#x27;t require array scans:</p>
+<pre><code>// Zustand store with normalized Map
+interface POSStore {
+  orders: Map&lt;string, Order&gt;;
+  processedEventIds: Set&lt;string&gt;; // For deduplication
+  lastSequenceNumbers: Map&lt;string, number&gt;; // For out-of-order handling
+  applyEvent: (event: PaymentStatusEvent) =&gt; void;
+}
+
+const usePOSStore = create&lt;POSStore&gt;((set, get) =&gt; ({
+  orders: new Map(),
+  processedEventIds: new Set(),
+  lastSequenceNumbers: new Map(),
+
+  applyEvent: (event) =&gt; set((state) =&gt; {
+    // 1. Deduplication
+    if (state.processedEventIds.has(event.eventId)) {
+      return state; // Already applied — ignore
+    }
+
+    // 2. Out-of-order detection
+    const lastSeq = state.lastSequenceNumbers.get(event.orderId) ?? -1;
+    if (event.sequenceNumber &lt;= lastSeq) {
+      // Stale event — ignore (we have a newer state for this order)
+      return state;
+    }
+
+    // 3. Apply patch to existing order
+    const existingOrder = state.orders.get(event.orderId);
+    if (!existingOrder) return state; // Order not in our store yet
+
+    const updatedOrder = { ...existingOrder, ...event.patch };
+
+    // 4. Immutable update — new Map to trigger React re-render
+    const newOrders = new Map(state.orders);
+    newOrders.set(event.orderId, updatedOrder);
+
+    const newSeqNumbers = new Map(state.lastSequenceNumbers);
+    newSeqNumbers.set(event.orderId, event.sequenceNumber);
+
+    const newEventIds = new Set(state.processedEventIds);
+    newEventIds.add(event.eventId);
+    // Prune old event IDs to prevent unbounded growth
+    if (newEventIds.size &gt; 10_000) {
+      const [firstId] = newEventIds;
+      newEventIds.delete(firstId);
+    }
+
+    return {
+      orders: newOrders,
+      processedEventIds: newEventIds,
+      lastSequenceNumbers: newSeqNumbers,
+    };
+  }),
+}));</code></pre>
+<p><strong>Render optimization — React.memo + selector per order:</strong></p>
+<p>The critical insight: each order card should subscribe only to its own order&#x27;s state, not the entire <code>orders</code> Map. Use selectors:</p>
+<pre><code>// Each OrderCard subscribes to only its own order
+const OrderCard = React.memo(({ orderId }: { orderId: string }) =&gt; {
+  // Selector: extracts only this order from the store
+  const order = usePOSStore(
+    useCallback((state) =&gt; state.orders.get(orderId), [orderId]),
+    // Equality: only re-render if this specific order changed
+    (a, b) =&gt; a?.status === b?.status &amp;&amp; a?.amount === b?.amount
+  );
+
+  if (!order) return null;
+
+  return (
+    &lt;div className={`order-card order-card--${order.status}`}&gt;
+      &lt;span className=&quot;order-number&quot;&gt;#{order.number}&lt;/span&gt;
+      &lt;span className=&quot;order-amount&quot;&gt;${(order.amount / 100).toFixed(2)}&lt;/span&gt;
+      &lt;PaymentStatusBadge status={order.status} /&gt;
+    &lt;/div&gt;
+  );
+});</code></pre>
+<p><strong>Order list — virtualization for 20+ orders:</strong></p>
+<p>Even with memoized order cards, rendering 20+ cards simultaneously can cause jank if each card is complex. Use <code>react-window</code> or <code>@tanstack/virtual</code> for the order list:</p>
+<pre><code>import { FixedSizeList as List } from &#x27;react-window&#x27;;
+
+function OrderList() {
+  const orderIds = usePOSStore(
+    (state) =&gt; Array.from(state.orders.keys()),
+    // Shallow compare arrays — only re-render if the list of IDs changes
+    (a, b) =&gt; a.length === b.length &amp;&amp; a.every((id, i) =&gt; id === b[i])
+  );
+
+  return (
+    &lt;List
+      height={600}
+      itemCount={orderIds.length}
+      itemSize={120} // px per order card
+      width=&quot;100%&quot;
+    &gt;
+      {({ index, style }) =&gt; (
+        &lt;div style={style}&gt;
+          &lt;OrderCard key={orderIds[index]} orderId={orderIds[index]} /&gt;
+        &lt;/div&gt;
+      )}
+    &lt;/List&gt;
+  );
+}</code></pre>
+<p><strong>WebSocket reconnection with event replay:</strong></p>
+<pre><code>class POSWebSocket {
+  private ws: WebSocket | null = null;
+  private lastEventId: string | null = null;
+  private reconnectDelay = 1000;
+  private store: POSStore;
+
+  connect() {
+    const url = `/api/pos/ws?lastEventId=${this.lastEventId ?? &#x27;&#x27;}`;
+    this.ws = new WebSocket(url);
+
+    this.ws.onmessage = (e) =&gt; {
+      const event: PaymentStatusEvent = JSON.parse(e.data);
+      this.lastEventId = event.eventId;
+      this.store.applyEvent(event); // Deduplication handles replayed events
+    };
+
+    this.ws.onclose = () =&gt; {
+      // Exponential backoff with cap
+      setTimeout(() =&gt; {
+        this.reconnectDelay = Math.min(this.reconnectDelay * 2, 30_000);
+        this.connect();
+      }, this.reconnectDelay);
+    };
+
+    this.ws.onopen = () =&gt; {
+      this.reconnectDelay = 1000; // Reset on successful connect
+    };
+  }
+}</code></pre>
+<p><strong>Server replays events on reconnect:</strong></p>
+<pre><code>ws.on(&#x27;connection&#x27;, async (socket, req) =&gt; {
+  const { lastEventId } = req.query;
+
+  // Replay missed events since lastEventId
+  if (lastEventId) {
+    const missed = await db.posEvents.findMany({
+      where: { id: { gt: lastEventId } },
+      orderBy: { sequenceNumber: &#x27;asc&#x27; },
+    });
+    for (const event of missed) {
+      socket.send(JSON.stringify(event));
+    }
+  }
+
+  // Subscribe to new events
+  pubSub.subscribe(&#x27;pos:events&#x27;, (event) =&gt; {
+    socket.send(JSON.stringify(event));
+  });
+});</code></pre>
+<p><strong>Out-of-order handling — concrete example:</strong></p>
+<pre><code>Events arrive:  [seq:7, ord:123, succeeded] then [seq:5, ord:123, processing]
+                 ↓                                  ↓
+Store sees:      Apply seq:7 (lastSeq → 7)         Reject seq:5 (5 ≤ 7, stale)
+Result:          Order 123 shows &quot;succeeded&quot;        No change — correct!</code></pre>
+<p>Without sequence numbers, the <code>processing</code> event arriving late would incorrectly revert a <code>succeeded</code> order to <code>processing</code>.</p>
+<p><strong>Tradeoffs:</strong> The normalized <code>Map</code> over an array is essential for O(1) updates but requires mutable-style updates wrapped in immutable patterns (creating a new Map on every update). For 20 orders this is fine; for 10,000 orders, consider a more efficient immutable data structure (Immer, structural sharing). The <code>processedEventIds</code> Set grows unboundedly — prune it on a sliding window (keep last N event IDs, where N &gt; your maximum expected duplicate window). The sequence-number approach assumes events are ordered per <code>orderId</code> — if your Kafka/queue doesn&#x27;t partition by orderId, sequence numbers may not be reliable; use timestamps as a secondary sort key in that case, accepting that two events in the same millisecond are treated as concurrent and either ordering is acceptable.</p>
+</article>
+  </main>
+  <footer class="page-footer">
+    <a href="index.html">← All sections</a> ·
+    <a href="../payments-system-frontend-architecture.html">Architecture map</a>
+  </footer>
+  <script src="assets/interactive.js" defer></script>
+</body>
+</html>

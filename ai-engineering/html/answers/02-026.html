@@ -1,0 +1,147 @@
+<div class="answer-header reveal">
+  <div class="answer-meta">
+    <span class="meta-badge meta-category">02-rag-systems</span>
+    <span class="meta-badge meta-num">Q026</span>
+    <span class="meta-badge meta-status-review">review</span>
+  </div>
+  <h1 class="answer-title">RAG with multi-turn conversation context?</h1>
+</div>
+
+<div class="answer-section reveal">
+  <div class="accordion">
+    <div class="accordion-header">
+      <span class="accordion-title">⟁ Framing — Why this is asked</span>
+      <span class="accordion-chevron">▾</span>
+    </div>
+    <div class="accordion-body">
+      <div class="framing-grid">
+        <div><div class="framing-card">
+          <div class="framing-card-title">Why asked</div>
+          <p style="font-size:13.5px;line-height:1.7;color:var(--text-dim)">Multi-turn RAG is where most naive implementations fall apart in production. The interviewer is probing whether you understand that retrieval must be grounded in the <em>full conversational intent</em>, not just the latest user message — and whether you can design the right architectural layers (query rewriting, conversation summarization, session state) without blowing up latency or cost.</p>
+        </div></div>
+        <div><div class="framing-card">
+          <div class="framing-card-title">Trigger phrases</div>
+          <div class="trigger-list">
+              <div class="trigger-phrase">How would you handle follow-up questions in your RAG chatbot?</div>
+              <div class="trigger-phrase">User says &#x27;tell me more about that&#x27; — what does your system do?</div>
+              <div class="trigger-phrase">How do you maintain context across turns in a RAG pipeline?</div>
+              <div class="trigger-phrase">Design a conversational search/assistant that remembers prior exchanges.</div>
+          </div>
+        </div></div>
+      </div>
+      <div class="tests-block">
+        <span style="font-family:var(--mono);font-size:10px;letter-spacing:0.1em;text-transform:uppercase;color:var(--purple);margin-right:8px">Tests:</span>Ability to design stateful retrieval pipelines: query reformulation, conversation memory architectures, and cost/latency tradeoffs at session scale.
+
+---
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="section-label">Concept</div>
+  <div class="concept-block"><p>In a single-turn RAG system, each query is independent — you embed it, retrieve chunks, and generate an answer. In multi-turn conversations, subsequent queries are often elliptical ("What about the pricing?" or "Can you expand on that?") and cannot be correctly resolved without knowing what "that" refers to. The core problem is <strong>query resolution</strong>: you must transform the user's latest message into a self-contained retrieval query that captures the full conversational intent before hitting the vector store.</p></div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="section-label">Mechanism</div>
+  <div class="card"><p><strong>Three-layer architecture for multi-turn RAG:</strong></p>
+<ol class="mechanism-steps"><li><strong>Session state store (Redis / DynamoDB)</strong></li></ol>
+<ul class="styled-list"><li>Store the last N turn pairs (user message + assistant response) keyed by <code>session_id</code>.</li><li>Keep a rolling window of 5–10 turns; older turns feed the summarization layer.</li><li>TTL the session key (e.g. 30 min inactivity = session reset).</li></ul>
+<ol class="mechanism-steps"><li><strong>Query reformulation (condense + rewrite)</strong></li></ol>
+<ul class="styled-list"><li>Before retrieval, call a cheap LLM (GPT-4o-mini, ~50 tokens in + 30 out) with a <em>standalone-question</em> prompt:</li></ul>
+     <div class="code-block-wrap"><pre class="code-block"><code>     Given this conversation history:
+     {last 3 turns}
+     Rewrite the user&#x27;s latest message as a self-contained search query.
+     User: {current_message}
+     Standalone query:</code></pre><button class="copy-btn">copy</button></div>
+<ul class="styled-list"><li>This resolves coreferences ("it", "that policy", "the earlier figure") and ellipses ("what about for enterprise?").</li><li>LangChain: <code>ConversationalRetrievalChain</code> does this automatically; LlamaIndex: <code>CondenseQuestionChatEngine</code>.</li></ul>
+<ol class="mechanism-steps"><li><strong>Retrieval on reformulated query</strong></li></ol>
+<ul class="styled-list"><li>Run the condensed query through the normal hybrid retrieval pipeline (BM25 + dense HNSW → cross-encoder rerank).</li><li>Optionally append the last 1–2 assistant turns as "conversation context" chunks with lower weight so retrieved docs stay dominant.</li></ul>
+<ol class="mechanism-steps"><li><strong>Generation with conversation history</strong></li></ol>
+<ul class="styled-list"><li>Include recent turns in the system/user prompt (kept short — last 2–3 turns max) plus the retrieved chunks.</li><li>Context layout: <code>[system instruction] [recent history] [retrieved chunks] [current query]</code></li><li>This lets the model refer back to prior answers for coherence without re-retrieving them.</li></ul>
+<ol class="mechanism-steps"><li><strong>Summarization layer for long sessions</strong></li></ol>
+<ul class="styled-list"><li>After ~10 turns, summarize older history into a single paragraph using a cheap model and store it in the session store.</li><li>LangChain <code>ConversationSummaryBufferMemory</code> does this: keeps the last K turns verbatim + a rolling summary of older turns.</li><li>This keeps the prompt within context budget while preserving long-range coherence.</li></ul></div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="section-label">Example / Tradeoff</div>
+  <div class="card card-accent"><div class="rich-text"><p><strong>Production example — customer support chatbot:</strong></p>
+<ul class="styled-list"><li>Turn 1: "What's your refund policy?" → retrieved policy chunks → answered.</li><li>Turn 2: "What about for digital products?" → naive system embeds "what about for digital products?" → retrieves unrelated chunks.</li><li>With query reformulation: condensed query = "What is the refund policy for digital products?" → correct retrieval.</li></ul>
+<p><strong>Cost breakdown at 1M sessions/day (avg 5 turns):</strong></p>
+<div class="table-wrap"><table class="data-table"><tr><th>Component</th><th>Cost</th></tr><tr><td>Query reformulation (GPT-4o-mini, 80 tokens)</td><td>~$0.04/1K sessions = $40/day</td></tr><tr><td>Retrieval (unchanged from single-turn)</td><td>~$200/day</td></tr><tr><td>Generation (GPT-4o-mini, 600 tokens)</td><td>~$600/day</td></tr><tr><td>Session store (Redis, 1KB/session, 30-min TTL)</td><td>~$5/day</td></tr></table></div>
+<p>The reformulation step adds only ~2% cost overhead for a major retrieval quality improvement.</p>
+<p><strong>Key tradeoff: how many turns to include in reformulation context?</strong></p>
+<ul class="styled-list"><li>Too few (1 turn): misses longer coreference chains ("the policy you mentioned three messages ago").</li><li>Too many (full history): reformulation prompt grows → latency and cost creep; condensed query becomes over-specified.</li><li>Sweet spot: last 3–5 turns for reformulation; full summary for generation.</li></ul></div></div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="accordion">
+    <div class="accordion-header">
+      <span class="accordion-title">🎙 Verbal Script (3–5 min)</span>
+      <span class="accordion-chevron">▾</span>
+    </div>
+    <div class="accordion-body">
+      <div class="script-block"><div class="script-label">Opening (30s)</div><p>"Multi-turn RAG is one of the trickiest production problems because it looks simple until users start saying things like 'tell me more about that' — and your retrieval completely fails because 'that' means nothing to the vector store. I'd tackle it with three layers: query reformulation, session state management, and a summarization buffer for long sessions."</p></div>
+      <div class="script-block"><div class="script-label">Core explanation (2–3 min)</div><p>"The root problem is query resolution — user messages in a conversation are elliptical. So before I ever touch the vector store, I run a cheap query reformulation step using GPT-4o-mini with a 'condense to standalone question' prompt. I pass the last 3 turns and the current message, and the model rewrites it as a self-contained search query. In LangChain this is <code>ConversationalRetrievalChain</code>; in LlamaIndex it's <code>CondenseQuestionChatEngine</code>.</p>
+<p>"The session state — the last N turns — lives in Redis keyed by session ID with a TTL. I keep about 5–10 turns verbatim. Once the session gets longer, I run a summarization pass using <code>ConversationSummaryBufferMemory</code>: older turns collapse into a rolling paragraph summary, and recent turns stay verbatim. That keeps my generation prompt within context budget.</p>
+<p>"For generation, I structure the prompt as: system instruction → rolling summary (if any) → last 2–3 turns verbatim → retrieved chunks → current query. The retrieved chunks should dominate — I don't want the model drifting into conversation history for factual claims.</p>
+<p>"A concrete production example: in a support bot, a user asks 'What's your refund policy?' in turn 1, then 'What about for digital downloads?' in turn 2. Without reformulation, the embedding for 'what about for digital downloads?' retrieves nothing useful. With reformulation: 'What is the refund policy for digital product downloads?' → correct retrieval."</p></div>
+      <div class="script-block"><div class="script-label">Tradeoff / production angle (1 min)</div><p>"The main tradeoffs are: how many turns to feed the reformulation step — I've found 3–5 is the sweet spot, more than that and the condensed query gets over-specified. And when to summarize vs keep verbatim — I trigger summarization after 8–10 turns to avoid context window inflation. At scale (1M sessions/day, 5 turns avg), the reformulation step costs about $40/day on GPT-4o-mini — roughly 2% of total pipeline cost, well worth the retrieval quality improvement. One failure mode to watch: if the reformulation model hallucinates topic continuity that doesn't exist, you get retrieval for questions the user never actually asked — I validate by checking if the reformulated query is semantically similar to recent turns before firing."</p></div>
+      <div class="script-block"><div class="script-label">Wrap-up (30s)</div><p>"So the mental model is: treat each turn's retrieval query as a first-class citizen that must be self-contained. Query reformulation + session state + summarization buffer — those three layers give you robust multi-turn RAG without blowing up latency or cost. Happy to go deeper on any of these layers."</p></div>
+    </div>
+  </div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="section-label">Pitfalls</div>
+  <div class="pitfall-card">
+    <div class="pitfall-mistake"><strong>✗ Mistake</strong> Concatenating the full conversation history directly into the retrieval query</div>
+    <div class="pitfall-better"><strong>✓ Better</strong> Use a dedicated reformulation step (cheap LLM call) to produce a self-contained, focused query; full history makes the embedding too diffuse and retrieval degrades.</div>
+  </div>
+  <div class="pitfall-card">
+    <div class="pitfall-mistake"><strong>✗ Mistake</strong> Storing only the current message in session state, then passing the raw history verbatim to generation without a summarization layer</div>
+    <div class="pitfall-better"><strong>✓ Better</strong> Use a rolling summary for older turns (e.g. LangChain <code>ConversationSummaryBufferMemory</code>) so context budget doesn&#x27;t explode over long sessions; concretely, 20 turns × 300 tokens = 6K tokens just for history before you add any retrieved chunks.</div>
+  </div>
+  <div class="pitfall-card">
+    <div class="pitfall-mistake"><strong>✗ Mistake</strong> Not invalidating or scoping the session store per user</div>
+    <div class="pitfall-better"><strong>✓ Better</strong> Key sessions by <code>user_id + session_id</code> with a TTL (30–60 min inactivity), and clear the session on explicit &quot;new conversation&quot; signals; leaking one user&#x27;s context into another is both a correctness bug and a data privacy issue.
+
+---</div>
+  </div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="section-label">Related Questions</div>
+  <div class="related-pills">
+    <div class="related-pill" data-slug="02-001">
+      <span class="related-pill-icon">→</span>
+      <div class="related-pill-text">
+        <div class="related-pill-q">Q1: Design a RAG system for a customer support chatbot</div>
+        <div class="related-pill-rel">Foundation — single-turn RAG pipeline this extends</div>
+      </div>
+    </div>
+    <div class="related-pill" data-slug="02-021">
+      <span class="related-pill-icon">→</span>
+      <div class="related-pill-text">
+        <div class="related-pill-q">Q21: How evaluate a RAG pipeline?</div>
+        <div class="related-pill-rel">Evaluation — multi-turn adds turn-level coherence metrics alongside standard RAGAS</div>
+      </div>
+    </div>
+    <div class="related-pill" data-slug="01-021">
+      <span class="related-pill-icon">→</span>
+      <div class="related-pill-text">
+        <div class="related-pill-q">Q21 (LLM fundamentals): How do you do memory management and context management with LLMs?</div>
+        <div class="related-pill-rel">Same architectural concepts applied at the LLM layer</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="section-label">One-liner recall</div>
+  <div class="oneliner-box">
+    <div class="oneliner-label">▸ Reconstruct from memory</div>
+    <div class="oneliner-text" data-text="Multi-turn RAG requires a query reformulation step (condense last 3–5 turns into a self-contained query via cheap LLM call) before retrieval, plus Redis session state with a rolling summarization buffer to keep context within budget across long conversations.">Multi-turn RAG requires a query reformulation step (condense last 3–5 turns into a self-contained query via cheap LLM call) before retrieval, plus Redis session state with a rolling summarization buffer to keep context within budget across long conversations.</div>
+  </div>
+</div>

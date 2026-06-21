@@ -1,0 +1,148 @@
+<div class="answer-header reveal">
+  <div class="answer-meta">
+    <span class="meta-badge meta-category">05-evaluation-metrics</span>
+    <span class="meta-badge meta-num">Q020</span>
+    <span class="meta-badge meta-status-review">review</span>
+  </div>
+  <h1 class="answer-title">A/B testing for prompt variations?</h1>
+</div>
+
+<div class="answer-section reveal">
+  <div class="accordion">
+    <div class="accordion-header">
+      <span class="accordion-title">⟁ Framing — Why this is asked</span>
+      <span class="accordion-chevron">▾</span>
+    </div>
+    <div class="accordion-body">
+      <div class="framing-grid">
+        <div><div class="framing-card">
+          <div class="framing-card-title">Why asked</div>
+          <p style="font-size:13.5px;line-height:1.7;color:var(--text-dim)">Interviewers ask this to probe whether you treat prompt engineering as a disciplined engineering practice rather than ad-hoc intuition. Strong candidates know how to set up statistically-valid experiments, choose the right metrics, handle non-determinism, and gate rollout — skills that directly transfer to production prompt governance.</p>
+        </div></div>
+        <div><div class="framing-card">
+          <div class="framing-card-title">Trigger phrases</div>
+          <div class="trigger-list">
+              <div class="trigger-phrase">How do you know if your new prompt is actually better?</div>
+              <div class="trigger-phrase">Walk me through how you&#x27;d compare two prompt variants in production.</div>
+              <div class="trigger-phrase">How do you safely roll out a prompt change to users?</div>
+          </div>
+        </div></div>
+      </div>
+      <div class="tests-block">
+        <span style="font-family:var(--mono);font-size:10px;letter-spacing:0.1em;text-transform:uppercase;color:var(--purple);margin-right:8px">Tests:</span>Ability to apply rigorous experimentation discipline (hypothesis, metric, statistical validity, guardrails) to the non-deterministic, hard-to-measure output space of LLM prompts.
+
+---
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="section-label">Concept</div>
+  <div class="concept-block"><p>A/B testing for prompt variations is the practice of routing live traffic (or a golden offline dataset) to two or more prompt variants simultaneously, collecting metric data for each, and using statistical tests to determine whether observed differences are significant before rolling out the winning variant. The core challenge is that LLM outputs are non-deterministic and require proxy metrics (LLM-as-judge, task-pass-rate, thumbs-up rate) rather than ground-truth labels.</p></div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="section-label">Mechanism</div>
+  <div class="card"><p><strong>Step 1 — Formulate a hypothesis and choose a primary metric</strong></p>
+<p>Before running any experiment, decide what you're optimising and how you'll measure it:</p>
+<div class="table-wrap"><table class="data-table"><tr><th>Goal</th><th>Primary metric</th><th>Secondary guardrails</th></tr><tr><td>Improve answer quality</td><td>LLM-as-judge score (1–5) on 5% sample</td><td>Faithfulness ≥ 0.85, latency p95</td></tr><tr><td>Reduce hallucinations</td><td>RAGAS Faithfulness on golden dataset</td><td>Deflection rate, CSAT</td></tr><tr><td>Improve conciseness</td><td>Token count reduction</td><td>Answer Relevancy, thumbs-up rate</td></tr><tr><td>Increase task completion</td><td>Pass@1 on golden task set</td><td>Cost-per-query, error rate</td></tr></table></div>
+<p>Always define a <strong>primary metric</strong> (what you're trying to move), <strong>guardrail metrics</strong> (must not regress), and a <strong>minimum detectable effect (MDE)</strong> before looking at data.</p>
+<p><strong>Step 2 — Choose the experiment surface</strong></p>
+<div class="table-wrap"><table class="data-table"><tr><th>Surface</th><th>When to use</th><th>Notes</th></tr><tr><td><strong>Offline golden dataset</strong></td><td>Pre-production, fast iteration</td><td>Run both variants against 150–300 representative queries; no user exposure</td></tr><tr><td><strong>Shadow mode</strong></td><td>High-risk changes (production traffic, no user exposure)</td><td>Log variant B responses alongside variant A; compare offline</td></tr><tr><td><strong>Canary / live A/B</strong></td><td>After offline validation passes</td><td>5–20% of traffic to variant B; collect real user signals</td></tr><tr><td><strong>Interleaved evaluation</strong></td><td>Ranking/search prompts</td><td>Same user sees results from both variants in one session (reduces user-level variance)</td></tr></table></div>
+<p><strong>Step 3 — Control for non-determinism</strong></p>
+<ul class="styled-list"><li>Set <strong>temperature = 0</strong> for offline comparisons to eliminate randomness as a confound.</li><li>For production A/B tests (where T > 0 is needed), use <strong>repeated sampling</strong> (e.g., 5 samples/query) and average the metric, or run with fixed seeds via a deterministic sampler.</li><li>Use a <strong>paired test</strong> where both variants respond to the same query, which eliminates query-level variance.</li></ul>
+<p><strong>Step 4 — Statistical validity</strong></p>
+<ul class="styled-list"><li>Run a <strong>power analysis</strong> before launching: typically need MDE of 2–5pp, α = 0.05, power = 0.80 → 300–1,000 observations per variant depending on metric variance.</li><li>Use <strong>paired t-test</strong> (for paired query samples) or <strong>Mann-Whitney U</strong> (for ordinal LLM-judge scores) rather than a simple average comparison.</li><li>Report <strong>confidence intervals</strong>, not just p-values.</li><li>Watch for <strong>multiple comparison inflation</strong> — if testing 5 variants simultaneously, apply Bonferroni correction or use a sequential testing framework (e.g., SPRT).</li></ul>
+<p><strong>Step 5 — Rollout gate</strong></p>
+<div class="code-block-wrap"><pre class="code-block"><code>Offline golden dataset:
+  Primary metric improves ≥ MDE with p &lt; 0.05?
+    AND guardrail metrics (faithfulness, latency, cost) hold?
+  → Promote to shadow / canary
+
+Canary (5–10% live traffic, 48–72h):
+  Same metrics + real user signals (thumbs-up, escalation rate)?
+  → Promote to 100%
+
+Auto-rollback trigger:
+  If guardrail metric breaches threshold at any stage → revert instantly</code></pre><button class="copy-btn">copy</button></div>
+<p><strong>Tooling:</strong> promptfoo (open-source prompt eval/A/B framework), LangSmith experiment runs, RAGAS offline eval suite, custom Grafana dashboards for live canary metrics.</p></div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="section-label">Example / Tradeoff</div>
+  <div class="card card-accent"><div class="rich-text"><p><strong>Customer support chatbot prompt test:</strong> Baseline prompt (A): system-role only with general instructions. Variant B: added explicit chain-of-thought instruction + citation format requirement.</p>
+<ul class="styled-list"><li>Offline test: 200 golden queries, T=0, LLM-as-judge (GPT-4o, 1–5 scale). Variant B: 3.7 vs 3.2 (p < 0.001). RAGAS Faithfulness: 0.91 vs 0.88. Token cost: +22% (more verbose CoT).</li><li>Canary (10% traffic, 72h): Deflection rate +4pp (61% → 65%), CSAT +0.2 (3.9 → 4.1), p95 latency +180ms (token inflation). Guardrails held.</li><li>Decision: roll out B (quality win outweighs latency cost); added LLMLingua post-processing to trim verbose CoT from final response, recovering 140ms.</li></ul>
+<p><strong>Tradeoff:</strong> The biggest risk in prompt A/B testing is <strong>novelty effect</strong> — users engage more with a new format initially, inflating early metrics. Minimum 48–72h canary before concluding, and check day-1 vs day-2 metrics separately.</p></div></div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="accordion">
+    <div class="accordion-header">
+      <span class="accordion-title">🎙 Verbal Script (3–5 min)</span>
+      <span class="accordion-chevron">▾</span>
+    </div>
+    <div class="accordion-body">
+      <div class="script-block"><div class="script-label">Opening (30s)</div><p>"Prompt changes can silently degrade a production system, so I treat them with the same rigour as a code deployment — hypothesis, metric, statistical gate, canary rollout. Let me walk through how I'd structure that."</p></div>
+      <div class="script-block"><div class="script-label">Core explanation (2–3 min)</div><p>"First, I define the hypothesis and the primary metric before looking at any data. For example: 'Adding chain-of-thought instructions will improve LLM-judge quality score by at least 0.3 points while keeping faithfulness above 0.85 and latency within 200ms.' The guardrail metrics are as important as the primary metric — a prompt that improves quality but inflates cost by 50% or slows TTFT below acceptable UX is not a win.</p>
+<p>Second, I start with an offline golden dataset — 150 to 300 representative queries with expected answers. I run both variants at temperature zero, score with RAGAS and an LLM-as-judge, and use a paired t-test because both variants see the exact same queries. This eliminates query-level variance. If the offline gate passes, I move to shadow mode for high-risk changes, or directly to a 5–10% live canary.</p>
+<p>In a live canary, I collect real user signals: thumbs-up rate, escalation rate, deflection rate, and p95 latency. I wait at least 48 to 72 hours to avoid novelty effect — users often engage more with any change on day one. I also set an auto-rollback trigger: if faithfulness drops below 0.80 or latency breaches the SLO at any point, the system reverts automatically without human intervention.</p>
+<p>For the stats: I do a power analysis upfront to know how many observations I need. Typically a 2–5 percentage point MDE, alpha 0.05, power 0.80, gives me 300 to 1,000 observations per variant. If I'm testing multiple variants simultaneously, I apply Bonferroni correction to avoid false-positive inflation."</p></div>
+      <div class="script-block"><div class="script-label">Tradeoff / production angle (1 min)</div><p>"The hardest tradeoff is that the metrics that are easiest to measure offline — BLEU, ROUGE, even LLM-judge scores — don't always predict business KPIs like deflection rate or revenue. I've seen a prompt score 15% better on LLM-judge but produce no improvement in deflection rate because the quality gain was in a dimension users didn't care about. That's why I always include at least one real user signal in the canary and treat offline metrics as a necessary but not sufficient gate."</p></div>
+      <div class="script-block"><div class="script-label">Wrap-up (30s)</div><p>"So in short: define hypothesis and metrics first, validate offline at temperature zero on a golden dataset, then canary with user signals and an auto-rollback trigger. Tools like promptfoo and LangSmith make the offline A/B layer straightforward. Happy to go deeper on the statistical validity piece or how to handle multi-variant tests."</p></div>
+    </div>
+  </div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="section-label">Pitfalls</div>
+  <div class="pitfall-card">
+    <div class="pitfall-mistake"><strong>✗ Mistake</strong> Evaluating prompt variants by eyeballing a few outputs and declaring a winner</div>
+    <div class="pitfall-better"><strong>✓ Better</strong> Run a statistically-powered experiment (paired t-test, 300+ query golden dataset at T=0, explicit MDE and p-value threshold) to distinguish signal from noise; LLM outputs are high-variance and intuition fails.</div>
+  </div>
+  <div class="pitfall-card">
+    <div class="pitfall-mistake"><strong>✗ Mistake</strong> Ignoring guardrail metrics (latency, cost, faithfulness) and optimising only the primary quality score</div>
+    <div class="pitfall-better"><strong>✓ Better</strong> Define guardrail thresholds upfront (e.g., &quot;variant B wins only if it doesn&#x27;t increase p95 latency by more than 200ms or cost-per-query by more than 10%&quot;) and treat guardrail breach as an automatic disqualifier.</div>
+  </div>
+  <div class="pitfall-card">
+    <div class="pitfall-mistake"><strong>✗ Mistake</strong> Running a canary for only 24 hours and concluding from the novelty spike on day one</div>
+    <div class="pitfall-better"><strong>✓ Better</strong> Wait 48–72 hours minimum; check day-1 vs day-2 metric stability; novelty effects reliably inflate early engagement for any change.
+
+---</div>
+  </div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="section-label">Related Questions</div>
+  <div class="related-pills">
+    <div class="related-pill" data-slug="05-021">
+      <span class="related-pill-icon">→</span>
+      <div class="related-pill-text">
+        <div class="related-pill-q">Q21: Test new model before full deployment — canary, interleaved, shadow</div>
+        <div class="related-pill-rel">Deployment strategy patterns that also apply to prompt rollouts — canary and shadow mode</div>
+      </div>
+    </div>
+    <div class="related-pill" data-slug="05-010">
+      <span class="related-pill-icon">→</span>
+      <div class="related-pill-text">
+        <div class="related-pill-q">Q10: Testing strategies for non-deterministic outputs</div>
+        <div class="related-pill-rel">How to handle non-determinism when constructing the test harness for prompt A/B experiments</div>
+      </div>
+    </div>
+    <div class="related-pill" data-slug="05-016">
+      <span class="related-pill-icon">→</span>
+      <div class="related-pill-text">
+        <div class="related-pill-q">Q16: &quot;Vibes-based&quot; eval vs formal eval framework</div>
+        <div class="related-pill-rel">Formal eval framework that provides the golden-dataset offline gate used in prompt A/B testing</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="section-label">One-liner recall</div>
+  <div class="oneliner-box">
+    <div class="oneliner-label">▸ Reconstruct from memory</div>
+    <div class="oneliner-text" data-text="Prompt A/B testing requires an upfront hypothesis + metric (primary + guardrails), offline validation on a golden dataset at T=0 with a paired statistical test, then a 48–72h live canary with auto-rollback — because eyeballing outputs and ignoring guardrail metrics are the two most common ways teams ship prompt regressions.">Prompt A/B testing requires an upfront hypothesis + metric (primary + guardrails), offline validation on a golden dataset at T=0 with a paired statistical test, then a 48–72h live canary with auto-rollback — because eyeballing outputs and ignoring guardrail metrics are the two most common ways teams ship prompt regressions.</div>
+  </div>
+</div>

@@ -1,0 +1,154 @@
+<div class="answer-header reveal">
+  <div class="answer-meta">
+    <span class="meta-badge meta-category">04-fine-tuning-training</span>
+    <span class="meta-badge meta-num">Q008</span>
+    <span class="meta-badge meta-status-review">review</span>
+  </div>
+  <h1 class="answer-title">RLHF pipeline: SFT, reward model, PPO. How does DPO simplify?</h1>
+</div>
+
+<div class="answer-section reveal">
+  <div class="accordion">
+    <div class="accordion-header">
+      <span class="accordion-title">⟁ Framing — Why this is asked</span>
+      <span class="accordion-chevron">▾</span>
+    </div>
+    <div class="accordion-body">
+      <div class="framing-grid">
+        <div><div class="framing-card">
+          <div class="framing-card-title">Why asked</div>
+          <p style="font-size:13.5px;line-height:1.7;color:var(--text-dim)">This is the deep-dive follow-up to &quot;what is RLHF?&quot; — interviewers expect you to walk the full three-stage pipeline with concrete details: loss functions, the KL leash formula, PPO clipping, reward hacking, and then explain <em>why</em> DPO was a significant simplification. It probes whether you actually understand the math and failure modes vs. having pattern-matched on the acronym. Senior candidates should be able to compare RLHF vs. DPO across dimensions and state which to use when.</p>
+        </div></div>
+        <div><div class="framing-card">
+          <div class="framing-card-title">Trigger phrases</div>
+          <div class="trigger-list">
+              <div class="trigger-phrase">Walk me through the RLHF pipeline end-to-end.</div>
+              <div class="trigger-phrase">What is the reward model&#x27;s role in RLHF? How is it trained?</div>
+              <div class="trigger-phrase">How does DPO differ from RLHF? What problem does it solve?</div>
+              <div class="trigger-phrase">Explain PPO in the context of LLM alignment.</div>
+              <div class="trigger-phrase">Why did people move from PPO to DPO for fine-tuning?</div>
+          </div>
+        </div></div>
+      </div>
+      <div class="tests-block">
+        <span style="font-family:var(--mono);font-size:10px;letter-spacing:0.1em;text-transform:uppercase;color:var(--purple);margin-right:8px">Tests:</span>Deep understanding of the three-stage RLHF pipeline (SFT → RM → PPO+KL), its failure modes (reward hacking, training instability, annotation cost), and how DPO&#x27;s closed-form reparameterization eliminates the reward model and PPO entirely.
+
+---
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="section-label">Concept</div>
+  <div class="concept-block"><p>RLHF is a three-stage alignment pipeline: (1) <strong>Supervised Fine-Tuning (SFT)</strong> teaches the model the correct response distribution; (2) a <strong>Reward Model (RM)</strong> is trained on pairwise human preferences to score any response; (3) <strong>PPO with a KL penalty</strong> optimizes the policy to maximize RM-predicted rewards while staying close to the SFT baseline. DPO (Direct Preference Optimization, Rafailov et al. 2023) bypasses stages 2 and 3 by showing that the optimal RLHF policy can be expressed as a <strong>closed-form function of the log-probability ratio</strong> between the policy and the SFT reference — turning alignment into a single binary cross-entropy loss on preference pairs.</p></div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="section-label">Mechanism</div>
+  <div class="card"><p><strong>Stage 1 — Supervised Fine-Tuning (SFT)</strong></p>
+<p>Fine-tune the base pre-trained model on high-quality (prompt, ideal-completion) pairs:</p>
+<div class="code-block-wrap"><pre class="code-block"><code>L_SFT = -E[log π_θ(y | x)]   # standard cross-entropy on labeled completions</code></pre><button class="copy-btn">copy</button></div>
+<p>The SFT model serves two roles: it is the starting point for RL fine-tuning (Stage 3) and the <strong>frozen reference model</strong> used to compute the KL penalty. InstructGPT used ~13K prompt-completion pairs curated by contractors.</p>
+<p><strong>Stage 2 — Reward Model (RM) Training</strong></p>
+<p>For each prompt <code>x</code>, collect <code>k</code> completions from the SFT model and have humans rank them: <code>y_w > y_l</code> (winner preferred over loser). Train a separate model (SFT backbone + scalar regression head) with a pairwise ranking loss:</p>
+<div class="code-block-wrap"><pre class="code-block"><code>L_RM = -E[log σ(r_φ(x, y_w) − r_φ(x, y_l))]</code></pre><button class="copy-btn">copy</button></div>
+<p>where <code>r_φ(x, y)</code> is the scalar reward. This is a Bradley-Terry preference model. The RM learns to assign higher scores to human-preferred completions. Key implementation details:</p>
+<ul class="styled-list"><li>RM is initialized from the SFT model (same architecture) with the final unembedding layer replaced by a linear scalar head.</li><li>InstructGPT trained a 6B RM on ~33K comparison pairs (4–9 pairs per prompt).</li><li>RM generalizes poorly out-of-distribution — this is the root cause of reward hacking.</li></ul>
+<p><strong>Stage 3 — PPO + KL Leash</strong></p>
+<p>Use the frozen RM as the environment reward signal and optimize the SFT policy using Proximal Policy Optimization:</p>
+<div class="code-block-wrap"><pre class="code-block"><code>objective(x, y) = r_φ(x, y)  −  β · KL[π_θ(y|x) || π_SFT(y|x)]</code></pre><button class="copy-btn">copy</button></div>
+<ul class="styled-list"><li><strong>KL penalty:</strong> β (typically 0.01–0.1) penalizes the policy for diverging from the SFT reference. Too small → reward hacking (policy exploits RM gaps with verbose/sycophantic outputs). Too large → policy stays near SFT and alignment gain is minimal.</li><li><strong>PPO clipping:</strong> updates are clipped to prevent large destabilizing steps (<code>clip(ratio, 1−ε, 1+ε)</code>, ε≈0.2). Each PPO step samples a batch of prompts, generates completions with the live policy, scores with the RM, and updates with clipped gradients.</li><li><strong>Value model (critic):</strong> PPO requires a separate value network (estimating baseline advantage) — adding yet another model to maintain.</li></ul>
+<p><strong>Production failure modes:</strong></p>
+<div class="table-wrap"><table class="data-table"><tr><th>Failure</th><th>Symptom</th><th>Mitigation</th></tr><tr><td>Reward hacking</td><td>Long, verbose, sycophantic completions score high on RM but fail human review</td><td>KL leash tighter; iterative RM retraining on RL samples</td></tr><tr><td>Training instability</td><td>Loss spikes, policy collapse</td><td>Careful β tuning, low learning rate, gradient clipping</td></tr><tr><td>RM out-of-distribution</td><td>Policy generates completions the RM has never seen</td><td>Diverse SFT data; rule-based guardrails alongside RM</td></tr><tr><td>Annotation cost</td><td>High-quality pairwise comparisons: ~$30–100/prompt</td><td>Synthetic pairs from stronger judge (GPT-4o) for cheap preference data</td></tr></table></div>
+<p><strong>DPO Simplification</strong></p>
+<p>Rafailov et al. (2023) showed that the optimal policy under the RLHF KL-constrained objective has a <strong>closed-form solution</strong>:</p>
+<div class="code-block-wrap"><pre class="code-block"><code>π*(y|x) = π_SFT(y|x) · exp(r*(x,y)/β) / Z(x)</code></pre><button class="copy-btn">copy</button></div>
+<p>Rearranging, the reward can be expressed as:</p>
+<div class="code-block-wrap"><pre class="code-block"><code>r*(x, y) = β · log[π*(y|x) / π_SFT(y|x)] + β · log Z(x)</code></pre><button class="copy-btn">copy</button></div>
+<p>Substituting into the Bradley-Terry pairwise preference model and cancelling the partition function <code>Z(x)</code> (which is the same for both <code>y_w</code> and <code>y_l</code> for the same prompt), you get the <strong>DPO loss</strong> — a single binary cross-entropy on preference pairs, no reward model required:</p>
+<div class="code-block-wrap"><pre class="code-block"><code>L_DPO = -E[log σ(β · log(π_θ(y_w|x)/π_ref(y_w|x)) − β · log(π_θ(y_l|x)/π_ref(y_l|x)))]</code></pre><button class="copy-btn">copy</button></div>
+<p>What this does intuitively: increase the log-prob of the winning completion <code>y_w</code> <strong>relative to the reference</strong> while decreasing the log-prob of the losing completion <code>y_l</code> relative to the reference.</p></div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="section-label">Example / Tradeoff</div>
+  <div class="card card-accent"><div class="rich-text"><p><strong>InstructGPT (OpenAI, 2022)</strong> — canonical RLHF:</p>
+<ul class="styled-list"><li>SFT: GPT-3 175B on 13K curated pairs</li><li>RM: 6B GPT-3 on 33K pairwise comparisons</li><li>PPO: 20 PPO steps/prompt, β=0.02</li><li>Result: 1.3B InstructGPT preferred over 175B GPT-3 (85% human win rate) — alignment > raw scale</li></ul>
+<p><strong>Llama 2 / Mistral Instruct / Zephyr (2023–2024)</strong> — DPO mainstream adoption:</p>
+<ul class="styled-list"><li>Zephyr-7B (HuggingFace 2023): SFT on UltraChat + DPO on UltraFeedback synthetic preference pairs generated by GPT-4 — competitive with GPT-3.5 on MT-Bench at 7B scale</li><li>No reward model, no PPO, no value network — training fits on 4 A100s</li></ul>
+<p><strong>RLHF vs DPO comparison:</strong></p>
+<div class="table-wrap"><table class="data-table"><tr><th>Dimension</th><th>RLHF (PPO)</th><th>DPO</th></tr><tr><td>Pipeline stages</td><td>3 (SFT + RM + PPO)</td><td>2 (SFT + DPO)</td></tr><tr><td>Extra models needed</td><td>RM + value network</td><td>None</td></tr><tr><td>Training stability</td><td>Low (PPO finicky)</td><td>High (cross-entropy)</td></tr><tr><td>Reward hacking risk</td><td>Higher (RM can be fooled)</td><td>Lower (no RM to hack)</td></tr><tr><td>Iterative improvement</td><td>Yes — retrain RM on RL samples</td><td>Harder without online rollouts</td></tr><tr><td>Compute cost</td><td>3–5× more GPU hours</td><td>~Same as SFT</td></tr><tr><td>Quality ceiling</td><td>Higher for frontier models</td><td>Sufficient for most production use cases</td></tr><tr><td>When to use</td><td>Frontier model alignment, iterative RM possible</td><td>Most production fine-tuning, smaller teams</td></tr></table></div>
+<p><strong>RLHF variants beyond DPO:</strong> IPO (identity preference optimization, avoids overfit on margins), KTO (non-paired feedback — binary good/bad labels), SimPO (no reference model, margin-based), GRPO (used in DeepSeek-R1 for math reasoning with process reward models).</p></div></div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="accordion">
+    <div class="accordion-header">
+      <span class="accordion-title">🎙 Verbal Script (3–5 min)</span>
+      <span class="accordion-chevron">▾</span>
+    </div>
+    <div class="accordion-body">
+      <div class="script-block"><div class="script-label">Opening (30s)</div><p>"I'd frame this as two questions: the full RLHF pipeline with its details and failure modes, then why DPO was such an important simplification. Let me walk the three stages of RLHF first, then explain what DPO does mathematically and when I'd use each."</p></div>
+      <div class="script-block"><div class="script-label">Core explanation (2–3 min)</div><p>"Stage one is supervised fine-tuning — you take the base pre-trained model and fine-tune it on high-quality (prompt, completion) pairs curated by humans. This is standard cross-entropy, and it gives you a well-behaved reference model. InstructGPT used about 13,000 such pairs.</p>
+<p>Stage two is training a reward model. You sample multiple completions for the same prompt from the SFT model, have humans rank them — chosen over rejected — and train a separate model with a pairwise ranking loss: negative log sigmoid of the reward difference between the winner and loser. The RM learns to predict human preference with a scalar score. The practical detail here is that the RM is usually the same SFT architecture with the final layer swapped for a scalar head.</p>
+<p>Stage three is PPO fine-tuning. You use the RM as the environment — it scores the policy's completions — and optimize with Proximal Policy Optimization. The critical addition is a KL divergence penalty: β times the KL between the current policy and the frozen SFT reference. This is what prevents reward hacking — without the KL leash, the policy quickly learns to produce very long, verbose, or sycophantic responses that score high on the RM but that humans don't actually prefer. β is typically 0.01 to 0.1; tuning it is one of the hardest parts of the pipeline.</p>
+<p>Now for DPO. The key insight — Rafailov et al. 2023 — is that the optimal policy under the KL-constrained RLHF objective has a closed-form expression: the policy is the reference model reweighted by exp(reward/β), normalized by the partition function. If you substitute that into the Bradley-Terry pairwise preference model — the same one the RM uses — the partition function cancels out, and you're left with a binary cross-entropy loss on preference pairs that involves only log-probability ratios between the current policy and the reference. No reward model needed, no PPO, no value network. You just train on preference pairs with a standard optimizer. That's why Llama 2, Mistral Instruct, and most smaller-team fine-tuning projects now use DPO."</p></div>
+      <div class="script-block"><div class="script-label">Tradeoff / production angle (1 min)</div><p>"The main tradeoffs: RLHF with PPO has a higher quality ceiling because you can iteratively retrain the RM on samples the policy actually generates — this is how frontier models push alignment quality further. DPO is a static offline method; it can't easily do that online loop. On the other hand, DPO is dramatically simpler — no extra models, no PPO instability — and for most practical alignment tasks it's sufficient. For a small team fine-tuning a 7–70B model for a product, I'd start with DPO, using synthetic preference pairs from GPT-4o as cheap labeled data. I'd only consider full RLHF if we were training a frontier model and had the infrastructure to iterate the RM."</p></div>
+      <div class="script-block"><div class="script-label">Wrap-up (30s)</div><p>"So the key points: RLHF is SFT → RM (pairwise ranking loss) → PPO+KL penalty. The KL leash is what prevents reward hacking. DPO simplifies by deriving the optimal RLHF policy in closed form — turning it into a single cross-entropy loss without a reward model. For production fine-tuning today, DPO is the default; PPO is for frontier-scale alignment. Happy to go into DPO loss math, reward hacking mitigations, or variants like KTO and SimPO."</p></div>
+    </div>
+  </div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="section-label">Pitfalls</div>
+  <div class="pitfall-card">
+    <div class="pitfall-mistake"><strong>✗ Mistake</strong> Saying &quot;PPO updates the model to get high rewards&quot; without mentioning the KL penalty</div>
+    <div class="pitfall-better"><strong>✓ Better</strong> Always include the KL leash formula <code>objective = E[reward] − β·KL(π_RL || π_SFT)</code> and explain that without it the policy will reward-hack by finding adversarial completions that fool the RM (verbosity, sycophancy), which is a documented failure mode in InstructGPT ablations</div>
+  </div>
+  <div class="pitfall-card">
+    <div class="pitfall-mistake"><strong>✗ Mistake</strong> Describing DPO as &quot;just a simpler training loop&quot; without explaining the mathematical derivation</div>
+    <div class="pitfall-better"><strong>✓ Better</strong> State that DPO derives from the fact that the optimal KL-constrained policy has a closed-form expression; substituting it into the RM&#x27;s pairwise loss cancels the partition function, yielding a log-probability-ratio cross-entropy on (y_w, y_l) pairs — this shows you understand <em>why</em> DPO works, not just that it does</div>
+  </div>
+  <div class="pitfall-card">
+    <div class="pitfall-mistake"><strong>✗ Mistake</strong> Saying DPO is strictly better than RLHF</div>
+    <div class="pitfall-better"><strong>✓ Better</strong> Acknowledge that DPO is an offline method; frontier models (GPT-4, Claude) still use RLHF variants because iterative online RM retraining on policy-generated samples captures distribution shift that DPO misses; DPO is best for smaller-scale production alignment where simplicity and stability outweigh the quality ceiling
+
+---</div>
+  </div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="section-label">Related Questions</div>
+  <div class="related-pills">
+    <div class="related-pill" data-slug="04-004">
+      <span class="related-pill-icon">→</span>
+      <div class="related-pill-text">
+        <div class="related-pill-q">Q4: What is RLHF and why important?</div>
+        <div class="related-pill-rel">Prerequisite: high-level RLHF overview before this deeper dive</div>
+      </div>
+    </div>
+    <div class="related-pill" data-slug="04-001">
+      <span class="related-pill-icon">→</span>
+      <div class="related-pill-text">
+        <div class="related-pill-q">Q1: When fine-tune vs prompt engineering?</div>
+        <div class="related-pill-rel">RLHF/DPO sits at the top of the fine-tuning decision ladder</div>
+      </div>
+    </div>
+    <div class="related-pill" data-slug="01-029">
+      <span class="related-pill-icon">→</span>
+      <div class="related-pill-text">
+        <div class="related-pill-q">Q29: RLHF vs DPO — when prefer one over the other?</div>
+        <div class="related-pill-rel">Cross-category: LLM fundamentals treatment of RLHF vs DPO tradeoffs</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="section-label">One-liner recall</div>
+  <div class="oneliner-box">
+    <div class="oneliner-label">▸ Reconstruct from memory</div>
+    <div class="oneliner-text" data-text="RLHF aligns LLMs via SFT → RM trained on pairwise human preferences → PPO with KL penalty (β·KL prevents reward hacking); DPO eliminates the RM and PPO by showing the optimal RLHF policy has a closed-form log-probability-ratio expression, reducing alignment to a single cross-entropy loss on preference pairs.">RLHF aligns LLMs via SFT → RM trained on pairwise human preferences → PPO with KL penalty (β·KL prevents reward hacking); DPO eliminates the RM and PPO by showing the optimal RLHF policy has a closed-form log-probability-ratio expression, reducing alignment to a single cross-entropy loss on preference pairs.</div>
+  </div>
+</div>

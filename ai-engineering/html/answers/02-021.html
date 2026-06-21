@@ -1,0 +1,139 @@
+<div class="answer-header reveal">
+  <div class="answer-meta">
+    <span class="meta-badge meta-category">02-rag-systems</span>
+    <span class="meta-badge meta-num">Q021</span>
+    <span class="meta-badge meta-status-review">review</span>
+  </div>
+  <h1 class="answer-title">How evaluate a RAG pipeline? NDCG, MRR, precision@k, recall?</h1>
+</div>
+
+<div class="answer-section reveal">
+  <div class="accordion">
+    <div class="accordion-header">
+      <span class="accordion-title">⟁ Framing — Why this is asked</span>
+      <span class="accordion-chevron">▾</span>
+    </div>
+    <div class="accordion-body">
+      <div class="framing-grid">
+        <div><div class="framing-card">
+          <div class="framing-card-title">Why asked</div>
+          <p style="font-size:13.5px;line-height:1.7;color:var(--text-dim)">RAG evaluation is the most under-prepped area in AI engineering interviews, yet it&#x27;s the skill that separates engineers who ship reliable systems from those who ship vibes-based demos. Interviewers probe whether you understand the two-layer evaluation problem (retrieval quality <em>and</em> generation quality) and whether you have a concrete measurement framework — golden datasets, offline metrics, and production signals.</p>
+        </div></div>
+        <div><div class="framing-card">
+          <div class="framing-card-title">Trigger phrases</div>
+          <div class="trigger-list">
+              <div class="trigger-phrase">How do you evaluate a RAG pipeline? What metrics?</div>
+              <div class="trigger-phrase">How would you know if your RAG system is working well?</div>
+              <div class="trigger-phrase">Walk me through how you measure retrieval quality vs answer quality.</div>
+              <div class="trigger-phrase">What&#x27;s your eval strategy for a customer support RAG — offline and online?</div>
+          </div>
+        </div></div>
+      </div>
+      <div class="tests-block">
+        <span style="font-family:var(--mono);font-size:10px;letter-spacing:0.1em;text-transform:uppercase;color:var(--purple);margin-right:8px">Tests:</span>Whether the candidate can decompose RAG evaluation into retrieval and generation layers, name concrete metrics for each, and connect offline eval to production monitoring.
+
+---
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="section-label">Concept</div>
+  <div class="concept-block"><p>RAG evaluation is a <strong>two-layer problem</strong>: retrieval quality (did we surface the right documents?) and generation quality (did the LLM produce a faithful, relevant answer from those docs?). Each layer has its own metrics and failure modes. Most weak candidates only think about generation — but retrieval is almost always where RAG breaks first.</p></div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="section-label">Mechanism</div>
+  <div class="card"><p><strong>Layer 1 — Retrieval metrics</strong> (offline, using labeled query→relevant-doc pairs):</p>
+<div class="table-wrap"><table class="data-table"><tr><th>Metric</th><th>What it measures</th><th>Formula / intuition</th></tr><tr><td><strong>Recall@k</strong></td><td>Did the correct doc appear in the top-k results?</td><td>\</td><td>relevant ∩ retrieved@k\</td><td>/ \</td><td>relevant\</td><td></td></tr><tr><td><strong>Precision@k</strong></td><td>How many of the top-k results are actually relevant?</td><td>\</td><td>relevant ∩ retrieved@k\</td><td>/ k</td></tr><tr><td><strong>MRR</strong> (Mean Reciprocal Rank)</td><td>How high did the first relevant result rank?</td><td>avg(1/rank of first relevant result) — good for QA where one answer exists</td></tr><tr><td><strong>NDCG@k</strong> (Normalized Discounted Cumulative Gain)</td><td>Graded relevance — rewards relevant docs ranked higher</td><td>DCG@k / IDCG@k — best when docs have tiered relevance (0/1/2 scale)</td></tr><tr><td><strong>MAP</strong> (Mean Average Precision)</td><td>Average precision across all recall levels</td><td>mean of AP over all queries</td></tr></table></div>
+<p><strong>Practical choice:</strong> MRR for QA (one right answer), NDCG for ranked search (graded relevance), Recall@5 as a primary retrieval health KPI.</p>
+<p><strong>Layer 2 — Generation metrics</strong> (RAGAS framework):</p>
+<div class="table-wrap"><table class="data-table"><tr><th>Metric</th><th>What it measures</th><th>How computed</th></tr><tr><td><strong>Faithfulness</strong></td><td>Is the answer entailed by the retrieved context?</td><td>LLM-as-judge: break answer into claims, check each claim against context chunks</td></tr><tr><td><strong>Answer Relevancy</strong></td><td>Is the answer on-topic for the question?</td><td>Embedding similarity: generate reverse questions from the answer, measure cosine sim to original</td></tr><tr><td><strong>Context Precision</strong></td><td>Are the retrieved chunks relevant to the question?</td><td>Fraction of retrieved chunks that are relevant (LLM-judged)</td></tr><tr><td><strong>Context Recall</strong></td><td>Were all relevant facts retrieved?</td><td>Fraction of ground-truth answer facts found in retrieved context</td></tr></table></div>
+<p><strong>RAGAS</strong> (Retrieval Augmented Generation Assessment) is the standard open-source framework that automates all four metrics using an LLM-as-judge and embedding similarity.</p>
+<p><strong>Layer 3 — Production / business metrics:</strong></p>
+<div class="table-wrap"><table class="data-table"><tr><th>Metric</th><th>Threshold / target</th></tr><tr><td>Deflection rate</td><td>% of support tickets resolved without human escalation (target: ≥ 80%)</td></tr><tr><td>p95 latency</td><td>End-to-end wall clock (target: < 3s for chat UX)</td></tr><tr><td>Cost per query</td><td>Token cost × LLM pricing (target: depends on use case)</td></tr><tr><td>Thumbs-down rate</td><td>User negative feedback rate (target: < 5%)</td></tr><tr><td>Hallucination SLO</td><td>Faithfulness < 0.8 triggers alert or HITL</td></tr></table></div>
+<p><strong>Evaluation workflow:</strong></p>
+<ol class="mechanism-steps"><li><strong>Build a golden dataset</strong>: 200–500 (question, ground-truth answer, relevant doc IDs) triples — sourced from historical support tickets, SME annotations, or synthetic generation with human review.</li><li><strong>Run offline eval</strong> before every deployment: Recall@5 on retrieval, Faithfulness + Answer Relevancy via RAGAS.</li><li><strong>Gate on regressions</strong>: block deploys where Recall@5 drops > 3 pts or Faithfulness < 0.8.</li><li><strong>Monitor production</strong>: sample 5% of live traffic, run RAGAS faithfulness asynchronously, alert on drift.</li><li><strong>Close the loop</strong>: add production failures to the golden set; retune retrieval (chunk size, top-k, reranker threshold) based on Recall@5 regressions.</li></ol></div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="section-label">Example / Tradeoff</div>
+  <div class="card card-accent"><div class="rich-text"><p>On a customer support RAG over 50K docs: baseline Recall@5 = 61% with dense-only retrieval. Adding BM25 hybrid search lifted it to 73%. Adding a cross-encoder reranker (Cohere Rerank) lifted Precision@5 from 55% → 78% — RAGAS Faithfulness went from 0.71 to 0.86. The reranker added ~120ms latency but eliminated the most egregious hallucination class (irrelevant context injected into answers).</p>
+<p>NDCG vs MRR: for customer support QA (one correct answer), MRR is most interpretable to stakeholders — "on average, the right doc is the 1.3rd result." NDCG is better for search where docs have tiered relevance (a doc that partially answers is better than an irrelevant one).</p>
+<p><strong>Tradeoff:</strong> RAGAS faithfulness uses an LLM judge — costs money (~$0.001/query at gpt-4o-mini). For 10K golden queries, that's $10/eval run. Use a cheaper judge for nightly runs and gpt-4o for pre-release gates.</p></div></div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="accordion">
+    <div class="accordion-header">
+      <span class="accordion-title">🎙 Verbal Script (3–5 min)</span>
+      <span class="accordion-chevron">▾</span>
+    </div>
+    <div class="accordion-body">
+      <div class="script-block"><div class="script-label">Opening (30s)</div><p>"RAG evaluation is a two-layer problem that most engineers under-prepare for. Layer one is retrieval quality — did we surface the right documents? Layer two is generation quality — did the LLM produce a faithful answer from those docs? I'd instrument both layers with different metrics and tie it all to a golden dataset and production monitoring. Let me walk through each."</p></div>
+      <div class="script-block"><div class="script-label">Core explanation (2–3 min)</div><p>"For retrieval, the core metrics are Recall@k, Precision@k, MRR, and NDCG. The right choice depends on the use case. For a QA system where there's one right answer, MRR is most intuitive — it tells you the average rank of the first correct doc. For a ranked search where docs have tiered relevance, NDCG is better because it rewards you for putting the <em>most</em> relevant doc at the top. I typically use Recall@5 as my primary retrieval health KPI — it's easy to explain: 'In 73% of queries, the right document appears in the first 5 results.'</p>
+<p>For generation, I use RAGAS — an open-source framework that measures four things: Faithfulness (is the answer entailed by the retrieved context?), Answer Relevancy (is the answer on-topic?), Context Precision (are the retrieved chunks actually relevant?), and Context Recall (did we retrieve all the facts needed to answer?). Faithfulness is the most important — it directly measures hallucination risk.</p>
+<p>The workflow is: build a golden dataset of 200–500 annotated (question, answer, relevant doc IDs) triples, run offline eval before every deploy, and gate on regressions — I block any deploy where Recall@5 drops more than 3 points or Faithfulness falls below 0.8."</p></div>
+      <div class="script-block"><div class="script-label">Tradeoff / production angle (1 min)</div><p>"In production I sample about 5% of live traffic and run RAGAS faithfulness asynchronously — it adds cost (about a dollar per thousand queries at gpt-4o-mini), but it's worth it to catch model drift. I also track business metrics: deflection rate for support use cases, p95 latency under 3 seconds, and thumbs-down rate. The key thing I've learned is that you can have great NDCG and still have poor deflection rate — because the user experience depends on how well the answer is synthesized, not just whether the right doc was retrieved. So you need both layers."</p></div>
+      <div class="script-block"><div class="script-label">Wrap-up (30s)</div><p>"So the mental model is: retrieval metrics catch the 'we didn't find the right doc' failures, RAGAS catches the 'we found the doc but the LLM hallucinated' failures, and production metrics catch the 'technically correct but useless in practice' failures. Happy to go deeper on any layer — RAGAS internals, how to build the golden dataset, or the production monitoring setup."</p></div>
+    </div>
+  </div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="section-label">Pitfalls</div>
+  <div class="pitfall-card">
+    <div class="pitfall-mistake"><strong>✗ Mistake</strong> Only mentioning BLEU/ROUGE for RAG evaluation</div>
+    <div class="pitfall-better"><strong>✓ Better</strong> Explain that BLEU/ROUGE are n-gram overlap metrics designed for MT/summarization; they miss faithfulness entirely (a hallucinated answer with good vocabulary scores well). Use RAGAS Faithfulness + Answer Relevancy for generative eval.</div>
+  </div>
+  <div class="pitfall-card">
+    <div class="pitfall-mistake"><strong>✗ Mistake</strong> Skipping retrieval metrics entirely and only evaluating the final answer</div>
+    <div class="pitfall-better"><strong>✓ Better</strong> Explicitly separate retrieval eval (Recall@5, MRR, NDCG) from generation eval (RAGAS). The most common RAG failures are retrieval failures, not generation failures — if you only measure the final answer, you can&#x27;t distinguish &quot;retrieved wrong doc → hallucinated&quot; from &quot;retrieved right doc → hallucinated.&quot;</div>
+  </div>
+  <div class="pitfall-card">
+    <div class="pitfall-mistake"><strong>✗ Mistake</strong> Saying &quot;I&#x27;d use human evaluators&quot; without mentioning the scalability problem</div>
+    <div class="pitfall-better"><strong>✓ Better</strong> Human eval is the gold standard for a 50-query spot check, but not scalable. Use RAGAS LLM-as-judge for automated eval at scale, validated against human labels on a calibration set. Also mention the cost tradeoff: gpt-4o judge is expensive; gpt-4o-mini is 10× cheaper and good enough for nightly runs.</div>
+  </div>
+  <div class="pitfall-card">
+    <div class="pitfall-mistake"><strong>✗ Mistake</strong> Omitting the golden dataset build process</div>
+    <div class="pitfall-better"><strong>✓ Better</strong> Explain how to create it: start with historical support tickets that have known resolutions, add SME-annotated edge cases, and use synthetic generation (have GPT-4 generate questions from each doc, then human-review). Stress that the golden set must grow with production failures.
+
+---</div>
+  </div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="section-label">Related Questions</div>
+  <div class="related-pills">
+    <div class="related-pill" data-slug="02-013">
+      <span class="related-pill-icon">→</span>
+      <div class="related-pill-text">
+        <div class="related-pill-q">Q13: Common RAG failure points — how debug them?</div>
+        <div class="related-pill-rel">Complementary — failure taxonomy maps to which eval layer catches each</div>
+      </div>
+    </div>
+    <div class="related-pill" data-slug="02-020">
+      <span class="related-pill-icon">→</span>
+      <div class="related-pill-text">
+        <div class="related-pill-q">Q20: RAG returns relevant docs but users can&#x27;t find the answer</div>
+        <div class="related-pill-rel">Follow-up — context_recall vs answer_relevancy diagnostic split</div>
+      </div>
+    </div>
+    <div class="related-pill" data-slug="02-034">
+      <span class="related-pill-icon">→</span>
+      <div class="related-pill-text">
+        <div class="related-pill-q">Q34: Weak evaluation hiding retrieval failures</div>
+        <div class="related-pill-rel">Same theme — why answer-only eval masks retrieval problems</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="section-label">One-liner recall</div>
+  <div class="oneliner-box">
+    <div class="oneliner-label">▸ Reconstruct from memory</div>
+    <div class="oneliner-text" data-text="RAG eval = retrieval layer (Recall@5, MRR, NDCG on a golden dataset) + generation layer (RAGAS Faithfulness, Answer Relevancy, Context Precision/Recall) + production signals (deflection rate, p95 latency, thumbs-down), with golden dataset regression gates before every deploy.">RAG eval = retrieval layer (Recall@5, MRR, NDCG on a golden dataset) + generation layer (RAGAS Faithfulness, Answer Relevancy, Context Precision/Recall) + production signals (deflection rate, p95 latency, thumbs-down), with golden dataset regression gates before every deploy.</div>
+  </div>
+</div>

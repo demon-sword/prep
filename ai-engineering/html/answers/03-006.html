@@ -1,0 +1,151 @@
+<div class="answer-header reveal">
+  <div class="answer-meta">
+    <span class="meta-badge meta-category">03-agents-tool-use</span>
+    <span class="meta-badge meta-num">Q006</span>
+    <span class="meta-badge meta-status-review">review</span>
+  </div>
+  <h1 class="answer-title">Essential components of an agent beyond an LLM?</h1>
+</div>
+
+<div class="answer-section reveal">
+  <div class="accordion">
+    <div class="accordion-header">
+      <span class="accordion-title">⟁ Framing — Why this is asked</span>
+      <span class="accordion-chevron">▾</span>
+    </div>
+    <div class="accordion-body">
+      <div class="framing-grid">
+        <div><div class="framing-card">
+          <div class="framing-card-title">Why asked</div>
+          <p style="font-size:13.5px;line-height:1.7;color:var(--text-dim)">The interviewer is testing whether you can think architecturally about agents — not just the LLM reasoning core, but the surrounding infrastructure that makes an agent safe, reliable, and debuggable in production. A weak candidate describes the LLM and maybe mentions tools. A strong candidate draws out a five-component system and explains why each non-LLM component is essential.</p>
+        </div></div>
+        <div><div class="framing-card">
+          <div class="framing-card-title">Trigger phrases</div>
+          <div class="trigger-list">
+              <div class="trigger-phrase">What does an agent need beyond the model itself?</div>
+              <div class="trigger-phrase">Walk me through the components of an agent system.</div>
+              <div class="trigger-phrase">What infrastructure does an agent require?</div>
+              <div class="trigger-phrase">If I just wrap an LLM with a loop, what am I missing?</div>
+          </div>
+        </div></div>
+      </div>
+      <div class="tests-block">
+        <span style="font-family:var(--mono);font-size:10px;letter-spacing:0.1em;text-transform:uppercase;color:var(--purple);margin-right:8px">Tests:</span>Whether you have a production-grounded architectural model of agents — specifically: tool layer, memory layer, orchestrator/planner, and observability/safety — and can articulate why each is required rather than optional.
+
+---
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="section-label">Concept</div>
+  <div class="concept-block"><p>An agent requires <strong>four supporting components</strong> beyond the LLM reasoning core: a <strong>tool layer</strong> (the actuators), a <strong>memory layer</strong> (state persistence), an <strong>orchestrator</strong> (control flow and budget enforcement), and an <strong>observability/safety layer</strong> (tracing, guardrails, and human-in-the-loop). Omitting any one of these turns a demo into a production liability.</p></div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="section-label">Mechanism</div>
+  <div class="card"><p><strong>1. Tool Layer (Actuators)</strong></p>
+<p>The LLM can only generate text — tools are what give it real-world effect. Each tool is exposed to the LLM as a <strong>JSON schema</strong>: name, description, parameter types, and return type. The description field is the most critical part; poor descriptions cause the model to select the wrong tool or hallucinate arguments.</p>
+<p>Common tool categories:</p>
+<div class="table-wrap"><table class="data-table"><tr><th>Type</th><th>Examples</th></tr><tr><td>Knowledge retrieval</td><td><code>search_knowledge_base(query)</code>, <code>web_search(query)</code></td></tr><tr><td>Data access</td><td><code>run_sql(query)</code>, <code>get_order(order_id)</code></td></tr><tr><td>Action / write</td><td><code>create_ticket(details)</code>, <code>send_email(to, body)</code></td></tr><tr><td>Code execution</td><td><code>run_python(code)</code> — sandboxed (E2B, Modal, Docker)</td></tr><tr><td>External APIs</td><td><code>stripe_charge(amount)</code>, <code>calendar_create_event(...)</code></td></tr></table></div>
+<p><strong>Tool execution is the orchestrator's responsibility</strong> — the LLM only selects a tool and arguments; the orchestrator actually calls it.</p>
+<p><strong>2. Memory Layer (State Persistence)</strong></p>
+<p>Four types of agent memory, each serving a distinct purpose:</p>
+<div class="table-wrap"><table class="data-table"><tr><th>Memory type</th><th>Storage</th><th>Content</th><th>Example tool</th></tr><tr><td>Working</td><td>Context window (in-flight)</td><td>Current task state, tool results, conversation</td><td>Token budget; flush old turns</td></tr><tr><td>Episodic</td><td>Vector store (external)</td><td>Past interactions, retrieved by similarity</td><td>Pinecone, Qdrant</td></tr><tr><td>Semantic</td><td>KV store / structured DB</td><td>User preferences, learned facts</td><td>Redis, PostgreSQL</td></tr><tr><td>Procedural</td><td>System prompt / fine-tune</td><td>Learned skills and behavioral patterns</td><td>System prompt injection</td></tr></table></div>
+<p>Working memory is free but bounded by the context window. Episodic memory scales cheaply but requires embedding + retrieval infrastructure. Semantic memory provides exact-match recall that embeddings miss.</p>
+<p><strong>3. Orchestrator / Planner (Control Flow)</strong></p>
+<p>The orchestrator is the program that drives the agent loop:</p>
+<div class="code-block-wrap"><pre class="code-block"><code>while not done and turns &lt; MAX_TURNS:
+    action = llm.decide(context, tool_schemas)
+    if action.type == &quot;tool_call&quot;:
+        result = tool_layer.execute(action.tool, action.args)  # with timeout, retry
+        context.append(result)
+    elif action.type == &quot;final_answer&quot;:
+        return action.content
+turns_exceeded → fallback response</code></pre><button class="copy-btn">copy</button></div>
+<p>The orchestrator owns:</p>
+<ul class="styled-list"><li><strong>Turn budget / token budget</strong> — hard caps to prevent runaway loops</li><li><strong>Retry logic</strong> — tool failures with exponential backoff, idempotency keys</li><li><strong>Human-in-the-loop triggers</strong> — interrupt before irreversible actions</li><li><strong>Routing</strong> — whether to call sub-agents, escalate, or terminate</li><li><strong>State checkpointing</strong> — persist intermediate state for long-running tasks (LangGraph's <code>StateGraph</code>, Temporal)</li></ul>
+<p><strong>4. Observability & Safety Layer</strong></p>
+<p>Without this layer, agents fail silently and catastrophically in production:</p>
+<ul class="styled-list"><li><strong>Tracing</strong> — every reasoning step, tool call, and tool result captured (LangSmith, Arize, OpenTelemetry spans). Essential for debugging non-deterministic multi-step failures.</li><li><strong>Input/output guardrails</strong> — content filtering before tool execution and before returning to user (NeMo Guardrails, LlamaGuard, custom NLI classifiers)</li><li><strong>PII scrubbing</strong> — Presidio or regex-based redaction before any data reaches the LLM or external tools</li><li><strong>Action allowlist / denylist</strong> — policy middleware that rejects out-of-scope tool calls before execution; prevents prompt-injection attacks from triggering destructive tools</li><li><strong>Alerting</strong> — token budget exhaustion, loop depth exceeded, tool error rate spikes (Datadog / PagerDuty)</li></ul></div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="section-label">Example / Tradeoff</div>
+  <div class="card card-accent"><div class="rich-text"><p><strong>LangGraph support agent (production stack):</strong></p>
+<ul class="styled-list"><li><strong>LLM:</strong> GPT-4o (reasoning), GPT-4o-mini (simple tool selection to save cost)</li><li><strong>Tools:</strong> <code>search_kb(query)</code>, <code>lookup_order(id)</code>, <code>create_ticket(details)</code>, <code>escalate(reason)</code> — each schema has rich description + typed params</li><li><strong>Memory:</strong> Working context (last 10 turns), Pinecone episodic store (similar past tickets), Redis user-preference store</li><li><strong>Orchestrator:</strong> LangGraph <code>StateGraph</code> with <code>interrupt_before</code> on <code>escalate</code> tool — human confirms before escalation; max 8 turns, $0.05 cost cap per session</li><li><strong>Observability:</strong> LangSmith traces every node; Presidio scrubs PII before <code>lookup_order</code>; Datadog alerts if p95 turns > 6</li></ul>
+<p><strong>Tradeoff — what happens when components are missing:</strong></p>
+<div class="table-wrap"><table class="data-table"><tr><th>Missing component</th><th>Failure mode</th></tr><tr><td>No tool schemas</td><td>LLM hallucinates tool arguments or picks wrong tool</td></tr><tr><td>No turn budget</td><td>Infinite loop; $100+ cost per session</td></tr><tr><td>No memory</td><td>Agent re-asks for context the user already provided; poor UX</td></tr><tr><td>No guardrails</td><td>Prompt injection → destructive tool call (e.g., bulk delete)</td></tr></table></div>| No tracing | Debugging multi-step failures takes hours; impossible to reproduce |</div></div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="accordion">
+    <div class="accordion-header">
+      <span class="accordion-title">🎙 Verbal Script (3–5 min)</span>
+      <span class="accordion-chevron">▾</span>
+    </div>
+    <div class="accordion-body">
+      <div class="script-block"><div class="script-label">Opening (30s)</div><p>"Beyond the LLM itself, I think of a production agent as requiring four non-negotiable components: the tool layer, a memory layer, an orchestrator that owns the control loop, and an observability and safety layer. If any of these is missing, the agent isn't production-ready — it's a demo."</p></div>
+      <div class="script-block"><div class="script-label">Core explanation (2–3 min)</div><p>"Let me walk through each. First, the tool layer: the LLM can only generate text, so tools are the actuators that give it real-world effect. Each tool is exposed as a JSON schema — name, description, typed parameters. That description field is crucial; a bad description causes the model to pick the wrong tool. Common categories are knowledge retrieval, data reads, write actions, code execution, and external APIs. The orchestrator, not the LLM, actually executes the tools.</p>
+<p>Second, memory. I think of four types. Working memory is just the context window — in-flight state for the current task. Episodic memory is a vector store like Pinecone or Qdrant that retrieves similar past interactions. Semantic memory is a KV store or structured DB for exact facts like user preferences. And procedural memory lives in the system prompt or fine-tuned weights — learned behaviors. Most production agents only implement working plus one of the external types; the others are added as pain points emerge.</p>
+<p>Third, the orchestrator. This is the program driving the agent loop: call LLM, parse its action, execute the tool, append the result, repeat. But critically, the orchestrator also owns the turn budget and token budget — hard caps to prevent infinite loops — plus retry logic for tool failures, human-in-the-loop triggers before irreversible actions, and state checkpointing for long-running tasks. LangGraph's StateGraph is a good pattern here.</p>
+<p>Fourth, observability and safety. You need full traces of every reasoning step and tool call — LangSmith is the go-to, or OpenTelemetry spans. You need input/output guardrails — NeMo Guardrails or LlamaGuard — and PII scrubbing via Presidio before any data reaches the model or tools. And you need an action allowlist that rejects out-of-scope tool calls before execution, which is your main defense against prompt injection."</p></div>
+      <div class="script-block"><div class="script-label">Tradeoff / production angle (1 min)</div><p>"The most common mistake I see is shipping an agent with a tool layer and no orchestrator budget, no guardrails, and no tracing. You get runaway loops when the LLM gets confused, silent failures when tools time out, and no way to debug why the agent took an unexpected action. The observability layer feels like overhead until your first production incident — then it's the difference between a 10-minute fix and a 10-hour investigation. My rule: if I can't replay an agent's decision trace in LangSmith, it's not ready to ship."</p></div>
+      <div class="script-block"><div class="script-label">Wrap-up (30s)</div><p>"So: tool layer for real-world actions, memory for state persistence, orchestrator for control flow and budget enforcement, and observability/safety for tracing and guardrails. The LLM is just the reasoning core — the other four are what make it an agent versus an expensive chat widget. Happy to go deeper on any of them, especially memory architecture or the orchestration patterns."</p></div>
+    </div>
+  </div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="section-label">Pitfalls</div>
+  <div class="pitfall-card">
+    <div class="pitfall-mistake"><strong>✗ Mistake</strong> Saying &quot;an agent needs tools and memory&quot; and stopping there, without mentioning the orchestrator&#x27;s budget enforcement or observability</div>
+    <div class="pitfall-better"><strong>✓ Better</strong> Name all four non-LLM components and explain why the orchestrator&#x27;s turn budget and the tracing layer are non-negotiable for production; omitting them is the root cause of the most common production agent failures (infinite loops, silent failures).</div>
+  </div>
+  <div class="pitfall-card">
+    <div class="pitfall-mistake"><strong>✗ Mistake</strong> Treating memory as a single concept (&quot;the agent has memory&quot;) without distinguishing working/episodic/semantic/procedural</div>
+    <div class="pitfall-better"><strong>✓ Better</strong> Break memory into types, explain what storage backend each requires (context window vs. vector store vs. KV store), and note that most teams start with working + episodic and add semantic only when exact-match failures appear.</div>
+  </div>
+  <div class="pitfall-card">
+    <div class="pitfall-mistake"><strong>✗ Mistake</strong> Describing the tool layer only by examples (&quot;web search, code interpreter&quot;) without mentioning that tool schema quality (especially the description field) directly determines LLM tool-selection accuracy</div>
+    <div class="pitfall-better"><strong>✓ Better</strong> Emphasize that the JSON schema description is the LLM&#x27;s interface to the tool; a vague description causes wrong tool selection or hallucinated arguments, making schema design a first-class engineering concern.
+
+---</div>
+  </div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="section-label">Related Questions</div>
+  <div class="related-pills">
+    <div class="related-pill" data-slug="03-001">
+      <span class="related-pill-icon">→</span>
+      <div class="related-pill-text">
+        <div class="related-pill-q">Q1: What is an AI agent and its role in a broader system?</div>
+        <div class="related-pill-rel">Prerequisite — defines the agent concept; this question is the deeper architectural dive</div>
+      </div>
+    </div>
+    <div class="related-pill" data-slug="03-008">
+      <span class="related-pill-icon">→</span>
+      <div class="related-pill-text">
+        <div class="related-pill-q">Q8: Walk through a production-ready agent architecture.</div>
+        <div class="related-pill-rel">Direct follow-up — applies these components to a concrete production design</div>
+      </div>
+    </div>
+    <div class="related-pill" data-slug="03-022">
+      <span class="related-pill-icon">→</span>
+      <div class="related-pill-text">
+        <div class="related-pill-q">Q22: Tool schemas that reduce hallucinated actions?</div>
+        <div class="related-pill-rel">Deep dive into tool layer schema design — the highest-leverage component detail</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="section-label">One-liner recall</div>
+  <div class="oneliner-box">
+    <div class="oneliner-label">▸ Reconstruct from memory</div>
+    <div class="oneliner-text" data-text="Beyond the LLM, a production agent requires four components: a **tool layer** (JSON-schemed actuators the orchestrator executes), a **memory layer** (working context + episodic vector store + semantic KV store), an **orchestrator** (the loop driver with turn budget, retry logic, and HITL triggers), and an **observability/safety layer** (LangSmith traces, Presidio PII scrubbing, action allowlist, and guardrails) — omitting any one turns a demo into a production liability.">Beyond the LLM, a production agent requires four components: a **tool layer** (JSON-schemed actuators the orchestrator executes), a **memory layer** (working context + episodic vector store + semantic KV store), an **orchestrator** (the loop driver with turn budget, retry logic, and HITL triggers), and an **observability/safety layer** (LangSmith traces, Presidio PII scrubbing, action allowlist, and guardrails) — omitting any one turns a demo into a production liability.</div>
+  </div>
+</div>

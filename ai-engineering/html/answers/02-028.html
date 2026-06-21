@@ -1,0 +1,143 @@
+<div class="answer-header reveal">
+  <div class="answer-meta">
+    <span class="meta-badge meta-category">02-rag-systems</span>
+    <span class="meta-badge meta-num">Q028</span>
+    <span class="meta-badge meta-status-review">review</span>
+  </div>
+  <h1 class="answer-title">Optimize RAG latency in production?</h1>
+</div>
+
+<div class="answer-section reveal">
+  <div class="accordion">
+    <div class="accordion-header">
+      <span class="accordion-title">⟁ Framing — Why this is asked</span>
+      <span class="accordion-chevron">▾</span>
+    </div>
+    <div class="accordion-body">
+      <div class="framing-grid">
+        <div><div class="framing-card">
+          <div class="framing-card-title">Why asked</div>
+          <p style="font-size:13.5px;line-height:1.7;color:var(--text-dim)">Interviewers want to see whether you can decompose a multi-stage pipeline into its latency contributors, apply targeted optimizations at each layer, and reason about accuracy/cost tradeoffs. Senior candidates are expected to quantify improvements and know when optimizations break down.</p>
+        </div></div>
+        <div><div class="framing-card">
+          <div class="framing-card-title">Trigger phrases</div>
+          <div class="trigger-list">
+              <div class="trigger-phrase">How do you reduce latency in your RAG pipeline?</div>
+              <div class="trigger-phrase">Our p95 response time is 4 seconds — where do you start?</div>
+              <div class="trigger-phrase">What levers do you pull to speed up a RAG system at scale?</div>
+              <div class="trigger-phrase">How do you balance latency vs retrieval quality?</div>
+          </div>
+        </div></div>
+      </div>
+      <div class="tests-block">
+        <span style="font-family:var(--mono);font-size:10px;letter-spacing:0.1em;text-transform:uppercase;color:var(--purple);margin-right:8px">Tests:</span>Ability to profile a multi-stage system, identify the binding latency contributor at each layer, and apply layer-appropriate optimizations without sacrificing retrieval quality.
+
+---
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="section-label">Concept</div>
+  <div class="concept-block"><p>RAG latency is the sum of four stages: <strong>embedding</strong> (query vectorization), <strong>retrieval</strong> (ANN search + optional BM25), <strong>reranking</strong> (cross-encoder over top-N candidates), and <strong>generation</strong> (LLM prefill + decode). Optimizing the wrong layer wastes effort — profile first to identify the bottleneck.</p></div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="section-label">Mechanism</div>
+  <div class="card"><p><strong>1. Profile the pipeline — measure each stage independently</strong></p>
+<div class="table-wrap"><table class="data-table"><tr><th>Stage</th><th>Typical latency (unoptimized)</th><th>% of total</th></tr><tr><td>Query embedding</td><td>20–50 ms</td><td>5–10%</td></tr><tr><td>ANN retrieval (Pinecone / HNSW)</td><td>20–100 ms</td><td>5–20%</td></tr><tr><td>BM25 (Elasticsearch)</td><td>10–50 ms</td><td>2–10%</td></tr><tr><td>Cross-encoder reranking (top-50)</td><td>100–300 ms</td><td>20–40%</td></tr><tr><td>LLM generation (GPT-4o-mini, 500 tok)</td><td>800–2000 ms</td><td>50–70%</td></tr></table></div>
+<p>The LLM call dominates. Target it first, then reranking.</p>
+<p><strong>2. Generation layer — biggest lever</strong></p>
+<ul class="styled-list"><li><strong>Model tiering:</strong> Route simple queries to GPT-4o-mini (~$0.15/1M tokens, ~500ms) and reserve GPT-4o for complex ones. Can cut p95 latency by 50%+ for most traffic.</li><li><strong>Streaming (SSE):</strong> Return tokens as they generate. TTFT (time-to-first-token) drops to 200–400ms even if full response takes 2s — users perceive much faster response.</li><li><strong>Prompt compression:</strong> Use LLMLingua or selective summarization to reduce context tokens by 30–50%. Fewer input tokens → lower prefill time.</li><li><strong>Reduce top-k:</strong> Passing 20 chunks instead of 50 cuts both context length and reranker load. Use RAGAS <code>context_precision</code> to validate you're not losing signal.</li><li><strong>Output length control:</strong> Set <code>max_tokens</code> to match the use case — Q&A needs 150 tokens, not 500.</li></ul>
+<p><strong>3. Reranking layer</strong></p>
+<ul class="styled-list"><li><strong>Rerank only top-N, not all candidates:</strong> ANN retrieves top-100, BM25 retrieves top-50; rerank only the top-50 merged candidates (RRF), not all 150. Cuts cross-encoder calls by 3×.</li><li><strong>Bi-encoder reranker as a pre-filter:</strong> Use a fast bi-encoder (Cohere Embed v3, 5ms) to score and trim from 100 to 20, then apply the cross-encoder only to those 20. Latency drops from 300ms to ~80ms.</li><li><strong>Async reranking:</strong> If the use case allows slightly stale results, pre-warm a cache of reranked results for common query clusters.</li></ul>
+<p><strong>4. Retrieval layer</strong></p>
+<ul class="styled-list"><li><strong>Semantic caching:</strong> Embed the incoming query, compute cosine similarity against a Redis/GPTCache cache of past queries. Threshold ~0.93 → serve cached response in <5ms. Effective for high-query-repetition workloads (support bots: ~25–35% hit rate).</li><li><strong>HNSW ef_search tuning:</strong> Reduce <code>ef_search</code> (controls recall-speed tradeoff). ef_search=100 → ef_search=40 cuts ANN latency by ~40% at the cost of ~2pt Recall@5 drop — validate with golden dataset.</li><li><strong>Pre-filter push-down:</strong> Apply metadata filters (ACL, date range) at the index layer (Pinecone namespaces, Qdrant payload filters), not post-retrieval. Avoids fetching irrelevant candidates.</li></ul>
+<p><strong>5. Embedding layer</strong></p>
+<ul class="styled-list"><li><strong>Cache query embeddings:</strong> Many repeated queries hit the same embedding — Redis with TTL=1h. Cost: negligible. Gain: ~30ms saved per cache hit.</li><li><strong>Batch embedding at ingestion:</strong> Amortize API call overhead by embedding 2048 chunks per call rather than one at a time.</li><li><strong>Self-hosted embedding models:</strong> For high-volume (>1M queries/day), self-host <code>text-embedding-3-small</code> on GPU (Triton/TGI). Latency drops from 50ms API round-trip to 5ms local inference.</li></ul>
+<p><strong>6. Infrastructure</strong></p>
+<ul class="styled-list"><li><strong>Co-locate vector DB and LLM service:</strong> Cross-region hops can add 100–200ms. Pinecone and OpenAI both have us-east-1 and eu-west-1 — pin to the same region.</li><li><strong>Connection pooling:</strong> Reuse HTTP connections to OpenAI API. Cold TCP + TLS handshake adds ~50ms per request.</li><li><strong>Speculative retrieval:</strong> While the LLM is generating, pre-fetch retrieval candidates for likely follow-up queries (works well in multi-turn chat where next question is often predictable).</li></ul></div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="section-label">Example / Tradeoff</div>
+  <div class="card card-accent"><div class="rich-text"><p><strong>Before/after at 100K queries/day:</strong></p>
+<div class="table-wrap"><table class="data-table"><tr><th>Optimization</th><th>p95 latency before</th><th>p95 latency after</th><th>Change</th></tr><tr><td>Streaming enabled</td><td>3200ms (full wait)</td><td>350ms TTFT</td><td>−90% perceived</td></tr><tr><td>GPT-4o → GPT-4o-mini (80% traffic)</td><td>2100ms</td><td>550ms</td><td>−74%</td></tr><tr><td>Rerank top-50 → top-20</td><td>280ms rerank</td><td>80ms rerank</td><td>−71%</td></tr><tr><td>Semantic cache (30% hit rate)</td><td>3500ms avg</td><td>2450ms avg</td><td>−30%</td></tr><tr><td>ef_search 100 → 40</td><td>90ms ANN</td><td>40ms ANN</td><td>−56%</td></tr></table></div>
+<p><strong>Tradeoff:</strong> Reducing <code>top-k</code> and <code>ef_search</code> can hurt Recall@5 by 2–5 points. Always validate with a golden dataset (RAGAS <code>context_recall</code> ≥ 0.80 SLO) before shipping.</p></div></div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="accordion">
+    <div class="accordion-header">
+      <span class="accordion-title">🎙 Verbal Script (3–5 min)</span>
+      <span class="accordion-chevron">▾</span>
+    </div>
+    <div class="accordion-body">
+      <div class="script-block"><div class="script-label">Opening (30s)</div><p>"I'd approach this as a profiling problem first — RAG latency comes from four stages (embedding, retrieval, reranking, generation), and the fix depends on which one is binding. In my experience, the LLM call dominates at 60–70% of total latency, so I start there."</p></div>
+      <div class="script-block"><div class="script-label">Core explanation (2–3 min)</div><p>"For the generation layer, the biggest wins are model tiering and streaming. I'd route simpler queries — keyword lookups, FAQs — to GPT-4o-mini, which is 4× cheaper and roughly 3× faster than GPT-4o. For the user experience angle, I'd enable token streaming (SSE) immediately — even if the full response takes 2 seconds, TTFT drops to 300–400ms and the UI feels snappy.</p>
+<p>Next I'd look at the reranking layer. A cross-encoder over 100 candidates is expensive — 200–300ms. The fix is two-stage: use ANN to get 100, a fast bi-encoder to trim to 20, then cross-encoder on those 20 only. That cuts reranker latency by ~70%.</p>
+<p>On the retrieval side, semantic caching is the highest-ROI lever for repetitive workloads — embed the query, do a cosine similarity lookup in Redis, and if it's above 0.93 just serve the cached answer. For a support bot with high query repetition you get 25–35% hit rates, saving the entire pipeline cost and latency for those queries.</p>
+<p>I'd also tune HNSW <code>ef_search</code> — dropping from 100 to 40 cuts ANN latency by half at a small recall cost — and validate that Recall@5 stays above our SLO on a golden dataset."</p></div>
+      <div class="script-block"><div class="script-label">Tradeoff / production angle (1 min)</div><p>"The main tension is accuracy vs speed. Reducing <code>ef_search</code> or <code>top-k</code> can hurt context recall. Smaller models hallucinate more on complex queries. The right approach is layered SLOs: p50 latency target (e.g. <800ms), p95 target (e.g. <2s), and a RAGAS faithfulness floor (e.g. ≥0.80). If an optimization improves latency but drops faithfulness below the floor, it's not worth it. I'd A/B test model tiering in particular — route 10% of traffic to the smaller model, measure answer quality via thumbs-down rate and golden-set regression before full rollout."</p></div>
+      <div class="script-block"><div class="script-label">Wrap-up (30s)</div><p>"In summary: stream first for perceived latency, tier models for generation speed, cache for high-repetition traffic, and tune retrieval parameters with golden-set validation. Happy to go deeper on any layer — semantic caching architecture, reranker design, or model tiering routing logic."</p></div>
+    </div>
+  </div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="section-label">Pitfalls</div>
+  <div class="pitfall-card">
+    <div class="pitfall-mistake"><strong>✗ Mistake</strong> Saying &quot;just use a faster model&quot; without specifying which model, the accuracy tradeoff, or how you&#x27;d route traffic</div>
+    <div class="pitfall-better"><strong>✓ Better</strong> Name GPT-4o-mini vs GPT-4o, explain the routing heuristic (query complexity classifier or regex-based fast-path), and describe the A/B test to validate accuracy before full rollout.</div>
+  </div>
+  <div class="pitfall-card">
+    <div class="pitfall-mistake"><strong>✗ Mistake</strong> Treating semantic caching as the first lever without mentioning threshold tuning — cache at cosine&gt;0.80 will return wrong answers for superficially similar but semantically different queries</div>
+    <div class="pitfall-better"><strong>✓ Better</strong> Explain the threshold tuning process (0.92–0.97 depending on query variance), TTL strategy, and cache invalidation on knowledge base updates.</div>
+  </div>
+  <div class="pitfall-card">
+    <div class="pitfall-mistake"><strong>✗ Mistake</strong> Ignoring streaming and treating TTFT as the same as total latency</div>
+    <div class="pitfall-better"><strong>✓ Better</strong> Distinguish TTFT (user-perceived) from total response time, and explain that streaming makes a 2s response feel like a 350ms response to the user.</div>
+  </div>
+  <div class="pitfall-card">
+    <div class="pitfall-mistake"><strong>✗ Mistake</strong> Optimizing only the LLM call while ignoring that reranking can be the bottleneck in some pipelines</div>
+    <div class="pitfall-better"><strong>✓ Better</strong> Profile all four stages independently before assuming which is dominant; reranking on a large candidate set can exceed LLM latency.
+
+---</div>
+  </div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="section-label">Related Questions</div>
+  <div class="related-pills">
+    <div class="related-pill" data-slug="02-025">
+      <span class="related-pill-icon">→</span>
+      <div class="related-pill-text">
+        <div class="related-pill-q">Q25: Semantic caching — reduce cost and latency?</div>
+        <div class="related-pill-rel">Deep dive on the highest-ROI retrieval-layer optimization</div>
+      </div>
+    </div>
+    <div class="related-pill" data-slug="02-027">
+      <span class="related-pill-icon">→</span>
+      <div class="related-pill-text">
+        <div class="related-pill-q">Q27: Key tradeoffs — latency vs accuracy, chunk size vs context, cost vs quality?</div>
+        <div class="related-pill-rel">Broader tradeoff framework this question fits into</div>
+      </div>
+    </div>
+    <div class="related-pill" data-slug="02-018">
+      <span class="related-pill-icon">→</span>
+      <div class="related-pill-text">
+        <div class="related-pill-q">Q18: What is re-ranking? Cross-encoder vs bi-encoder?</div>
+        <div class="related-pill-rel">Reranking layer — the second-biggest latency contributor</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="section-label">One-liner recall</div>
+  <div class="oneliner-box">
+    <div class="oneliner-label">▸ Reconstruct from memory</div>
+    <div class="oneliner-text" data-text="Profile the four RAG stages (embed→retrieve→rerank→generate), then hit the biggest contributor first: stream LLM output for perceived latency, tier to GPT-4o-mini for speed, semantic-cache repetitive queries, and trim reranker candidates from 100 to 20 with a fast bi-encoder pre-filter.">Profile the four RAG stages (embed→retrieve→rerank→generate), then hit the biggest contributor first: stream LLM output for perceived latency, tier to GPT-4o-mini for speed, semantic-cache repetitive queries, and trim reranker candidates from 100 to 20 with a fast bi-encoder pre-filter.</div>
+  </div>
+</div>

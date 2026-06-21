@@ -1,0 +1,133 @@
+<div class="answer-header reveal">
+  <div class="answer-meta">
+    <span class="meta-badge meta-category">05-evaluation-metrics</span>
+    <span class="meta-badge meta-num">Q021</span>
+    <span class="meta-badge meta-status-review">review</span>
+  </div>
+  <h1 class="answer-title">Test new model before full deployment — canary, interleaved, shadow?</h1>
+</div>
+
+<div class="answer-section reveal">
+  <div class="accordion">
+    <div class="accordion-header">
+      <span class="accordion-title">⟁ Framing — Why this is asked</span>
+      <span class="accordion-chevron">▾</span>
+    </div>
+    <div class="accordion-body">
+      <div class="framing-grid">
+        <div><div class="framing-card">
+          <div class="framing-card-title">Why asked</div>
+          <p style="font-size:13.5px;line-height:1.7;color:var(--text-dim)">Interviewers are probing whether you understand that shipping a new LLM (or prompt change) is a risk-management problem, not just a deployment problem. Weak candidates swap models globally and watch production metrics afterward; strong candidates have a staged rollout with automatic rollback triggers, measurable success criteria, and a protocol for each phase.</p>
+        </div></div>
+        <div><div class="framing-card">
+          <div class="framing-card-title">Trigger phrases</div>
+          <div class="trigger-list">
+              <div class="trigger-phrase">How would you test a new model before rolling it out?</div>
+              <div class="trigger-phrase">What&#x27;s your deployment strategy for a new LLM version?</div>
+              <div class="trigger-phrase">How do you validate a model change doesn&#x27;t regress production?</div>
+              <div class="trigger-phrase">Canary, shadow, interleaved — when would you use each?</div>
+          </div>
+        </div></div>
+      </div>
+      <div class="tests-block">
+        <span style="font-family:var(--mono);font-size:10px;letter-spacing:0.1em;text-transform:uppercase;color:var(--purple);margin-right:8px">Tests:</span>Whether the candidate can design a safe, data-driven model deployment pipeline with offline gates, production shadowing, and progressive traffic rollout — not just &quot;deploy and monitor.&quot;
+
+---
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="section-label">Concept</div>
+  <div class="concept-block"><p>Deploying a new LLM into production requires three sequential validation phases: <strong>offline evaluation</strong> (golden-dataset gates before any traffic), <strong>shadow mode</strong> (parallel inference on live traffic with no user impact), and <strong>canary/interleaved rollout</strong> (progressive live traffic exposure with automatic rollback). Each phase has explicit pass/fail criteria; failure at any phase halts promotion to the next.</p></div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="section-label">Mechanism</div>
+  <div class="card"><p><strong>Phase 0 — Offline gate (pre-deployment)</strong></p>
+<ul class="styled-list"><li>Run new model on the category's 150–300 sample golden dataset.</li><li>Must meet or exceed baseline on: Faithfulness ≥ 0.85, Answer Relevancy ≥ 0.80, Recall@5 ≥ 0.70 (for RAG pipelines), and task-specific regression benchmarks.</li><li>Gate is enforced in CI (GitHub Actions / Buildkite). Red gate = no promotion.</li></ul>
+<p><strong>Phase 1 — Shadow mode (0% live traffic)</strong></p>
+<ul class="styled-list"><li>New model runs on every real request <em>in parallel</em> with the production model.</li><li>New model responses are <strong>logged but never shown to users</strong>.</li><li>Metrics collected: latency (p50/p95/p99), cost per query, RAGAS Faithfulness (async sidecar), hallucination rate.</li><li>Duration: 24–72 hours, ≥10K requests.</li><li>Pass criteria: p95 latency ≤ baseline + 20%, cost ≤ baseline × 1.15, Faithfulness ≥ 0.85.</li></ul>
+<p><strong>Phase 2 — Interleaved / canary (1% → 10% → 50% → 100%)</strong></p>
+<ul class="styled-list"><li>Traffic splitting via a feature flag or load-balancer weight (e.g. LaunchDarkly, nginx upstream, AWS ALB weighted target groups).</li><li><strong>Interleaved</strong> means the same user may receive responses from either model on different turns, which controls for temporal novelty effects and user cohort skew.</li><li>At each traffic tier, hold for ≥48 hours and monitor:</li><li>Business KPIs: deflection rate, CSAT/thumbs-up, ticket escalation rate.</li><li>Technical SLOs: p95 latency < 800ms, error rate < 0.5%, cost-per-query.</li><li>RAGAS Faithfulness ≥ 0.85 on sampled async sidecar.</li><li><strong>Auto-rollback trigger</strong>: if any SLO breaches by > 10% relative for > 15 minutes, feature flag flips back to 0% automatically (PagerDuty + Grafana alerting rule).</li></ul>
+<p><strong>Phase 3 — Full rollout (100%)</strong></p>
+<ul class="styled-list"><li>Promote after all canary tiers pass.</li><li>Keep prior model artifact available for 7-day hot rollback.</li></ul></div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="section-label">Example / Tradeoff</div>
+  <div class="card card-accent"><div class="rich-text"><p>At a customer-support RAG system (1M queries/day):</p>
+<ul class="styled-list"><li><strong>Shadow mode</strong> caught a 35% p95 latency regression when moving from GPT-4o-mini to a self-hosted Llama 3 70B — avoided a production incident.</li><li><strong>Interleaved at 5%</strong> (50K req/day) is statistically sufficient to detect a 2pp deflection-rate drop at 95% power within 48 hours (using an online MDE calculator).</li><li><strong>Tradeoff</strong>: shadow mode doubles inference cost during the shadow period (two models run per request). Mitigate by sampling shadow on 10–20% of traffic rather than 100% if cost is a hard constraint.</li></ul>
+<div class="table-wrap"><table class="data-table"><tr><th>Phase</th><th>Traffic</th><th>User Impact</th><th>Duration</th><th>Rollback Effort</th></tr><tr><td>Offline gate</td><td>0%</td><td>None</td><td>Minutes (CI)</td><td>N/A — never deployed</td></tr><tr><td>Shadow</td><td>0% user-visible</td><td>None</td><td>24–72h</td><td>N/A — not live</td></tr><tr><td>Canary 1%</td><td>1%</td><td>Minimal</td><td>48h</td><td>Instant flag flip</td></tr><tr><td>Canary 10%</td><td>10%</td><td>Limited</td><td>48h</td><td>Instant flag flip</td></tr></table></div>| Full rollout | 100% | All users | Ongoing | 7-day hot rollback |</div></div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="accordion">
+    <div class="accordion-header">
+      <span class="accordion-title">🎙 Verbal Script (3–5 min)</span>
+      <span class="accordion-chevron">▾</span>
+    </div>
+    <div class="accordion-body">
+      <div class="script-block"><div class="script-label">Opening (30s)</div><p>"I think about model deployment in three sequential phases, each with explicit pass/fail gates, so that no regression reaches users without being caught first. The key principle is: fail fast in the cheapest environment, then progressively expose to real traffic."</p></div>
+      <div class="script-block"><div class="script-label">Core explanation (2–3 min)</div><p>"Phase zero is an offline gate run in CI. I run the new model against our golden dataset — around 150–300 human-labeled query/answer/chunk triples — and require it to meet or exceed baseline Faithfulness ≥ 0.85, Answer Relevancy ≥ 0.80, and Recall@5 ≥ 0.70. If it fails, it never gets deployed. This costs nothing and catches most regressions.</p>
+<p>"Phase one is shadow mode. I deploy the new model behind the existing one, run both on every live request, but only show the old model's response to users. The new model's outputs are logged and run through an async RAGAS sidecar. I'm checking p95 latency, cost per query, and Faithfulness over 24–72 hours and at least 10K requests. If p95 latency is more than 20% higher or Faithfulness drops below 0.85, I don't proceed.</p>
+<p>"Phase two is a canary rollout — typically 1% → 10% → 50% → 100% traffic via feature flags or weighted load-balancer rules. I prefer <em>interleaved</em> allocation rather than cohort-split, because it controls for novelty effects and user segment skew. At each tier I hold for 48 hours and watch business KPIs: deflection rate, CSAT, p95 latency, and cost. I set up an auto-rollback rule: if any SLO breaches by more than 10% relative for more than 15 minutes, the flag automatically flips to 0%."</p></div>
+      <div class="script-block"><div class="script-label">Tradeoff / production angle (1 min)</div><p>"The main cost of shadow mode is that you're running two models simultaneously — doubling inference cost during the shadow window. You can mitigate this by sampling shadow traffic at 10–20% rather than 100%. The other risk is novelty bias in canary: users behave differently when a product is new, so a 48-hour hold at each tier is the minimum to see steady-state metrics. For latency-critical systems, I'd also set a stricter p95 threshold in shadow — say ≤ 10% regression — rather than ≤ 20%."</p></div>
+      <div class="script-block"><div class="script-label">Wrap-up (30s)</div><p>"The key insight is that canary alone is not enough — you need the offline gate to catch regressions cheaply, and shadow mode to validate latency and cost before any user sees the new model. I'm happy to go deeper on auto-rollback trigger design or how to size the golden dataset."</p></div>
+    </div>
+  </div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="section-label">Pitfalls</div>
+  <div class="pitfall-card">
+    <div class="pitfall-mistake"><strong>✗ Mistake</strong> &quot;I&#x27;d just push to 10% canary and monitor CSAT for a few days&quot;</div>
+    <div class="pitfall-better"><strong>✓ Better</strong> Describe the full three-phase pipeline (offline gate → shadow → canary), name specific SLO thresholds, and explain the auto-rollback trigger; skipping shadow misses latency/cost regressions before any user exposure.</div>
+  </div>
+  <div class="pitfall-card">
+    <div class="pitfall-mistake"><strong>✗ Mistake</strong> Treating canary as a cohort split (all users in segment X get new model) without mentioning novelty-effect bias</div>
+    <div class="pitfall-better"><strong>✓ Better</strong> Explain interleaved allocation (same user may hit either model across turns), specify 48h minimum hold per tier, and reference statistical power / MDE to justify sample size.</div>
+  </div>
+  <div class="pitfall-card">
+    <div class="pitfall-mistake"><strong>✗ Mistake</strong> Not specifying rollback criteria or rollback speed</div>
+    <div class="pitfall-better"><strong>✓ Better</strong> Mention the auto-rollback rule (PagerDuty + Grafana alert: SLO breach &gt; 10% relative for &gt; 15 min → flag flips to 0%), and note the 7-day hot artifact retention for full rollout reversal.
+
+---</div>
+  </div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="section-label">Related Questions</div>
+  <div class="related-pills">
+    <div class="related-pill" data-slug="05-016">
+      <span class="related-pill-icon">→</span>
+      <div class="related-pill-text">
+        <div class="related-pill-q">Q16: &quot;Vibes-based&quot; eval vs formal eval framework</div>
+        <div class="related-pill-rel">Prerequisite — formal eval framework that feeds the offline gate</div>
+      </div>
+    </div>
+    <div class="related-pill" data-slug="05-017">
+      <span class="related-pill-icon">→</span>
+      <div class="related-pill-text">
+        <div class="related-pill-q">Q17: Golden dataset for evaluation and regression testing</div>
+        <div class="related-pill-rel">Prerequisite — golden dataset construction used in Phase 0</div>
+      </div>
+    </div>
+    <div class="related-pill" data-slug="05-020">
+      <span class="related-pill-icon">→</span>
+      <div class="related-pill-text">
+        <div class="related-pill-q">Q20: A/B testing for prompt variations</div>
+        <div class="related-pill-rel">Same concept — canary/interleaved design applies equally to prompt A/B tests</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="section-label">One-liner recall</div>
+  <div class="oneliner-box">
+    <div class="oneliner-label">▸ Reconstruct from memory</div>
+    <div class="oneliner-text" data-text="Safe model deployment uses three phases in sequence: offline golden-dataset CI gate → shadow mode (0% user-visible, latency/cost check) → interleaved canary (1→10→50→100%) with auto-rollback on SLO breach.">Safe model deployment uses three phases in sequence: offline golden-dataset CI gate → shadow mode (0% user-visible, latency/cost check) → interleaved canary (1→10→50→100%) with auto-rollback on SLO breach.</div>
+  </div>
+</div>

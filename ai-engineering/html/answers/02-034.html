@@ -1,0 +1,141 @@
+<div class="answer-header reveal">
+  <div class="answer-meta">
+    <span class="meta-badge meta-category">02-rag-systems</span>
+    <span class="meta-badge meta-num">Q034</span>
+    <span class="meta-badge meta-status-review">review</span>
+  </div>
+  <h1 class="answer-title">Weak evaluation hiding retrieval failures</h1>
+</div>
+
+<div class="answer-section reveal">
+  <div class="accordion">
+    <div class="accordion-header">
+      <span class="accordion-title">⟁ Framing — Why this is asked</span>
+      <span class="accordion-chevron">▾</span>
+    </div>
+    <div class="accordion-body">
+      <div class="framing-grid">
+        <div><div class="framing-card">
+          <div class="framing-card-title">Why asked</div>
+          <p style="font-size:13.5px;line-height:1.7;color:var(--text-dim)">This question probes whether you understand the subtlest and most dangerous failure mode in RAG systems: a pipeline that <em>appears</em> to work because your evaluation methodology is too weak to catch that retrieval is silently underperforming. Interviewers at mid/senior level ask this to distinguish engineers who build real eval infrastructure from those who rely on vibes, BLEU scores, or infrequent spot checks.</p>
+        </div></div>
+        <div><div class="framing-card">
+          <div class="framing-card-title">Trigger phrases</div>
+          <div class="trigger-list">
+              <div class="trigger-phrase">Is there an actual eval framework, or vibes-based?</div>
+              <div class="trigger-phrase">How do you know your RAG pipeline is actually working?</div>
+              <div class="trigger-phrase">Your accuracy dropped 95% → 80% — how do you diagnose before retraining?</div>
+              <div class="trigger-phrase">How do you catch retrieval failures before users do?</div>
+          </div>
+        </div></div>
+      </div>
+      <div class="tests-block">
+        <span style="font-family:var(--mono);font-size:10px;letter-spacing:0.1em;text-transform:uppercase;color:var(--purple);margin-right:8px">Tests:</span>Whether you can design rigorous, layered evaluation that distinguishes retrieval failures from generation failures — and build regression infrastructure to catch regressions before production.
+
+---
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="section-label">Concept</div>
+  <div class="concept-block"><p>Weak evaluation hides retrieval failures when your metrics measure the final answer quality (user satisfaction, thumbs up/down, BLEU) but never instrument the retrieval layer independently. Because LLMs are surprisingly good at generating plausible-sounding answers even from irrelevant or partially relevant context, a failing retriever can produce mediocre answers that score acceptably on coarse metrics — masking the root cause. The result: hallucination and quality regressions accumulate silently until they're large enough to notice from user complaints.</p></div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="section-label">Mechanism</div>
+  <div class="card"><p>The failure pattern unfolds in three stages:</p>
+<ol class="mechanism-steps"><li><strong>No retrieval-layer metrics</strong>: Teams deploy with only end-to-end eval (human thumbs-up, BLEU on answers, or LLM-as-judge on final response). Retrieval precision, recall, NDCG, and MRR are never measured.</li></ol>
+<ol class="mechanism-steps"><li><strong>Masking by generation</strong>: GPT-4o-mini fills in plausible answers from partial or irrelevant chunks. Answer quality scores stay at 85%+ even as context precision drops from 0.8 to 0.5. The vibes are fine.</li></ol>
+<ol class="mechanism-steps"><li><strong>Delayed signal</strong>: Only when the model can't compensate — new question domains, schema drift, embedding model changes — does end-to-end quality collapse visibly. By then the retrieval failure has been festering for weeks.</li></ol>
+<p><strong>The fix: two-layer eval with a golden dataset</strong></p>
+<div class="table-wrap"><table class="data-table"><tr><th>Layer</th><th>Metric</th><th>Tool</th><th>Frequency</th></tr><tr><td><strong>Retrieval</strong></td><td>Recall@5, Precision@5, MRR, NDCG@10</td><td>RAGAS <code>context_recall</code> + <code>context_precision</code>, or custom golden set</td><td>Every deploy</td></tr><tr><td><strong>Generation</strong></td><td>Faithfulness, Answer Relevancy</td><td>RAGAS <code>faithfulness</code>, <code>answer_relevancy</code></td><td>Every deploy</td></tr><tr><td><strong>Production</strong></td><td>Deflection rate, thumbs-down rate, p95 latency</td><td>Datadog / Langfuse dashboards</td><td>Real-time</td></tr></table></div>
+<p><strong>Golden dataset construction:</strong></p>
+<ul class="styled-list"><li>100–500 curated (question, ideal answer, expected source documents) triples</li><li>Cover edge cases: multi-hop queries, exact-match terms, negation, out-of-scope questions</li><li>Run on every pipeline change; gate deployment if Recall@5 drops >3 pts or Faithfulness drops >0.05</li></ul>
+<p><strong>RAGAS diagnostic split (most important):</strong></p>
+<ul class="styled-list"><li><code>context_recall</code> drops but <code>faithfulness</code> is fine → retriever is missing relevant chunks</li><li><code>faithfulness</code> drops but <code>context_recall</code> is fine → generator is hallucinating despite good context</li><li>Both drop → likely a data quality / embedding drift issue</li></ul>
+<p><strong>Additional signals to wire up:</strong></p>
+<ul class="styled-list"><li>Log retrieved chunk IDs and cosine scores for every query in production (Langfuse / Weave)</li><li>Run shadow retrieval: old index vs new index for 5% of traffic before full cutover</li><li>Alert on cosine score distribution shifts — sudden drop in mean similarity signals embedding or index drift</li></ul></div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="section-label">Example / Tradeoff</div>
+  <div class="card card-accent"><div class="rich-text"><p>A real pattern: a legal-tech team updated their chunking strategy (fixed-size → semantic) and saw end-to-end LLM-judge scores stay flat at 84%. They assumed parity. Six weeks later users started complaining that clause references were wrong. Root cause: NDCG@10 had dropped from 0.72 to 0.51 because semantic chunks were breaking mid-clause — but the LLM filled in plausible (wrong) clauses from adjacent context. A 100-question golden dataset with document-level Recall@5 tracking would have surfaced the regression on day 1 of the chunking change.</p>
+<p><strong>Tradeoff: eval cost vs eval coverage</strong></p>
+<ul class="styled-list"><li>Running RAGAS with GPT-4o-mini as judge: ~$0.002/question → $0.20/100-question golden set per deploy</li><li>Running with GPT-4o: ~$0.02/question → $2/100 questions, higher accuracy for faithfulness</li><li>Offline NDCG on retrieval layer requires pre-labeled relevance judgments (one-time human effort ~2–8 hours for 100 questions, then automated thereafter)</li><li>The cost of one production hallucination incident (eng time + user trust) far exceeds the eval infrastructure cost</li></ul></div></div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="accordion">
+    <div class="accordion-header">
+      <span class="accordion-title">🎙 Verbal Script (3–5 min)</span>
+      <span class="accordion-chevron">▾</span>
+    </div>
+    <div class="accordion-body">
+      <div class="script-block"><div class="script-label">Opening (30s)</div><p>"Weak evaluation hiding retrieval failures is what I'd call the most dangerous silent failure mode in RAG. The core problem is that if you only measure final answer quality — thumbs-up rates, LLM-judge scores — a failing retriever can stay hidden for weeks because the LLM is good enough at generating plausible text from bad context. I'd approach this by explaining what weak eval looks like, why it masks retrieval failures, and what a proper two-layer eval framework looks like."</p></div>
+      <div class="script-block"><div class="script-label">Core explanation (2–3 min)</div><p>"The failure pattern is this: you deploy with only end-to-end metrics. Your LLM-as-judge score sits at 85%, vibes are fine. But under the hood, context precision has dropped from 0.8 to 0.5 because you changed your chunking strategy, or your embedding model was updated, or a new document category landed in the corpus. The model papers over the gap by generating plausible-sounding answers from partial or irrelevant context. This continues until the retriever is so broken that the LLM can't compensate — then quality falls off a cliff and you have a production incident.</p>
+<p>The fix is a two-layer eval framework with a golden dataset. Layer one is the retrieval layer: you measure Recall@5, Precision@5, and NDCG@10 against a pre-labeled set of 100–500 (question, expected source docs) pairs. I use RAGAS <code>context_recall</code> and <code>context_precision</code> for this, plus a custom offline NDCG script. Layer two is the generation layer: RAGAS <code>faithfulness</code> tells you whether the answer is grounded in retrieved context, and <code>answer_relevancy</code> tells you whether it actually addresses the question.</p>
+<p>The diagnostic split between these two is the key insight: if <code>context_recall</code> drops but <code>faithfulness</code> stays high, the retriever is missing relevant chunks. If <code>faithfulness</code> drops but retrieval looks fine, the generator is hallucinating. If both drop, you likely have data quality or embedding drift. That split tells you exactly where to debug."</p></div>
+      <div class="script-block"><div class="script-label">Tradeoff / production angle (1 min)</div><p>"In production I'd wire up three additional signals: log retrieved chunk IDs and cosine scores for every query to Langfuse or Weave so you have retrieval telemetry, run shadow retrieval against a new index for 5% of traffic before any index cutover, and alert on cosine score distribution shifts — a sudden drop in mean similarity is often the first signal of embedding or schema drift, days before user complaints arrive. The cost of this eval infrastructure is minimal — a 100-question golden set costs about $0.20 to run with GPT-4o-mini — but it catches regressions before they become incidents."</p></div>
+      <div class="script-block"><div class="script-label">Wrap-up (30s)</div><p>"So the summary is: weak eval hides retrieval failures by measuring the wrong layer. The fix is a two-layer golden-dataset framework that instruments retrieval (Recall@5, NDCG, RAGAS context_recall) and generation (faithfulness, answer_relevancy) independently, gates deployments on both, and wires production telemetry to surface drift before users do. Happy to go deeper on golden dataset construction or the RAGAS diagnostic split."</p></div>
+    </div>
+  </div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="section-label">Pitfalls</div>
+  <div class="pitfall-card">
+    <div class="pitfall-mistake"><strong>✗ Mistake</strong> Saying &quot;we use thumbs-up/thumbs-down rates to evaluate our RAG&quot; without mentioning retrieval-layer metrics</div>
+    <div class="pitfall-better"><strong>✓ Better</strong> Distinguish retrieval eval (Recall@5, NDCG, context_recall) from generation eval (faithfulness, answer_relevancy) and explain why end-to-end metrics alone can&#x27;t diagnose the root cause of quality regressions.</div>
+  </div>
+  <div class="pitfall-card">
+    <div class="pitfall-mistake"><strong>✗ Mistake</strong> Treating RAGAS as a single score (&quot;we run RAGAS and it&#x27;s 0.85&quot;) rather than decomposing its sub-metrics</div>
+    <div class="pitfall-better"><strong>✓ Better</strong> Explain the diagnostic split: <code>context_recall</code> drop → retriever failing; <code>faithfulness</code> drop → generator hallucinating; use both to triage.</div>
+  </div>
+  <div class="pitfall-card">
+    <div class="pitfall-mistake"><strong>✗ Mistake</strong> Saying &quot;we spot-check 10 queries every sprint&quot; as the eval process</div>
+    <div class="pitfall-better"><strong>✓ Better</strong> Describe a 100–500 question golden dataset with labeled source documents, automated Recall@5 and faithfulness scoring on every deploy, and a deployment gate on metric regressions &gt;3 pts.</div>
+  </div>
+  <div class="pitfall-card">
+    <div class="pitfall-mistake"><strong>✗ Mistake</strong> Not mentioning production telemetry</div>
+    <div class="pitfall-better"><strong>✓ Better</strong> Add that logging cosine scores per query and monitoring their distribution is the earliest signal of embedding drift or schema changes, often days before LLM-judge scores degrade.
+
+---</div>
+  </div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="section-label">Related Questions</div>
+  <div class="related-pills">
+    <div class="related-pill" data-slug="02-021">
+      <span class="related-pill-icon">→</span>
+      <div class="related-pill-text">
+        <div class="related-pill-q">Q21: How evaluate a RAG pipeline? NDCG, MRR, precision@k, recall?</div>
+        <div class="related-pill-rel">Prerequisite — the full eval metric vocabulary and RAGAS framework</div>
+      </div>
+    </div>
+    <div class="related-pill" data-slug="02-013">
+      <span class="related-pill-icon">→</span>
+      <div class="related-pill-text">
+        <div class="related-pill-q">Q13: Common RAG failure points — how debug them?</div>
+        <div class="related-pill-rel">Sibling — weak eval is one of the 6 RAG failure modes; debugging framework overlaps</div>
+      </div>
+    </div>
+    <div class="related-pill" data-slug="02-033">
+      <span class="related-pill-icon">→</span>
+      <div class="related-pill-text">
+        <div class="related-pill-q">Q33: Stale indexes, embedding drift</div>
+        <div class="related-pill-rel">Follow-up — embedding drift is a primary cause of retrieval regressions that weak eval misses</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="section-label">One-liner recall</div>
+  <div class="oneliner-box">
+    <div class="oneliner-label">▸ Reconstruct from memory</div>
+    <div class="oneliner-text" data-text="Weak eval hides retrieval failures by measuring only final answer quality — the fix is a two-layer golden-dataset framework that instruments retrieval (Recall@5, NDCG, `context_recall`) and generation (`faithfulness`) independently, with a deployment gate on both.">Weak eval hides retrieval failures by measuring only final answer quality — the fix is a two-layer golden-dataset framework that instruments retrieval (Recall@5, NDCG, `context_recall`) and generation (`faithfulness`) independently, with a deployment gate on both.</div>
+  </div>
+</div>

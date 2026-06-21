@@ -1,0 +1,144 @@
+<div class="answer-header reveal">
+  <div class="answer-meta">
+    <span class="meta-badge meta-category">04-fine-tuning-training</span>
+    <span class="meta-badge meta-num">Q012</span>
+    <span class="meta-badge meta-status-review">review</span>
+  </div>
+  <h1 class="answer-title">Quantization — tradeoffs between size, speed, accuracy?</h1>
+</div>
+
+<div class="answer-section reveal">
+  <div class="accordion">
+    <div class="accordion-header">
+      <span class="accordion-title">⟁ Framing — Why this is asked</span>
+      <span class="accordion-chevron">▾</span>
+    </div>
+    <div class="accordion-body">
+      <div class="framing-grid">
+        <div><div class="framing-card">
+          <div class="framing-card-title">Why asked</div>
+          <p style="font-size:13.5px;line-height:1.7;color:var(--text-dim)">Quantization is the primary lever for reducing LLM inference cost and latency without retraining. Interviewers probe whether you understand the full tradeoff space — not just &quot;smaller is faster&quot; — but when accuracy degrades unacceptably, which bit-widths are safe, which layers are sensitive, and how to validate a quantized model before deploying it. This is especially relevant for cost/latency optimization, edge deployment, and model serving at scale.</p>
+        </div></div>
+        <div><div class="framing-card">
+          <div class="framing-card-title">Trigger phrases</div>
+          <div class="trigger-list">
+              <div class="trigger-phrase">How do you reduce inference cost at scale?</div>
+              <div class="trigger-phrase">We need to deploy a 70B model on fewer GPUs — how do you approach that?</div>
+              <div class="trigger-phrase">What&#x27;s the tradeoff between quantization and accuracy?</div>
+              <div class="trigger-phrase">Walk me through INT8 vs FP16 vs 4-bit quantization.</div>
+              <div class="trigger-phrase">How do you make a large model fit on consumer hardware?</div>
+          </div>
+        </div></div>
+      </div>
+      <div class="tests-block">
+        <span style="font-family:var(--mono);font-size:10px;letter-spacing:0.1em;text-transform:uppercase;color:var(--purple);margin-right:8px">Tests:</span>Whether you can navigate the size/speed/accuracy tradeoff triangle with concrete bit-width comparisons, tool knowledge (GPTQ, AWQ, bitsandbytes), and a systematic validation approach before production deployment.
+
+---
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="section-label">Concept</div>
+  <div class="concept-block"><p>Quantization reduces the numerical precision of model weights (and optionally activations) from 32-bit or 16-bit floats to lower-precision integers (INT8, INT4, FP8), shrinking memory footprint and accelerating compute-bound operations. The central tradeoff: each bit you drop saves memory and can increase throughput, but risks accuracy degradation — especially in outlier-heavy layers and on reasoning tasks.</p></div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="section-label">Mechanism</div>
+  <div class="card"><p><strong>Precision levels and their profiles:</strong></p>
+<div class="table-wrap"><table class="data-table"><tr><th>Format</th><th>Memory/param</th><th>Typical accuracy loss</th><th>Use case</th></tr><tr><td>BF16 / FP16</td><td>2 bytes</td><td>Baseline (training/inference standard)</td><td>Default serving</td></tr><tr><td>FP8 (e8m0/e4m3)</td><td>1 byte</td><td><1% on most tasks</td><td>H100 training + inference</td></tr><tr><td>INT8 (W8A8)</td><td>1 byte</td><td>1–2% on reasoning</td><td>Throughput-optimized serving</td></tr><tr><td>INT4 (W4A16)</td><td>0.5 bytes</td><td>2–5%, 10–20%+ on math/code</td><td>Consumer GPU / cost-optimized</td></tr><tr><td>INT2/INT3</td><td>0.25–0.375 bytes</td><td>Significant; not production-ready at scale</td><td>Research</td></tr></table></div>
+<p><strong>Key techniques:</strong></p>
+<ol class="mechanism-steps"><li><strong>Post-Training Quantization (PTQ)</strong> — quantize a trained BF16 model without retraining:</li></ol>
+<ul class="styled-list"><li><strong>GPTQ</strong> (Frantar et al., 2022): Layer-by-layer Hessian-based weight rounding that minimizes output error. Supports W4A16 (4-bit weights, 16-bit activations). Used in AutoGPTQ / llama.cpp.</li><li><strong>AWQ</strong> (Lin et al., 2023): Activation-aware weight quantization — identifies and protects 1% of weights responsible for large activations (outliers). Often beats GPTQ on perplexity at 4-bit.</li><li><strong>bitsandbytes</strong>: INT8 and NF4/FP4 quantization via absmax/LLM.int8() outlier decomposition; used in QLoRA during training.</li></ul>
+<ol class="mechanism-steps"><li><strong>Quantization-Aware Training (QAT)</strong> — simulate quantization during fine-tuning (straight-through estimator for gradients). Best accuracy at target bit-width; requires training budget.</li></ol>
+<ol class="mechanism-steps"><li><strong>Activation quantization (W8A8 vs W4A16)</strong>: Quantizing activations is harder than weights because activations have dynamic range and outliers. W4A16 (4-bit weights only) is safer than W4A8. Hardware support for W8A8 INT8 GEMM is mature on NVIDIA (TensorRT).</li></ol>
+<p><strong>Sensitive layers:</strong> embedding tables and the first/last transformer layers are most sensitive to quantization — common to skip these or use higher precision for them (mixed-precision quantization).</p>
+<p><strong>Calibration dataset:</strong> PTQ methods require a calibration set (512–1024 samples from the target distribution) to compute quantization scales. Wrong domain → poor scale estimates → degraded accuracy.</p></div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="section-label">Example / Tradeoff</div>
+  <div class="card card-accent"><div class="rich-text"><p><strong>Llama 3 70B on 2×A100 80GB:</strong></p>
+<ul class="styled-list"><li>BF16: 140 GB VRAM — doesn't fit on 2×A100.</li><li>INT8: 70 GB VRAM — fits on 1×A100 with ~1.5% perplexity increase.</li><li>AWQ W4A16: 35 GB VRAM — fits easily, ~3–4% perplexity increase, 1.6× decode throughput gain vs BF16 due to lower memory bandwidth pressure.</li></ul>
+<p><strong>Accuracy sensitivity by task type:</strong></p>
+<ul class="styled-list"><li>Perplexity (general text): 4-bit ≈ 1–3 ppl increase — often acceptable.</li><li>Math/coding (GSM8K, HumanEval): 4-bit can drop 5–15 accuracy points on smaller models (<13B); larger models (>70B) are more robust.</li><li>RAG generation (T=0, grounding prompt): 4-bit often indistinguishable in production eval — retrieval quality dominates.</li></ul>
+<p><strong>Toolchain:</strong> vLLM natively supports AWQ/GPTQ for production serving; llama.cpp GGUF for CPU/edge.</p>
+<p><strong>Validation protocol:</strong></p>
+<ol class="mechanism-steps"><li>Run calibration perplexity on held-out validation set — compare to BF16 baseline.</li><li>Run golden-task benchmark (GSM8K pass@1, RAGAS faithfulness on RAG golden set, HumanEval for code).</li><li>Shadow deploy: route 5% of traffic to quantized model, compare output quality signal (thumbs-up/down, edit rate).</li><li>Check p95 latency and throughput (tokens/s) — quantized models can have higher decode throughput but similar TTFT if prefill is compute-bound.</li></ol></div></div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="accordion">
+    <div class="accordion-header">
+      <span class="accordion-title">🎙 Verbal Script (3–5 min)</span>
+      <span class="accordion-chevron">▾</span>
+    </div>
+    <div class="accordion-body">
+      <div class="script-block"><div class="script-label">Opening (30s)</div><p>"Quantization is the primary lever for fitting large models on available hardware and cutting inference cost — but it's a tradeoff triangle: size, speed, and accuracy. I'd structure my answer around the main precision formats, the two quantization approaches (post-training vs quantization-aware training), and then how I'd validate a quantized model before shipping it."</p></div>
+      <div class="script-block"><div class="script-label">Core explanation (2–3 min)</div><p>"The key formats to know are BF16 as the baseline, INT8 at half the memory with ~1–2% accuracy cost, and 4-bit (INT4 or NF4) at a quarter of BF16 with 2–5% cost on general tasks but potentially 10–15% on math or code for smaller models.</p>
+<p>For post-training quantization — which is what you'd use in production when you don't want to retrain — GPTQ and AWQ are the go-to algorithms. AWQ is often better because it's activation-aware: it identifies the ~1% of weights that correspond to outlier activations and protects them at higher precision. GPTQ does layer-by-layer Hessian-minimization. Both are supported in vLLM and AutoGPTQ.</p>
+<p>A concrete example: Llama 3 70B in BF16 needs 140GB VRAM — that's 2 A100s with no room for the KV cache. AWQ W4A16 brings it down to ~35GB, so it runs on a single A100 with headroom for batching, and you get about a 1.6× decode throughput boost because you're under less memory-bandwidth pressure — which is the actual bottleneck at decode time.</p>
+<p>The critical point people miss is that accuracy loss is task-dependent. For RAG-based QA at temperature=0 with a grounding prompt, 4-bit is often indistinguishable in practice because retrieval quality dominates. But for math reasoning or code generation, especially on models under 13B, 4-bit can cost you meaningful points on GSM8K."</p></div>
+      <div class="script-block"><div class="script-label">Tradeoff / production angle (1 min)</div><p>"My validation protocol before deploying a quantized model: first, compare perplexity on a held-out validation set. Second, run the golden task benchmarks for the use case — GSM8K for math, HumanEval for code, RAGAS faithfulness on the RAG golden set. Third, shadow deploy at 5% traffic and compare thumbs-up/down or edit rates. I also check that p95 latency actually improves — if the model is prefill-bound (long system prompts), quantization helps less than if it's decode-bound."</p></div>
+      <div class="script-block"><div class="script-label">Wrap-up (30s)</div><p>"The short version: use AWQ or GPTQ W4A16 for cost and memory reduction in most production settings, validate on task-specific golden sets not just perplexity, and be cautious about 4-bit for math/code tasks on smaller models. Happy to go deeper on any of the quantization algorithms or the serving stack."</p></div>
+    </div>
+  </div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="section-label">Pitfalls</div>
+  <div class="pitfall-card">
+    <div class="pitfall-mistake"><strong>✗ Mistake</strong> Saying &quot;quantization always cuts accuracy so just use INT8 to be safe&quot; without distinguishing task sensitivity</div>
+    <div class="pitfall-better"><strong>✓ Better</strong> Explain that RAG generation at T=0 is often fine at 4-bit while math/code tasks are more sensitive, so the right bit-width depends on the application benchmark, not a blanket rule.</div>
+  </div>
+  <div class="pitfall-card">
+    <div class="pitfall-mistake"><strong>✗ Mistake</strong> Conflating QLoRA (4-bit during training) with GPTQ/AWQ (PTQ for inference) — treating them as the same thing</div>
+    <div class="pitfall-better"><strong>✓ Better</strong> Clarify that QLoRA uses NF4 quantization of the frozen base weights during fine-tuning, but the trained adapter is typically merged back into BF16 or separately quantized with GPTQ/AWQ for production serving.</div>
+  </div>
+  <div class="pitfall-card">
+    <div class="pitfall-mistake"><strong>✗ Mistake</strong> Skipping the calibration dataset quality check</div>
+    <div class="pitfall-better"><strong>✓ Better</strong> Explain that PTQ quantization scale estimates depend on the calibration set&#x27;s distribution; using out-of-domain data (e.g., Wikipedia for a medical model) leads to poor scales and larger accuracy loss than necessary.</div>
+  </div>
+  <div class="pitfall-card">
+    <div class="pitfall-mistake"><strong>✗ Mistake</strong> Assuming quantization speeds up prefill as much as decode</div>
+    <div class="pitfall-better"><strong>✓ Better</strong> Clarify that decode is memory-bandwidth-bound (low arithmetic intensity) so quantization helps most there; prefill is compute-bound and benefits less from weight-only quantization (W4A16).
+
+---</div>
+  </div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="section-label">Related Questions</div>
+  <div class="related-pills">
+    <div class="related-pill" data-slug="04-003">
+      <span class="related-pill-icon">→</span>
+      <div class="related-pill-text">
+        <div class="related-pill-q">Q3: QLoRA vs LoRA — when choose one?</div>
+        <div class="related-pill-rel">QLoRA uses NF4 quantization during training; GPTQ/AWQ is PTQ for inference — important to distinguish</div>
+      </div>
+    </div>
+    <div class="related-pill" data-slug="04-010">
+      <span class="related-pill-icon">→</span>
+      <div class="related-pill-text">
+        <div class="related-pill-q">Q10: Speculative decoding — speed up inference?</div>
+        <div class="related-pill-rel">Complementary inference optimization — quantization reduces memory bandwidth pressure; speculative decoding increases throughput on structured tasks</div>
+      </div>
+    </div>
+    <div class="related-pill" data-slug="07-003">
+      <span class="related-pill-icon">→</span>
+      <div class="related-pill-text">
+        <div class="related-pill-q">How do you reduce latency in GenAI applications?</div>
+        <div class="related-pill-rel">Quantization is the primary model-level latency lever in the cost/latency optimization toolkit</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="section-label">One-liner recall</div>
+  <div class="oneliner-box">
+    <div class="oneliner-label">▸ Reconstruct from memory</div>
+    <div class="oneliner-text" data-text="Quantization reduces model precision (BF16→INT8→INT4) to shrink memory and boost decode throughput, with AWQ/GPTQ as the standard PTQ algorithms — validate on task-specific golden sets because accuracy loss is task-dependent (RAG is forgiving; math/code at 4-bit on small models is risky).">Quantization reduces model precision (BF16→INT8→INT4) to shrink memory and boost decode throughput, with AWQ/GPTQ as the standard PTQ algorithms — validate on task-specific golden sets because accuracy loss is task-dependent (RAG is forgiving; math/code at 4-bit on small models is risky).</div>
+  </div>
+</div>

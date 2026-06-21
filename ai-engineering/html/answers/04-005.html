@@ -1,0 +1,132 @@
+<div class="answer-header reveal">
+  <div class="answer-meta">
+    <span class="meta-badge meta-category">04-fine-tuning-training</span>
+    <span class="meta-badge meta-num">Q005</span>
+    <span class="meta-badge meta-status-review">review</span>
+  </div>
+  <h1 class="answer-title">Fine-tune or prompt-engineered RAG?</h1>
+</div>
+
+<div class="answer-section reveal">
+  <div class="accordion">
+    <div class="accordion-header">
+      <span class="accordion-title">⟁ Framing — Why this is asked</span>
+      <span class="accordion-chevron">▾</span>
+    </div>
+    <div class="accordion-body">
+      <div class="framing-grid">
+        <div><div class="framing-card">
+          <div class="framing-card-title">Why asked</div>
+          <p style="font-size:13.5px;line-height:1.7;color:var(--text-dim)">This question probes whether a candidate understands the distinct failure modes that RAG and fine-tuning address, and whether they can make a principled cost-benefit call rather than defaulting to either extreme. Interviewers at mid-to-senior level want to see that you&#x27;ve shipped both approaches and have concrete signals for when one beats the other — not just abstract &quot;it depends.&quot;</p>
+        </div></div>
+        <div><div class="framing-card">
+          <div class="framing-card-title">Trigger phrases</div>
+          <div class="trigger-list">
+              <div class="trigger-phrase">Would you fine-tune the model or just add retrieval?</div>
+              <div class="trigger-phrase">We have a domain-specific QA problem — fine-tune or RAG?</div>
+              <div class="trigger-phrase">When is fine-tuning better than RAG + prompt engineering?</div>
+              <div class="trigger-phrase">Our RAG pipeline still produces bad answers — should we fine-tune?</div>
+          </div>
+        </div></div>
+      </div>
+      <div class="tests-block">
+        <span style="font-family:var(--mono);font-size:10px;letter-spacing:0.1em;text-transform:uppercase;color:var(--purple);margin-right:8px">Tests:</span>Ability to diagnose the root cause of an LLM product failure (knowledge gap vs behavior gap vs format gap) and select the correct adaptation mechanism, including cost-benefit reasoning and hybrid combinations.
+
+---
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="section-label">Concept</div>
+  <div class="concept-block"><p>Fine-tuning and RAG solve <em>different</em> problems: RAG closes a <strong>knowledge gap</strong> (the model lacks facts or they're stale), while fine-tuning closes a <strong>behavior gap</strong> (the model has the knowledge but can't reliably format, reason, or respond in the required style). Choosing the wrong tool — fine-tuning when you needed better retrieval, or RAG when the model can't follow the output format — is one of the most common production mistakes in applied AI.</p></div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="section-label">Mechanism</div>
+  <div class="card"><p><strong>Use RAG (prompt-engineered) when:</strong></p>
+<ol class="mechanism-steps"><li><strong>The failure is factual</strong> — the model answers from stale training data or halluccinates facts that live in your private corpus (product docs, customer records, legal contracts). RAG retrieves the ground truth at query time.</li><li><strong>Your data changes frequently</strong> — a fine-tuned model encodes knowledge at training time; RAG indexes are updateable within minutes via CDC pipelines (Debezium + Kafka + Pinecone upsert).</li><li><strong>You need citations / attributability</strong> — RAG naturally surfaces source chunks; a fine-tuned model can't tell you <em>which document</em> it learned from.</li><li><strong>You have < 1K labeled examples</strong> — RAG needs no training data, only a document corpus.</li><li><strong>You're in early product stage</strong> — RAG iteration cycle is hours; fine-tuning is days-to-weeks.</li></ol>
+<p><strong>Use fine-tuning when:</strong></p>
+<ol class="mechanism-steps"><li><strong>The failure is behavioral, not factual</strong> — the model knows the material but can't produce the right format (structured JSON, a specific citation style, medical SOAP notes), safety constraints, or tone consistently even with detailed prompting.</li><li><strong>Inference cost or latency is the constraint</strong> — baking instructions and domain style into weights lets you use a smaller (cheaper, faster) model without a large system prompt or retrieval overhead. A fine-tuned Llama 3 8B can beat a prompted GPT-4o-mini at 10% of the cost per call.</li><li><strong>You have confidential data that can't enter prompts</strong> — if proprietary context can't be injected into inference-time prompts (due to security or IP policy), fine-tuning encodes that knowledge into weights at training time on a controlled cluster.</li><li><strong>You need guaranteed output schema</strong> — fine-tuning on structured-output examples is more reliable than prompt-only JSON extraction for complex nested schemas.</li><li><strong>RAG retrieval itself is the bottleneck</strong> — if retrieval accuracy is the root cause and the relevant context is too diffuse to retrieve (general domain style, not specific documents), fine-tuning may outperform RAG.</li></ol>
+<p><strong>The hybrid pattern (most production systems eventually reach this):</strong></p>
+<p>Fine-tuned model + RAG retrieval is the strongest combination: fine-tuning teaches the model <em>how</em> to reason, format, and respond; RAG provides <em>what</em> facts to reason over. Example: fine-tune a Llama 3 8B on your company's QA style (tone, citation format, structured output schema) with LoRA, then deploy it with a Pinecone RAG pipeline for live knowledge retrieval. This gives smaller model cost + dynamic knowledge + consistent behavior.</p></div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="section-label">Example / Tradeoff</div>
+  <div class="card card-accent"><div class="rich-text"><p><strong>Customer support QA at a SaaS company (real pattern):</strong></p>
+<ul class="styled-list"><li><strong>RAG baseline:</strong> GPT-4o-mini + Pinecone hybrid BM25+dense retrieval. Faithfulness RAGAS score 0.78, but 22% of answers used incorrect product-name casing, missed required disclaimer text, and returned inconsistent JSON for the ticket API.</li><li><strong>Root cause diagnosis:</strong> Retrieval recall@5 was 0.87 (good) — the facts were present. The failure was behavioral: the model couldn't consistently follow the output schema and safety instructions even with a 1K-token system prompt.</li><li><strong>Fix:</strong> LoRA fine-tuning on 8K labeled (ticket, response) pairs (Llama 3 8B, rank=32, α=64, 3 epochs). Kept RAG for live product catalog retrieval. Outcome: schema compliance 78%→99%, disclaimer adherence 81%→100%, cost $0.018/ticket → $0.004/ticket vs GPT-4o-mini RAG.</li><li><strong>Tradeoff:</strong> Fine-tune iteration cycle was 2 weeks (data curation + training + eval). The system prompt fix would have taken 2 hours — but it had already been tried 4 times without success, which was the signal to escalate to fine-tuning.</li></ul>
+<div class="table-wrap"><table class="data-table"><tr><th>Criterion</th><th>RAG</th><th>Fine-tune</th><th>Hybrid</th></tr><tr><td>Knowledge gap (missing facts)</td><td>✅ Best</td><td>❌ Poor (brittle memorization)</td><td>✅ Best</td></tr><tr><td>Behavior/style gap</td><td>⚠️ Partial (big prompt)</td><td>✅ Best</td><td>✅ Best</td></tr><tr><td>Data currency</td><td>✅ Real-time updates</td><td>❌ Stale at training</td><td>✅ Real-time updates</td></tr><tr><td>Iteration speed</td><td>✅ Hours</td><td>❌ Days–weeks</td><td>❌ Days–weeks</td></tr><tr><td>Inference cost</td><td>⚠️ Retrieval overhead + large model</td><td>✅ Smaller model possible</td><td>✅ Smaller model + retrieval</td></tr><tr><td>Source attribution</td><td>✅ Natural</td><td>❌ None</td><td>✅ Natural</td></tr></table></div>| Data need | No labeled data | 1K–100K examples | Both |</div></div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="accordion">
+    <div class="accordion-header">
+      <span class="accordion-title">🎙 Verbal Script (3–5 min)</span>
+      <span class="accordion-chevron">▾</span>
+    </div>
+    <div class="accordion-body">
+      <div class="script-block"><div class="script-label">Opening (30s)</div><p>"I treat this as a root-cause question before a solution question. The key diagnostic is: <em>why</em> is the current system failing? If it's failing because the model doesn't have the right facts — stale, private, or domain-specific — that's a knowledge gap and RAG is the right tool. If it's failing because the model <em>has</em> the knowledge but can't reliably format the answer, follow safety constraints, or produce the right tone, that's a behavior gap and fine-tuning is the right tool. The mistake I see most often is teams reaching for fine-tuning when they haven't fixed their retrieval."</p></div>
+      <div class="script-block"><div class="script-label">Core explanation (2–3 min)</div><p>"So my decision framework starts with diagnosis. I'd look at RAGAS context_recall — if relevant chunks aren't being retrieved, fix retrieval first: hybrid search, better chunking, cross-encoder reranking. If recall is fine (0.85+) but the generated answers are still wrong in format or style, that's the signal to consider fine-tuning.</p>
+<p>For RAG: it's the right default because it's updateable, needs no labeled training data, gives you source attribution, and iterates fast. It handles knowledge gaps well and can handle moderate behavior guidance through prompt engineering — a detailed system prompt with examples covers a lot of ground.</p>
+<p>Fine-tuning earns its place when prompt iteration has genuinely failed — say, 3–4 serious attempts at improving the system prompt still produce inconsistent schema or tone — and when I have at least 1K labeled examples. In practice I'd use LoRA (rank 32, α=64, targeting q_proj/v_proj) on a smaller base model, which also solves the cost problem: a fine-tuned Llama 3 8B can often beat a prompted GPT-4o-mini at 10–20% of the per-call cost.</p>
+<p>The strongest production pattern is the hybrid: fine-tune for behavior and style, RAG for live knowledge. Fine-tuning teaches the model <em>how</em> to respond; RAG tells it <em>what facts</em> to use."</p></div>
+      <div class="script-block"><div class="script-label">Tradeoff / production angle (1 min)</div><p>"The practical tradeoff is iteration speed. RAG prompt changes deploy in hours; a fine-tuning cycle — data curation, training, eval, regression, deploy — is 1–2 weeks and requires the right infrastructure. So the break-even question is: have I spent more engineering time wrestling with the system prompt than a fine-tune cycle would cost? If yes, it's time to escalate. Also: fine-tuning encodes knowledge at a point in time — if your domain data changes weekly, you're now on a retraining treadmill, which tips the scales back toward RAG for the knowledge component."</p></div>
+      <div class="script-block"><div class="script-label">Wrap-up (30s)</div><p>"So: RAG by default for knowledge gaps and early-stage products; fine-tuning when you have a confirmed behavior gap, ≥1K labeled examples, and prompt iteration has hit a ceiling. The hybrid of fine-tuned model + RAG retrieval is usually the production sweet spot for mature systems. Happy to go deeper on LoRA mechanics or how to build the labeled dataset for fine-tuning."</p></div>
+    </div>
+  </div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="section-label">Pitfalls</div>
+  <div class="pitfall-card">
+    <div class="pitfall-mistake"><strong>✗ Mistake</strong> Saying &quot;fine-tuning gives the model better knowledge of our domain&quot;</div>
+    <div class="pitfall-better"><strong>✓ Better</strong> Clarify that fine-tuning primarily changes behavior and style, not reliable factual recall; for domain facts, RAG retrieval is more accurate and updateable; SFT can memorize facts but is brittle under paraphrase and causes hallucination on unseen facts</div>
+  </div>
+  <div class="pitfall-card">
+    <div class="pitfall-mistake"><strong>✗ Mistake</strong> Jumping to fine-tuning after one or two failed RAG prompts, without checking retrieval quality</div>
+    <div class="pitfall-better"><strong>✓ Better</strong> Always check RAGAS context_recall first; if recall@5 &lt; 0.80, the problem is retrieval, not generation — fix chunking, add hybrid BM25 search, or add a cross-encoder reranker before considering fine-tuning</div>
+  </div>
+  <div class="pitfall-card">
+    <div class="pitfall-mistake"><strong>✗ Mistake</strong> Treating fine-tuning and RAG as mutually exclusive</div>
+    <div class="pitfall-better"><strong>✓ Better</strong> Describe the hybrid pattern explicitly: fine-tune for behavior/style/schema consistency, keep RAG for live knowledge retrieval; this is the dominant production architecture for mature QA systems
+
+---</div>
+  </div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="section-label">Related Questions</div>
+  <div class="related-pills">
+    <div class="related-pill" data-slug="04-001">
+      <span class="related-pill-icon">→</span>
+      <div class="related-pill-text">
+        <div class="related-pill-q">Q1: When fine-tune vs prompt engineering?</div>
+        <div class="related-pill-rel">Parent decision: full cost ladder including RAG as a rung</div>
+      </div>
+    </div>
+    <div class="related-pill" data-slug="04-002">
+      <span class="related-pill-icon">→</span>
+      <div class="related-pill-text">
+        <div class="related-pill-q">Q2: What is PEFT/LoRA and when use it?</div>
+        <div class="related-pill-rel">Follow-up: mechanics of fine-tuning once you&#x27;ve decided to fine-tune</div>
+      </div>
+    </div>
+    <div class="related-pill" data-slug="02-021">
+      <span class="related-pill-icon">→</span>
+      <div class="related-pill-text">
+        <div class="related-pill-q">Q21: How evaluate a RAG pipeline?</div>
+        <div class="related-pill-rel">Critical prerequisite: you must evaluate retrieval quality (context_recall) before deciding RAG has failed</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="section-label">One-liner recall</div>
+  <div class="oneliner-box">
+    <div class="oneliner-label">▸ Reconstruct from memory</div>
+    <div class="oneliner-text" data-text="RAG fixes knowledge gaps (missing or stale facts); fine-tuning fixes behavior gaps (bad format, style, schema compliance despite good retrieval) — diagnose root cause with RAGAS context_recall before choosing, and use both together for mature production systems.">RAG fixes knowledge gaps (missing or stale facts); fine-tuning fixes behavior gaps (bad format, style, schema compliance despite good retrieval) — diagnose root cause with RAGAS context_recall before choosing, and use both together for mature production systems.</div>
+  </div>
+</div>

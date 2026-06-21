@@ -1,0 +1,127 @@
+<div class="answer-header reveal">
+  <div class="answer-meta">
+    <span class="meta-badge meta-category">06-ml-fundamentals</span>
+    <span class="meta-badge meta-num">Q013</span>
+    <span class="meta-badge meta-status-review">review</span>
+  </div>
+  <h1 class="answer-title">Debug model that runs but doesn&#x27;t learn — broadcasting, dimension mismatches?</h1>
+</div>
+
+<div class="answer-section reveal">
+  <div class="accordion">
+    <div class="accordion-header">
+      <span class="accordion-title">⟁ Framing — Why this is asked</span>
+      <span class="accordion-chevron">▾</span>
+    </div>
+    <div class="accordion-body">
+      <div class="framing-grid">
+        <div><div class="framing-card">
+          <div class="framing-card-title">Why asked</div>
+          <p style="font-size:13.5px;line-height:1.7;color:var(--text-dim)">The interviewer is probing practical debugging depth — whether you have actually trained neural networks end-to-end and diagnosed silent failures. Models that compile and run without errors but never improve are the most insidious class of ML bugs; catching them requires a systematic checklist, not guesswork.</p>
+        </div></div>
+        <div><div class="framing-card">
+          <div class="framing-card-title">Trigger phrases</div>
+          <div class="trigger-list">
+              <div class="trigger-phrase">Your model trains but loss doesn&#x27;t go down — what do you do?</div>
+              <div class="trigger-phrase">Walk me through debugging a neural network that isn&#x27;t learning.</div>
+              <div class="trigger-phrase">What are common PyTorch bugs that cause a model to fail silently?</div>
+          </div>
+        </div></div>
+      </div>
+      <div class="tests-block">
+        <span style="font-family:var(--mono);font-size:10px;letter-spacing:0.1em;text-transform:uppercase;color:var(--purple);margin-right:8px">Tests:</span>Systematic ML debugging instinct: ability to isolate data, model, and optimizer bugs in priority order.
+
+---
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="section-label">Concept</div>
+  <div class="concept-block"><p>A model that "runs but doesn't learn" means the training loop executes without crashing but loss stagnates, diverges, or never falls below a random baseline. The root causes fall into three buckets: <strong>data pipeline bugs</strong> (wrong labels, silent shape errors, normalisation mistakes), <strong>model architecture bugs</strong> (broadcasting masks real errors, dead activations, gradient blocking), and <strong>optimiser mis-configuration</strong> (learning rate, loss reduction, detached tensors). Broadcasting in PyTorch/NumPy silently reshapes mismatched tensors instead of erroring, which is the single most common source of "shape looks fine but output is noise."</p></div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="section-label">Mechanism</div>
+  <div class="card"><p><strong>Step 1 — Sanity-check with a mini-batch overfit test</strong>   Run <code>N=1</code> (or 32) examples for 100+ steps. A correctly wired model must overfit a tiny batch to near-zero loss. If it can't, the bug is in the model or loss, not the data scale.</p>
+<p><strong>Step 2 — Validate data pipeline</strong></p>
+<ul class="styled-list"><li>Print <code>X.shape</code>, <code>y.shape</code>, dtype, and a handful of <code>(X[i], y[i])</code> pairs.  </li><li>Check label alignment: shuffle bugs and index-off-by-one errors produce random labels.  </li><li>Confirm normalisation is applied identically at train and serve time (training/serving skew).</li></ul>
+<p><strong>Step 3 — Check for broadcasting traps</strong>   ```python</p></div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="section-label">Example / Tradeoff</div>
+  <div class="card card-accent"><div class="rich-text"></div></div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="accordion">
+    <div class="accordion-header">
+      <span class="accordion-title">🎙 Verbal Script (3–5 min)</span>
+      <span class="accordion-chevron">▾</span>
+    </div>
+    <div class="accordion-body">
+      <div class="script-block"><div class="script-label">Opening (30s)</div><p>"This is one of the trickiest classes of ML bugs because everything appears to be working — no exceptions, no NaNs at first glance. My approach is a systematic five-step checklist that isolates data, model, and optimizer as separate failure domains."</p></div>
+      <div class="script-block"><div class="script-label">Core explanation (2–3 min)</div><p>"The first thing I do is a mini-batch overfit test: I take 32 examples and run 100+ gradient steps. Any correctly wired model must memorise those examples. If it can't, the bug is in the model or loss function, not in the size or quality of the data.</p>
+<p>Next I validate the data pipeline — print raw shapes, dtypes, and a few (X, y) pairs to confirm labels are aligned. Shuffle bugs and off-by-one indexing errors produce random labels, which look like a non-learning model but are actually a data bug.</p>
+<p>The broadcasting issue is the sneakiest: PyTorch will silently reshape tensors that don't match instead of throwing an error. I always add explicit <code>assert</code> statements on the shapes right before the loss call. For example, a labels tensor of shape (B,) that accidentally gets transposed becomes (1, B), which broadcasts against (B, C) logits and computes a meaningless loss without crashing.</p>
+<p>Then I check gradients directly with <code>named_parameters()</code>. If any parameter has <code>.grad == None</code>, it means it's detached from the computation graph — usually from a stray <code>.numpy()</code> call or a <code>detach()</code> that was meant for inference code. I enable <code>torch.autograd.set_detect_anomaly(True)</code> to catch NaN gradients early. Finally I verify the learning rate scale — too high and loss explodes, too low and it barely moves for many epochs."</p></div>
+      <div class="script-block"><div class="script-label">Tradeoff / production angle (1 min)</div><p>"At scale, anomaly detection adds overhead — I enable it only during debugging, not production training. For large models I also add forward hooks to sample activation statistics per layer. If a ReLU layer is returning all zeros, that's a dead-neuron problem that broadcasting checks won't catch. Weight initialisation matters here — using <code>nn.init.kaiming_uniform_</code> for ReLU networks prevents most dead-activation issues."</p></div>
+      <div class="script-block"><div class="script-label">Wrap-up (30s)</div><p>"The key discipline is: never trust the training loop just because it doesn't crash. The overfit test is the single fastest gate — if your model can't memorise 32 examples in 100 steps, stop there and fix the model or loss before touching data scale."</p></div>
+    </div>
+  </div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="section-label">Pitfalls</div>
+  <div class="pitfall-card">
+    <div class="pitfall-mistake"><strong>✗ Mistake</strong> Jumping straight to hyperparameter tuning (adjust LR, change optimizer) when the model isn&#x27;t learning</div>
+    <div class="pitfall-better"><strong>✓ Better</strong> Run the mini-batch overfit test first; if the model can&#x27;t overfit 32 examples, hyperparameter tuning will never fix the underlying structural bug.</div>
+  </div>
+  <div class="pitfall-card">
+    <div class="pitfall-mistake"><strong>✗ Mistake</strong> Saying &quot;check for NaN in the loss&quot; as the primary debugging strategy</div>
+    <div class="pitfall-better"><strong>✓ Better</strong> Broadcasting bugs produce finite but meaningless loss values; always add explicit shape assertions before the loss call and check <code>p.grad is None</code> for every parameter.</div>
+  </div>
+  <div class="pitfall-card">
+    <div class="pitfall-mistake"><strong>✗ Mistake</strong> Forgetting that <code>optimizer.zero_grad()</code> placement matters — placing it after <code>loss.backward()</code> but before the next <code>optimizer.step()</code> accumulates gradients from previous batches silently</div>
+    <div class="pitfall-better"><strong>✓ Better</strong> Always call <code>zero_grad()</code> at the top of the training loop before the forward pass.
+
+---</div>
+  </div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="section-label">Related Questions</div>
+  <div class="related-pills">
+    <div class="related-pill" data-slug="06-003">
+      <span class="related-pill-icon">→</span>
+      <div class="related-pill-text">
+        <div class="related-pill-q">Q3: Diagnose performance bugs in a model?</div>
+        <div class="related-pill-rel">Parent diagnostic framework — covers broader perf issues beyond training bugs</div>
+      </div>
+    </div>
+    <div class="related-pill" data-slug="06-009">
+      <span class="related-pill-icon">→</span>
+      <div class="related-pill-text">
+        <div class="related-pill-q">Q9: Bias-variance tradeoff?</div>
+        <div class="related-pill-rel">Follow-up once the model is learning — diagnosing under/overfitting</div>
+      </div>
+    </div>
+    <div class="related-pill" data-slug="06-022">
+      <span class="related-pill-icon">→</span>
+      <div class="related-pill-text">
+        <div class="related-pill-q">Q22: Gradient descent?</div>
+        <div class="related-pill-rel">Foundational mechanism — understanding why LR and gradient flow matter</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="section-label">One-liner recall</div>
+  <div class="oneliner-box">
+    <div class="oneliner-label">▸ Reconstruct from memory</div>
+    <div class="oneliner-text" data-text="Run a mini-batch overfit test first (32 examples, 100 steps); if it fails, add shape assertions before the loss call and check `p.grad is None` for every parameter to catch broadcasting traps and detached tensors before touching hyperparameters.">Run a mini-batch overfit test first (32 examples, 100 steps); if it fails, add shape assertions before the loss call and check `p.grad is None` for every parameter to catch broadcasting traps and detached tensors before touching hyperparameters.</div>
+  </div>
+</div>

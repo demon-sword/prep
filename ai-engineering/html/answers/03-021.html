@@ -1,0 +1,151 @@
+<div class="answer-header reveal">
+  <div class="answer-meta">
+    <span class="meta-badge meta-category">03-agents-tool-use</span>
+    <span class="meta-badge meta-num">Q021</span>
+    <span class="meta-badge meta-status-review">review</span>
+  </div>
+  <h1 class="answer-title">How agents decide which tool to use?</h1>
+</div>
+
+<div class="answer-section reveal">
+  <div class="accordion">
+    <div class="accordion-header">
+      <span class="accordion-title">⟁ Framing — Why this is asked</span>
+      <span class="accordion-chevron">▾</span>
+    </div>
+    <div class="accordion-body">
+      <div class="framing-grid">
+        <div><div class="framing-card">
+          <div class="framing-card-title">Why asked</div>
+          <p style="font-size:13.5px;line-height:1.7;color:var(--text-dim)">This question probes whether the candidate understands the <strong>mechanism and failure modes of tool selection</strong> inside an agent loop — a critical production concern because a hallucinated or miscalibrated tool call is the most common source of agent errors. Interviewers want to know if you can both explain how tool selection works and how to engineer schemas, prompts, and orchestration to make it reliable.</p>
+        </div></div>
+        <div><div class="framing-card">
+          <div class="framing-card-title">Trigger phrases</div>
+          <div class="trigger-list">
+              <div class="trigger-phrase">How does an agent know which tool to call?</div>
+              <div class="trigger-phrase">How do you design tool schemas for reliable selection?</div>
+              <div class="trigger-phrase">What happens when an agent picks the wrong tool?</div>
+          </div>
+        </div></div>
+      </div>
+      <div class="tests-block">
+        <span style="font-family:var(--mono);font-size:10px;letter-spacing:0.1em;text-transform:uppercase;color:var(--purple);margin-right:8px">Tests:</span>Deep understanding of the interplay between LLM function-calling mechanics, tool schema quality, and orchestrator-side validation — plus production intuition about failure modes.
+
+---
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="section-label">Concept</div>
+  <div class="concept-block"><p>Agents decide which tool to use through <strong>LLM function-calling</strong>: the model receives a set of JSON-schema tool definitions alongside the conversation context, and its next-token prediction head is fine-tuned to output a structured <code>tool_call</code> object that names the tool and its arguments. Tool selection is a <strong>semantic match</strong> between the current task context and each tool's description — which means schema quality is the primary lever for reliability.</p></div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="section-label">Mechanism</div>
+  <div class="card"><p><strong>Step-by-step flow (OpenAI / Anthropic function-calling pattern):</strong></p>
+<ol class="mechanism-steps"><li><strong>Schema injection</strong> — the orchestrator prepends all available tool definitions (name, description, parameter schema with types and constraints) into the system prompt or <code>tools</code> array (OpenAI API <code>tools</code> param / Anthropic <code>tools</code> block).</li><li><strong>LLM reasoning (ReAct Thought step)</strong> — the model generates a <code>Thought</code> explaining what it needs to do, then emits a <code>tool_call</code> JSON: <code>{"name": "search_kb", "arguments": {"query": "refund policy"}}</code>.</li><li><strong>Orchestrator validation</strong> — the orchestrator (not the LLM) validates: tool name is in the allowlist, required parameters are present, types match the schema. Rejects malformed calls with a structured error the LLM can correct.</li><li><strong>Tool execution</strong> — the validated call is dispatched; the result is injected as an <code>Observation</code> back into the context.</li><li><strong>Iteration</strong> — the LLM reads the observation and selects the next tool (or terminates with <code>FINAL_ANSWER</code>).</li></ol>
+<p><strong>What drives the selection decision:</strong></p>
+<div class="table-wrap"><table class="data-table"><tr><th>Factor</th><th>Effect on tool selection</th></tr><tr><td>Tool <code>description</code> field</td><td>Primary signal — must be distinct and action-oriented ("Search the knowledge base for policy questions" not "KB search")</td></tr><tr><td>Parameter schema quality</td><td>Constrained enums and examples reduce hallucinated arg values</td></tr><tr><td>Number of tools</td><td>≤10 tools → near-perfect selection; 20+ tools → accuracy degrades; 40+ → use tool retrieval</td></tr><tr><td>Context clarity</td><td>Ambiguous user intent → LLM falls back to asking for clarification or picks the "closest" tool incorrectly</td></tr><tr><td>Temperature</td><td>T=0 for tool-calling steps forces the highest-probability (most confident) tool selection</td></tr></table></div>
+<p><strong>Tool retrieval for large tool sets (20+ tools):</strong>   When the tool library is large (e.g., 50-200 enterprise API tools), inject only a <strong>retrieved subset</strong> per turn: embed the current task description, embed all tool descriptions at startup, and retrieve the top-5–10 by cosine similarity (FAISS/Qdrant). This keeps the context window small and accuracy high.</p></div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="section-label">Example / Tradeoff</div>
+  <div class="card card-accent"><div class="rich-text"><p><strong>Support-ticket agent with 5 tools — LangGraph + OpenAI function-calling:</strong></p>
+<div class="code-block-wrap"><pre class="code-block"><code>tools = [
+    {
+        &quot;name&quot;: &quot;search_kb&quot;,
+        &quot;description&quot;: &quot;Search the support knowledge base for policy or product information. Use when the user asks about policies, features, or troubleshooting steps.&quot;,
+        &quot;parameters&quot;: {
+            &quot;query&quot;: {&quot;type&quot;: &quot;string&quot;, &quot;description&quot;: &quot;Natural language search query&quot;},
+            &quot;category&quot;: {&quot;type&quot;: &quot;string&quot;, &quot;enum&quot;: [&quot;billing&quot;, &quot;shipping&quot;, &quot;returns&quot;, &quot;technical&quot;], 
+                         &quot;description&quot;: &quot;Filter by support category&quot;}
+        }
+    },
+    {
+        &quot;name&quot;: &quot;get_order&quot;,
+        &quot;description&quot;: &quot;Retrieve order details by order ID. Use when the user references a specific order number or asks about order status.&quot;,
+        &quot;parameters&quot;: {
+            &quot;order_id&quot;: {&quot;type&quot;: &quot;string&quot;, &quot;pattern&quot;: &quot;^ORD-[0-9]{6}$&quot;}
+        }
+    },
+    # ... escalate, send_email, create_ticket
+]</code></pre><button class="copy-btn">copy</button></div>
+<p><strong>Selection accuracy in production:</strong></p>
+<ul class="styled-list"><li>5 well-described tools → ~95%+ correct selection at T=0 with GPT-4o-mini</li><li>Same 5 tools with generic descriptions ("Use this to search") → drops to ~70–75%</li><li>Adding 20 poorly-described tools → drops to ~60%, hallucinated tool names appear</li></ul>
+<p><strong>Tradeoff:</strong> More tools = richer agent capability but lower selection accuracy and higher input-token cost (each tool schema consumes tokens every turn). The production pattern is: start with ≤10 curated tools, add tool retrieval when the library grows, and benchmark selection accuracy on a golden task set after each tool addition.</p></div></div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="accordion">
+    <div class="accordion-header">
+      <span class="accordion-title">🎙 Verbal Script (3–5 min)</span>
+      <span class="accordion-chevron">▾</span>
+    </div>
+    <div class="accordion-body">
+      <div class="script-block"><div class="script-label">Opening (30s)</div><p>"Tool selection in agents runs through LLM function-calling — the model reads a set of JSON tool schemas alongside the task context and produces a structured tool-call object. The key insight is that selection accuracy is almost entirely driven by how well you write those schemas, not by anything magic in the model. Let me walk through the mechanism and the production failure modes."</p></div>
+      <div class="script-block"><div class="script-label">Core explanation (2–3 min)</div><p>"The orchestrator injects tool definitions into every call — name, description, and a parameter JSON schema. The LLM then does a semantic match between what it needs to do right now and each tool's description, and emits a <code>tool_call</code> JSON naming the tool and its arguments. The orchestrator validates the output — confirming the tool name is on the allowlist, required params are present, types match — and rejects malformed calls with a structured error so the LLM can self-correct.</p>
+<p>The description field is the primary lever. A description like 'Search the knowledge base for policy or product information — use when the user asks about policies, features, or troubleshooting steps' is dramatically better than 'KB search'. Similarly, constrained enum parameters prevent the model from hallucinating values — if <code>category</code> must be one of <code>['billing', 'shipping', 'returns', 'technical']</code>, it can't invent a new category.</p>
+<p>Temperature matters here too: I always set T=0 for tool-calling turns to force the highest-confidence selection rather than creative sampling.</p>
+<p>When the tool library grows past 10–15 tools, selection accuracy degrades and input token cost rises because you're sending every schema every turn. The fix is tool retrieval: embed all tool descriptions offline, then at runtime embed the current task and retrieve the top 5–10 tools by cosine similarity from FAISS or Qdrant before the LLM call."</p></div>
+      <div class="script-block"><div class="script-label">Tradeoff / production angle (1 min)</div><p>"The failure mode I see most in production is teams adding tools without updating descriptions, so two tools end up with overlapping semantics and the model alternates between them. I benchmark selection accuracy on a golden task set — 50–100 representative tasks where the correct tool is labeled — after every tool change. If accuracy on that set drops more than 5 points, the new tool's description needs work or the schema needs better parameter constraints.</p>
+<p>A second failure: tool selection is fine but argument generation is wrong. This is fixed with examples in the parameter description, constrained enums, and pattern fields in the JSON schema — the model will follow schema constraints reliably at T=0."</p></div>
+      <div class="script-block"><div class="script-label">Wrap-up (30s)</div><p>"So: agents select tools via LLM function-calling driven by schema quality. The levers are tool description distinctiveness, parameter constraints, temperature=0, and tool retrieval for large libraries. The orchestrator validates every call in code — never trust the LLM to self-validate its own tool arguments."</p></div>
+    </div>
+  </div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="section-label">Pitfalls</div>
+  <div class="pitfall-card">
+    <div class="pitfall-mistake"><strong>✗ Mistake</strong> Writing vague or overlapping tool descriptions (&quot;Use this tool to get information&quot;) and then wondering why the agent picks the wrong tool</div>
+    <div class="pitfall-better"><strong>✓ Better</strong> Make each description action-oriented and explicitly state the condition under which to use it (&quot;Use when the user references a specific order number&quot;); treat descriptions as classifier training data — the model is doing zero-shot classification against them.</div>
+  </div>
+  <div class="pitfall-card">
+    <div class="pitfall-mistake"><strong>✗ Mistake</strong> Expecting the LLM to validate its own tool arguments (&quot;the model will use the right format&quot;)</div>
+    <div class="pitfall-better"><strong>✓ Better</strong> Enforce JSON schema validation in the orchestrator; reject malformed calls with a structured error response that names the violated constraint so the model can self-correct in the next turn.</div>
+  </div>
+  <div class="pitfall-card">
+    <div class="pitfall-mistake"><strong>✗ Mistake</strong> Injecting 30+ tool schemas every turn and wondering why token costs exploded and selection accuracy dropped</div>
+    <div class="pitfall-better"><strong>✓ Better</strong> Embed tool descriptions at startup, retrieve the top 5–10 relevant tools per turn via cosine similarity, and benchmark selection accuracy on a golden task set as the library grows.
+
+---</div>
+  </div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="section-label">Related Questions</div>
+  <div class="related-pills">
+    <div class="related-pill" data-slug="03-022">
+      <span class="related-pill-icon">→</span>
+      <div class="related-pill-text">
+        <div class="related-pill-q">Q22: Tool schemas that reduce hallucinated actions</div>
+        <div class="related-pill-rel">Follow-up — how to design schemas for reliable selection</div>
+      </div>
+    </div>
+    <div class="related-pill" data-slug="03-009">
+      <span class="related-pill-icon">→</span>
+      <div class="related-pill-text">
+        <div class="related-pill-q">Q9: What logic belongs in orchestrator vs LLM</div>
+        <div class="related-pill-rel">Prerequisite — orchestrator owns tool dispatch and validation</div>
+      </div>
+    </div>
+    <div class="related-pill" data-slug="03-006">
+      <span class="related-pill-icon">→</span>
+      <div class="related-pill-text">
+        <div class="related-pill-q">Q6: Essential components of an agent beyond an LLM</div>
+        <div class="related-pill-rel">Context — tool layer as one of the four agent components</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="section-label">One-liner recall</div>
+  <div class="oneliner-box">
+    <div class="oneliner-label">▸ Reconstruct from memory</div>
+    <div class="oneliner-text" data-text="Agents select tools via LLM function-calling — the model does a semantic match between task context and tool descriptions, so schema quality (distinct descriptions, constrained enums, T=0) is the primary accuracy lever, with tool retrieval (embed + cosine-retrieve top-K) for libraries of 15+ tools.">Agents select tools via LLM function-calling — the model does a semantic match between task context and tool descriptions, so schema quality (distinct descriptions, constrained enums, T=0) is the primary accuracy lever, with tool retrieval (embed + cosine-retrieve top-K) for libraries of 15+ tools.</div>
+  </div>
+</div>

@@ -1,0 +1,129 @@
+<div class="answer-header reveal">
+  <div class="answer-meta">
+    <span class="meta-badge meta-category">01-llm-fundamentals</span>
+    <span class="meta-badge meta-num">Q025</span>
+    <span class="meta-badge meta-status-review">review</span>
+  </div>
+  <h1 class="answer-title">Encoder-only vs decoder-only vs encoder-decoder — when use each?</h1>
+</div>
+
+<div class="answer-section reveal">
+  <div class="accordion">
+    <div class="accordion-header">
+      <span class="accordion-title">⟁ Framing — Why this is asked</span>
+      <span class="accordion-chevron">▾</span>
+    </div>
+    <div class="accordion-body">
+      <div class="framing-grid">
+        <div><div class="framing-card">
+          <div class="framing-card-title">Why asked</div>
+          <p style="font-size:13.5px;line-height:1.7;color:var(--text-dim)">Tests whether the candidate understands transformer architecture families at a mechanistic level — not just &quot;BERT is for classification, GPT is for generation,&quot; but <em>why</em> the architecture shapes constrain what tasks each family is good at. Interviewers at Google, Microsoft, and Meta use this to separate candidates who memorized marketing from those who understand attention masks, bidirectionality, and the pretraining/fine-tuning tradeoff.</p>
+        </div></div>
+        <div><div class="framing-card">
+          <div class="framing-card-title">Trigger phrases</div>
+          <div class="trigger-list">
+              <div class="trigger-phrase">Explain the different transformer architectures and when you&#x27;d use each.</div>
+              <div class="trigger-phrase">Why is BERT better for classification but GPT better for generation?</div>
+              <div class="trigger-phrase">When would you choose an encoder-decoder over a decoder-only model?</div>
+              <div class="trigger-phrase">Why are decoder-only models now dominant even for tasks that seem to need understanding?</div>
+          </div>
+        </div></div>
+      </div>
+      <div class="tests-block">
+        <span style="font-family:var(--mono);font-size:10px;letter-spacing:0.1em;text-transform:uppercase;color:var(--purple);margin-right:8px">Tests:</span>Architectural intuition: how attention masking, bidirectionality, and pretraining objectives shape a model&#x27;s strengths for classification, generation, and seq2seq tasks.
+
+---
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="section-label">Concept</div>
+  <div class="concept-block"><p>The three transformer families differ in which tokens can attend to which at training time, which drives the pretraining objective, which in turn determines which downstream tasks each family natively excels at. <strong>Encoder-only</strong> models see all tokens bidirectionally (good for <em>understanding</em>); <strong>decoder-only</strong> models see only past tokens (causal masking, good for <em>generation</em>); <strong>encoder-decoder</strong> models encode the full input bidirectionally then decode autoregressively (good for <em>conditional generation / transduction</em>).</p></div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="section-label">Mechanism</div>
+  <div class="card"><div class="table-wrap"><table class="data-table"><tr><th>Dimension</th><th>Encoder-only</th><th>Decoder-only</th><th>Encoder-decoder</th></tr><tr><td><strong>Attention</strong></td><td>Bidirectional (every token sees every token)</td><td>Causal (each token sees only past tokens)</td><td>Encoder: bidirectional; Decoder: causal + cross-attention to encoder</td></tr><tr><td><strong>Pretraining objective</strong></td><td>Masked language modeling (MLM) — predict masked tokens</td><td>Next-token prediction (CLM) — predict next token</td><td>Span corruption (T5), seq2seq LM, or denoising</td></tr><tr><td><strong>Canonical models</strong></td><td>BERT, RoBERTa, DeBERTa, BGE, E5</td><td>GPT-4, Claude, Llama 3, Mistral</td><td>T5, BART, mBART, Flan-T5</td></tr><tr><td><strong>Native strengths</strong></td><td>Classification, NER, embeddings, reranking</td><td>Open-ended generation, few-shot, instruction following</td><td>Translation, summarization, structured generation (code→test)</td></tr><tr><td><strong>Context efficiency</strong></td><td>Every token in full attention → O(n²) but over full input</td><td>Same O(n²) but KV cache reuse across tokens</td><td>Encoder O(n²), decoder O(m²) + cross-attn</td></tr><tr><td><strong>Typical size (2025)</strong></td><td>110M–7B</td><td>1B–100B+</td><td>250M–11B</td></tr></table></div>
+<p><strong>Why encoder-only models are best for embeddings and classification:</strong> MLM pretraining forces the model to build rich contextual representations for every position because any token might be masked. The <code>[CLS]</code> token or mean-pooled output captures a dense sentence embedding. BERT fine-tuned on a sentiment task updates a tiny classification head; the backbone already "understands" syntax, coreference, and semantics.</p>
+<p><strong>Why decoder-only models are now dominant even for classification:</strong> Decoder-only models with instruction tuning (RLHF/DPO) can do classification zero-shot by generating the label as text. At 70B+ parameters they outperform fine-tuned BERT on most understanding benchmarks. The tradeoff: they're much larger, slower, and more expensive for the same classification task. For a production classification API at 1M QPS, a fine-tuned BERT-base (110M) at $0.001/1K tokens beats GPT-4 by 100×-cost margin.</p>
+<p><strong>Why encoder-decoder models fit seq2seq:</strong> Cross-attention lets the decoder attend to the <em>full</em> encoded input while generating each output token — ideal when output depends on the entire input (translation, summarization). A decoder-only model can do this with "input || output" in one sequence, but wastes KV cache re-encoding the input for every generated token. Encoder-decoder is more parameter-efficient for fixed-length transduction tasks.</p></div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="section-label">Example / Tradeoff</div>
+  <div class="card card-accent"><div class="rich-text"><p><strong>Production example — RAG reranking:</strong> Cross-encoders used for reranking (e.g., <code>cross-encoder/ms-marco-MiniLM-L-6-v2</code> from sentence-transformers) are encoder-only models that score query-document pairs via classification. They're far more accurate than bi-encoder (also encoder-only) dot-product search, but 10–50× slower because they process each query-doc pair jointly. In practice: bi-encoder for top-K retrieval, cross-encoder reranker on top-16 only.</p>
+<p><strong>Production example — Summarization at scale:</strong> Flan-T5-XL (3B, encoder-decoder) outperforms GPT-3.5 on faithful summarization benchmarks (ROUGE-L, BERTScore) at ~5× lower inference cost. Used in enterprise document workflows where budget matters.</p>
+<p><strong>The trend (2025–2026):</strong> Decoder-only models with instruction tuning have eaten encoder-decoder's lunch for most NLP tasks because scale and RLHF compensate for the architectural mismatch. Encoder-only models remain dominant for <em>embedding</em> and <em>fast classification</em> use cases where latency and cost are paramount. T5/BART family persists in specialized seq2seq pipelines where training data and compute efficiency matter.</p></div></div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="accordion">
+    <div class="accordion-header">
+      <span class="accordion-title">🎙 Verbal Script (3–5 min)</span>
+      <span class="accordion-chevron">▾</span>
+    </div>
+    <div class="accordion-body">
+      <div class="script-block"><div class="script-label">Opening (30s)</div><p>"There are three families, and the key variable is the attention mask — which tokens can see which. I'd frame it as: encoder-only for understanding and embeddings, decoder-only for generation and instruction-following, and encoder-decoder for transduction tasks like translation and summarization."</p></div>
+      <div class="script-block"><div class="script-label">Core explanation (2–3 min)</div><p>"Encoder-only models like BERT use <em>bidirectional</em> attention — every token attends to every other token — and are pretrained with masked language modeling, where you randomly mask 15% of tokens and predict them. Because any token might be masked, the model learns rich contextual representations. That makes the output embeddings excellent for classification, NER, or sentence similarity — you fine-tune a tiny head on top. The cost is that they can't generate text autoregressively.</p>
+<p>Decoder-only models like GPT and Llama use <em>causal</em> masking — each token only attends to past tokens. They're pretrained to predict the next token, which gives them powerful generative ability. The KV cache makes autoregressive generation efficient because you reuse past key/value computations. With instruction tuning and RLHF, decoder-only models can now do classification, summarization — basically anything — just by generating the answer as text. At 70B scale they beat fine-tuned BERT on most tasks, but they cost 100× more per query.</p>
+<p>Encoder-decoder models like T5 and BART take the best of both: the encoder reads the full input bidirectionally, the decoder generates output autoregressively and attends back to the encoder via cross-attention. This is architecturally ideal for translation or summarization where the output depends on the entire input. The classic use case is Flan-T5 for summarization — it outperforms GPT-3.5 on some benchmarks at a fraction of the inference cost."</p></div>
+      <div class="script-block"><div class="script-label">Tradeoff / production angle (1 min)</div><p>"In production, I'd choose encoder-only for embedding generation or fast classification — DeBERTa or BGE give me top-tier accuracy at 110M–400M parameters with low latency. I'd choose a decoder-only model when I need open-ended generation, instruction-following, or few-shot adaptability and I can afford GPT-4 / Claude pricing. I'd consider encoder-decoder for a constrained seq2seq pipeline — say a medical report summarizer — where I have fine-tuning data and need cost efficiency at scale. The trend is that decoder-only models with enough scale and instruction tuning have become general-purpose, but encoder-only models for embeddings and cross-encoders for reranking remain the right call in RAG pipelines."</p></div>
+      <div class="script-block"><div class="script-label">Wrap-up (30s)</div><p>"So the one-liner: encoder-only = understand/embed, decoder-only = generate/instruct, encoder-decoder = transduce — and decoder-only has taken over most of the middle ground at scale. Happy to go deeper on any of the three."</p></div>
+    </div>
+  </div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="section-label">Pitfalls</div>
+  <div class="pitfall-card">
+    <div class="pitfall-mistake"><strong>✗ Mistake</strong> Saying &quot;BERT is for classification, GPT is for generation&quot; without explaining <em>why</em> — the attention mask and pretraining objective</div>
+    <div class="pitfall-better"><strong>✓ Better</strong> Explain bidirectional vs causal masking and how MLM vs CLM shapes what the model learns; the architecture difference is the <em>cause</em>, not just the outcome.</div>
+  </div>
+  <div class="pitfall-card">
+    <div class="pitfall-mistake"><strong>✗ Mistake</strong> Claiming encoder-only models &quot;can&#x27;t be used for generation at all&quot;</div>
+    <div class="pitfall-better"><strong>✓ Better</strong> Clarify that encoder-only models can do autoregressive generation with modifications (e.g., causal masking at fine-tune time), but it&#x27;s architecturally unnatural and inefficient; say &quot;optimized for&quot; not &quot;limited to.&quot;</div>
+  </div>
+  <div class="pitfall-card">
+    <div class="pitfall-mistake"><strong>✗ Mistake</strong> Dismissing encoder-decoder (T5/BART) as &quot;obsolete&quot; because decoder-only LLMs are dominant</div>
+    <div class="pitfall-better"><strong>✓ Better</strong> Note that encoder-decoder remains competitive for <em>production seq2seq tasks</em> (translation, summarization) where fine-tuning data exists and inference cost matters; Flan-T5 still ships in enterprise workflows.
+
+---</div>
+  </div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="section-label">Related Questions</div>
+  <div class="related-pills">
+    <div class="related-pill" data-slug="01-002">
+      <span class="related-pill-icon">→</span>
+      <div class="related-pill-text">
+        <div class="related-pill-q">Q2: How do transformers work?</div>
+        <div class="related-pill-rel">Prerequisite — self-attention mechanism underlying all three families</div>
+      </div>
+    </div>
+    <div class="related-pill" data-slug="01-022">
+      <span class="related-pill-icon">→</span>
+      <div class="related-pill-text">
+        <div class="related-pill-q">Q22: What is self-attention? How does it differ from multi-head attention?</div>
+        <div class="related-pill-rel">Deep dive into attention mechanics that explain bidirectional vs causal difference</div>
+      </div>
+    </div>
+    <div class="related-pill" data-slug="01-026">
+      <span class="related-pill-icon">→</span>
+      <div class="related-pill-text">
+        <div class="related-pill-q">Q26: Why are decoder-only models dominant even for non-generation tasks?</div>
+        <div class="related-pill-rel">Direct follow-up — the architectural + scaling argument for decoder-only dominance</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="section-label">One-liner recall</div>
+  <div class="oneliner-box">
+    <div class="oneliner-label">▸ Reconstruct from memory</div>
+    <div class="oneliner-text" data-text="Encoder-only (BERT) = bidirectional attention + MLM → best for embeddings/classification; decoder-only (GPT/Llama) = causal masking + CLM → best for generation/instruction-following; encoder-decoder (T5/BART) = bidirectional encode + autoregressive decode → best for seq2seq transduction; decoder-only has taken over most tasks at scale but encoder-only wins on latency/cost for embeddings.">Encoder-only (BERT) = bidirectional attention + MLM → best for embeddings/classification; decoder-only (GPT/Llama) = causal masking + CLM → best for generation/instruction-following; encoder-decoder (T5/BART) = bidirectional encode + autoregressive decode → best for seq2seq transduction; decoder-only has taken over most tasks at scale but encoder-only wins on latency/cost for embeddings.</div>
+  </div>
+</div>

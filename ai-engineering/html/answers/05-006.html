@@ -1,0 +1,132 @@
+<div class="answer-header reveal">
+  <div class="answer-meta">
+    <span class="meta-badge meta-category">05-evaluation-metrics</span>
+    <span class="meta-badge meta-num">Q006</span>
+    <span class="meta-badge meta-status-review">review</span>
+  </div>
+  <h1 class="answer-title">LLM confidently wrong — debug RAG giving confident wrong answers?</h1>
+</div>
+
+<div class="answer-section reveal">
+  <div class="accordion">
+    <div class="accordion-header">
+      <span class="accordion-title">⟁ Framing — Why this is asked</span>
+      <span class="accordion-chevron">▾</span>
+    </div>
+    <div class="accordion-body">
+      <div class="framing-grid">
+        <div><div class="framing-card">
+          <div class="framing-card-title">Why asked</div>
+          <p style="font-size:13.5px;line-height:1.7;color:var(--text-dim)">Interviewers probe whether you can systematically diagnose a production failure in a RAG system rather than just retrain or swap the model. Confident wrong answers are the most dangerous hallucination pattern because they erode user trust while the system shows no obvious error signal. The question tests production debugging instinct: can you isolate retrieval failures from generation failures, and do you have concrete tools and metrics to do so?</p>
+        </div></div>
+        <div><div class="framing-card">
+          <div class="framing-card-title">Trigger phrases</div>
+          <div class="trigger-list">
+              <div class="trigger-phrase">Your RAG chatbot is giving confident but wrong answers — what do you do?</div>
+              <div class="trigger-phrase">LLM is confidently wrong, not just hallucinating empty context — how do you debug?</div>
+              <div class="trigger-phrase">Users say the system gives wrong answers with high confidence — walk me through your investigation.</div>
+          </div>
+        </div></div>
+      </div>
+      <div class="tests-block">
+        <span style="font-family:var(--mono);font-size:10px;letter-spacing:0.1em;text-transform:uppercase;color:var(--purple);margin-right:8px">Tests:</span>Whether the candidate can split retrieval failure from generation failure using RAGAS metrics and systematic layer-by-layer debugging, rather than reflexively blaming the model or calling for fine-tuning.
+
+---
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="section-label">Concept</div>
+  <div class="concept-block"><p>Confident wrong answers in a RAG system arise from one of two root causes: <strong>retrieval failure</strong> (the wrong chunks are surfaced and the LLM faithfully synthesizes from bad evidence) or <strong>generation failure</strong> (the right chunks are retrieved but the LLM confabulates beyond or against them). These require completely different fixes, so the first diagnostic goal is to isolate which layer is broken.</p></div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="section-label">Mechanism</div>
+  <div class="card"><p><strong>Step 1 — Split retrieval from generation using RAGAS</strong></p>
+<p>Run RAGAS on a sample of failure cases:</p>
+<ul class="styled-list"><li><strong><code>context_recall</code></strong> low (< 0.7) → retrieval is the problem; retrieved chunks don't contain the answer.</li><li><strong><code>faithfulness</code></strong> low (< 0.8) but <code>context_recall</code> high → generation is the problem; model is confabulating beyond the retrieved context.</li><li>Both high but <code>answer_relevancy</code> low → query understanding / synthesis layer is the problem.</li></ul>
+<p><strong>Step 2 — Debug retrieval failures (context_recall low)</strong></p>
+<p>Check in order:</p>
+<ol class="mechanism-steps"><li><strong>Chunking</strong> — Is the answer split across chunk boundaries? Log the chunk IDs for failing queries and inspect. If the answer straddles two chunks, add overlap or switch to parent-child chunking (1024 parent / 256 child).</li><li><strong>Vocabulary mismatch</strong> — Dense-only retrieval failing on exact keywords (SKU numbers, legal citations, model names). Fix: add BM25 hybrid with RRF fusion. Run <code>Recall@5</code> before/after; expect +15–20 pts.</li><li><strong>Top-k too low</strong> — The answer is in position 8 but <code>top_k=5</code>. Temporarily raise <code>k</code> on the failing queries to confirm, then add a cross-encoder reranker (Cohere Rerank / BGE-Reranker) rather than just raising <code>k</code> blindly (context window cost).</li><li><strong>Stale index</strong> — The answer is correct in the source document but the index hasn't updated. Check <code>index_lag_seconds</code> monitoring; add CDC-driven incremental ingestion.</li></ol>
+<p><strong>Step 3 — Debug generation failures (faithfulness low)</strong></p>
+<ol class="mechanism-steps"><li><strong>Temperature too high</strong> — LLM is sampling creatively and drifting from the retrieved context. Set <code>temperature=0</code> for factual RAG.</li><li><strong>Lost in the middle</strong> — Correct chunk is retrieved but placed in position 3–6 of a 7-chunk context; the LLM underweights it. Reorder chunks: most relevant first and last (sandwich placement).</li><li><strong>Prompt not grounding</strong> — System prompt doesn't instruct the model to stay within retrieved context. Add explicit grounding instruction: <code>"Answer only using the context below. If the answer is not in the context, say so."</code></li><li><strong>Context pollution</strong> — Irrelevant chunks in the context confuse the model. Reduce <code>top_k</code>, apply cross-encoder reranker to filter, or raise the cosine similarity threshold for retrieval.</li></ol>
+<p><strong>Step 4 — Add a confidence gate</strong> Post-generation: run DeBERTa NLI entailment between the answer and each retrieved chunk. If max entailment score < 0.80, replace the answer with a canned abstention (<code>"I'm not confident I have the right information for this — here's what I found: [sources]"</code>). This caps the confident-wrong rate at the NLI model's precision.</p></div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="section-label">Example / Tradeoff</div>
+  <div class="card card-accent"><div class="rich-text"><p><strong>Concrete incident pattern:</strong> A support bot answered billing questions incorrectly with high confidence. RAGAS <code>context_recall = 0.91</code> (retrieval fine), <code>faithfulness = 0.54</code> (generation broken). Investigation revealed <code>temperature=0.7</code> was set globally; the LLM was blending retrieved policy text with its pre-training knowledge of similar policies. Fix: <code>temperature=0</code> + explicit grounding prompt. Faithfulness rose to 0.93, confident-wrong rate dropped from 4.2% to 0.6%.</p>
+<p><strong>Tradeoff:</strong> Adding a synchronous DeBERTa NLI gate adds ~80–120ms per query. For latency-sensitive paths, run it async with a fallback: serve the answer immediately, flag for review if NLI < threshold, and surface the correction to the user asynchronously (email / next session). For regulated domains (healthcare, finance), the synchronous gate is non-negotiable.</p></div></div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="accordion">
+    <div class="accordion-header">
+      <span class="accordion-title">🎙 Verbal Script (3–5 min)</span>
+      <span class="accordion-chevron">▾</span>
+    </div>
+    <div class="accordion-body">
+      <div class="script-block"><div class="script-label">Opening (30s)</div><p>"Confident wrong answers are the hardest RAG failure because there's no obvious error signal — the system looks like it's working. My first instinct is not to retrain or swap the model. Instead, I split the problem into two layers: retrieval and generation. They fail for different reasons and need different fixes."</p></div>
+      <div class="script-block"><div class="script-label">Core explanation (2–3 min)</div><p>"I'd start by running RAGAS on a sample of the failing queries — specifically <code>context_recall</code> and <code>faithfulness</code>. These two metrics together act as a diagnostic crosshair.</p>
+<p>If <code>context_recall</code> is low — say below 0.70 — the retrieved chunks simply don't contain the answer. The LLM is doing its best with bad evidence. I'd look at three culprits: chunking boundaries splitting the answer, vocabulary mismatch where dense retrieval misses exact keywords like SKU numbers or legal citations, and stale indexes where the source was updated but the vector index wasn't. The vocabulary mismatch is really common — switching to BM25 hybrid search with RRF fusion usually fixes it and I'd expect Recall@5 to jump 15–20 points.</p>
+<p>If <code>context_recall</code> is high but <code>faithfulness</code> is low — the right chunks are there but the LLM is generating beyond them — then I look at temperature first. Even a temperature of 0.7 on a factual task causes the model to blend retrieved context with its pre-training priors. Setting temperature to zero is often the single highest-ROI fix. I'd also add an explicit grounding instruction in the system prompt and check for lost-in-the-middle: if the correct chunk is in position 4 of 7, the model systematically underweights it, so reordering with the most relevant chunk first and last often helps."</p></div>
+      <div class="script-block"><div class="script-label">Tradeoff / production angle (1 min)</div><p>"Once the root cause is fixed, I'd add a long-term confidence gate: async DeBERTa NLI entailment between the answer and retrieved chunks. If the entailment score is below 0.80, the system falls back to a canned abstention rather than serving the wrong answer confidently. The tradeoff is ~80–100ms latency. For a support bot that's usually fine to run synchronously. For a real-time product, I'd run it async and surface a correction in the next interaction. For a healthcare chatbot, the sync gate is non-negotiable."</p></div>
+      <div class="script-block"><div class="script-label">Wrap-up (30s)</div><p>"So the structured approach is: RAGAS to split retrieval from generation, layer-by-layer debug starting with the cheapest fixes (temperature, grounding prompt, chunking), and a NLI gate as the production safety net. Happy to go deeper on any of those layers."</p></div>
+    </div>
+  </div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="section-label">Pitfalls</div>
+  <div class="pitfall-card">
+    <div class="pitfall-mistake"><strong>✗ Mistake</strong> Saying &quot;we should fine-tune the model to fix hallucinations&quot;</div>
+    <div class="pitfall-better"><strong>✓ Better</strong> Fine-tuning doesn&#x27;t fix retrieval failures and rarely fixes generation-layer confident-wrong answers; start with RAGAS to diagnose the layer, fix retrieval with hybrid search or chunking changes, fix generation with <code>temperature=0</code> and grounding prompts — fine-tune is the last resort.</div>
+  </div>
+  <div class="pitfall-card">
+    <div class="pitfall-mistake"><strong>✗ Mistake</strong> Saying &quot;just lower the temperature to 0&quot; without first checking whether retrieval is the root cause</div>
+    <div class="pitfall-better"><strong>✓ Better</strong> Temperature=0 helps only when good context is retrieved; if <code>context_recall</code> is low, the model is faithfully summarizing bad evidence, and temperature changes don&#x27;t help — you need to fix retrieval first.</div>
+  </div>
+  <div class="pitfall-card">
+    <div class="pitfall-mistake"><strong>✗ Mistake</strong> Treating confident wrong answers as a single phenomenon</div>
+    <div class="pitfall-better"><strong>✓ Better</strong> Distinguish intrinsic hallucination (model invents facts absent from context) from retrieval-grounded confabulation (model extends beyond retrieved context) from retrieval failure (wrong context → wrong answer) — each has a different fix.
+
+---</div>
+  </div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="section-label">Related Questions</div>
+  <div class="related-pills">
+    <div class="related-pill" data-slug="05-003">
+      <span class="related-pill-icon">→</span>
+      <div class="related-pill-text">
+        <div class="related-pill-q">Q3: Detect and mitigate hallucinations in production</div>
+        <div class="related-pill-rel">prerequisite — broader hallucination framework this question drills into</div>
+      </div>
+    </div>
+    <div class="related-pill" data-slug="05-008">
+      <span class="related-pill-icon">→</span>
+      <div class="related-pill-text">
+        <div class="related-pill-q">Q8: Measure hallucination rate in production</div>
+        <div class="related-pill-rel">follow-up — how to track the metric this debugging process targets</div>
+      </div>
+    </div>
+    <div class="related-pill" data-slug="02-013">
+      <span class="related-pill-icon">→</span>
+      <div class="related-pill-text">
+        <div class="related-pill-q">Q13: Common RAG failure points — how debug them?</div>
+        <div class="related-pill-rel">same concept from RAG category — retrieval-layer debug taxonomy</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="section-label">One-liner recall</div>
+  <div class="oneliner-box">
+    <div class="oneliner-label">▸ Reconstruct from memory</div>
+    <div class="oneliner-text" data-text="Run RAGAS: low `context_recall` → fix retrieval (hybrid search, chunking, freshness); low `faithfulness` → fix generation (temperature=0, grounding prompt, sandwich placement); add async DeBERTa NLI gate to cap confident-wrong rate in production.">Run RAGAS: low `context_recall` → fix retrieval (hybrid search, chunking, freshness); low `faithfulness` → fix generation (temperature=0, grounding prompt, sandwich placement); add async DeBERTa NLI gate to cap confident-wrong rate in production.</div>
+  </div>
+</div>

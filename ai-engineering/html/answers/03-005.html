@@ -1,0 +1,137 @@
+<div class="answer-header reveal">
+  <div class="answer-meta">
+    <span class="meta-badge meta-category">03-agents-tool-use</span>
+    <span class="meta-badge meta-num">Q005</span>
+    <span class="meta-badge meta-status-review">review</span>
+  </div>
+  <h1 class="answer-title">How define and enforce agent autonomy boundaries?</h1>
+</div>
+
+<div class="answer-section reveal">
+  <div class="accordion">
+    <div class="accordion-header">
+      <span class="accordion-title">⟁ Framing — Why this is asked</span>
+      <span class="accordion-chevron">▾</span>
+    </div>
+    <div class="accordion-body">
+      <div class="framing-grid">
+        <div><div class="framing-card">
+          <div class="framing-card-title">Why asked</div>
+          <p style="font-size:13.5px;line-height:1.7;color:var(--text-dim)">Interviewers probe whether you understand that unbounded autonomy is a production liability, not a feature. The question tests whether you&#x27;ve thought about <em>who decides</em> what an agent is allowed to do, how that decision is encoded in the system (not just the prompt), and how violations are caught before they cause harm — financial, reputational, or security. Senior engineers are expected to have concrete mechanisms, not vague assurances.</p>
+        </div></div>
+        <div><div class="framing-card">
+          <div class="framing-card-title">Trigger phrases</div>
+          <div class="trigger-list">
+              <div class="trigger-phrase">How would you prevent an agent from doing something dangerous?</div>
+              <div class="trigger-phrase">How do you control what actions an agent can take?</div>
+              <div class="trigger-phrase">What guardrails do you put on autonomous agents?</div>
+              <div class="trigger-phrase">How do you define the scope of what an agent is allowed to do?</div>
+          </div>
+        </div></div>
+      </div>
+      <div class="tests-block">
+        <span style="font-family:var(--mono);font-size:10px;letter-spacing:0.1em;text-transform:uppercase;color:var(--purple);margin-right:8px">Tests:</span>The ability to translate a vague &quot;give the agent guardrails&quot; requirement into concrete architectural patterns: allowlists, capability scoping, HITL triggers, and runtime policy enforcement.
+
+---
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="section-label">Concept</div>
+  <div class="concept-block"><p>Agent autonomy boundaries are the explicit constraints on what actions an agent can initiate, what resources it can touch, and under what conditions it must pause for human review. Boundaries are defined at design time (capability scoping, tool allowlists) and enforced at runtime (policy checks, budget limits, HITL triggers) — never just described in a system prompt, which the LLM can ignore or reason around.</p></div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="section-label">Mechanism</div>
+  <div class="card"><p><strong>1. Capability scoping (design time)</strong></p>
+<ul class="styled-list"><li>Give the agent only the tools it needs — no omnibus tool set. A customer support agent gets <code>search_knowledge_base</code>, <code>update_ticket_status</code>, <code>send_email_to_customer</code> — not <code>delete_account</code>, <code>run_sql_query</code>, or <code>call_external_api</code>.</li><li>Each tool schema carries its own permission level (read-only vs write, low-stakes vs high-stakes). LangChain StructuredTool and OpenAI function definitions enforce the schema; the orchestrator enforces which tools are loaded.</li></ul>
+<p><strong>2. Action allowlisting / denylisting (runtime policy)</strong></p>
+<ul class="styled-list"><li>Before any tool call executes, a policy layer evaluates it: Is this tool in the allowed set? Does the argument satisfy constraints (e.g., dollar amount < $500, user's own data only)?</li><li>Implemented as a middleware intercept in the agent loop — not inside the LLM prompt. Tools like LangGraph's <code>interrupt</code> or custom <code>pre_tool_call</code> hooks enforce this.</li></ul>
+<p><strong>3. Resource and budget limits</strong></p>
+<ul class="styled-list"><li>Turn budget: cap the number of LLM calls or tool invocations per task (e.g., max 10 steps). Prevents runaway loops.</li><li>Cost budget: track cumulative API spend per run; abort if a threshold is crossed.</li><li>Time budget: hard timeout (e.g., 30 seconds) triggers graceful shutdown and HITL escalation.</li></ul>
+<p><strong>4. Human-in-the-loop (HITL) triggers</strong></p>
+<ul class="styled-list"><li>Irreversible actions (delete, send email, charge card) pause the loop and require human approval.</li><li>Confidence threshold: if the agent's planned action has high uncertainty (detected via structured output confidence field or low tool-call consistency across samples), escalate.</li><li>Anomaly triggers: action type not seen in training distribution → pause.</li></ul>
+<p><strong>5. Environment isolation (sandboxing)</strong></p>
+<ul class="styled-list"><li>Code execution happens in a sandboxed container (e.g., E2B, Modal, AWS Fargate with no VPC egress) — the agent cannot reach production databases or external APIs directly.</li><li>Read-only replicas and staging environments for data-touching actions.</li></ul>
+<p><strong>6. Audit trail and post-hoc enforcement</strong></p>
+<ul class="styled-list"><li>Every tool call logged with timestamp, arguments, result, and agent reasoning trace (LangSmith, OpenTelemetry). Enables replay debugging and policy violation detection.</li><li>Anomaly detection on the trace stream: flag runs that invoke high-risk tools above a frequency threshold.</li></ul></div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="section-label">Example / Tradeoff</div>
+  <div class="card card-accent"><div class="rich-text"><p>A financial reconciliation agent at a fintech startup: tools are <code>read_ledger(date_range)</code>, <code>flag_discrepancy(transaction_id, reason)</code>, and <code>create_jira_ticket(summary)</code>. The tool <code>write_ledger_correction</code> is explicitly excluded — any correction requires human approval via a HITL workflow in LangGraph (<code>interrupt_before=["write_ledger_correction"]</code>). Turn budget is 20 steps; cost budget is $0.50 per run. All tool calls emit structured logs to Datadog. Result: the agent runs autonomously for ~95% of reconciliation cases, with human review triggered for the remaining 5% involving write actions.</p>
+<p><strong>Tradeoff:</strong> Tight boundaries reduce agent utility — if you allowlist too few tools, the agent can't complete tasks and escalates constantly, frustrating users. If boundaries are too loose, one jailbreak or prompt-injection attack has real consequences. The right calibration is task-specific: start with read-only access, add write tools one at a time with HITL on each new capability, and tighten after observing production behavior.</p></div></div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="accordion">
+    <div class="accordion-header">
+      <span class="accordion-title">🎙 Verbal Script (3–5 min)</span>
+      <span class="accordion-chevron">▾</span>
+    </div>
+    <div class="accordion-body">
+      <div class="script-block"><div class="script-label">Opening (30s)</div><p>"Agent autonomy boundaries are really about two things: defining what the agent <em>can</em> do at design time, and enforcing it at runtime so the LLM can't reason its way around the constraint. I'd break this into capability scoping, runtime policy enforcement, HITL triggers, and sandboxing."</p></div>
+      <div class="script-block"><div class="script-label">Core explanation (2–3 min)</div><p>"I'd start at the tool layer — the agent only gets the tools it needs for its specific task. A customer support agent gets search and ticket tools, not a raw SQL tool. Each tool's schema defines its own constraints: argument types, value ranges, read vs write. The LLM is never given a tool it shouldn't call.</p>
+<p>At runtime, before any tool executes, a policy middleware checks the call — is this tool in the allowed set, does the argument satisfy constraints like dollar limits or scope to the user's own data? This check lives in the orchestrator, not the prompt. In LangGraph I'd use <code>interrupt_before</code> on high-stakes tools to require human approval.</p>
+<p>I'd also set hard budget limits — max 10 turns per task, max $0.50 in API spend, 30-second timeout. These prevent runaway loops. If any limit is hit, the agent gracefully escalates rather than failing silently.</p>
+<p>Finally, sandboxing: if the agent executes code, it runs in an isolated container like E2B or Modal with no VPC egress. It can't reach production databases directly."</p></div>
+      <div class="script-block"><div class="script-label">Tradeoff / production angle (1 min)</div><p>"The calibration question is hard — too tight and the agent escalates constantly and users stop trusting it; too loose and one prompt injection has real consequences. My approach is to start with read-only tools only, add write capabilities one at a time with HITL on each new capability, and only remove the HITL requirement after observing stable behavior in production. I also maintain a full audit trail in LangSmith or OpenTelemetry — every tool call logged with arguments and reasoning trace — so I can detect anomalies and replay failures."</p></div>
+      <div class="script-block"><div class="script-label">Wrap-up (30s)</div><p>"In summary: scope at the tool level, enforce at the middleware layer with a policy check, set hard budgets, sandbox side-effectful execution, and wire HITL to irreversible actions. Happy to go deeper on any of those layers or talk about how I'd calibrate HITL thresholds for a specific domain."</p></div>
+    </div>
+  </div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="section-label">Pitfalls</div>
+  <div class="pitfall-card">
+    <div class="pitfall-mistake"><strong>✗ Mistake</strong> &quot;I put the constraints in the system prompt — I tell the agent it&#x27;s not allowed to delete records.&quot;</div>
+    <div class="pitfall-better"><strong>✓ Better</strong> The system prompt is advisory; a sufficiently adversarial input or jailbreak can override it. Enforce constraints in the orchestrator&#x27;s policy layer as code, not prose. The LLM cannot override a <code>if tool_name in DENIED_TOOLS: raise PolicyViolation</code> check.</div>
+  </div>
+  <div class="pitfall-card">
+    <div class="pitfall-mistake"><strong>✗ Mistake</strong> Describing autonomy boundaries only in terms of prompt-level instructions without mentioning tooling, sandboxing, or HITL triggers</div>
+    <div class="pitfall-better"><strong>✓ Better</strong> Name the specific enforcement mechanism for each boundary type: allowlist tools in the tool registry, reject calls in a pre-execution policy hook, sandbox code in E2B/Modal, and gate irreversible actions behind <code>interrupt_before</code> (LangGraph) or a HITL approval queue.</div>
+  </div>
+  <div class="pitfall-card">
+    <div class="pitfall-mistake"><strong>✗ Mistake</strong> &quot;I&#x27;d just monitor the logs and fix issues afterward.&quot;</div>
+    <div class="pitfall-better"><strong>✓ Better</strong> Post-hoc monitoring catches violations after damage is done. Pre-execution policy checks are the primary control; monitoring is a secondary anomaly-detection layer.
+
+---</div>
+  </div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="section-label">Related Questions</div>
+  <div class="related-pills">
+    <div class="related-pill" data-slug="03-004">
+      <span class="related-pill-icon">→</span>
+      <div class="related-pill-text">
+        <div class="related-pill-q">Q4: When is agentic architecture the wrong solution?</div>
+        <div class="related-pill-rel">Prerequisite — autonomy risk is a core reason NOT to use agents in regulated/high-stakes contexts</div>
+      </div>
+    </div>
+    <div class="related-pill" data-slug="03-010">
+      <span class="related-pill-icon">→</span>
+      <div class="related-pill-text">
+        <div class="related-pill-q">Q10: Design a safe and debuggable agent loop</div>
+        <div class="related-pill-rel">Follow-up — the agent loop design embodies the boundary enforcement architecture</div>
+      </div>
+    </div>
+    <div class="related-pill" data-slug="03-029">
+      <span class="related-pill-icon">→</span>
+      <div class="related-pill-text">
+        <div class="related-pill-q">Q29: Human-in-the-loop patterns — when trigger human review?</div>
+        <div class="related-pill-rel">Same concept — HITL is the primary runtime boundary enforcement mechanism</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="section-label">One-liner recall</div>
+  <div class="oneliner-box">
+    <div class="oneliner-label">▸ Reconstruct from memory</div>
+    <div class="oneliner-text" data-text="Autonomy boundaries = capability scoping at design time (allowlisted tools only) + runtime policy middleware (pre-call enforcement, hard budgets, HITL on irreversible actions) + sandboxed execution — never just a system prompt instruction the LLM can reason around.">Autonomy boundaries = capability scoping at design time (allowlisted tools only) + runtime policy middleware (pre-call enforcement, hard budgets, HITL on irreversible actions) + sandboxed execution — never just a system prompt instruction the LLM can reason around.</div>
+  </div>
+</div>

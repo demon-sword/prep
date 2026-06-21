@@ -1,0 +1,136 @@
+<div class="answer-header reveal">
+  <div class="answer-meta">
+    <span class="meta-badge meta-category">05-evaluation-metrics</span>
+    <span class="meta-badge meta-num">Q013</span>
+    <span class="meta-badge meta-status-review">review</span>
+  </div>
+  <h1 class="answer-title">Evaluate and monitor model in production, not just offline?</h1>
+</div>
+
+<div class="answer-section reveal">
+  <div class="accordion">
+    <div class="accordion-header">
+      <span class="accordion-title">⟁ Framing — Why this is asked</span>
+      <span class="accordion-chevron">▾</span>
+    </div>
+    <div class="accordion-body">
+      <div class="framing-grid">
+        <div><div class="framing-card">
+          <div class="framing-card-title">Why asked</div>
+          <p style="font-size:13.5px;line-height:1.7;color:var(--text-dim)">Offline eval on a golden dataset tells you what your model <em>can</em> do in a controlled setting — it doesn&#x27;t tell you what it <em>is doing</em> for real users with real, messy queries. Interviewers ask this to probe whether you understand data distribution drift, silent regressions, and the feedback loops needed to keep a production AI system healthy over time.</p>
+        </div></div>
+        <div><div class="framing-card">
+          <div class="framing-card-title">Trigger phrases</div>
+          <div class="trigger-list">
+              <div class="trigger-phrase">How do you know your model is still working well after launch?</div>
+              <div class="trigger-phrase">Walk me through your production monitoring strategy for an LLM.</div>
+              <div class="trigger-phrase">How do you catch regressions in a GenAI system?</div>
+              <div class="trigger-phrase">How do you evaluate and monitor a model in production, not just offline?</div>
+          </div>
+        </div></div>
+      </div>
+      <div class="tests-block">
+        <span style="font-family:var(--mono);font-size:10px;letter-spacing:0.1em;text-transform:uppercase;color:var(--purple);margin-right:8px">Tests:</span>Whether you can architect a continuous quality loop — offline eval + live signals + alerting + regression gating — rather than treating model deployment as a one-time event.
+
+---
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="section-label">Concept</div>
+  <div class="concept-block"><p>Production evaluation closes the gap between offline benchmarks and real-world behaviour by combining asynchronous metric computation on live traffic, business KPI tracking, and automated regression alerts. Offline eval tells you the model <em>should</em> work; production monitoring tells you it <em>does</em> work and catches the moment it stops.</p></div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="section-label">Mechanism</div>
+  <div class="card"><p><strong>Layer 1 — Async metric pipeline (100% coverage)</strong></p>
+<ul class="styled-list"><li>Log every request/response pair to a message queue (Kafka, Kinesis).</li><li>An async sidecar computes lightweight, cheap metrics without blocking the serving path:</li><li>RAGAS <strong>Faithfulness</strong> (context entailment score) and <strong>Answer Relevancy</strong> (query alignment)</li><li>Retrieval cosine score distribution (p50/p95) — leading indicator of index freshness</li><li>Response latency (TTFT, total) per model version</li><li>Emit metrics to a time-series store (Prometheus + Grafana / Datadog).</li></ul>
+<p><strong>Layer 2 — LLM-as-judge sampling (1–5% of traffic)</strong></p>
+<ul class="styled-list"><li>A GPT-4o-class judge evaluates conversation quality on a random sample: helpfulness, groundedness, tone.</li><li>Results flow into the same Grafana dashboard as async metrics.</li><li>Cost budget: 1M queries/day × 1% sample × ~$0.005/judge call ≈ <strong>$50/day</strong>.</li></ul>
+<p><strong>Layer 3 — Golden dataset regression (nightly)</strong></p>
+<ul class="styled-list"><li>A curated set of ~200–500 query-context-answer triples with expected outputs, covering your highest-risk topics.</li><li>Nightly CI job runs the current prod model against the golden set; computes Faithfulness, Answer Relevancy, and BERTScore F1.</li><li>If any metric drops >3 points from the prior passing run, a PagerDuty alert fires and a GitHub Action blocks the next deployment.</li><li>This is the safety net: it catches silent regressions caused by prompt changes, model updates, or index drift before users notice.</li></ul>
+<p><strong>Layer 4 — Business / user signals (continuous)</strong></p>
+<ul class="styled-list"><li><strong>Deflection rate</strong> — fraction of queries resolved without human escalation.</li><li><strong>CSAT / thumbs-down rate</strong> — direct user signal; thumbs-down are routed to a human review queue for label harvesting.</li><li><strong>Cost-per-query</strong> — tracked per model version and tier; alerts on >15% spike.</li><li>These lag async metrics by hours/days but are ground truth for whether the system is delivering value.</li></ul>
+<p><strong>Alerting thresholds (example SLOs)</strong></p>
+<div class="table-wrap"><table class="data-table"><tr><th>Metric</th><th>Warning</th><th>Page</th></tr><tr><td>RAGAS Faithfulness (p50)</td><td>< 0.90</td><td>< 0.85</td></tr><tr><td>Retrieval cosine score (p50)</td><td>< 0.72</td><td>< 0.68</td></tr><tr><td>p95 latency</td><td>> 1.5s</td><td>> 3.0s</td></tr></table></div>| Thumbs-down rate | > 4% | > 8% |</div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="section-label">Example / Tradeoff</div>
+  <div class="card card-accent"><div class="rich-text"><p>At a customer support deployment (GPT-4o-mini, Pinecone, 200K queries/day):</p>
+<ul class="styled-list"><li>Async RAGAS pipeline added ~40ms latency overhead (async, non-blocking).</li><li>Nightly golden-set regression caught a prompt-rewrite that dropped Faithfulness from 0.93 → 0.81 before it hit prod — blocker in the deployment gate.</li><li>Thumbs-down spikes (> 6%) were the first signal that the chunking strategy had drifted after a Confluence re-indexing; retrieval cosine scores confirmed it 30 min later.</li></ul>
+<p><strong>Key tradeoff — sync vs async eval:</strong>   Running RAGAS synchronously in the request path adds ~200–400ms latency; running it async means you catch hallucinations retrospectively, not in real time. For most applications async is acceptable; for high-stakes domains (medical, legal) consider a synchronous NLI entailment gate (DeBERTa, ~50ms) on the hot path and async RAGAS for broader monitoring.</p></div></div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="accordion">
+    <div class="accordion-header">
+      <span class="accordion-title">🎙 Verbal Script (3–5 min)</span>
+      <span class="accordion-chevron">▾</span>
+    </div>
+    <div class="accordion-body">
+      <div class="script-block"><div class="script-label">Opening (30s)</div><p>"I think of production monitoring for an LLM system in four layers: an async metric pipeline on 100% of traffic, a lightweight LLM-as-judge sampling pass, a nightly golden-dataset regression job, and business signals like deflection rate and CSAT. Each layer catches a different class of failure at a different cost point."</p></div>
+      <div class="script-block"><div class="script-label">Core explanation (2–3 min)</div><p>"The async pipeline is the backbone. Every request-response pair goes into Kafka. A sidecar consumer computes RAGAS Faithfulness and Answer Relevancy, plus retrieval cosine scores and latency, without touching the user-facing serving path. These emit into Grafana, and I set SLO thresholds — say, Faithfulness p50 below 0.90 fires a warning, below 0.85 pages on-call.</p>
+<p>For conversation quality — things like tone, helpfulness, nuance — I run a GPT-4o judge on 1–5% of traffic. That's cheap: at 1M queries/day and 1% sampling, it costs around $50/day. The judge scores come into the same dashboard.</p>
+<p>Then nightly, a CI job runs the prod model against a golden dataset of 200–500 hand-annotated query-context-answer triples. If Faithfulness drops more than 3 points from the previous passing run, the next deployment is blocked automatically. This is the safety net that catches silent regressions from prompt changes, model updates, or index drift.</p>
+<p>Finally, business signals — deflection rate, thumbs-down rate, cost-per-query — are the ground truth. They lag by hours, but they're what the business actually cares about, and spikes there trigger a full incident investigation."</p></div>
+      <div class="script-block"><div class="script-label">Tradeoff / production angle (1 min)</div><p>"The biggest tradeoff is sync versus async eval. Running NLI entailment or RAGAS synchronously catches hallucinations before the user sees them, but adds 200–400ms per request. For most chatbots that's too expensive, so async is the default. For high-stakes domains — a medical chatbot, a legal assistant — I'd add a synchronous DeBERTa NLI gate on the hot path and keep async RAGAS for broader monitoring."</p></div>
+      <div class="script-block"><div class="script-label">Wrap-up (30s)</div><p>"The key insight is that offline eval is necessary but not sufficient. Production monitoring closes the loop with real traffic, catches distribution shifts, and gives you the leading indicators — retrieval score drift, Faithfulness decline — before the lagging business metrics like CSAT deteriorate. Happy to go deeper on golden-dataset design or SLO threshold setting."</p></div>
+    </div>
+  </div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="section-label">Pitfalls</div>
+  <div class="pitfall-card">
+    <div class="pitfall-mistake"><strong>✗ Mistake</strong> Treating offline golden-dataset eval as sufficient monitoring — &quot;We ran evals before launch, so we&#x27;re good.&quot;</div>
+    <div class="pitfall-better"><strong>✓ Better</strong> Explain that prod traffic distribution shifts over time (user vocabulary changes, knowledge base updates), so a static golden set is a lagging indicator; you need async metric telemetry on live traffic plus periodic golden-set updates seeded from production failures.</div>
+  </div>
+  <div class="pitfall-card">
+    <div class="pitfall-mistake"><strong>✗ Mistake</strong> Using only user thumbs-down/CSAT as the production quality signal</div>
+    <div class="pitfall-better"><strong>✓ Better</strong> Thumbs-down has high latency (users don&#x27;t always rate) and low coverage; pair it with async automated metrics (RAGAS Faithfulness, retrieval cosine score) that provide near-real-time 100% coverage and can alert before users notice degradation.</div>
+  </div>
+  <div class="pitfall-card">
+    <div class="pitfall-mistake"><strong>✗ Mistake</strong> Running RAGAS synchronously on every request and blaming latency budgets for dropping eval</div>
+    <div class="pitfall-better"><strong>✓ Better</strong> Run it asynchronously via a Kafka sidecar; reserve synchronous checks for a fast, narrow NLI entailment gate only in high-stakes domains.
+
+---</div>
+  </div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="section-label">Related Questions</div>
+  <div class="related-pills">
+    <div class="related-pill" data-slug="05-008">
+      <span class="related-pill-icon">→</span>
+      <div class="related-pill-text">
+        <div class="related-pill-q">Q8: Measure hallucination rate in production</div>
+        <div class="related-pill-rel">Specific sub-problem of production monitoring — hallucination SLO tracking</div>
+      </div>
+    </div>
+    <div class="related-pill" data-slug="05-017">
+      <span class="related-pill-icon">→</span>
+      <div class="related-pill-text">
+        <div class="related-pill-q">Q17: Golden dataset for evaluation and regression testing</div>
+        <div class="related-pill-rel">The offline component that anchors the production monitoring regression gate</div>
+      </div>
+    </div>
+    <div class="related-pill" data-slug="05-002">
+      <span class="related-pill-icon">→</span>
+      <div class="related-pill-text">
+        <div class="related-pill-q">Q2: How evaluate a chatbot?</div>
+        <div class="related-pill-rel">Broader eval framework context this question extends into production</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="section-label">One-liner recall</div>
+  <div class="oneliner-box">
+    <div class="oneliner-label">▸ Reconstruct from memory</div>
+    <div class="oneliner-text" data-text="Production monitoring = async RAGAS sidecar on 100% of traffic + 1–5% LLM-judge sampling + nightly golden-set regression gate + business KPIs (deflection rate, CSAT), each catching a different failure class at increasing cost and latency.">Production monitoring = async RAGAS sidecar on 100% of traffic + 1–5% LLM-judge sampling + nightly golden-set regression gate + business KPIs (deflection rate, CSAT), each catching a different failure class at increasing cost and latency.</div>
+  </div>
+</div>

@@ -1,0 +1,130 @@
+<div class="answer-header reveal">
+  <div class="answer-meta">
+    <span class="meta-badge meta-category">03-agents-tool-use</span>
+    <span class="meta-badge meta-num">Q004</span>
+    <span class="meta-badge meta-status-review">review</span>
+  </div>
+  <h1 class="answer-title">When is agentic architecture the wrong solution?</h1>
+</div>
+
+<div class="answer-section reveal">
+  <div class="accordion">
+    <div class="accordion-header">
+      <span class="accordion-title">⟁ Framing — Why this is asked</span>
+      <span class="accordion-chevron">▾</span>
+    </div>
+    <div class="accordion-body">
+      <div class="framing-grid">
+        <div><div class="framing-card">
+          <div class="framing-card-title">Why asked</div>
+          <p style="font-size:13.5px;line-height:1.7;color:var(--text-dim)">Interviewers ask this to test engineering judgment — specifically whether you default to the shiniest tool or can reason about when simpler approaches win. In 2025–2026, &quot;agent&quot; is heavily hyped; strong candidates push back and articulate concrete failure modes, cost traps, and cases where a chain, a DAG, or a simple prompt is strictly better.</p>
+        </div></div>
+        <div><div class="framing-card">
+          <div class="framing-card-title">Trigger phrases</div>
+          <div class="trigger-list">
+              <div class="trigger-phrase">When would you NOT use an agent?</div>
+              <div class="trigger-phrase">What are the downsides of agentic architectures?</div>
+              <div class="trigger-phrase">How do you decide between an agent and a simpler pipeline?</div>
+          </div>
+        </div></div>
+      </div>
+      <div class="tests-block">
+        <span style="font-family:var(--mono);font-size:10px;letter-spacing:0.1em;text-transform:uppercase;color:var(--purple);margin-right:8px">Tests:</span>Ability to evaluate architectural fit: recognising the real costs (latency, cost, unpredictability, debuggability) of multi-step LLM control flow and knowing which task properties make those costs unjustifiable.
+
+---
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="section-label">Concept</div>
+  <div class="concept-block"><p>Agentic architecture is the <strong>wrong solution</strong> whenever the added flexibility of LLM-controlled flow doesn't outweigh its costs: higher token spend, non-deterministic execution paths, compounding error rates across steps, and dramatically harder evaluation and debugging. The heuristic: if you can enumerate all valid execution paths at design time, a chain or DAG is almost always the better choice.</p></div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="section-label">Mechanism</div>
+  <div class="card"><p>Five concrete situations where agents are the wrong call:</p>
+<div class="table-wrap"><table class="data-table"><tr><th>Situation</th><th>Why agents are wrong</th><th>Better alternative</th></tr><tr><td><strong>Fixed, enumerable workflow</strong></td><td>Developer already knows the path; LLM control flow adds cost and variance with no benefit</td><td>Deterministic chain / LangChain Sequential / DAG</td></tr><tr><td><strong>Latency-critical path</strong> (< 500 ms SLO)</td><td>Each agent step = 1+ LLM call + tool latency; 3–5 steps easily adds 3–10 s</td><td>Single prompt with structured output, or pre-built pipeline</td></tr><tr><td><strong>Budget-constrained at scale</strong> (≥1M req/day)</td><td>5-step GPT-4o agent at $0.30/task = $300K/day; a single GPT-4o-mini prompt = ~$2K/day</td><td>Prompt-engineered single call or distilled fine-tune</td></tr><tr><td><strong>High-stakes, low-tolerance for errors</strong> (financial, medical, legal)</td><td>Non-deterministic path makes auditability near-impossible; compounded errors at each step</td><td>Deterministic pipeline with HITL gates and explicit audit trail</td></tr><tr><td><strong>Simple classification or extraction</strong></td><td>One structured-output LLM call is sufficient; routing + tools add complexity with no benefit</td><td><code>response_format: json_schema</code> single call</td></tr></table></div>
+<p><strong>Error compounding</strong> is the most-missed failure mode: if each agent step has 90% success probability, a 5-step agent succeeds only 59% of the time. A single-step pipeline at 95% is far better for reliability.</p>
+<p><strong>Debuggability:</strong> When a 5-step agent fails, you don't know which step failed, what the model "saw" at that step, or why it chose that tool sequence. Traditional software doesn't have this problem. You need full distributed tracing (LangSmith, Arize Phoenix, OpenTelemetry) just to diagnose.</p>
+<p><strong>Evaluation difficulty:</strong> Agents produce non-deterministic paths, so you can't write simple input→expected-output tests. You need trajectory evaluation, tool-selection accuracy, and end-state success metrics — all much harder to maintain.</p></div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="section-label">Example / Tradeoff</div>
+  <div class="card card-accent"><div class="rich-text"><p>A customer support team evaluating agents for handling routine refund requests (fixed policy: check order age > 30 days → reject; ≤ 30 days → approve). An agent that dynamically decides to call <code>lookup_order()</code>, then <code>check_policy()</code>, then <code>issue_refund()</code> adds 3 LLM calls + latency (~4 s) to something that can be a single SQL query + rule engine (~50 ms). The team shipped the rule engine.</p>
+<p>Contrast with a multi-tool <strong>research agent</strong> that searches the web, reads 10 PDFs, synthesises findings, and writes a report — genuinely open-ended; you can't enumerate the path in advance. Here, agency is justified.</p></div></div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="accordion">
+    <div class="accordion-header">
+      <span class="accordion-title">🎙 Verbal Script (3–5 min)</span>
+      <span class="accordion-chevron">▾</span>
+    </div>
+    <div class="accordion-body">
+      <div class="script-block"><div class="script-label">Opening (30s)</div><p>"I'd flip this question around and say: you should default to NOT using an agent, and only reach for one when you've confirmed the task genuinely requires open-ended, LLM-controlled flow. Most things that look like they need an agent don't — they need a well-engineered pipeline."</p></div>
+      <div class="script-block"><div class="script-label">Core explanation (2–3 min)</div><p>"The clearest signal that an agent is wrong is when you can enumerate all the valid execution paths at design time. If the sequence is always 'classify → look up → respond,' that's a chain — a deterministic DAG in code, not an LLM-controlled loop. Forcing that into an agent adds 3–5 extra LLM calls, unpredictable path variance, and exponential debugging complexity, with zero upside.</p>
+<p>The second red flag is a latency or cost SLO that agents can't meet. A 3-step agent on GPT-4o is realistically 5–8 seconds of wall-clock time and 15–30 cents per task. At 1M requests a day that's $150K–300K/day. A single GPT-4o-mini prompt with structured output handles most extraction and classification tasks in under a second for about $2/thousand.</p>
+<p>Third: error compounding. If each step in a 5-step agent has a 10% failure probability, you only succeed 59% of the time overall. A well-engineered single-step pipeline at 95% is more reliable than a 5-step agent where each step is 99% reliable.</p>
+<p>High-stakes regulated domains are a fourth no-go. In financial or medical contexts, every decision needs an audit trail. 'The LLM chose to call this tool based on prior observations' is not an audit trail. You need explicit, logged, deterministic logic with HITL gates — an agent's non-deterministic path makes auditability nearly impossible.</p>
+<p>Finally, debugging. When your 5-step agent fails, you don't know which step broke. You need distributed tracing — LangSmith, Arize Phoenix — just to diagnose. A chain fails loudly at a specific function call."</p></div>
+      <div class="script-block"><div class="script-label">Tradeoff / production angle (1 min)</div><p>"The situations where agents genuinely earn their complexity: truly open-ended tasks where the valid action sequence depends on runtime data you can't predict at design time — multi-step research, dynamic planning, anything where 'what to do next' is a genuine function of the current observation. Even then I'd impose hard limits: max turn budget (e.g. 10 steps), cost ceiling per task, and HITL gates for irreversible actions. The agent is wrong if those constraints can't be met."</p></div>
+      <div class="script-block"><div class="script-label">Wrap-up (30s)</div><p>"So my practical rule: if you can write a flowchart for it, write the code for it. Reach for agents only when the flowchart branches depend on data you won't have until runtime and the LLM is the right thing to do that branching. Happy to go into how I'd enforce cost and turn limits when agents are justified."</p></div>
+    </div>
+  </div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="section-label">Pitfalls</div>
+  <div class="pitfall-card">
+    <div class="pitfall-mistake"><strong>✗ Mistake</strong> Saying &quot;agents are always more powerful so they&#x27;re the right default&quot;</div>
+    <div class="pitfall-better"><strong>✓ Better</strong> Argue the opposite: agents are a last resort when simpler pipelines can&#x27;t handle the open-endedness. Default to chains; justify agents by listing what a pipeline can&#x27;t do.</div>
+  </div>
+  <div class="pitfall-card">
+    <div class="pitfall-mistake"><strong>✗ Mistake</strong> Listing &quot;agents are bad because they&#x27;re non-deterministic&quot; without explaining <em>why</em> that matters in practice</div>
+    <div class="pitfall-better"><strong>✓ Better</strong> Quantify: 5-step agent at 90% per-step reliability = 59% end-to-end success; trace the debuggability problem (which step failed? why?); mention the need for LangSmith/Arize Phoenix for observability.</div>
+  </div>
+  <div class="pitfall-card">
+    <div class="pitfall-mistake"><strong>✗ Mistake</strong> Not mentioning cost at scale</div>
+    <div class="pitfall-better"><strong>✓ Better</strong> Give concrete math: 5-step GPT-4o agent at $0.30/task × 1M req/day = $300K/day vs. a single GPT-4o-mini prompt at ~$2/thousand = ~$2K/day.
+
+---</div>
+  </div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="section-label">Related Questions</div>
+  <div class="related-pills">
+    <div class="related-pill" data-slug="03-003">
+      <span class="related-pill-icon">→</span>
+      <div class="related-pill-text">
+        <div class="related-pill-q">Q3: What makes a system truly agentic? What does NOT qualify?</div>
+        <div class="related-pill-rel">Prerequisite — defines what counts as agentic before asking when to avoid it</div>
+      </div>
+    </div>
+    <div class="related-pill" data-slug="03-002">
+      <span class="related-pill-icon">→</span>
+      <div class="related-pill-text">
+        <div class="related-pill-q">Q2: Agent vs simple LLM chain?</div>
+        <div class="related-pill-rel">Same decision axis — chain is almost always the answer when agent is wrong</div>
+      </div>
+    </div>
+    <div class="related-pill" data-slug="03-026">
+      <span class="related-pill-icon">→</span>
+      <div class="related-pill-text">
+        <div class="related-pill-q">Q26: Control cost explosions from tool calls</div>
+        <div class="related-pill-rel">Follow-up — if you do use an agent, how to bound its costs</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="section-label">One-liner recall</div>
+  <div class="oneliner-box">
+    <div class="oneliner-label">▸ Reconstruct from memory</div>
+    <div class="oneliner-text" data-text="Agents are wrong when the execution path can be enumerated at design time, latency/cost SLOs can&#x27;t absorb multiple LLM calls, auditability is required, or error compounding across steps makes the end-to-end reliability worse than a single-step pipeline.">Agents are wrong when the execution path can be enumerated at design time, latency/cost SLOs can&#x27;t absorb multiple LLM calls, auditability is required, or error compounding across steps makes the end-to-end reliability worse than a single-step pipeline.</div>
+  </div>
+</div>

@@ -1,0 +1,143 @@
+<div class="answer-header reveal">
+  <div class="answer-meta">
+    <span class="meta-badge meta-category">04-fine-tuning-training</span>
+    <span class="meta-badge meta-num">Q010</span>
+    <span class="meta-badge meta-status-review">review</span>
+  </div>
+  <h1 class="answer-title">Speculative decoding — speed up inference?</h1>
+</div>
+
+<div class="answer-section reveal">
+  <div class="accordion">
+    <div class="accordion-header">
+      <span class="accordion-title">⟁ Framing — Why this is asked</span>
+      <span class="accordion-chevron">▾</span>
+    </div>
+    <div class="accordion-body">
+      <div class="framing-grid">
+        <div><div class="framing-card">
+          <div class="framing-card-title">Why asked</div>
+          <p style="font-size:13.5px;line-height:1.7;color:var(--text-dim)">Interviewers want to know whether you understand <em>why</em> LLM decode is slow (memory-bandwidth-bound, one-token-at-a-time) and whether you know advanced inference optimization techniques beyond &quot;just use quantization.&quot; Speculative decoding is a favourite because it exploits architectural insight (the verify pass is cheap) rather than raw hardware.</p>
+        </div></div>
+        <div><div class="framing-card">
+          <div class="framing-card-title">Trigger phrases</div>
+          <div class="trigger-list">
+              <div class="trigger-phrase">How do you speed up LLM inference beyond quantization?</div>
+              <div class="trigger-phrase">Speculative decoding — how does it work?</div>
+              <div class="trigger-phrase">How would you reduce time-to-first-token / decode latency at scale?</div>
+              <div class="trigger-phrase">Walk me through how vLLM achieves high throughput.</div>
+          </div>
+        </div></div>
+      </div>
+      <div class="tests-block">
+        <span style="font-family:var(--mono);font-size:10px;letter-spacing:0.1em;text-transform:uppercase;color:var(--purple);margin-right:8px">Tests:</span>Understanding of the memory-bandwidth bottleneck in autoregressive decode and the ability to trade compute for reduced wall-clock latency through draft-verify speculation.
+
+---
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="section-label">Concept</div>
+  <div class="concept-block"><p>Speculative decoding speeds up autoregressive LLM inference by using a small, cheap <strong>draft model</strong> to generate multiple candidate tokens in parallel, then having the large <strong>target model</strong> verify all of them in a <em>single forward pass</em>. Accepted tokens are kept; the first rejected token triggers a rollback. Because the target model's forward pass is nearly constant-cost regardless of how many tokens it evaluates in parallel (it is memory-bandwidth-bound, not compute-bound during decode), this dramatically increases effective throughput and reduces wall-clock latency without changing model outputs.</p></div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="section-label">Mechanism</div>
+  <div class="card"><p><strong>Why autoregressive decode is slow:</strong></p>
+<ul class="styled-list"><li>Each decode step loads the full model weights from HBM into the compute units — for a 70B model at BF16 that is ~140 GB per step.</li><li>Arithmetic intensity ≈ 2 FLOPs/byte during decode (vs. 156 FLOPs/byte theoretical peak on A100): the GPU sits mostly idle waiting for memory transfers, not computing.</li><li>One token per forward pass → O(N) sequential steps for N output tokens.</li></ul>
+<p><strong>Speculative decoding algorithm:</strong></p>
+<div class="code-block-wrap"><pre class="code-block"><code>1. Draft:  small model M_q (e.g. 7B) generates K draft tokens
+           autoregressively (fast — K sequential M_q passes).
+2. Verify: target model M_p (e.g. 70B) runs ONE forward pass over
+           all K draft tokens in parallel (token-parallel batch).
+3. Accept: compare draft token distribution q(x) vs target p(x).
+           - Accept token i with probability min(1, p(x_i)/q(x_i)).
+           - On first rejection: sample a corrected token from
+             p(x) - q(x) (residual distribution).
+4. Result: 1–K+1 tokens produced per M_p forward pass.</code></pre><button class="copy-btn">copy</button></div>
+<p><strong>Key properties:</strong></p>
+<ul class="styled-list"><li><strong>Lossless:</strong> mathematically equivalent to sampling from the target model — no quality degradation.</li><li><strong>Throughput gain:</strong> If acceptance rate α ≈ 0.7 and K = 4, expected tokens per M_p pass ≈ 1 + 4·0.7 = 3.8×. Real-world gains: 2–4× on coding/structured tasks with aligned draft/target distributions.</li><li><strong>Tradeoff:</strong> Works best when draft and target agree often (aligned distribution → high α). Domain mismatch or creative/diverse sampling degrades α and may produce negative speedup (extra M_q overhead).</li></ul>
+<p><strong>Draft model choices:</strong></p>
+<div class="table-wrap"><table class="data-table"><tr><th>Draft strategy</th><th>Examples</th><th>Notes</th></tr><tr><td>Dedicated small model</td><td>Gemma 2B drafts Gemma 9B</td><td>Same family → high α</td></tr><tr><td>Self-drafting (Medusa)</td><td>Adds parallel "heads" to target</td><td>No separate model; slightly lower α</td></tr></table></div>| n-gram / retrieval | Prompt Cache draft | Works for repetitive outputs (code, boilerplate) |</div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="section-label">Example / Tradeoff</div>
+  <div class="card card-accent"><div class="rich-text"><p><strong>Production usage:</strong></p>
+<ul class="styled-list"><li><strong>vLLM</strong> supports speculative decoding natively (<code>--speculative-model</code>, <code>--num-speculative-tokens</code>): using Llama 3 8B as draft for Llama 3 70B yields ~2.8× throughput improvement on HumanEval code tasks.</li><li><strong>Google's 2023 paper</strong> (Leviathan et al.) demonstrated 2–3× wall-clock speedup on Chinchilla, lossless.</li><li><strong>Medusa</strong> (Cai et al. 2024) adds 4–5 parallel heads to the target model itself, eliminating the need for a draft model; effective for serving a single model family.</li></ul>
+<p><strong>When speculative decoding helps vs. hurts:</strong></p>
+<div class="table-wrap"><table class="data-table"><tr><th>Scenario</th><th>Α (acceptance rate)</th><th>Recommendation</th></tr><tr><td>Code generation (structured, predictable)</td><td>0.75–0.85</td><td>Strong use case</td></tr><tr><td>Summarisation (moderate diversity)</td><td>0.60–0.70</td><td>Moderate gain</td></tr><tr><td>Creative / high-temperature chat</td><td>0.30–0.50</td><td>Marginal — may hurt</td></tr><tr><td>Short outputs (<20 tokens)</td><td>N/A</td><td>Overhead dominates</td></tr></table></div>
+<p><strong>Cost note:</strong> The draft model M_q adds VRAM and compute. Typical budget: M_q is ≈10% of M_p parameters (e.g. 7B draft for 70B target). If serving at low concurrency, prefer quantization (GPTQ/AWQ) over speculative decoding; at high concurrency and long outputs, speculative decoding wins.</p></div></div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="accordion">
+    <div class="accordion-header">
+      <span class="accordion-title">🎙 Verbal Script (3–5 min)</span>
+      <span class="accordion-chevron">▾</span>
+    </div>
+    <div class="accordion-body">
+      <div class="script-block"><div class="script-label">Opening (30s)</div><p>"I'd frame speculative decoding around why autoregressive decode is slow in the first place. Each token generation requires a full weight load from GPU HBM — it's memory-bandwidth-bound, not compute-bound. So the GPU is mostly idle waiting for data, and we generate one token per pass. Speculative decoding exploits that the <em>verify</em> pass is almost free relative to the memory transfer cost."</p></div>
+      <div class="script-block"><div class="script-label">Core explanation (2–3 min)</div><p>"The algorithm has two phases. First, a small draft model — say Llama 3 8B — generates K candidate tokens autoregressively; that's fast because the model is tiny. Then the large target model — say Llama 3 70B — runs a single forward pass over all K tokens in parallel. Because a forward pass that processes K tokens costs roughly the same memory bandwidth as processing 1 token at peak decode batch size 1, we get K evaluations almost for free.</p>
+<p>We accept draft token i with probability min(1, p_target / p_draft). If the draft was right, we keep it; if it was wrong, we sample a corrected token from the residual distribution and throw away everything after. The result is mathematically identical to sampling directly from the target model — it's lossless.</p>
+<p>The efficiency gain scales with the acceptance rate α. For coding tasks where draft and target strongly agree, α ≈ 0.75–0.85 and we get 2.8–3.5× throughput. For creative high-temperature outputs where distributions diverge, α drops to 0.3–0.5 and the overhead of running the draft model can actually hurt."</p></div>
+      <div class="script-block"><div class="script-label">Tradeoff / production angle (1 min)</div><p>"In production with vLLM, you pass <code>--speculative-model llama3-8b</code> and <code>--num-speculative-tokens 5</code>. The main gotcha is memory: the draft model lives in VRAM alongside the target, so you need to size your server accordingly. For a 70B target at BF16 (140 GB), adding an 8B draft (16 GB) requires at least 2 A100s just for weights, before KV cache. Alternatives like Medusa add parallel prediction heads to the target itself — no extra model — which is cleaner operationally. n-gram drafting works without any draft model for highly repetitive outputs like boilerplate code."</p></div>
+      <div class="script-block"><div class="script-label">Wrap-up (30s)</div><p>"So the punchline is: speculative decoding converts a sequential memory-bandwidth bottleneck into a parallel verification problem, giving 2–4× latency improvement on structured tasks with no quality loss. It's most powerful when draft and target are from the same model family. Happy to go deeper on Medusa, continuous batching interactions, or how speculative decoding interacts with PagedAttention."</p></div>
+    </div>
+  </div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="section-label">Pitfalls</div>
+  <div class="pitfall-card">
+    <div class="pitfall-mistake"><strong>✗ Mistake</strong> Describing speculative decoding as &quot;approximate&quot; or saying it sacrifices quality</div>
+    <div class="pitfall-better"><strong>✓ Better</strong> It is provably lossless — the acceptance criterion (min(1, p/q)) ensures the marginal token distribution is exactly the target model&#x27;s distribution.</div>
+  </div>
+  <div class="pitfall-card">
+    <div class="pitfall-mistake"><strong>✗ Mistake</strong> Saying &quot;just use a smaller model for all requests&quot; instead of discussing the draft-verify architecture</div>
+    <div class="pitfall-better"><strong>✓ Better</strong> Speculative decoding keeps the target model in the loop for quality; the draft just proposes, the target decides, so you get small-model speed with large-model quality.</div>
+  </div>
+  <div class="pitfall-card">
+    <div class="pitfall-mistake"><strong>✗ Mistake</strong> Claiming speculative decoding always gives a speedup regardless of task</div>
+    <div class="pitfall-better"><strong>✓ Better</strong> On high-temperature or highly diverse outputs, the acceptance rate drops and the draft overhead may exceed the gain; you should profile acceptance rate per workload and fall back to standard decode if α &lt; ~0.5.
+
+---</div>
+  </div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="section-label">Related Questions</div>
+  <div class="related-pills">
+    <div class="related-pill" data-slug="01-034">
+      <span class="related-pill-icon">→</span>
+      <div class="related-pill-text">
+        <div class="related-pill-q">Q34: Why is LLM inference memory-bounded?</div>
+        <div class="related-pill-rel">Root cause that speculative decoding exploits</div>
+      </div>
+    </div>
+    <div class="related-pill" data-slug="01-009">
+      <span class="related-pill-icon">→</span>
+      <div class="related-pill-text">
+        <div class="related-pill-q">Q9: What is KV cache? How does it help in LLM inference?</div>
+        <div class="related-pill-rel">Prerequisite — KV cache is the baseline inference optimization</div>
+      </div>
+    </div>
+    <div class="related-pill" data-slug="04-012">
+      <span class="related-pill-icon">→</span>
+      <div class="related-pill-text">
+        <div class="related-pill-q">Q12: Quantization — tradeoffs between size, speed, accuracy?</div>
+        <div class="related-pill-rel">Complementary inference optimization; choose based on concurrency and output length</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="section-label">One-liner recall</div>
+  <div class="oneliner-box">
+    <div class="oneliner-label">▸ Reconstruct from memory</div>
+    <div class="oneliner-text" data-text="Speculative decoding uses a cheap draft model to propose K tokens, then verifies all K in one parallel target-model pass — losslessly achieving 2–4× throughput on structured tasks by converting sequential memory-bandwidth trips into a single batch verify.">Speculative decoding uses a cheap draft model to propose K tokens, then verifies all K in one parallel target-model pass — losslessly achieving 2–4× throughput on structured tasks by converting sequential memory-bandwidth trips into a single batch verify.</div>
+  </div>
+</div>

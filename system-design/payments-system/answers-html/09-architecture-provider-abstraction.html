@@ -1,0 +1,753 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Section 9: Architecture &amp; Provider Abstraction | System Design Answers</title>
+  <meta name="description" content="Interview-depth answers for Payments-System frontend system design.">
+  <style>
+    :root {
+      --bg: #f8f9fb; --surface: #ffffff; --text: #1a1d26; --text-muted: #5c6370;
+      --border: #e2e6ed; --accent: #3d5a80; --accent-soft: #eef2f7;
+      --code-bg: #f0f2f6; --pre-bg: #1e2433; --pre-text: #e8ecf4;
+      --nav-bg: rgba(248, 249, 251, 0.92); --shadow: 0 1px 3px rgba(0, 0, 0, 0.06);
+    }
+    @media (prefers-color-scheme: dark) {
+      :root {
+        --bg: #12151c; --surface: #1a1f2a; --text: #e8ecf4; --text-muted: #9aa3b2;
+        --border: #2d3548; --accent: #8cb4d9; --accent-soft: #232a38;
+        --code-bg: #252d3d; --pre-bg: #0d1017; --pre-text: #d4dae6;
+        --nav-bg: rgba(18, 21, 28, 0.94); --shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
+      }
+    }
+    *, *::before, *::after { box-sizing: border-box; }
+    html { scroll-behavior: smooth; scroll-padding-top: 5.5rem; }
+    body { margin: 0; font-family: "Segoe UI", system-ui, sans-serif; font-size: 1.0625rem;
+      line-height: 1.65; color: var(--text); background: var(--bg); }
+    .site-nav { position: sticky; top: 0; z-index: 100; background: var(--nav-bg);
+      backdrop-filter: blur(10px); border-bottom: 1px solid var(--border); box-shadow: var(--shadow); }
+    .site-nav-inner { max-width: 900px; margin: 0 auto; padding: 0.75rem 1.5rem; }
+    .site-nav-title { font-size: 0.8125rem; font-weight: 600; text-transform: uppercase;
+      letter-spacing: 0.04em; color: var(--text-muted); margin: 0 0 0.5rem; }
+    .toc { display: flex; flex-wrap: wrap; gap: 0.35rem 0.75rem; margin: 0; padding: 0;
+      list-style: none; font-size: 0.8125rem; }
+    .toc a { color: var(--accent); text-decoration: none; white-space: nowrap; }
+    .toc a:hover { text-decoration: underline; }
+    .page { max-width: 900px; margin: 0 auto; padding: 2rem 1.5rem 4rem; }
+    header.page-header { margin-bottom: 2.5rem; padding-bottom: 1.5rem; border-bottom: 1px solid var(--border); }
+    h1 { font-size: 1.75rem; font-weight: 700; margin: 0 0 0.75rem; }
+    .lead { margin: 0; color: var(--text-muted); font-size: 1.05rem; }
+    h2.section { font-size: 1.35rem; font-weight: 700; margin: 2.5rem 0 1.25rem;
+      color: var(--accent); border-bottom: 2px solid var(--accent-soft); padding-bottom: 0.35rem; }
+    article.qa { margin-bottom: 2.75rem; background: var(--surface); border: 1px solid var(--border);
+      border-radius: 10px; padding: 1.5rem 1.75rem; box-shadow: var(--shadow); }
+    h3.question { font-size: 1.2rem; font-weight: 600; margin: 0 0 1rem; }
+    article.qa p { margin: 0 0 1rem; }
+    ol, ul { margin: 0 0 1rem; padding-left: 1.35rem; }
+    table { width: 100%; border-collapse: collapse; margin: 0 0 1rem; font-size: 0.95rem; }
+    th, td { border: 1px solid var(--border); padding: 0.55rem 0.75rem; text-align: left; }
+    th { background: var(--accent-soft); font-weight: 600; }
+    code { font-family: ui-monospace, Menlo, Consolas, monospace; font-size: 0.88em;
+      background: var(--code-bg); padding: 0.15em 0.4em; border-radius: 4px; }
+    pre { margin: 0 0 1rem; padding: 1rem; background: var(--pre-bg); color: var(--pre-text);
+      border-radius: 8px; overflow-x: auto; font-size: 0.875rem; }
+    pre code { background: none; padding: 0; color: inherit; }
+    .mermaid-wrap { margin: 0 0 1rem; padding: 1rem; background: var(--surface);
+      border: 1px solid var(--border); border-radius: 8px; overflow-x: auto; }
+    footer.page-footer { max-width: 900px; margin: 0 auto; padding: 1.5rem;
+      border-top: 1px solid var(--border); font-size: 0.9375rem; }
+    footer.page-footer a { color: var(--accent); text-decoration: none; font-weight: 500; }
+  </style>
+  <link rel="stylesheet" href="assets/interactive.css">
+</head>
+<body>
+  <nav class="site-nav" aria-label="Table of contents">
+    <div class="site-nav-inner">
+      <p class="site-nav-title">On this page</p>
+      
+    </div>
+  </nav>
+  <main class="page">
+    <header class="page-header">
+      <h1>Section 9: Architecture &amp; Provider Abstraction</h1>
+      <p class="lead">Interview-depth answers for Payments-System frontend system design.</p>
+    </header>
+    <h1 id="section-9-architecture-provider-abstraction">Section 9: Architecture &amp; Provider Abstraction</h1>
+<hr>
+<h2 class="section" id="q1">Q1</h2>
+<p><strong>Problem framing</strong></p>
+<p>As a platform grows it often needs to route payments to multiple PSPs: Stripe for cards in the US, Adyen for EU enterprise merchants, PayPal for wallet users, or Klarna for BNPL. The checkout UI should not care which PSP is active — that coupling makes A/B tests, failover, and migrations painful. The challenge is designing an abstraction layer whose seams are in the right places.</p>
+<p><strong>Approach</strong></p>
+<p>Define a <code>IPaymentProvider</code> interface. All PSP adapters implement it. The checkout component only calls the interface.</p>
+<pre><code>// The contract every PSP adapter must satisfy
+interface IPaymentProvider {
+  readonly providerId: &#x27;stripe&#x27; | &#x27;adyen&#x27; | &#x27;paypal&#x27; | &#x27;braintree&#x27;;
+
+  /** Load the PSP SDK script; idempotent */
+  init(config: ProviderConfig): Promise&lt;void&gt;;
+
+  /** Mount card / wallet UI into the given container */
+  mount(containerId: string, options: MountOptions): Promise&lt;void&gt;;
+
+  /** Unmount and clean up DOM + listeners */
+  unmount(): void;
+
+  /** Confirm the payment with the server-issued client token */
+  confirm(clientToken: string, billingDetails: BillingDetails): Promise&lt;PaymentResult&gt;;
+
+  /** Handle a 3DS / redirect challenge */
+  handleAction(actionPayload: unknown): Promise&lt;PaymentResult&gt;;
+
+  /** Expose current validation state */
+  getFieldState(): PaymentFieldState;
+}
+
+// Unified result — no PSP-specific fields on the success path
+interface PaymentResult {
+  status: &#x27;succeeded&#x27; | &#x27;requires_action&#x27; | &#x27;failed&#x27;;
+  paymentId: string;          // normalised to our internal ID
+  action?: RedirectAction | ChallengeAction;
+  error?: FrontendPaymentError; // see Q6
+  raw?: unknown;              // PSP-specific payload for logging only
+}</code></pre>
+<p>The <strong>router</strong> selects which adapter to instantiate based on a server-supplied config:</p>
+<pre><code>// Server sends this with the session response
+interface ProviderConfig {
+  provider: &#x27;stripe&#x27; | &#x27;adyen&#x27; | &#x27;paypal&#x27;;
+  clientToken: string;        // PaymentIntent client_secret or Adyen session token
+  publishableKey?: string;
+  environment: &#x27;live&#x27; | &#x27;sandbox&#x27;;
+}
+
+// Factory / registry
+class PaymentProviderRouter {
+  private adapters: Map&lt;string, IPaymentProvider&gt; = new Map();
+
+  async resolve(config: ProviderConfig): Promise&lt;IPaymentProvider&gt; {
+    if (!this.adapters.has(config.provider)) {
+      const { default: Adapter } = await import(`./adapters/${config.provider}`);
+      this.adapters.set(config.provider, new Adapter());
+    }
+    const adapter = this.adapters.get(config.provider)!;
+    await adapter.init(config);
+    return adapter;
+  }
+}</code></pre>
+<p>The checkout component never imports <code>StripeAdapter</code> directly — it only holds an <code>IPaymentProvider</code> ref received from the router.</p>
+<div class="mermaid-wrap"><pre class="mermaid">flowchart TD
+  Server["Server: /checkout/session\n(returns ProviderConfig)"]
+  Router["PaymentProviderRouter\n(resolves adapter)"]
+  StripeAdapter["StripeAdapter\nimplements IPaymentProvider"]
+  AdyenAdapter["AdyenAdapter\nimplements IPaymentProvider"]
+  PayPalAdapter["PayPalAdapter\nimplements IPaymentProvider"]
+  CheckoutUI["CheckoutForm\n(only sees IPaymentProvider)"]
+
+  Server -->|ProviderConfig| Router
+  Router -->|lazy import| StripeAdapter
+  Router -->|lazy import| AdyenAdapter
+  Router -->|lazy import| PayPalAdapter
+  Router -->|resolved adapter| CheckoutUI</pre></div>
+<p><strong>Tradeoffs</strong></p>
+<table>
+<thead><tr>
+<th>Approach</th>
+<th>Pros</th>
+<th>Cons</th>
+</tr></thead><tbody>
+<tr>
+<td>Interface-based adapters (above)</td>
+<td>Full checkout isolation, easy to swap providers</td>
+<td>Adapters require ongoing maintenance as PSP APIs evolve</td>
+</tr>
+<tr>
+<td>Thin shim (pass-through)</td>
+<td>Low upfront effort</td>
+<td>Leaks PSP concepts into UI; migration = rewrite</td>
+</tr>
+<tr>
+<td>Server-side rendering of PSP SDK</td>
+<td>No client JS from PSP</td>
+<td>Loses SDK&#x27;s fraud signals and 3DS handling</td>
+</tr>
+</tbody></table>
+<p>The main risk: PSP SDKs evolve — an Adyen Web Components major version can break your adapter. Pin SDK versions and add integration tests against each adapter independently.</p>
+<hr>
+<h2 class="section" id="q2">Q2</h2>
+<p><strong>Problem framing</strong></p>
+<p>Stripe mounts a <code>CardElement</code> via <code>elements.create(&#x27;card&#x27;).mount(&#x27;#id&#x27;)</code>. Adyen uses <code>new AdyenCheckout(config).create(&#x27;card&#x27;).mount(&#x27;#id&#x27;)</code>. Braintree uses <code>braintree.hostedFields.create(...)</code>. Each has different event names, validation callbacks, and confirmation APIs. The goal is one interface all three fit behind.</p>
+<p><strong>Approach</strong></p>
+<p>Map each PSP API&#x27;s lifecycle to the four <code>IPaymentProvider</code> methods: <code>init</code>, <code>mount</code>, <code>confirm</code>, <code>handleAction</code>.</p>
+<pre><code>// StripeAdapter
+class StripeAdapter implements IPaymentProvider {
+  readonly providerId = &#x27;stripe&#x27; as const;
+  private stripe!: Stripe;
+  private elements!: StripeElements;
+  private cardElement!: StripeCardElement;
+  private onChangeHandler?: (e: StripeCardElementChangeEvent) =&gt; void;
+
+  async init(config: ProviderConfig) {
+    await loadStripeJs(); // lazy — see Q7
+    this.stripe = Stripe(config.publishableKey!);
+    this.elements = this.stripe.elements({ locale: &#x27;auto&#x27; });
+  }
+
+  async mount(containerId: string, options: MountOptions) {
+    this.cardElement = this.elements.create(&#x27;card&#x27;, {
+      style: options.style,
+      hidePostalCode: options.hidePostalCode,
+    });
+    this.cardElement.mount(`#${containerId}`);
+
+    // Normalise Stripe&#x27;s onChange to our unified field state
+    this.onChangeHandler = (e) =&gt; options.onFieldChange?.({
+      complete: e.complete,
+      empty: e.empty,
+      error: e.error ? normaliseStripeFieldError(e.error) : undefined,
+    });
+    this.cardElement.on(&#x27;change&#x27;, this.onChangeHandler);
+  }
+
+  unmount() {
+    this.cardElement.off(&#x27;change&#x27;, this.onChangeHandler);
+    this.cardElement.destroy();
+  }
+
+  async confirm(clientToken: string, billing: BillingDetails): Promise&lt;PaymentResult&gt; {
+    const { paymentIntent, error } = await this.stripe.confirmCardPayment(clientToken, {
+      payment_method: { card: this.cardElement, billing_details: toStripeBilling(billing) },
+    });
+    if (error) return { status: &#x27;failed&#x27;, paymentId: &#x27;&#x27;, error: normaliseStripeError(error) };
+    if (paymentIntent?.status === &#x27;requires_action&#x27;) {
+      return { status: &#x27;requires_action&#x27;, paymentId: paymentIntent.id,
+               action: { type: &#x27;stripe_action&#x27;, payload: paymentIntent } };
+    }
+    return { status: &#x27;succeeded&#x27;, paymentId: paymentIntent!.id };
+  }
+
+  async handleAction(payload: unknown): Promise&lt;PaymentResult&gt; {
+    const { paymentIntent, error } = await this.stripe.handleCardAction(
+      (payload as { client_secret: string }).client_secret
+    );
+    if (error) return { status: &#x27;failed&#x27;, paymentId: &#x27;&#x27;, error: normaliseStripeError(error) };
+    return { status: &#x27;succeeded&#x27;, paymentId: paymentIntent!.id };
+  }
+
+  getFieldState(): PaymentFieldState {
+    // Stripe doesn&#x27;t expose this synchronously — adapter tracks via onChange
+    return this._cachedFieldState;
+  }
+}</code></pre>
+<pre><code>// AdyenAdapter — fundamentally different API, same interface
+class AdyenAdapter implements IPaymentProvider {
+  readonly providerId = &#x27;adyen&#x27; as const;
+  private checkout!: AdyenCheckout;
+  private cardComponent!: AdyenComponent;
+
+  async init(config: ProviderConfig) {
+    const { default: AdyenCheckout } = await import(&#x27;@adyen/adyen-web&#x27;);
+    this.checkout = new AdyenCheckout({
+      environment: config.environment === &#x27;live&#x27; ? &#x27;live&#x27; : &#x27;test&#x27;,
+      clientKey: config.publishableKey,
+      session: { id: config.clientToken, shopperLocale: &#x27;en-US&#x27; },
+    });
+  }
+
+  async mount(containerId: string, options: MountOptions) {
+    this.cardComponent = this.checkout.create(&#x27;card&#x27;, {
+      onFieldValid: (data) =&gt; options.onFieldChange?.(normaliseAdyenFieldEvent(data)),
+    });
+    this.cardComponent.mount(`#${containerId}`);
+  }
+
+  // ... confirm maps to this.cardComponent.submit() + session result polling
+}</code></pre>
+<p><strong>Tradeoffs</strong></p>
+<p>The normalisation layer adds an indirection cost: when Stripe ships a new API (e.g., Link, Payment Element replacing Card Element), the adapter must be updated before that feature is available. Teams often hit this when upgrading Stripe.js from v2 to v3 — the Card Element API changed substantially. Consider keeping adapters versioned (<code>StripeAdapterV3</code>) so rollback is safe.</p>
+<hr>
+<h2 class="section" id="q3">Q3</h2>
+<p><strong>Problem framing</strong></p>
+<p>A PSP-agnostic data model for payment methods must express &quot;card,&quot; &quot;bank transfer,&quot; &quot;wallet,&quot; and BNPL without referencing Stripe&#x27;s <code>PaymentMethod</code> shape or Adyen&#x27;s <code>paymentMethodsResponse</code>. This config drives which UI components render and which adapter code paths activate.</p>
+<p><strong>Approach</strong></p>
+<p>Define a <code>PaymentMethodConfig</code> returned by the server — server-side abstraction prevents leaking PSP details:</p>
+<pre><code>// Returned by GET /checkout/session
+interface CheckoutSession {
+  sessionId: string;
+  provider: ProviderConfig;
+  availablePaymentMethods: PaymentMethodConfig[];
+  defaultMethod: string;  // slug
+}
+
+type PaymentMethodType = &#x27;card&#x27; | &#x27;bank_transfer&#x27; | &#x27;wallet&#x27; | &#x27;bnpl&#x27; | &#x27;voucher&#x27;;
+
+interface PaymentMethodConfig {
+  slug: string;               // e.g. &#x27;card&#x27;, &#x27;paypal&#x27;, &#x27;klarna&#x27;, &#x27;ideal&#x27;
+  type: PaymentMethodType;
+  displayName: string;        // &quot;Credit or Debit Card&quot;
+  logoUrl: string;
+  countries: string[];        // ISO 3166-1 alpha-2
+  currencies: string[];       // ISO 4217
+  requiresRedirect: boolean;  // Adyen iDEAL, PayPal, Klarna → true
+  fields: PaymentFieldSchema[]; // for bank transfer: sort code, account number
+}
+
+interface PaymentFieldSchema {
+  id: string;           // &#x27;iban&#x27;, &#x27;sort_code&#x27;, &#x27;bsb&#x27;
+  label: string;
+  type: &#x27;text&#x27; | &#x27;numeric&#x27; | &#x27;select&#x27;;
+  options?: { label: string; value: string }[]; // for select (bank list)
+  validation: { pattern?: string; maxLength?: number };
+}</code></pre>
+<p>The checkout UI renders from this config. A card method shows the PSP card element; a <code>bank_transfer</code> method with <code>fields</code> renders generic text inputs; a <code>wallet</code> method (PayPal) may show only a button that triggers the wallet SDK.</p>
+<pre><code>// CheckoutForm — driven entirely by config, no PSP imports
+function CheckoutForm({ session }: { session: CheckoutSession }) {
+  const [selected, setSelected] = useState(session.defaultMethod);
+  const method = session.availablePaymentMethods.find(m =&gt; m.slug === selected)!;
+
+  return (
+    &lt;&gt;
+      &lt;PaymentMethodSelector methods={session.availablePaymentMethods} onSelect={setSelected} /&gt;
+      {method.type === &#x27;card&#x27; &amp;&amp; &lt;CardFields providerId={session.provider.provider} /&gt;}
+      {method.type === &#x27;bank_transfer&#x27; &amp;&amp; &lt;BankTransferFields fields={method.fields} /&gt;}
+      {method.type === &#x27;wallet&#x27; &amp;&amp; &lt;WalletButton method={method} /&gt;}
+      {method.type === &#x27;bnpl&#x27; &amp;&amp; &lt;BnplWidget method={method} /&gt;}
+    &lt;/&gt;
+  );
+}</code></pre>
+<p><strong>Tradeoffs</strong></p>
+<ul><li><strong>Server-driven config</strong> means adding Klarna doesn&#x27;t require a frontend deploy — but server and client must stay in schema sync. Use JSON Schema validation on both sides.</li><li><strong>PSP-agnostic field IDs</strong> work for generic bank transfers, but some PSPs (Adyen) pass back field-level metadata the server may need to forward. Add a <code>providerHints: unknown</code> passthrough field on <code>PaymentMethodConfig</code> for edge cases.</li><li><strong>BNPL complexity</strong>: Klarna, Afterpay, and Affirm each have different eligibility signals (cart value, shopper country). The config&#x27;s <code>countries</code>/<code>currencies</code> filters handle eligibility at render time, but dynamic eligibility (e.g., cart value threshold) still requires a real-time check.</li></ul>
+<hr>
+<h2 class="section" id="q4">Q4</h2>
+<p><strong>Problem framing</strong></p>
+<p>Stripe&#x27;s 3DS is handled inline via <code>confirmCardPayment</code> — the challenge happens in an iframe without leaving the page. Adyen iDEAL requires a full-page redirect to the bank&#x27;s site. Your abstraction layer must handle both without the checkout component knowing which flow fires.</p>
+<p><strong>Approach</strong></p>
+<p>The <code>PaymentResult.action</code> discriminated union captures both patterns:</p>
+<pre><code>type PaymentAction =
+  | { type: &#x27;stripe_challenge&#x27;; clientSecret: string }
+  | { type: &#x27;redirect&#x27;; url: string; returnUrl: string }
+  | { type: &#x27;adyen_action&#x27;; actionPayload: AdyenAction }
+  | { type: &#x27;none&#x27; };</code></pre>
+<p>Each adapter&#x27;s <code>confirm()</code> returns the appropriate action type. The checkout&#x27;s action handler dispatches:</p>
+<pre><code>async function handlePaymentAction(action: PaymentAction, provider: IPaymentProvider) {
+  switch (action.type) {
+    case &#x27;stripe_challenge&#x27;:
+      // Stripe handles inline — no navigation
+      return provider.handleAction(action);
+
+    case &#x27;redirect&#x27;:
+      // Persist checkout state before leaving
+      sessionStorage.setItem(&#x27;pendingCheckout&#x27;, JSON.stringify({
+        sessionId: currentSession.id,
+        returnTo: window.location.href,
+      }));
+      window.location.assign(action.url);
+      // No return — page navigates away
+      break;
+
+    case &#x27;adyen_action&#x27;:
+      // Adyen&#x27;s drop-in handles the action inline (could be redirect or QR etc.)
+      return provider.handleAction(action.actionPayload);
+  }
+}</code></pre>
+<p>For redirect flows, the return URL lands on a <code>/payment/return</code> page that reads the session from storage and calls <code>GET /checkout/session/:id</code> to check the final status — provider-agnostic outcome polling.</p>
+<div class="mermaid-wrap"><pre class="mermaid">sequenceDiagram
+  participant UI as CheckoutForm
+  participant Adapter as IPaymentProvider
+  participant Server as Backend
+  participant PSP as PSP (Adyen/Stripe)
+
+  UI->>Adapter: confirm(clientToken, billing)
+  Adapter->>PSP: SDK confirm call
+  PSP-->>Adapter: requires_action (redirect or 3DS)
+  Adapter-->>UI: PaymentResult { status: requires_action, action }
+  alt action.type === redirect
+    UI->>UI: persist state to sessionStorage
+    UI->>PSP: window.location.assign(action.url)
+    Note over UI,PSP: User completes bank auth
+    PSP->>UI: redirect to returnUrl
+    UI->>Server: GET /checkout/session/:id
+    Server-->>UI: { status: succeeded | failed }
+  else action.type === stripe_challenge
+    UI->>Adapter: handleAction(action)
+    Adapter->>PSP: handleCardAction()
+    PSP-->>Adapter: paymentIntent (succeeded)
+    Adapter-->>UI: PaymentResult { status: succeeded }
+  end</pre></div>
+<p><strong>Tradeoffs</strong></p>
+<p>The redirect case breaks React state entirely — the page reloads. Store just enough in <code>sessionStorage</code> to re-hydrate the success/failure UI on return. Avoid storing sensitive fields. The risk is the user&#x27;s browser blocks the redirect or they close the tab — handle this with the webhook-to-UI polling described in section 04.</p>
+<hr>
+<h2 class="section" id="q5">Q5</h2>
+<p><strong>Problem framing</strong></p>
+<p>When building a PSP abstraction, you choose between two extremes: a &quot;thin shim&quot; that just renames methods, or a &quot;rich unified API&quot; that irons out all PSP differences. Both fail in different ways as the system grows.</p>
+<p><strong>Approach</strong></p>
+<p><strong>Thin shim</strong>: The interface just delegates with minimal transformation. <code>stripeAdapter.confirm()</code> calls <code>stripe.confirmCardPayment()</code> and returns the raw result. Almost no normalisation.</p>
+<ul><li><strong>Breaks when</strong>: the checkout component starts accumulating <code>if (provider === &#x27;stripe&#x27;)</code> branches to handle PSP-specific error shapes, 3DS flows, or field validation quirks. The abstraction provides no value — the seam is at the wrong level.</li></ul>
+<p><strong>Rich unified API</strong>: The interface fully normalises errors, field state, action types, and success shapes. Adapters do heavy lifting.</p>
+<ul><li><strong>Breaks when</strong>: a PSP ships a feature that has no analogue in your interface — e.g., Stripe Link (one-click checkout) or PayPal&#x27;s Pay Later messaging. You either extend the interface (breaking other adapters) or bypass it (defeating the abstraction).</li></ul>
+<p><strong>Practical middle ground</strong>: Define the interface around <strong>checkout lifecycle events</strong> rather than PSP API shapes. The interface has <code>mount</code>, <code>confirm</code>, <code>handleAction</code>, <code>getFieldState</code> — not <code>createPaymentMethod</code> or <code>retrievePaymentIntent</code>. PSP features that don&#x27;t map into the lifecycle are exposed as <strong>opt-in capability flags</strong>:</p>
+<pre><code>interface IPaymentProvider {
+  // ... core lifecycle ...
+
+  // Optional capabilities — adapters declare what they support
+  capabilities: {
+    oneTouchCheckout: boolean;  // Stripe Link, PayPal one-touch
+    walletButtons: boolean;     // Apple Pay, Google Pay via this provider
+    bnplMessaging: boolean;     // Klarna placement widget
+  };
+
+  // Only call if capabilities.oneTouchCheckout === true
+  triggerOneTouch?(): Promise&lt;PaymentResult&gt;;
+}</code></pre>
+<p>The checkout UI checks capabilities before rendering optional features. This keeps the common path clean while allowing PSP-specific features to opt in incrementally.</p>
+<p><strong>Tradeoffs</strong></p>
+<table>
+<thead><tr>
+<th></th>
+<th>Thin Shim</th>
+<th>Rich Unified API</th>
+<th>Lifecycle + Capabilities</th>
+</tr></thead><tbody>
+<tr>
+<td>Upfront cost</td>
+<td>Low</td>
+<td>High</td>
+<td>Medium</td>
+</tr>
+<tr>
+<td>PSP leakage into UI</td>
+<td>High over time</td>
+<td>None</td>
+<td>Low</td>
+</tr>
+<tr>
+<td>New PSP feature support</td>
+<td>Easy (just delegate)</td>
+<td>Requires interface change</td>
+<td>Capability flag</td>
+</tr>
+<tr>
+<td>Adapter complexity</td>
+<td>Low</td>
+<td>High</td>
+<td>Medium</td>
+</tr>
+</tbody></table>
+<hr>
+<h2 class="section" id="q6">Q6</h2>
+<p><strong>Problem framing</strong></p>
+<p>Stripe returns <code>{ error: { code: &#x27;card_declined&#x27;, decline_code: &#x27;insufficient_funds&#x27;, message: &#x27;...&#x27; } }</code>. Adyen returns <code>{ resultCode: &#x27;Refused&#x27;, refusalReason: &#x27;Not enough balance&#x27;, refusalReasonCode: &#x27;8&#x27; }</code>. Braintree returns <code>{ transaction: { status: &#x27;processor_declined&#x27;, processorResponseCode: &#x27;2001&#x27; } }</code>. The checkout UI needs actionable categories; the support team needs the raw PSP detail.</p>
+<p><strong>Approach</strong></p>
+<p>Define a <code>FrontendPaymentError</code> enum with UI-actionable categories, and attach the raw PSP payload alongside:</p>
+<pre><code>type PaymentErrorCategory =
+  | &#x27;insufficient_funds&#x27;        // &quot;Your card has insufficient funds&quot;
+  | &#x27;card_declined_generic&#x27;     // &quot;Your card was declined&quot; (don&#x27;t reveal reason)
+  | &#x27;authentication_required&#x27;   // → trigger 3DS / redirect
+  | &#x27;expired_card&#x27;
+  | &#x27;incorrect_cvc&#x27;
+  | &#x27;do_not_retry&#x27;              // stolen card, fraud — hard stop
+  | &#x27;network_error&#x27;             // timeout, SDK load failure
+  | &#x27;provider_unavailable&#x27;      // PSP 5xx
+  | &#x27;unknown&#x27;;
+
+interface FrontendPaymentError {
+  category: PaymentErrorCategory;
+  userMessage: string;           // pre-localised, safe to display
+  retryable: boolean;
+  raw: {                         // never shown to user; sent to logging/support
+    provider: string;
+    code: string;
+    message: string;
+  };
+}</code></pre>
+<p>Each adapter&#x27;s normaliser maps PSP codes to categories:</p>
+<pre><code>// stripe-adapter/normalise-error.ts
+const STRIPE_CODE_MAP: Record&lt;string, PaymentErrorCategory&gt; = {
+  insufficient_funds:   &#x27;insufficient_funds&#x27;,
+  card_declined:        &#x27;card_declined_generic&#x27;,
+  expired_card:         &#x27;expired_card&#x27;,
+  incorrect_cvc:        &#x27;incorrect_cvc&#x27;,
+  authentication_required: &#x27;authentication_required&#x27;,
+  stolen_card:          &#x27;do_not_retry&#x27;,
+  fraudulent:           &#x27;do_not_retry&#x27;,
+  // ... etc
+};
+
+export function normaliseStripeError(err: StripeError): FrontendPaymentError {
+  const category = STRIPE_CODE_MAP[err.decline_code ?? err.code ?? &#x27;&#x27;] ?? &#x27;unknown&#x27;;
+  return {
+    category,
+    userMessage: USER_MESSAGES[category],  // i18n key lookup
+    retryable: ![&#x27;do_not_retry&#x27;, &#x27;unknown&#x27;].includes(category),
+    raw: { provider: &#x27;stripe&#x27;, code: err.code ?? &#x27;&#x27;, message: err.message ?? &#x27;&#x27; },
+  };
+}</code></pre>
+<pre><code>// adyen-adapter/normalise-error.ts — Adyen refusal reason codes
+const ADYEN_REFUSAL_MAP: Record&lt;string, PaymentErrorCategory&gt; = {
+  &#x27;2&#x27;:  &#x27;card_declined_generic&#x27;,  // Refused
+  &#x27;5&#x27;:  &#x27;do_not_retry&#x27;,           // Blocked
+  &#x27;8&#x27;:  &#x27;insufficient_funds&#x27;,     // Not enough balance
+  &#x27;23&#x27;: &#x27;authentication_required&#x27;, // 3D Secure required
+  // ...
+};</code></pre>
+<p>The <code>raw</code> field is forwarded to Sentry/Datadog with PCI-safe stripping (no card numbers). Support can query by <code>raw.provider</code> + <code>raw.code</code> without seeing card data.</p>
+<p><strong>Tradeoffs</strong></p>
+<ul><li><strong>Under-normalisation</strong>: if <code>do_not_retry</code> collapses <code>stolen_card</code> and <code>card_velocity_exceeded</code> into one category, support can&#x27;t distinguish fraud from limit issues. Use <code>raw.code</code> for support queries, not just the category.</li><li><strong>Over-normalisation</strong>: if you map every Adyen refusal to <code>card_declined_generic</code>, you lose the ability to surface actionable messages. Maintain a per-PSP lookup table with fallback to <code>unknown</code>.</li><li><strong>Localisation</strong>: <code>userMessage</code> should be an i18n key, not a hardcoded English string. The category enum is the translation key.</li></ul>
+<hr>
+<h2 class="section" id="q7">Q7</h2>
+<p><strong>Problem framing</strong></p>
+<p>Loading Stripe.js, Adyen Web, and Braintree Client on every checkout page triples the SDK weight and adds cross-origin script evaluation time even when only one provider is active. Lazy loading means loading only the provider the server selected — but the load must complete before the user reaches the card fields.</p>
+<p><strong>Approach</strong></p>
+<p>Use a <strong>registry map</strong> with dynamic <code>import()</code> and preloading triggered at route entry, not at mount time.</p>
+<pre><code>// SDK loader registry
+const SDK_LOADERS = {
+  stripe:    () =&gt; import(&#x27;./adapters/stripe&#x27;),
+  adyen:     () =&gt; import(&#x27;./adapters/adyen&#x27;),
+  paypal:    () =&gt; import(&#x27;./adapters/paypal&#x27;),
+  braintree: () =&gt; import(&#x27;./adapters/braintree&#x27;),
+} as const;
+
+// Called when checkout route is entered (before user sees card form)
+export async function preloadPaymentSDK(provider: ProviderConfig[&#x27;provider&#x27;]) {
+  return SDK_LOADERS[provider]();
+}</code></pre>
+<p>Call <code>preloadPaymentSDK</code> as early as possible — on route prefetch, not on user click:</p>
+<pre><code>// React Router v6 loader — runs before component renders
+export async function checkoutLoader({ request }: LoaderArgs) {
+  const session = await fetchCheckoutSession();
+  // Preload SDK in parallel with session fetch, don&#x27;t await here
+  const sdkPreload = preloadPaymentSDK(session.provider.provider);
+  // Await session; SDK loads in parallel
+  const adapter = await sdkPreload.then(m =&gt; new m.default());
+  await adapter.init(session.provider);
+  return { session, adapter };
+}</code></pre>
+<p>For Stripe specifically, Stripe recommends loading <code>stripe.js</code> from <code>js.stripe.com</code> on every page (for fraud signals). In that case, add a <code>&lt;script async&gt;</code> in the document <code>&lt;head&gt;</code> for the Stripe script URL only, and let the adapter dynamic import wire it up:</p>
+<pre><code>&lt;!-- In &lt;head&gt; — loads async, doesn&#x27;t block render --&gt;
+&lt;script async src=&quot;https://js.stripe.com/v3/&quot;&gt;&lt;/script&gt;</code></pre>
+<pre><code>// stripe-adapter: wait for window.Stripe to exist
+async function loadStripeJs(): Promise&lt;void&gt; {
+  if (window.Stripe) return; // already loaded by &lt;head&gt; script
+  await new Promise&lt;void&gt;(resolve =&gt; {
+    const check = setInterval(() =&gt; {
+      if (window.Stripe) { clearInterval(check); resolve(); }
+    }, 50);
+  });
+}</code></pre>
+<p>For Adyen and Braintree (no mandatory every-page load): use dynamic <code>import()</code> only — no <code>&lt;head&gt;</code> script tag.</p>
+<div class="mermaid-wrap"><pre class="mermaid">sequenceDiagram
+  participant Browser
+  participant Router as React Router
+  participant Server as /checkout/session
+  participant StripeJS as js.stripe.com
+
+  Browser->>Router: navigate /checkout
+  par Parallel loads
+    Router->>Server: GET /checkout/session
+    Browser->>StripeJS: <script async> (head, Stripe only)
+  end
+  Server-->>Router: { provider: 'stripe', clientToken }
+  Router->>Router: import('./adapters/stripe')  [cached if Stripe]
+  Router->>Router: adapter.init(config)
+  Router-->>Browser: CheckoutForm renders with mounted card fields</pre></div>
+<p><strong>Tradeoffs</strong></p>
+<ul><li>Stripe&#x27;s &quot;load on every page&quot; recommendation is for fraud ML signal collection (device fingerprinting). If you only load it on <code>/checkout</code>, fraud scores are weaker. Accept this tradeoff for non-Stripe providers; for Stripe, use the async <code>&lt;head&gt;</code> tag even if it&#x27;s not always needed.</li><li>Dynamic import + provider-specific chunk means Webpack/Vite creates separate bundles per adapter. Set <code>webpackChunkName: &#x27;payment-stripe&#x27;</code> so the chunk name is stable for CDN caching.</li><li>If the server returns a provider the browser hasn&#x27;t prefetched, the dynamic import adds ~200–400ms. Mitigate by reading provider from a cookie/localStorage hint set on the user&#x27;s previous session.</li></ul>
+<hr>
+<h2 class="section" id="q8-deep">Q8 (Deep)</h2>
+<p><strong>Problem framing</strong></p>
+<p>A multi-PSP checkout with Stripe (cards), PayPal (wallet), and Klarna (BNPL) must mount three different SDK-owned UI components into the same DOM. Each SDK renders iframes or shadow DOM. When the user switches payment methods, you must ensure the inactive SDKs are visually hidden but cleanly unmounted — leaked iframes and event listeners cause memory pressure and can fire stale callbacks.</p>
+<p><strong>Approach</strong></p>
+<p><strong>Component mounting strategy</strong>: Use a single container div per method. Mount all three once at checkout load, then show/hide using CSS visibility rather than unmount/remount:</p>
+<pre><code>// Three persistent container refs
+const cardContainerRef = useRef&lt;HTMLDivElement&gt;(null);
+const paypalContainerRef = useRef&lt;HTMLDivElement&gt;(null);
+const klarnaContainerRef = useRef&lt;HTMLDivElement&gt;(null);
+
+useEffect(() =&gt; {
+  // Mount all three during init — each in its own container
+  stripeAdapter.mount(&#x27;card-container&#x27;, { onFieldChange: handleCardChange });
+  paypalAdapter.mount(&#x27;paypal-container&#x27;, { onApprove: handlePayPalApprove });
+  klarnaAdapter.mount(&#x27;klarna-container&#x27;, { onAuthorize: handleKlarnaAuth });
+
+  return () =&gt; {
+    stripeAdapter.unmount();
+    paypalAdapter.unmount();
+    klarnaAdapter.unmount();
+  };
+}, []); // Mount once</code></pre>
+<p><strong>Visibility management</strong> — only the selected method&#x27;s container is visible:</p>
+<pre><code>&lt;div
+  id=&quot;card-container&quot;
+  style={{ display: selectedMethod === &#x27;card&#x27; ? &#x27;block&#x27; : &#x27;none&#x27; }}
+/&gt;
+&lt;div
+  id=&quot;paypal-container&quot;
+  style={{ display: selectedMethod === &#x27;paypal&#x27; ? &#x27;block&#x27; : &#x27;none&#x27; }}
+/&gt;
+&lt;div
+  id=&quot;klarna-container&quot;
+  style={{ display: selectedMethod === &#x27;klarna&#x27; ? &#x27;block&#x27; : &#x27;none&#x27; }}
+/&gt;</code></pre>
+<p>CSS <code>display: none</code> pauses iframe rendering without destroying the iframe&#x27;s state. This is critical — Stripe&#x27;s CardElement loses its internal state if the iframe is removed from DOM.</p>
+<p><strong>Event communication model</strong> — each SDK fires callbacks that the adapter normalises into a single shared event bus:</p>
+<pre><code>const paymentBus = new EventTarget();
+
+// Inside StripeAdapter.mount():
+cardElement.on(&#x27;change&#x27;, (e) =&gt; {
+  paymentBus.dispatchEvent(new CustomEvent(&#x27;fieldChange&#x27;, {
+    detail: { provider: &#x27;stripe&#x27;, complete: e.complete, error: e.error }
+  }));
+});
+
+// Inside PayPalAdapter.mount():
+paypal.Buttons({
+  onApprove: (data) =&gt; {
+    paymentBus.dispatchEvent(new CustomEvent(&#x27;paypalApproved&#x27;, { detail: data }));
+  },
+  onError: (err) =&gt; {
+    paymentBus.dispatchEvent(new CustomEvent(&#x27;paymentError&#x27;, {
+      detail: normalisePayPalError(err)
+    }));
+  }
+}).render(&#x27;#paypal-container&#x27;);</code></pre>
+<p>The React component subscribes to the bus:</p>
+<pre><code>useEffect(() =&gt; {
+  const handleError = (e: Event) =&gt;
+    setError((e as CustomEvent&lt;FrontendPaymentError&gt;).detail);
+  paymentBus.addEventListener(&#x27;paymentError&#x27;, handleError);
+  return () =&gt; paymentBus.removeEventListener(&#x27;paymentError&#x27;, handleError);
+}, []);</code></pre>
+<p><strong>Only one method active at a time</strong> — the <code>confirm</code> button is gated:</p>
+<pre><code>function handleConfirm() {
+  const activeAdapter = adapterMap[selectedMethod];
+  activeAdapter.confirm(session.clientToken, billingDetails);
+}</code></pre>
+<p><strong>Preventing listener leaks</strong> — each adapter&#x27;s <code>unmount()</code> cleans up:</p>
+<pre><code>// StripeAdapter.unmount()
+unmount() {
+  this.cardElement.off(&#x27;change&#x27;, this.changeHandler);  // remove SDK listener
+  this.cardElement.destroy();                           // destroys iframe
+  // EventTarget listeners are removed by the React cleanup in useEffect
+}</code></pre>
+<p><strong>Tradeoffs</strong></p>
+<ul><li><strong>Mount-all-at-init</strong> means all three SDKs load on checkout load, not lazily. Mitigate: combine with Q7&#x27;s lazy SDK loading — only init the adapters whose SDKs are loaded. Show a loading spinner per method until its SDK is ready.</li><li><strong>CSS visibility vs. unmount/remount</strong>: <code>display: none</code> keeps the iframe alive (good for state). <code>visibility: hidden</code> is an alternative that keeps layout space. Full unmount is needed if the PSP SDK is heavyweight (Klarna&#x27;s widget is ~400KB) — benchmark on mobile.</li><li><strong>PayPal&#x27;s button SDK</strong> renders its own button, not a card form — mounting into a hidden container and then showing it works, but PayPal&#x27;s eligibility check happens at mount time. If eligibility changes (cart update), you may need to remount the PayPal button.</li></ul>
+<hr>
+<h2 class="section" id="q9-deep">Q9 (Deep)</h2>
+<p><strong>Problem framing</strong></p>
+<p>Provider failover — retrying a failed Stripe charge through Adyen within 2 seconds without user awareness — sounds like a frontend responsibility but is fundamentally a server-side problem. The frontend abstraction can coordinate it, but the constraints are severe.</p>
+<p><strong>Approach</strong></p>
+<p><strong>Server-side pre-condition</strong>: The server must create payment intents/sessions for both providers *before* the frontend starts. The client token for Adyen cannot be created after Stripe fails — there isn&#x27;t 2 seconds for a round trip plus Adyen session creation.</p>
+<pre><code>// Server response must include tokens for all failover providers
+interface CheckoutSession {
+  sessionId: string;
+  primary: ProviderConfig;    // { provider: &#x27;stripe&#x27;, clientToken: &#x27;...&#x27; }
+  failover?: ProviderConfig;  // { provider: &#x27;adyen&#x27;, clientToken: &#x27;...&#x27; }
+}</code></pre>
+<p><strong>Frontend failover logic</strong> in the abstraction layer:</p>
+<pre><code>class FailoverPaymentRouter {
+  private primaryAdapter: IPaymentProvider;
+  private failoverAdapter?: IPaymentProvider;
+
+  async confirm(billing: BillingDetails, session: CheckoutSession): Promise&lt;PaymentResult&gt; {
+    try {
+      const result = await Promise.race([
+        this.primaryAdapter.confirm(session.primary.clientToken, billing),
+        timeout(8000), // don&#x27;t wait forever on Stripe 5xx
+      ]);
+      if (result.status !== &#x27;failed&#x27; || !isProviderError(result.error)) return result;
+      // Only failover on 5xx, not on declined cards
+      if (result.error?.category !== &#x27;provider_unavailable&#x27;) return result;
+    } catch (err) {
+      if (!isTimeoutOrNetworkError(err) || !this.failoverAdapter) throw err;
+    }
+
+    // Switch to failover
+    console.warn(&#x27;[Payment] Primary provider failed, switching to failover&#x27;);
+    trackEvent(&#x27;payment_failover_triggered&#x27;, { from: session.primary.provider, to: session.failover!.provider });
+    return this.failoverAdapter!.confirm(session.failover!.clientToken, billing);
+  }
+}</code></pre>
+<p><strong>Constraints and where this breaks</strong>:</p>
+<ol><li><strong>Card data never leaves the PSP iframe</strong> — you cannot re-submit card data to Adyen after Stripe fails. The failover only works for token-based flows where the server has the tokenized card, or for wallet methods where the PSP SDK re-handles the payment.</li><li><strong>Idempotency</strong> — if Stripe&#x27;s 5xx was actually a timeout that succeeded server-side, charging through Adyen double-charges the user. The server must check the Stripe PaymentIntent status before authorising the Adyen charge.</li><li><strong>User-visible timing</strong> — the failover adapter must be pre-initialised (SDK loaded, session token fetched). If Adyen&#x27;s SDK isn&#x27;t pre-loaded, the 2-second window is unrealistic.</li><li><strong>3DS</strong> — if the Stripe flow required a 3DS challenge and failed after authentication, repeating through Adyen means a second 3DS challenge. Invisible failover is impossible in this case.</li></ol>
+<div class="mermaid-wrap"><pre class="mermaid">sequenceDiagram
+  participant UI as Checkout
+  participant Router as FailoverRouter
+  participant Stripe as StripeAdapter
+  participant Adyen as AdyenAdapter
+  participant Server as Backend
+
+  Note over Server: Creates Stripe PaymentIntent AND Adyen session at /checkout/session
+
+  UI->>Router: confirm(billing)
+  Router->>Stripe: confirmCardPayment(stripeToken)
+  Stripe-->>Router: { error: provider_unavailable }  [5xx]
+  Router->>Server: PATCH /checkout/session — verify Stripe status
+  Server-->>Router: { stripeStatus: 'requires_payment_method' } [not charged]
+  Router->>Adyen: confirm(adyenSessionToken)
+  Adyen-->>Router: { status: 'succeeded', paymentId: '...' }
+  Router-->>UI: PaymentResult { status: 'succeeded' }</pre></div>
+<p><strong>Tradeoffs</strong></p>
+<p>True silent failover is only safe for server-tokenized flows. For card-present iframe flows (Stripe Elements, Adyen Web Components), the card data is isolated in the iframe and cannot be transferred. Failover in this context means showing the user a different payment form — which is visible. Document this limitation clearly in your abstraction&#x27;s interface contract.</p>
+<hr>
+<h2 class="section" id="q10-deep">Q10 (Deep)</h2>
+<p><strong>Problem framing</strong></p>
+<p>Migrating checkout from Braintree to Stripe over 6 months with a gradual rollout means both SDKs are active simultaneously for the migration period. You need to avoid doubling script weight, route cohorts correctly, compare success rates across providers, and define a clean &quot;done&quot; criteria.</p>
+<p><strong>Approach</strong></p>
+<p><strong>1. Loading both SDKs without doubling weight</strong></p>
+<p>Use the adapter registry from Q7. Braintree&#x27;s Client SDK (<code>braintree-web</code>) is ~70KB gzipped; Stripe.js is loaded from Stripe&#x27;s CDN. During migration, route cohorts so each user loads exactly one adapter — not both.</p>
+<pre><code>// Feature flag drives which adapter loads
+const provider = featureFlags.get(&#x27;checkout_provider&#x27;); // &#x27;stripe&#x27; | &#x27;braintree&#x27;
+
+// Only the selected adapter&#x27;s chunk is fetched
+const { default: Adapter } = await SDK_LOADERS[provider]();</code></pre>
+<p>The <code>braintree-web</code> npm package is bundled into a separate chunk (<code>payment-braintree</code>). Users on the Stripe cohort never download it.</p>
+<p>For Stripe&#x27;s every-page fraud script: add it only for the Stripe cohort via a flag-gated <code>&lt;script&gt;</code> injection:</p>
+<pre><code>if (provider === &#x27;stripe&#x27; &amp;&amp; !document.querySelector(&#x27;script[src*=&quot;stripe.com&quot;]&#x27;)) {
+  const s = document.createElement(&#x27;script&#x27;);
+  s.src = &#x27;https://js.stripe.com/v3/&#x27;;
+  s.async = true;
+  document.head.appendChild(s);
+}</code></pre>
+<p><strong>2. Cohort routing</strong></p>
+<p>Use a deterministic hash of <code>userId % 100</code> so the same user always gets the same provider (prevents same-session switching):</p>
+<pre><code>function assignProvider(userId: string, rolloutPercent: number): &#x27;stripe&#x27; | &#x27;braintree&#x27; {
+  const hash = murmurhash3(userId) % 100;
+  return hash &lt; rolloutPercent ? &#x27;stripe&#x27; : &#x27;braintree&#x27;;
+}</code></pre>
+<p>Store the assignment in the session at login time. The server stamps it into the checkout session response so the frontend just reads it.</p>
+<p>Rollout schedule: 5% → 20% → 50% → 100% with one week hold-and-observe at each step.</p>
+<p><strong>3. Analytics: comparing success rates across providers</strong></p>
+<p>Every checkout event is tagged with <code>{ provider: &#x27;stripe&#x27; | &#x27;braintree&#x27;, experiment_variant: &#x27;migration_stripe_v1&#x27; }</code>:</p>
+<pre><code>track(&#x27;payment_attempted&#x27;, {
+  provider: session.provider.provider,
+  experiment_variant: session.migrationVariant,
+  payment_method_type: selectedMethod,
+});
+
+track(&#x27;payment_succeeded&#x27;, {
+  provider: session.provider.provider,
+  payment_id: result.paymentId,
+  experiment_variant: session.migrationVariant,
+});</code></pre>
+<p>Dashboard query (DataDog / Amplitude):</p>
+<pre><code>success_rate = count(payment_succeeded) / count(payment_attempted)
+GROUP BY provider, experiment_variant</code></pre>
+<p>Segment by card type, device, country to ensure Stripe doesn&#x27;t win/lose due to cohort imbalance (e.g., if the Stripe cohort skews mobile).</p>
+<p><strong>4. Defining &quot;migration complete&quot;</strong></p>
+<pre><code>// Migration is complete when all of:
+const migrationComplete = [
+  rolloutPercent === 100,                    // All users on Stripe
+  braintreeSuccessRate.p7d &lt; 0.001,          // Braintree handling near-zero traffic
+  stripeSuccessRate.p7d &gt;= baselineRate * 0.99, // Stripe success rate ≥ 99% of Braintree baseline
+  noOpenP0Incidents.stripe,                  // No open Stripe-caused incidents
+  braintreeSDKChunk.notRequested,            // Braintree chunk no longer fetched
+].every(Boolean);</code></pre>
+<p>Post-completion: remove the Braintree adapter, delete the <code>payment-braintree</code> chunk, remove Braintree from the feature flag system, cancel the Braintree merchant account.</p>
+<p><strong>Tradeoffs</strong></p>
+<ul><li><strong>Deterministic hash vs. feature flag service</strong>: hash is zero-latency (no network call) but can&#x27;t be overridden per-user for support triage. Use a feature flag service with hash-based default + manual override capability for support escalation.</li><li><strong>Risk of divergent success rates</strong>: if Braintree and Stripe process different payment method mixes (e.g., Braintree handles more AMEX), success rate comparison is confounded. Stratify the analysis by card network.</li><li><strong>Braintree contract</strong>: many contracts have termination notice periods. Begin contract wind-down at 50% rollout to Stripe, not at 100% — legal timelines are longer than technical timelines.</li></ul>
+  </main>
+  <footer class="page-footer">
+    <a href="index.html">← All sections</a> ·
+    <a href="../payments-system-frontend-architecture.html">Architecture map</a>
+  </footer>
+  <script src="assets/interactive.js" defer></script>
+</body>
+</html>

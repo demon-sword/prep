@@ -1,0 +1,134 @@
+<div class="answer-header reveal">
+  <div class="answer-meta">
+    <span class="meta-badge meta-category">01-llm-fundamentals</span>
+    <span class="meta-badge meta-num">Q016</span>
+    <span class="meta-badge meta-status-review">review</span>
+  </div>
+  <h1 class="answer-title">What is graph RAG? How does it differ from standard RAG?</h1>
+</div>
+
+<div class="answer-section reveal">
+  <div class="accordion">
+    <div class="accordion-header">
+      <span class="accordion-title">⟁ Framing — Why this is asked</span>
+      <span class="accordion-chevron">▾</span>
+    </div>
+    <div class="accordion-body">
+      <div class="framing-grid">
+        <div><div class="framing-card">
+          <div class="framing-card-title">Why asked</div>
+          <p style="font-size:13.5px;line-height:1.7;color:var(--text-dim)">The interviewer is probing whether you understand the structural limitations of flat vector search — and when relationships between entities matter more than semantic similarity. Graph RAG is a 2024–2025 pattern that appears in enterprise knowledge management, legal/medical domain Q&amp;A, and multi-hop reasoning systems. The question tests architectural thinking beyond the vanilla pipeline.</p>
+        </div></div>
+        <div><div class="framing-card">
+          <div class="framing-card-title">Trigger phrases</div>
+          <div class="trigger-list">
+              <div class="trigger-phrase">How would you handle queries that require connecting multiple documents?</div>
+              <div class="trigger-phrase">What is graph RAG and when would you use it?</div>
+              <div class="trigger-phrase">Standard RAG struggles with multi-hop questions — what&#x27;s the fix?</div>
+              <div class="trigger-phrase">How do you model relationships between entities in a knowledge base?</div>
+          </div>
+        </div></div>
+      </div>
+      <div class="tests-block">
+        <span style="font-family:var(--mono);font-size:10px;letter-spacing:0.1em;text-transform:uppercase;color:var(--purple);margin-right:8px">Tests:</span>Whether the candidate can articulate the structural gap in vector-only retrieval and knows when a knowledge graph adds signal that embeddings can&#x27;t capture.
+
+---
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="section-label">Concept</div>
+  <div class="concept-block"><p>Graph RAG augments the standard RAG pipeline by replacing (or supplementing) the flat vector index with a <strong>knowledge graph</strong> — nodes represent entities (people, concepts, events, documents) and edges represent typed relationships between them. Instead of retrieving the top-k most similar text chunks, retrieval now traverses the graph to collect a subgraph of related entities, then passes that structured context to the LLM. Microsoft Research's GraphRAG (2024) is the canonical open-source implementation.</p></div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="section-label">Mechanism</div>
+  <div class="card"><p><strong>Standard RAG flow:</strong></p>
+<ol class="mechanism-steps"><li>Chunk documents → embed chunks → store in vector index (FAISS / Pinecone)</li><li>Query → embed query → ANN search → top-k chunks → LLM generates answer</li></ol>
+<p><strong>Graph RAG flow:</strong></p>
+<ol class="mechanism-steps"><li><strong>Offline graph construction:</strong> An LLM extracts entities and relationships from source documents → build a knowledge graph (Neo4j, Kuzu, or in-memory NetworkX). Optionally cluster into "communities" (Leiden algorithm) and pre-generate community summaries.</li><li><strong>Retrieval:</strong> Given a query, identify anchor entities (NER or embedding match) → traverse the graph (BFS/DFS/shortest-path) to collect a relevant subgraph or community summary.</li><li><strong>Context assembly:</strong> Serialize the subgraph (triples or natural-language summary) + optionally augment with raw chunks → pass to LLM.</li><li><strong>Generation:</strong> LLM answers using relational context it couldn't get from flat retrieval.</li></ol>
+<p><strong>Key variants:</strong></p>
+<ul class="styled-list"><li><strong>Local search</strong> (GraphRAG): expands from anchor entities outward — best for entity-specific queries</li><li><strong>Global search</strong> (GraphRAG): uses pre-built community summaries — best for holistic "what are the main themes?" queries</li><li><strong>Hybrid graph + vector</strong>: Neo4j vector index lets you do semantic ANN search <em>and</em> graph traversal in a single query</li></ul></div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="section-label">Example / Tradeoff</div>
+  <div class="card card-accent"><div class="rich-text"><p><strong>When Graph RAG wins:</strong> A legal knowledge base with 10,000 contracts. A query like <em>"Which suppliers have disputes with clients who also appear in contract amendments from 2023?"</em> requires linking supplier → contract → client → amendment — three hops. Flat RAG retrieves individual chunks about each entity but misses the connections. Graph RAG traverses those relationships explicitly.</p>
+<p><strong>Microsoft GraphRAG (2024) benchmark:</strong> On the "Poverty Map" dataset (a large community-oriented corpus), global GraphRAG answered community-summarization questions that standard RAG failed on, but at ~3–5× higher cost (graph construction is LLM-intensive).</p>
+<p><strong>Concrete tradeoffs:</strong></p>
+<div class="table-wrap"><table class="data-table"><tr><th>Dimension</th><th>Standard RAG</th><th>Graph RAG</th></tr><tr><td>Setup cost</td><td>Low (embed + index)</td><td>High (LLM-driven entity extraction + graph build)</td></tr><tr><td>Multi-hop queries</td><td>Poor</td><td>Strong</td></tr><tr><td>Simple factual Q&A</td><td>Strong</td><td>Marginal improvement</td></tr><tr><td>Latency</td><td>Fast (ANN ~5ms)</td><td>Slower (graph traversal + possibly community summary fetch)</td></tr><tr><td>Maintenance</td><td>Re-embed on update</td><td>Re-extract entities + rebuild edges on update</td></tr><tr><td>Tooling</td><td>FAISS, Pinecone, Weaviate</td><td>Neo4j, Kuzu, Microsoft GraphRAG, LlamaIndex PropertyGraph</td></tr></table></div>
+<p><strong>When NOT to use Graph RAG:</strong> High document-churn corpora (news, real-time data) — graph construction is expensive and stale graphs are worse than no graph. Also avoid for simple single-document Q&A where flat retrieval is sufficient.</p></div></div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="accordion">
+    <div class="accordion-header">
+      <span class="accordion-title">🎙 Verbal Script (3–5 min)</span>
+      <span class="accordion-chevron">▾</span>
+    </div>
+    <div class="accordion-body">
+      <div class="script-block"><div class="script-label">Opening (30s)</div><p>"Graph RAG addresses a structural gap in standard vector RAG: flat chunk retrieval is excellent at finding semantically similar text, but it can't reason about <em>relationships</em> between entities across documents. Graph RAG builds a knowledge graph on top of the corpus, so retrieval can traverse connections — not just rank similarity."</p></div>
+      <div class="script-block"><div class="script-label">Core explanation (2–3 min)</div><p>"In standard RAG, I embed chunks and retrieve top-k by cosine similarity. That works well for self-contained factual questions. But consider a query like 'Which of our supplier contracts have penalty clauses linked to clients who also appear in 2023 amendments?' — that's a three-hop question. No single chunk contains all three relationships. Flat retrieval fails here.</p>
+<p>Graph RAG fixes this in two phases. First, offline: I run an LLM over the corpus to extract entities and typed relationships — supplier, contract, client, clause type — and store them as a graph, say in Neo4j or with Microsoft's GraphRAG library using Leiden community clustering. Second, at query time: I identify anchor entities from the query using NER or a small ANN search, then traverse the graph — BFS, shortest-path, or community-summary lookup — to collect a relevant subgraph. I serialize those triples or the community summary into natural language and pass it as context to the generation LLM.</p>
+<p>Microsoft's 2024 GraphRAG paper showed this works especially well for 'global' queries — 'what are the main themes in this corpus?' — where community-level pre-summaries surface patterns no single chunk reveals."</p></div>
+      <div class="script-block"><div class="script-label">Tradeoff / production angle (1 min)</div><p>"The key tradeoff is construction cost versus query quality. Graph construction is LLM-intensive — you're running extraction over every document, which can be 5–10× the embedding cost. That's fine for a stable legal or medical corpus, but expensive for high-churn corpora like news feeds. For those, I'd stick with hybrid dense+sparse vector search. I also keep vector search in parallel because Graph RAG alone can miss purely semantic matches — the hybrid wins on both axes.</p>
+<p>A practical middle ground: use LlamaIndex's PropertyGraph or Neo4j's vector index to do ANN search <em>and</em> graph traversal in a single query, so you don't have to choose."</p></div>
+      <div class="script-block"><div class="script-label">Wrap-up (30s)</div><p>"So: Graph RAG = knowledge graph on top of the corpus, entity traversal at retrieval time, best for multi-hop relational queries. Standard RAG = flat vector search, best for single-hop factual or semantic similarity tasks. The decision comes down to whether relationships between entities are load-bearing for the queries you're answering. Happy to go deeper on the construction pipeline or community summarization."</p></div>
+    </div>
+  </div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="section-label">Pitfalls</div>
+  <div class="pitfall-card">
+    <div class="pitfall-mistake"><strong>✗ Mistake</strong> Saying &quot;Graph RAG is just RAG with a graph database&quot; without explaining what changes in the retrieval step</div>
+    <div class="pitfall-better"><strong>✓ Better</strong> Explain that the retrieval mechanism shifts from ANN similarity search to entity-anchored graph traversal, and that graph construction requires an LLM extraction pass that standard RAG doesn&#x27;t need.</div>
+  </div>
+  <div class="pitfall-card">
+    <div class="pitfall-mistake"><strong>✗ Mistake</strong> Recommending Graph RAG for every use case because it &quot;handles relationships&quot;</div>
+    <div class="pitfall-better"><strong>✓ Better</strong> Acknowledge the high construction and maintenance cost; flag that for simple factual Q&amp;A or high-churn corpora, standard RAG is cheaper and often just as accurate. Only reach for Graph RAG when multi-hop relational queries are a documented failure mode.</div>
+  </div>
+  <div class="pitfall-card">
+    <div class="pitfall-mistake"><strong>✗ Mistake</strong> Not mentioning the community summarization variant (global search)</div>
+    <div class="pitfall-better"><strong>✓ Better</strong> Distinguish local search (entity-anchored traversal) from global search (pre-built community summaries for thematic/holistic questions), as the interviewer may ask about the Microsoft GraphRAG paper specifically.
+
+---</div>
+  </div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="section-label">Related Questions</div>
+  <div class="related-pills">
+    <div class="related-pill" data-slug="01-012">
+      <span class="related-pill-icon">→</span>
+      <div class="related-pill-text">
+        <div class="related-pill-q">Q12: What&#x27;s an RAG model? Explain the complete process.</div>
+        <div class="related-pill-rel">Prerequisite — standard RAG pipeline to contrast against</div>
+      </div>
+    </div>
+    <div class="related-pill" data-slug="01-013">
+      <span class="related-pill-icon">→</span>
+      <div class="related-pill-text">
+        <div class="related-pill-q">Q13: What are embeddings?</div>
+        <div class="related-pill-rel">Prerequisite — embedding-based retrieval that Graph RAG augments</div>
+      </div>
+    </div>
+    <div class="related-pill" data-slug="01-014">
+      <span class="related-pill-icon">→</span>
+      <div class="related-pill-text">
+        <div class="related-pill-q">Q14: How does chunking happen?</div>
+        <div class="related-pill-rel">Related — Graph RAG&#x27;s entity extraction depends on chunking strategy upstream</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="section-label">One-liner recall</div>
+  <div class="oneliner-box">
+    <div class="oneliner-label">▸ Reconstruct from memory</div>
+    <div class="oneliner-text" data-text="Graph RAG replaces flat vector retrieval with a knowledge-graph traversal — extracting entities and typed relationships offline, then traversing them at query time to answer multi-hop relational questions that standard top-k chunk retrieval cannot.">Graph RAG replaces flat vector retrieval with a knowledge-graph traversal — extracting entities and typed relationships offline, then traversing them at query time to answer multi-hop relational questions that standard top-k chunk retrieval cannot.</div>
+  </div>
+</div>

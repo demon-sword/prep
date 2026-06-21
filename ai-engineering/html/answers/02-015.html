@@ -1,0 +1,153 @@
+<div class="answer-header reveal">
+  <div class="answer-meta">
+    <span class="meta-badge meta-category">02-rag-systems</span>
+    <span class="meta-badge meta-num">Q015</span>
+    <span class="meta-badge meta-status-review">review</span>
+  </div>
+  <h1 class="answer-title">What vector databases have you used? Which and why?</h1>
+</div>
+
+<div class="answer-section reveal">
+  <div class="accordion">
+    <div class="accordion-header">
+      <span class="accordion-title">⟁ Framing — Why this is asked</span>
+      <span class="accordion-chevron">▾</span>
+    </div>
+    <div class="accordion-body">
+      <div class="framing-grid">
+        <div><div class="framing-card">
+          <div class="framing-card-title">Why asked</div>
+          <p style="font-size:13.5px;line-height:1.7;color:var(--text-dim)">The interviewer is probing hands-on production experience with vector storage, not textbook knowledge. They want to see whether you can justify a technology choice based on real constraints — managed vs self-hosted, latency SLOs, scale, filtering needs, cost — and whether you understand the architectural tradeoffs each database makes.</p>
+        </div></div>
+        <div><div class="framing-card">
+          <div class="framing-card-title">Trigger phrases</div>
+          <div class="trigger-list">
+              <div class="trigger-phrase">What vector databases have you worked with?</div>
+              <div class="trigger-phrase">Which vector DB would you pick for this system, and why?</div>
+              <div class="trigger-phrase">Have you used Pinecone / Qdrant / Weaviate / FAISS — what&#x27;s your take?</div>
+              <div class="trigger-phrase">How did you choose your vector store?</div>
+          </div>
+        </div></div>
+      </div>
+      <div class="tests-block">
+        <span style="font-family:var(--mono);font-size:10px;letter-spacing:0.1em;text-transform:uppercase;color:var(--purple);margin-right:8px">Tests:</span>Ability to select and justify a vector database based on production constraints (scale, latency, cost, filtering, managed vs self-hosted) rather than just naming tools.
+
+---
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="section-label">Concept</div>
+  <div class="concept-block"><p>A vector database stores high-dimensional embeddings and supports approximate nearest-neighbor (ANN) search — typically HNSW or IVF-based — often combined with metadata filtering. The right choice depends on five axes: managed vs self-hosted, scale (number of vectors), filtering complexity, latency SLO, and cost.</p></div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="section-label">Mechanism</div>
+  <div class="card"><p><strong>Key databases and their positioning:</strong></p>
+<div class="table-wrap"><table class="data-table"><tr><th>DB</th><th>Index</th><th>Hosting</th><th>Sweet spot</th><th>Weakness</th></tr><tr><td><strong>Pinecone</strong></td><td>HNSW (proprietary)</td><td>Fully managed SaaS</td><td>Fast MVP, no ops burden, reliable p99</td><td>Costly at high QPS; no self-host</td></tr><tr><td><strong>Qdrant</strong></td><td>HNSW + payload indexing</td><td>Self-host or cloud</td><td>Rich filtering, Rust performance, open-source</td><td>You own the ops</td></tr><tr><td><strong>Weaviate</strong></td><td>HNSW + BM25 hybrid</td><td>Self-host or cloud</td><td>Built-in hybrid search, GraphQL API</td><td>Memory-heavy HNSW for large corpora</td></tr><tr><td><strong>pgvector</strong></td><td>IVF-Flat / HNSW</td><td>Any Postgres host</td><td>Existing Postgres stack, <5M vectors</td><td>Recall drops without tuning; not sharded natively</td></tr><tr><td><strong>FAISS</strong></td><td>IVF-PQ, HNSW, Flat</td><td>Library (no server)</td><td>Offline batch search, R&D, custom infra</td><td>No filtering, no persistence, no multi-tenancy</td></tr><tr><td><strong>Chroma</strong></td><td>HNSW (hnswlib)</td><td>Embedded or server</td><td>Local dev / small apps</td><td>Not production-grade at scale</td></tr><tr><td><strong>Milvus</strong></td><td>IVF-PQ, HNSW, DiskANN</td><td>Self-host (k8s)</td><td>100M+ vectors, GPU acceleration</td><td>Operational complexity</td></tr></table></div>
+<p><strong>Selection decision tree:</strong></p>
+<div class="code-block-wrap"><pre class="code-block"><code>Need managed, zero-ops?
+  → Pinecone (or Weaviate Cloud)
+
+Have Postgres already + &lt;10M vectors?
+  → pgvector with HNSW index
+
+Need rich payload filtering + self-host?
+  → Qdrant (best filtering performance per benchmark)
+
+Need built-in hybrid search (dense + BM25)?
+  → Weaviate or Qdrant (with BM25 plugin)
+
+&gt;100M vectors + GPU budget?
+  → Milvus or Weaviate with DiskANN
+
+Research / offline batch only?
+  → FAISS (IVF-PQ for memory efficiency)</code></pre><button class="copy-btn">copy</button></div>
+<p><strong>ANN index nuances:</strong></p>
+<ul class="styled-list"><li><strong>HNSW</strong> — high recall (>95%), fast query, high memory (O(n·d·4 bytes)); sweet spot <50M vectors</li><li><strong>IVF-PQ</strong> — quantized centroids reduce memory 4–16×; recall ~85–92%; good for 50M–1B vectors</li><li><strong>DiskANN</strong> — SSD-resident graph; near-HNSW recall with fraction of RAM; Milvus and Weaviate support it</li></ul>
+<p><strong>Filtering:</strong> Pre-filtering (index per segment) vs post-filtering (ANN then filter) tradeoff. Qdrant's payload indexes support pre-filtering without recall collapse — critical for multi-tenant RAG with ACL filters.</p></div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="section-label">Example / Tradeoff</div>
+  <div class="card card-accent"><div class="rich-text"><p>In a production customer-support RAG system (~2M product chunks): started with <strong>Pinecone</strong> for speed of launch — pod-based s1 tier, cosine similarity, p99 query ~25ms. As metadata filter complexity grew (tenant × product-line × date range), migrated to <strong>Qdrant</strong> (self-hosted on k8s) because Pinecone's metadata filtering degraded recall and added cost. Qdrant's payload indexing kept recall@5 above 90% with compound filters at <30ms p99.</p>
+<p>For dev/local testing: <strong>Chroma</strong> embedded mode for zero-infrastructure iteration, swapped for production store at deploy.</p>
+<p><strong>Cost comparison (rough at 5M vectors, 1K QPS):</strong></p>
+<ul class="styled-list"><li>Pinecone p2.x2 pod: ~$700/mo</li><li>Qdrant self-hosted (3-node, 16GB RAM each): ~$300/mo cloud compute + ops overhead</li><li>pgvector on RDS r7g.2xlarge: ~$400/mo — only viable if Postgres already in stack</li></ul></div></div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="accordion">
+    <div class="accordion-header">
+      <span class="accordion-title">🎙 Verbal Script (3–5 min)</span>
+      <span class="accordion-chevron">▾</span>
+    </div>
+    <div class="accordion-body">
+      <div class="script-block"><div class="script-label">Opening (30s)</div><p>"I've worked with several vector stores across different stages of production — Pinecone for managed simplicity, Qdrant for rich filtering at self-hosted scale, FAISS for offline batch research, and pgvector when we already had Postgres in the stack. My selection framework comes down to five axes: managed vs self-hosted, number of vectors, filtering complexity, latency SLO, and cost."</p></div>
+      <div class="script-block"><div class="script-label">Core explanation (2–3 min)</div><p>"Let me walk through the main options.</p>
+<p>Pinecone is the default managed choice — zero operational overhead, reliable p99 latency around 20–30ms, and a clean SDK. The tradeoff is cost at high QPS and limited control over the underlying index. I'd pick it when the team is small, we're moving fast, and ops complexity is a risk.</p>
+<p>Qdrant is my go-to for self-hosted deployments where metadata filtering is complex — things like per-tenant ACL filters combined with date ranges. Qdrant's payload indexing does pre-filtering without sacrificing HNSW recall, which is a meaningful advantage over post-filtering approaches that can collapse recall to near-zero when filters are tight. It's written in Rust, so the per-query latency is excellent.</p>
+<p>Weaviate makes sense when you want built-in hybrid search — it can fuse BM25 and dense retrieval natively without running a separate Elasticsearch instance. That's attractive if you want to reduce infrastructure components.</p>
+<p>pgvector is interesting if you already have Postgres. For corpora under about five million vectors, the HNSW extension performs well. Beyond that, you start hitting sharding limits and you lose the memory efficiency you'd get from a purpose-built store.</p>
+<p>FAISS I treat as a library, not a database — great for offline batch search or for building custom serving infrastructure, but it doesn't handle persistence, multi-tenancy, or filtering natively."</p></div>
+      <div class="script-block"><div class="script-label">Tradeoff / production angle (1 min)</div><p>"The key mistake I see is choosing a vector DB based on brand name rather than the filtering model. HNSW recall degrades badly when you add metadata post-filters — if you're filtering to 5% of the corpus, ANN retrieves from 100% and then discards 95%, so effective recall tanks. Qdrant and Weaviate with native payload indexing solve this by partitioning the graph by filter values. That's the architectural decision that matters most for multi-tenant RAG.</p>
+<p>Cost is the other lever: at 1M queries/day, the difference between a managed tier and self-hosted can be $5K–$10K/month. I always model that break-even before committing."</p></div>
+      <div class="script-block"><div class="script-label">Wrap-up (30s)</div><p>"So my default stack: Pinecone for rapid iteration or when ops is a constraint, Qdrant for production self-hosted with complex filters, Weaviate when hybrid search is needed built-in, pgvector for Postgres-native shops under five million vectors. Happy to go deeper on any of these or on how ANN index choice — HNSW vs IVF-PQ vs DiskANN — affects the recall/cost tradeoff."</p></div>
+    </div>
+  </div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="section-label">Pitfalls</div>
+  <div class="pitfall-card">
+    <div class="pitfall-mistake"><strong>✗ Mistake</strong> Naming only one tool (&quot;I&#x27;ve used Pinecone&quot;) without discussing why or what tradeoffs it made</div>
+    <div class="pitfall-better"><strong>✓ Better</strong> Explain the selection criteria: managed vs self-hosted, filtering model, scale, cost; reference at least one alternative considered and rejected.</div>
+  </div>
+  <div class="pitfall-card">
+    <div class="pitfall-mistake"><strong>✗ Mistake</strong> Treating all vector DBs as equivalent &quot;just store embeddings&quot; stores, ignoring filtering</div>
+    <div class="pitfall-better"><strong>✓ Better</strong> Explicitly discuss pre-filtering vs post-filtering and why compound metadata filters matter for multi-tenant or ACL-controlled RAG pipelines.</div>
+  </div>
+  <div class="pitfall-card">
+    <div class="pitfall-mistake"><strong>✗ Mistake</strong> Recommending FAISS as a production vector database</div>
+    <div class="pitfall-better"><strong>✓ Better</strong> Clarify FAISS is a library with no persistence, filtering, or multi-tenancy; it&#x27;s for offline batch or custom serving infrastructure only.
+
+---</div>
+  </div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="section-label">Related Questions</div>
+  <div class="related-pills">
+    <div class="related-pill" data-slug="02-012">
+      <span class="related-pill-icon">→</span>
+      <div class="related-pill-text">
+        <div class="related-pill-q">Q12: Compare sparse vs dense retrieval. When use each?</div>
+        <div class="related-pill-rel">Prerequisite — vector DB hosts the dense index; retrieval strategy determines what you store</div>
+      </div>
+    </div>
+    <div class="related-pill" data-slug="02-023">
+      <span class="related-pill-icon">→</span>
+      <div class="related-pill-text">
+        <div class="related-pill-q">Q23: How does ANN search work? HNSW indexing?</div>
+        <div class="related-pill-rel">Deep dive into the index algorithm underlying every vector DB</div>
+      </div>
+    </div>
+    <div class="related-pill" data-slug="02-017">
+      <span class="related-pill-icon">→</span>
+      <div class="related-pill-text">
+        <div class="related-pill-q">Q17: What is hybrid search? When combine vector + BM25?</div>
+        <div class="related-pill-rel">Follow-up — Weaviate/Qdrant built-in hybrid search vs separate Elasticsearch</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="section-label">One-liner recall</div>
+  <div class="oneliner-box">
+    <div class="oneliner-label">▸ Reconstruct from memory</div>
+    <div class="oneliner-text" data-text="Choose by five axes — managed vs self-hosted, vector count, filtering complexity, latency SLO, cost — defaulting to Pinecone for zero-ops, Qdrant for rich pre-filtering at self-hosted scale, and pgvector when Postgres is already in the stack under 5M vectors.">Choose by five axes — managed vs self-hosted, vector count, filtering complexity, latency SLO, cost — defaulting to Pinecone for zero-ops, Qdrant for rich pre-filtering at self-hosted scale, and pgvector when Postgres is already in the stack under 5M vectors.</div>
+  </div>
+</div>

@@ -1,12 +1,13 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# Usage: ./ralph-system-design/once.sh <topic> [--model <slug>] [iterations]
+# Usage: ./ralph-system-design/once.sh <topic> [--agent cursor|claude] [--model <slug>] [iterations]
 #
-# Runs Cursor Agent headless for one system-design topic.
-# Reference: pulse/ralph/once.sh
+# Runs one system-design topic plan item via Cursor Agent or Claude Code.
+#   --agent cursor  (default) — uses Cursor's headless `agent` CLI
+#   --agent claude            — uses Claude Code's `claude -p` CLI
 
-TOPIC="${1:?Usage: $0 <topic> [--model <slug>] [iterations]}"
+TOPIC="${1:?Usage: $0 <topic> [--agent cursor|claude] [--model <slug>] [iterations]}"
 shift
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
@@ -15,29 +16,35 @@ cd "$WORKSPACE"
 
 MODEL="${CURSOR_MODEL:-}"
 ITERATIONS=1
+AGENT_BACKEND="${RALPH_AGENT:-claude}"
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
+    --agent|-a)
+      [[ $# -ge 2 ]] || { echo "--agent requires cursor|claude" >&2; exit 1; }
+      AGENT_BACKEND="$2"; shift 2
+      ;;
     --model|-m)
-      [[ $# -ge 2 ]] || { echo "Usage: $0 <topic> [--model <slug>] [iterations]" >&2; exit 1; }
-      MODEL="$2"
-      shift 2
+      [[ $# -ge 2 ]] || { echo "--model requires a value" >&2; exit 1; }
+      MODEL="$2"; shift 2
       ;;
     --help|-h)
-      sed -n '1,15p' "$0" >&2
-      exit 0
+      sed -n '1,15p' "$0" >&2; exit 0
       ;;
     *)
       if [[ "$1" =~ ^[0-9]+$ ]]; then
-        ITERATIONS="$1"
-        shift
+        ITERATIONS="$1"; shift
       else
-        echo "Unknown argument: $1" >&2
-        exit 1
+        echo "Unknown argument: $1" >&2; exit 1
       fi
       ;;
   esac
 done
+
+case "$AGENT_BACKEND" in
+  cursor|claude) ;;
+  *) echo "Unknown --agent value: $AGENT_BACKEND (expected cursor or claude)" >&2; exit 1 ;;
+esac
 
 TOPIC_DIR="$WORKSPACE/system-design/$TOPIC"
 PLAN="$TOPIC_DIR/plan.md"
@@ -53,42 +60,60 @@ LOG_DIR="$SCRIPT_DIR/.logs"
 
 PROMPT_BODY="$(sed "s/{{TOPIC}}/$TOPIC/g" "$PROMPT_FILE")"
 
-CURSOR_PROMPT="@${SPEC} @${README} @${PLAN} @${PROGRESS} @${PROMPT_FILE} \
-Topic: $TOPIC. Workspace: system-design/$TOPIC/ \
-${PROMPT_BODY} \
-Follow ralph-system-design/prompt.md. Complete exactly ONE unchecked item in plan.md Next section. \
-Use Task/subagent for research-heavy steps. \
+TASK_INSTRUCTIONS="Topic: $TOPIC. Workspace: system-design/$TOPIC/
+${PROMPT_BODY}
+Follow ralph-system-design/prompt.md. Complete exactly ONE unchecked item in plan.md Next section.
+Use Task/subagent for research-heavy steps.
 End with normal assistant text; emit <promise>COMPLETE</promise> only when ALL plan items done."
 
-OUTPUT_FORMAT="${CURSOR_AGENT_OUTPUT_FORMAT:-stream-json}"
+AGENT_TIMEOUT_SEC="${CURSOR_AGENT_TIMEOUT_SEC:-2700}"
 
-AGENT_FLAGS=(
-  --print
-  --trust
-  --force
-  --approve-mcps
-  --workspace "$WORKSPACE"
-  --output-format "$OUTPUT_FORMAT"
-)
+# ── Cursor backend ────────────────────────────────────────────────────────────
+build_cursor_cmd() {
+  local output_fmt="${CURSOR_AGENT_OUTPUT_FORMAT:-stream-json}"
+  local prompt="@${SPEC} @${README} @${PLAN} @${PROGRESS} @${PROMPT_FILE} ${TASK_INSTRUCTIONS}"
+  local -a flags=(--print --trust --force --approve-mcps --workspace "$WORKSPACE" --output-format "$output_fmt")
+  if [[ "$output_fmt" == "stream-json" ]] && [[ "${CURSOR_AGENT_STREAM:-1}" == "1" ]]; then
+    flags+=(--stream-partial-output)
+  fi
+  [[ -n "$MODEL" ]] && flags+=(--model "$MODEL")
+  BUILT_CMD=(agent "${flags[@]}" "$prompt")
+}
 
-if [[ "$OUTPUT_FORMAT" == "stream-json" ]] && [[ "${CURSOR_AGENT_STREAM:-1}" == "1" ]]; then
-  AGENT_FLAGS+=(--stream-partial-output)
-fi
+# ── Claude Code backend ───────────────────────────────────────────────────────
+build_claude_cmd() {
+  local context
+  context="$(cat "$SPEC" "$README" "$PLAN" "$PROGRESS" "$PROMPT_FILE" 2>/dev/null || true)"
+  BUILT_PROMPT="${context}
 
-if [[ -n "$MODEL" ]]; then
-  AGENT_FLAGS+=(--model "$MODEL")
-fi
-
-CURSOR_AGENT_TIMEOUT_SEC="${CURSOR_AGENT_TIMEOUT_SEC:-2700}"
+${TASK_INSTRUCTIONS}"
+  local -a flags=(-p --dangerously-skip-permissions --output-format stream-json --verbose)
+  [[ -n "$MODEL" ]] && flags+=(--model "$MODEL")
+  BUILT_CMD=(claude "${flags[@]}")
+}
 
 run_agent_with_timeout() {
-  local -a cmd=(agent "${AGENT_FLAGS[@]}" "$CURSOR_PROMPT")
-  if command -v timeout >/dev/null 2>&1; then
-    timeout --signal=INT --kill-after=60 "${CURSOR_AGENT_TIMEOUT_SEC}" "${cmd[@]}"
-  elif command -v gtimeout >/dev/null 2>&1; then
-    gtimeout --signal=INT --kill-after=60 "${CURSOR_AGENT_TIMEOUT_SEC}" "${cmd[@]}"
+  if [[ "$AGENT_BACKEND" == "claude" ]]; then
+    # Pass prompt as positional arg — `timeout` breaks claude and yields empty output.
+    "${BUILT_CMD[@]}" "$BUILT_PROMPT" &
+    local agent_pid=$!
+    (sleep "$AGENT_TIMEOUT_SEC" && kill -INT "$agent_pid" 2>/dev/null && sleep 60 && kill -KILL "$agent_pid" 2>/dev/null) &
+    local watchdog_pid=$!
+    wait "$agent_pid"
+    local rc=$?
+    kill "$watchdog_pid" 2>/dev/null || true
+    wait "$watchdog_pid" 2>/dev/null || true
+    return $rc
   else
-    perl -e 'alarm shift @ARGV if shift; exec @ARGV' "$CURSOR_AGENT_TIMEOUT_SEC" "${cmd[@]}"
+    local -a timed_cmd
+    if command -v timeout >/dev/null 2>&1; then
+      timed_cmd=(timeout --signal=INT --kill-after=60 "$AGENT_TIMEOUT_SEC")
+    elif command -v gtimeout >/dev/null 2>&1; then
+      timed_cmd=(gtimeout --signal=INT --kill-after=60 "$AGENT_TIMEOUT_SEC")
+    else
+      timed_cmd=(perl -e 'alarm shift @ARGV if shift; exec @ARGV' "$AGENT_TIMEOUT_SEC")
+    fi
+    "${timed_cmd[@]}" "${BUILT_CMD[@]}"
   fi
 }
 
@@ -125,29 +150,37 @@ for ((i = 1; i <= ITERATIONS; i++)); do
 
   LOG_FILE="$LOG_DIR/${TOPIC}-iter-${i}-$(date +%Y%m%d-%H%M%S).log"
   echo "Log: $LOG_FILE" >&2
-  echo "Timeout: ${CURSOR_AGENT_TIMEOUT_SEC}s" >&2
+  echo "Timeout: ${AGENT_TIMEOUT_SEC}s" >&2
+  echo "Agent: $AGENT_BACKEND" >&2
   [[ -n "$MODEL" ]] && echo "Model: $MODEL" >&2
 
+  BUILT_CMD=(); BUILT_PROMPT=""
+  if [[ "$AGENT_BACKEND" == "claude" ]]; then
+    build_claude_cmd
+  else
+    build_cursor_cmd
+  fi
+
   set +e
-  if [[ -t 1 ]]; then
+  if [[ "$AGENT_BACKEND" == "claude" ]]; then
+    run_agent_with_timeout > "$LOG_FILE" 2>&1
+    agent_exit=$?
+    cat "$LOG_FILE"
+  elif [[ -t 1 ]]; then
     run_agent_with_timeout 2>&1 | tee "$LOG_FILE" /dev/tty
+    agent_exit=${PIPESTATUS[0]}
   else
     run_agent_with_timeout 2>&1 | tee "$LOG_FILE"
+    agent_exit=${PIPESTATUS[0]}
   fi
-  agent_exit=$?
   set -e
 
   if [[ "$agent_exit" -eq 124 ]] || [[ "$agent_exit" -eq 142 ]]; then
-    echo "Agent killed after ${CURSOR_AGENT_TIMEOUT_SEC}s" >&2
+    echo "Agent killed after ${AGENT_TIMEOUT_SEC}s" >&2
     exit 124
   fi
 
-  promise_text=""
-  if [[ "$OUTPUT_FORMAT" == "stream-json" ]]; then
-    promise_text="$(extract_stream_json_result "$LOG_FILE")"
-  else
-    promise_text="$(<"$LOG_FILE")"
-  fi
+  promise_text="$(extract_stream_json_result "$LOG_FILE")"
 
   if has_completion_promise "$promise_text"; then
     echo "Stopping: COMPLETE promise in agent result."

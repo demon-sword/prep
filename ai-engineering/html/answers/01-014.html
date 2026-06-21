@@ -1,0 +1,136 @@
+<div class="answer-header reveal">
+  <div class="answer-meta">
+    <span class="meta-badge meta-category">01-llm-fundamentals</span>
+    <span class="meta-badge meta-num">Q014</span>
+    <span class="meta-badge meta-status-review">review</span>
+  </div>
+  <h1 class="answer-title">How does chunking happen?</h1>
+</div>
+
+<div class="answer-section reveal">
+  <div class="accordion">
+    <div class="accordion-header">
+      <span class="accordion-title">⟁ Framing — Why this is asked</span>
+      <span class="accordion-chevron">▾</span>
+    </div>
+    <div class="accordion-body">
+      <div class="framing-grid">
+        <div><div class="framing-card">
+          <div class="framing-card-title">Why asked</div>
+          <p style="font-size:13.5px;line-height:1.7;color:var(--text-dim)">Chunking is the most under-estimated failure point in RAG pipelines. Interviewers ask this to distinguish candidates who understand chunking as a <em>retrieval quality decision</em> from those who treat it as a mechanical preprocessing step. Bad chunking choices propagate to every downstream stage: embeddings, retrieval precision, context window budget, and generation quality.</p>
+        </div></div>
+        <div><div class="framing-card">
+          <div class="framing-card-title">Trigger phrases</div>
+          <div class="trigger-list">
+              <div class="trigger-phrase">How does chunking happen?</div>
+              <div class="trigger-phrase">How do you decide on chunk size?</div>
+              <div class="trigger-phrase">What chunking strategy do you use in your RAG pipeline?</div>
+              <div class="trigger-phrase">System processing huge PDF reports — how do you handle context when splitting documents?</div>
+          </div>
+        </div></div>
+      </div>
+      <div class="tests-block">
+        <span style="font-family:var(--mono);font-size:10px;letter-spacing:0.1em;text-transform:uppercase;color:var(--purple);margin-right:8px">Tests:</span>Whether the candidate understands chunking as a retrieval optimization (semantic coherence + index efficiency) and can reason about tradeoffs: chunk size vs. embedding granularity, fixed-size vs. semantic boundaries, parent-child strategies, and domain-specific edge cases (tables, lists, cross-page references).
+
+---
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="section-label">Concept</div>
+  <div class="concept-block"><p>Chunking is the process of splitting source documents into smaller, semantically coherent units before embedding and indexing them. The goal is to produce chunks that are <em>just large enough</em> to contain a self-contained unit of meaning — enough context to answer a question — but <em>small enough</em> that a retrieved chunk doesn't dilute the embedding with irrelevant content or blow the generation context window.</p></div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="section-label">Mechanism</div>
+  <div class="card"><p>There are four main chunking strategies, each suited to different content types:</p>
+<p><strong>1. Fixed-size / sliding window (baseline)</strong> Split on token or character count (e.g., 512 tokens, 100-token overlap). Fast and simple. Overlap prevents splitting a key sentence across chunk boundaries. Fails on documents where structure matters — a paragraph break mid-sentence, or a table split across chunks.</p>
+<p><strong>2. Recursive / structure-aware (most common in production)</strong> LangChain's <code>RecursiveCharacterTextSplitter</code> splits on paragraph breaks first (<code>\n\n</code>), then sentences (<code>\n</code>), then words. Respects natural document structure. Configurable separators per document type (Markdown headers, HTML tags, code blocks).</p>
+<p><strong>3. Semantic chunking</strong> Embed each sentence; cluster sentences by embedding similarity; split when cosine similarity drops below a threshold. Produces variable-length, semantically coherent chunks. More CPU-intensive; used when document structure is poor (e.g., raw OCR output). Libraries: <code>semantic-chunker</code> in LangChain, <code>chonkie</code> OSS library.</p>
+<p><strong>4. Parent-child (hierarchical) chunking</strong> Index small <em>child</em> chunks (128–256 tokens) for precise retrieval, but return the full <em>parent</em> chunk (512–1,024 tokens) to the LLM for generation context. Solves the precision-vs-context tradeoff: retrieval is precise, generation has full context. Used in LlamaIndex's <code>ParentDocumentRetriever</code>.</p>
+<p><strong>Special cases:</strong></p>
+<ul class="styled-list"><li><strong>Tables:</strong> OCR'd tables must be kept intact or converted to structured formats (Markdown table or JSON key-value pairs) before chunking; splitting mid-row destroys meaning.</li><li><strong>Lists:</strong> Numbered or bulleted lists should chunk at the list level, not mid-item.</li><li><strong>Cross-page metadata:</strong> A PDF that says "amounts in thousands" on page 1 and presents numbers on page 50 needs document-level metadata injected into each chunk (e.g., <code>metadata: {"currency_unit": "thousands"}</code>), not reliance on retrieval alone.</li><li><strong>Code:</strong> Split on function or class boundaries, not arbitrary token counts.</li></ul></div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="section-label">Example / Tradeoff</div>
+  <div class="card card-accent"><div class="rich-text"><p><strong>Production benchmark:</strong> For a customer support RAG pipeline over 50,000 support articles, switching from 512-token fixed-size chunks to 256-token recursive chunks with a 50-token overlap improved retrieval recall@5 from 61% to 74% (measured via RAGAS). The smaller chunks allowed the embedding model to encode a single topic per chunk rather than averaging across two or three topics.</p>
+<p><strong>The key tradeoff:</strong></p>
+<div class="table-wrap"><table class="data-table"><tr><th>Dimension</th><th>Small chunks (128–256 tokens)</th><th>Large chunks (512–1024 tokens)</th></tr><tr><td>Embedding precision</td><td>High — one topic per vector</td><td>Low — blended topics blur embedding</td></tr><tr><td>Retrieval recall@k</td><td>Higher precision, lower recall for partial answers</td><td>Better recall for multi-sentence answers</td></tr><tr><td>Context pollution</td><td>Low</td><td>Higher — may include irrelevant sentences</td></tr><tr><td>Index size</td><td>4–8× more vectors</td><td>Fewer vectors, cheaper index</td></tr><tr><td>Generation context</td><td>Must retrieve more chunks to cover answer</td><td>Single chunk often sufficient</td></tr></table></div>
+<p><strong>Rule of thumb:</strong> Start at 256–512 tokens with 10–20% overlap. Benchmark retrieval recall@5 on a golden set of 50–100 question-answer pairs before committing.</p></div></div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="accordion">
+    <div class="accordion-header">
+      <span class="accordion-title">🎙 Verbal Script (3–5 min)</span>
+      <span class="accordion-chevron">▾</span>
+    </div>
+    <div class="accordion-body">
+      <div class="script-block"><div class="script-label">Opening (30s)</div><p>"Chunking is one of those places where small decisions early in the pipeline have outsized effects on everything downstream. The core problem is simple: documents are long, embedding models have a max input length, and the LLM's context window has a cost. So you need to split documents into pieces — but the strategy you choose determines whether your retrieval actually works."</p></div>
+      <div class="script-block"><div class="script-label">Core explanation (2–3 min)</div><p>"I think about chunking strategies on a spectrum from simple to sophisticated.</p>
+<p>The baseline is fixed-size chunking: split every 512 tokens, 100-token overlap so you don't cut mid-sentence. It's fast, deterministic, and works well enough on well-structured documents. The overlap is important — without it, a key phrase that straddles a chunk boundary gets split and neither chunk embeds it correctly.</p>
+<p>One step up is recursive chunking, which is what LangChain's <code>RecursiveCharacterTextSplitter</code> does. It tries to split on natural boundaries first — double newline for paragraphs, single newline for sentences — and only falls back to character-level splits if the chunk is still too long. This respects document structure and is what I'd use by default on Markdown or structured text.</p>
+<p>For documents with messy structure — raw OCR, scraped web content, annual reports — semantic chunking works better. You embed each sentence, compute similarity between adjacent sentences, and split when the similarity drops below a threshold. This produces variable-length chunks that are semantically coherent. Tools like the LangChain <code>SemanticChunker</code> or the OSS <code>chonkie</code> library do this.</p>
+<p>The most sophisticated approach for production is parent-child chunking. You index small child chunks — say 128 tokens — for precision retrieval, but when a child chunk hits, you return its parent chunk (512 tokens) to the LLM. So you get precise retrieval + rich generation context. LlamaIndex's <code>ParentDocumentRetriever</code> implements this pattern."</p></div>
+      <div class="script-block"><div class="script-label">Tradeoff / production angle (1 min)</div><p>"The two biggest failure modes I've seen in production are: first, chunks that are too large — the embedding averages across multiple topics, so the vector doesn't strongly match any single query, and recall drops. Second, naively splitting tables or lists mid-row — the retrieved chunk is semantically broken and the LLM either hallucinates or returns 'I don't know.'</p>
+<p>For tabular content, I convert tables to Markdown or structured JSON before chunking, and keep the entire table as a single chunk with clear metadata. For cross-document context — like 'amounts in thousands' on the first page — I inject that as chunk-level metadata so the LLM always has the context it needs, regardless of which chunk gets retrieved."</p></div>
+      <div class="script-block"><div class="script-label">Wrap-up (30s)</div><p>"So: start with recursive or fixed-size at 256–512 tokens with ~15% overlap, benchmark retrieval recall@5 on a golden question set before you scale, and use parent-child chunking when you need both high retrieval precision and rich generation context. Happy to dig into how this connects to the reranking stage or how you'd handle specific document types."</p></div>
+    </div>
+  </div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="section-label">Pitfalls</div>
+  <div class="pitfall-card">
+    <div class="pitfall-mistake"><strong>✗ Mistake</strong> Saying &quot;I just split on 512 tokens&quot; without mentioning overlap or structure</div>
+    <div class="pitfall-better"><strong>✓ Better</strong> Explain that fixed-size chunking without overlap cuts sentences across boundaries (degrading embedding quality), and that structure-aware splitting (recursive on <code>\n\n</code> → <code>\n</code> → space) should be the default; mention chunk size as a tunable hyperparameter validated against retrieval recall on a golden set.</div>
+  </div>
+  <div class="pitfall-card">
+    <div class="pitfall-mistake"><strong>✗ Mistake</strong> Treating chunking as a one-time, one-size-fits-all decision</div>
+    <div class="pitfall-better"><strong>✓ Better</strong> Explain that chunk size and strategy are document-type-specific (code splits on function boundaries, tables must be kept intact, OCR output needs semantic chunking) and should be validated empirically before production; many teams use different chunking configs for different document types in the same pipeline.</div>
+  </div>
+  <div class="pitfall-card">
+    <div class="pitfall-mistake"><strong>✗ Mistake</strong> Ignoring the relationship between chunk size and embedding model input limits</div>
+    <div class="pitfall-better"><strong>✓ Better</strong> Note that most embedding models have a 512- or 8192-token max input; chunks exceeding the limit get silently truncated, which quietly degrades recall; always check the model&#x27;s <code>max_seq_length</code> and chunk below it.
+
+---</div>
+  </div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="section-label">Related Questions</div>
+  <div class="related-pills">
+    <div class="related-pill" data-slug="01-013">
+      <span class="related-pill-icon">→</span>
+      <div class="related-pill-text">
+        <div class="related-pill-q">Q13: What are embeddings?</div>
+        <div class="related-pill-rel">Prerequisite — what each chunk gets encoded into</div>
+      </div>
+    </div>
+    <div class="related-pill" data-slug="01-012">
+      <span class="related-pill-icon">→</span>
+      <div class="related-pill-text">
+        <div class="related-pill-q">Q12: What&#x27;s an RAG model? Explain the complete process.</div>
+        <div class="related-pill-rel">Parent pipeline — chunking is Stage 2 of the 9-stage RAG pipeline</div>
+      </div>
+    </div>
+    <div class="related-pill" data-slug="01-005">
+      <span class="related-pill-icon">→</span>
+      <div class="related-pill-text">
+        <div class="related-pill-q">Q5: Explain context windows and their limitations.</div>
+        <div class="related-pill-rel">Related constraint — chunk size must fit within the LLM&#x27;s context window at generation time</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="section-label">One-liner recall</div>
+  <div class="oneliner-box">
+    <div class="oneliner-label">▸ Reconstruct from memory</div>
+    <div class="oneliner-text" data-text="Chunking splits documents into semantically coherent units (typically 256–512 tokens with 10–20% overlap) using strategies from fixed-size to semantic to parent-child hierarchical, where the key tradeoff is embedding precision (small chunks) vs. generation context richness (large chunks), validated against retrieval recall@5 on a golden question set.">Chunking splits documents into semantically coherent units (typically 256–512 tokens with 10–20% overlap) using strategies from fixed-size to semantic to parent-child hierarchical, where the key tradeoff is embedding precision (small chunks) vs. generation context richness (large chunks), validated against retrieval recall@5 on a golden question set.</div>
+  </div>
+</div>

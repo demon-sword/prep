@@ -1,0 +1,138 @@
+<div class="answer-header reveal">
+  <div class="answer-meta">
+    <span class="meta-badge meta-category">05-evaluation-metrics</span>
+    <span class="meta-badge meta-num">Q010</span>
+    <span class="meta-badge meta-status-review">review</span>
+  </div>
+  <h1 class="answer-title">Testing strategies for non-deterministic outputs</h1>
+</div>
+
+<div class="answer-section reveal">
+  <div class="accordion">
+    <div class="accordion-header">
+      <span class="accordion-title">⟁ Framing — Why this is asked</span>
+      <span class="accordion-chevron">▾</span>
+    </div>
+    <div class="accordion-body">
+      <div class="framing-grid">
+        <div><div class="framing-card">
+          <div class="framing-card-title">Why asked</div>
+          <p style="font-size:13.5px;line-height:1.7;color:var(--text-dim)">LLM outputs are stochastic — the same prompt can return different valid answers on every call. Interviewers want to know whether you have moved past &quot;assert output == expected_string&quot; and built a principled testing framework that can catch regressions without false-positives from benign paraphrase variation. This probes production engineering discipline and eval maturity.</p>
+        </div></div>
+        <div><div class="framing-card">
+          <div class="framing-card-title">Trigger phrases</div>
+          <div class="trigger-list">
+              <div class="trigger-phrase">How do you test an LLM pipeline when the output changes every run?</div>
+              <div class="trigger-phrase">How do you catch regressions in a generative system?</div>
+              <div class="trigger-phrase">What&#x27;s your testing strategy for non-deterministic AI outputs?</div>
+          </div>
+        </div></div>
+      </div>
+      <div class="tests-block">
+        <span style="font-family:var(--mono);font-size:10px;letter-spacing:0.1em;text-transform:uppercase;color:var(--purple);margin-right:8px">Tests:</span>Ability to design a layered eval framework that distinguishes acceptable output variation from real regressions — using property-based assertions, statistical thresholds, LLM-as-judge scoring, and golden dataset regression gates.
+
+---
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="section-label">Concept</div>
+  <div class="concept-block"><p>Classical unit tests (exact string equality) break immediately for LLM outputs because two semantically identical answers may differ in wording. The fix is a <strong>property-based testing approach</strong>: instead of asserting what the output <em>is</em>, assert what it <em>must have</em> (format, length, tone, factual entailment, absence of forbidden phrases) and score quality statistically over a fixed golden dataset.</p></div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="section-label">Mechanism</div>
+  <div class="card"><p><strong>Five-layer testing stack:</strong></p>
+<ol class="mechanism-steps"><li><strong>Structural / property assertions (unit layer)</strong></li></ol>
+<ul class="styled-list"><li>Assert output schema, length bounds, format constraints — things that must always be true regardless of wording.</li><li>Examples: <code>assert is_valid_json(output)</code>, <code>assert 50 < len(output) < 800</code>, <code>assert "I don't know" not in output if context_provided</code>.</li><li>Run at T=0 for determinism in CI; these are fast (<1s per case).</li></ul>
+<ol class="mechanism-steps"><li><strong>Semantic similarity (regression layer)</strong></li></ol>
+<ul class="styled-list"><li>Compare new output to a reference golden answer using cosine similarity on embeddings (e.g. <code>text-embedding-3-small</code>).</li><li>Gate: cosine ≥ 0.85 → pass; < 0.85 → flag for human review.</li><li>Paraphrase variation typically lands at 0.93–0.97; genuine regression (wrong fact, wrong entity) drops to 0.60–0.75.</li></ul>
+<ol class="mechanism-steps"><li><strong>LLM-as-judge (quality layer)</strong></li></ol>
+<ul class="styled-list"><li>Prompt a capable judge model (GPT-4o or Claude 3.5 Sonnet) with a rubric: correctness, faithfulness, completeness (1–5 scale or pass/fail).</li><li>Sample 5–10% of live traffic plus 100% of golden dataset in nightly batch.</li><li>Gate: mean score ≥ 4.0 on golden set; alert if score drops > 0.3 from baseline.</li><li>Tools: <code>deepeval</code> DeepEval framework, <code>promptfoo</code> for CI harness, <code>RAGAS</code> for RAG-specific dimensions.</li></ul>
+<ol class="mechanism-steps"><li><strong>Statistical assertion over a golden dataset</strong></li></ol>
+<ul class="styled-list"><li>Maintain 100–500 <code>(input, expected_properties, reference_answer)</code> triples.</li><li>Run the full suite on every model/prompt change; track pass-rate over time, not individual test outcomes.</li><li>Key metrics: pass-rate@k (run k times, at least one pass for correct tasks), mean RAGAS Faithfulness, mean RAGAS Answer Relevancy.</li><li>Gate: pass-rate ≥ 95% before deployment promotion.</li></ul>
+<ol class="mechanism-steps"><li><strong>Shadow / canary in production</strong></li></ol>
+<ul class="styled-list"><li>Route 5% of live traffic to the new model; compare LLM-judge scores and business metrics (CSAT, thumbs-down) to the control cohort.</li><li>Auto-rollback if thumbs-down rate rises > 2pp or p95 latency exceeds SLO.</li></ul></div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="section-label">Example / Tradeoff</div>
+  <div class="card card-accent"><div class="rich-text"><p><strong>Customer support chatbot (GPT-4o-mini, RAG-backed):</strong></p>
+<ul class="styled-list"><li>CI suite: 200 golden (question, context, properties) triples via <code>promptfoo</code> — runs in ~4 min, gates PR merge.</li><li>Properties checked: JSON schema valid, answer length 50–600 chars, ≥1 citation present, no fabricated policy numbers (regex check against allowed SKU list).</li><li>Semantic cosine gate (0.85) catches word-salad regressions without penalising paraphrase.</li><li>Nightly: GPT-4o judge on 100% of golden set → Faithfulness and Correctness dashboards in Datadog.</li><li>Result: 3 prompt regressions caught pre-deploy over 6 months; 0 customer-facing incidents from prompt changes.</li></ul>
+<p><strong>Tradeoff — T=0 vs sampling:</strong></p>
+<ul class="styled-list"><li>T=0 eliminates within-test variance (CI is stable); sampling (T=0.7) requires running each test 3–5× and checking majority-pass — more realistic but 3–5× slower and more expensive.</li><li>Recommendation: use T=0 in CI for speed, run sampled tests (T=0.7, k=5) monthly for robustness measurement.</li></ul></div></div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="accordion">
+    <div class="accordion-header">
+      <span class="accordion-title">🎙 Verbal Script (3–5 min)</span>
+      <span class="accordion-chevron">▾</span>
+    </div>
+    <div class="accordion-body">
+      <div class="script-block"><div class="script-label">Opening (30s)</div><p>"Testing non-deterministic outputs is one of the most under-solved problems in LLM engineering. The mistake I see most often is teams writing unit tests that assert exact output strings — those break on every model update even when the answer is correct. I'd replace that with a five-layer strategy: property assertions, semantic similarity gating, LLM-as-judge scoring, golden dataset pass-rate tracking, and shadow/canary in production."</p></div>
+      <div class="script-block"><div class="script-label">Core explanation (2–3 min)</div><p>"The first layer is structural property assertions — things that must always be true regardless of wording. For a RAG chatbot that might be: output is valid JSON, length is between 50 and 800 characters, at least one citation present, no hallucinated policy IDs. These are fast and deterministic — I run them at temperature zero in CI.</p>
+<p>The second layer is semantic similarity regression. I embed both the new output and a stored reference answer with <code>text-embedding-3-small</code> and compute cosine similarity. Paraphrase variation from the same correct answer typically lands at 0.93–0.97; genuine regression — wrong fact, wrong entity — drops to 0.60–0.75. So a threshold of 0.85 cleanly separates benign variation from real errors.</p>
+<p>The third layer is LLM-as-judge. I prompt GPT-4o or Claude 3.5 Sonnet with a structured rubric: correctness, faithfulness to context, completeness — each scored 1–5. I run this on 100% of my golden dataset nightly and on a 5–10% sample of live traffic. A drop of 0.3 in mean score from baseline triggers a Slack alert.</p>
+<p>Tying it all together is a golden dataset of 100–500 <code>(input, expected properties, reference answer)</code> triples. Every prompt or model change runs the full suite. I track pass-rate, not individual test outcomes, because individual runs can flake. A gate of 95% pass-rate blocks the deploy.</p>
+<p>Finally, in production I use shadow or canary routing — 5% of traffic to the new version — with auto-rollback if thumbs-down rate rises more than 2 percentage points."</p></div>
+      <div class="script-block"><div class="script-label">Tradeoff / production angle (1 min)</div><p>"The main tension is T=0 vs sampled testing. T=0 makes CI stable and cheap — each test runs once and the result is deterministic. But it misses variance that users actually see. Sampled testing at T=0.7, run k=5 times per case, gives a more honest picture but is 5× slower and more expensive. My pattern: T=0 in CI for fast gate, sampled monthly for robustness audit. LLM-as-judge is the other cost tension — it adds ~$0.002 per golden case with GPT-4o, so 500 cases is $1/run, which is fine nightly but expensive if you run it on every PR commit."</p></div>
+      <div class="script-block"><div class="script-label">Wrap-up (30s)</div><p>"So the key insight is: don't test for exact output equality — test for properties, semantic proximity, and quality scores statistically over a golden dataset. That gives you real regression signal without penalising benign paraphrase variation. Happy to go deeper on golden dataset curation or LLM-judge rubric design."</p></div>
+    </div>
+  </div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="section-label">Pitfalls</div>
+  <div class="pitfall-card">
+    <div class="pitfall-mistake"><strong>✗ Mistake</strong> Writing unit tests with <code>assert output == &quot;expected string&quot;</code> and calling that a test suite</div>
+    <div class="pitfall-better"><strong>✓ Better</strong> Use property-based assertions (schema, length, presence of required fields) plus semantic cosine gating; exact string equality fails on every model update even when the answer is correct.</div>
+  </div>
+  <div class="pitfall-card">
+    <div class="pitfall-mistake"><strong>✗ Mistake</strong> Running all tests at the default sampling temperature (T=0.7) and treating a single pass/fail as conclusive</div>
+    <div class="pitfall-better"><strong>✓ Better</strong> Use T=0 for CI determinism, or run k=3–5 samples and gate on majority-pass; single-sample tests at high temperature have high false-positive rates.</div>
+  </div>
+  <div class="pitfall-card">
+    <div class="pitfall-mistake"><strong>✗ Mistake</strong> Skipping the golden dataset entirely and relying only on LLM-as-judge on live traffic</div>
+    <div class="pitfall-better"><strong>✓ Better</strong> Maintain a curated golden set with expected properties so you can gate deploys <em>before</em> they reach users; live-only eval discovers regressions too late.
+
+---</div>
+  </div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="section-label">Related Questions</div>
+  <div class="related-pills">
+    <div class="related-pill" data-slug="05-008">
+      <span class="related-pill-icon">→</span>
+      <div class="related-pill-text">
+        <div class="related-pill-q">Q8: Measure hallucination rate in production</div>
+        <div class="related-pill-rel">Same async eval pipeline — NLI + LLM-judge + golden dataset</div>
+      </div>
+    </div>
+    <div class="related-pill" data-slug="05-017">
+      <span class="related-pill-icon">→</span>
+      <div class="related-pill-text">
+        <div class="related-pill-q">Q17: Golden dataset for evaluation and regression testing</div>
+        <div class="related-pill-rel">Deep dive on building the golden set used in this strategy</div>
+      </div>
+    </div>
+    <div class="related-pill" data-slug="05-021">
+      <span class="related-pill-icon">→</span>
+      <div class="related-pill-text">
+        <div class="related-pill-q">Q21: Test new model before full deployment — canary, interleaved, shadow</div>
+        <div class="related-pill-rel">Production deployment layer of this same framework</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="section-label">One-liner recall</div>
+  <div class="oneliner-box">
+    <div class="oneliner-label">▸ Reconstruct from memory</div>
+    <div class="oneliner-text" data-text="Test non-deterministic outputs with property assertions (schema/length/format) at T=0, semantic cosine gating (≥0.85) for regression, LLM-as-judge scoring on a golden dataset, and canary/shadow routing with auto-rollback in production — never exact string equality.">Test non-deterministic outputs with property assertions (schema/length/format) at T=0, semantic cosine gating (≥0.85) for regression, LLM-as-judge scoring on a golden dataset, and canary/shadow routing with auto-rollback in production — never exact string equality.</div>
+  </div>
+</div>

@@ -1,0 +1,149 @@
+<div class="answer-header reveal">
+  <div class="answer-meta">
+    <span class="meta-badge meta-category">06-ml-fundamentals</span>
+    <span class="meta-badge meta-num">Q017</span>
+    <span class="meta-badge meta-status-review">review</span>
+  </div>
+  <h1 class="answer-title">Feature scaling — normalization vs standardization?</h1>
+</div>
+
+<div class="answer-section reveal">
+  <div class="accordion">
+    <div class="accordion-header">
+      <span class="accordion-title">⟁ Framing — Why this is asked</span>
+      <span class="accordion-chevron">▾</span>
+    </div>
+    <div class="accordion-body">
+      <div class="framing-grid">
+        <div><div class="framing-card">
+          <div class="framing-card-title">Why asked</div>
+          <p style="font-size:13.5px;line-height:1.7;color:var(--text-dim)">Tests whether the candidate understands <em>why</em> scale matters (distance-based and gradient-based algorithms are sensitive to feature magnitude), can choose the right technique for the distribution at hand, and knows the production gotcha of fitting the scaler on training data only.</p>
+        </div></div>
+        <div><div class="framing-card">
+          <div class="framing-card-title">Trigger phrases</div>
+          <div class="trigger-list">
+              <div class="trigger-phrase">How would you handle features of very different scales?</div>
+              <div class="trigger-phrase">When would you use min-max normalization vs z-score standardization?</div>
+              <div class="trigger-phrase">What preprocessing do you apply before training a neural network / SVM / k-NN?</div>
+          </div>
+        </div></div>
+      </div>
+      <div class="tests-block">
+        <span style="font-family:var(--mono);font-size:10px;letter-spacing:0.1em;text-transform:uppercase;color:var(--purple);margin-right:8px">Tests:</span>Ability to match scaling method to data distribution + algorithm + production requirements, and to avoid data-leakage through the scaler.
+
+---
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="section-label">Concept</div>
+  <div class="concept-block"><p>Feature scaling brings numeric features onto a comparable range so that algorithms that depend on distances (k-NN, SVM, PCA) or gradient magnitudes (neural networks, logistic regression with gradient descent) are not dominated by large-valued features. The two main methods are <strong>min-max normalization</strong> (rescale to [0, 1]) and <strong>z-score standardization</strong> (rescale to zero mean, unit variance).</p></div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="section-label">Mechanism</div>
+  <div class="card"><div class="table-wrap"><table class="data-table"><tr><th>Method</th><th>Formula</th><th>Output range</th><th>Sensitive to outliers?</th></tr><tr><td>Min-max normalization</td><td><code>x' = (x − min) / (max − min)</code></td><td>[0, 1] (bounded)</td><td>Yes — outliers shift min/max</td></tr><tr><td>Z-score standardization</td><td><code>x' = (x − μ) / σ</code></td><td>(−∞, +∞) unbounded</td><td>Less so — mean/std more robust</td></tr><tr><td>Robust scaling</td><td><code>x' = (x − median) / IQR</code></td><td>Unbounded</td><td>No — uses median/IQR</td></tr></table></div>
+<p><strong>Decision rule:</strong></p>
+<div class="code-block-wrap"><pre class="code-block"><code>Bounded, known range + no heavy outliers (pixel intensities, ratings)?
+  → Min-max normalization (values stay in [0,1], good for sigmoid/tanh activations)
+
+Unknown range or significant outliers + Gaussian-ish data?
+  → Z-score standardization (preserves signed distance from mean; standard for SVMs, PCA, LR)
+
+Heavy outliers present?
+  → Robust scaling (sklearn.preprocessing.RobustScaler)
+
+Tree-based model (XGBoost, Random Forest, LightGBM)?
+  → No scaling needed — splits are rank-invariant</code></pre><button class="copy-btn">copy</button></div>
+<p><strong>Critical production rule:</strong> Fit the scaler <strong>only on the training set</strong>, then apply <code>transform()</code> to validation and test sets. Fitting on the full dataset leaks test-set statistics → inflated metrics.</p>
+<div class="code-block-wrap"><pre class="code-block"><code>from sklearn.preprocessing import StandardScaler
+from sklearn.pipeline import Pipeline
+
+pipe = Pipeline([
+    (&#x27;scaler&#x27;, StandardScaler()),
+    (&#x27;clf&#x27;, LogisticRegression()),
+])
+pipe.fit(X_train, y_train)          # scaler fitted on X_train only
+pipe.score(X_test, y_test)          # transform applied to X_test with train params</code></pre><button class="copy-btn">copy</button></div></div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="section-label">Example / Tradeoff</div>
+  <div class="card card-accent"><div class="rich-text"><p><strong>Neural network training (LLM embedding fine-tuning):</strong> When appending tabular features (e.g., user age, tenure) to a model alongside text embeddings, z-score standardization ensures gradient contributions from tabular features are comparable to the embedding dimensions. Without scaling, a feature with range [0, 100k] dominates weight updates and destabilizes training.</p>
+<p><strong>Fraud detection SVM:</strong> SVM maximizes the margin in feature space; a feature with σ=50,000 (transaction amount) would overshadow a feature with σ=1 (browser trust score). Standardization brings both to σ=1, letting the kernel measure distance fairly.</p>
+<p><strong>Tradeoff:</strong> Min-max is bounded, which suits pixel-level CNNs (VGG, ResNet expect [0,1] or [0,255]). But a single outlier (e.g., a fraudulent transaction 100× the max training value) will compress all other values into a tiny range at inference time — StandardScaler degrades more gracefully.</p></div></div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="accordion">
+    <div class="accordion-header">
+      <span class="accordion-title">🎙 Verbal Script (3–5 min)</span>
+      <span class="accordion-chevron">▾</span>
+    </div>
+    <div class="accordion-body">
+      <div class="script-block"><div class="script-label">Opening (30s)</div><p>"Feature scaling matters whenever your algorithm is sensitive to feature magnitudes — distance-based methods like k-NN and SVM, or gradient descent in neural networks. The two main choices are min-max normalization and z-score standardization, and I pick between them based on the data distribution, presence of outliers, and the downstream model."</p></div>
+      <div class="script-block"><div class="script-label">Core explanation (2–3 min)</div><p>"Min-max rescales to [0, 1] using the training min and max. It's great when the range is known and bounded — pixel intensities for a CNN, ratings on a 1–5 scale. The downside is that outliers shift the min and max, compressing everything else.</p>
+<p>Z-score standardization subtracts the mean and divides by standard deviation, producing unbounded output centered at zero. It's the standard for SVMs, PCA, and logistic regression because it preserves signed distance from the center and degrades gracefully with outliers. If outliers are severe, I'd use RobustScaler from sklearn, which uses median and IQR instead of mean and std.</p>
+<p>Tree-based models — XGBoost, LightGBM, Random Forest — don't need scaling at all because splits are rank-invariant.</p>
+<p>The production rule I always emphasize: fit the scaler only on training data, then call transform on val and test. Fitting on the full dataset leaks test statistics and gives you optimistically biased evaluation metrics. sklearn Pipelines make this easy — the scaler is part of the pipeline and can't leak."</p></div>
+      <div class="script-block"><div class="script-label">Tradeoff / production angle (1 min)</div><p>"A concrete production gotcha: in a fraud detection SVM, transaction amount could have a σ of $50,000 while browser trust score has σ=1. Without standardization, the kernel distance is dominated by transaction amount and the trust score is invisible to the model. After StandardScaler both have σ=1 and the SVM learns both features.</p>
+<p>Another angle: at serving time, you serialize the fitted scaler alongside the model and apply the same training-set params to new requests. If your data distribution shifts (embedding drift, seasonality), the scaler params become stale — a signal to retrain."</p></div>
+      <div class="script-block"><div class="script-label">Wrap-up (30s)</div><p>"So my rule of thumb: bounded known range → min-max; general continuous features → standardization; heavy outliers → robust scaling; tree models → skip scaling entirely. And always fit on training data only. Happy to go deeper on any of these or discuss how this applies to feature stores in production."</p></div>
+    </div>
+  </div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="section-label">Pitfalls</div>
+  <div class="pitfall-card">
+    <div class="pitfall-mistake"><strong>✗ Mistake</strong> Fitting StandardScaler on the full dataset (train + test) before the train/test split</div>
+    <div class="pitfall-better"><strong>✓ Better</strong> Always fit the scaler inside a Pipeline or after the split, on training data only; explain that test-set leakage inflates eval metrics and produces overconfident models in production.</div>
+  </div>
+  <div class="pitfall-card">
+    <div class="pitfall-mistake"><strong>✗ Mistake</strong> Applying min-max scaling when heavy outliers exist in production data</div>
+    <div class="pitfall-better"><strong>✓ Better</strong> Explain that a single extreme value at inference time compresses all other features into a near-zero range; use StandardScaler or RobustScaler when the feature range is unbounded or outlier-prone.</div>
+  </div>
+  <div class="pitfall-card">
+    <div class="pitfall-mistake"><strong>✗ Mistake</strong> Scaling tree-based model features unnecessarily and calling it a best practice</div>
+    <div class="pitfall-better"><strong>✓ Better</strong> Clarify that XGBoost, LightGBM, and Random Forest are invariant to monotonic feature transformations; scaling adds complexity with no benefit.
+
+---</div>
+  </div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="section-label">Related Questions</div>
+  <div class="related-pills">
+    <div class="related-pill" data-slug="06-001">
+      <span class="related-pill-icon">→</span>
+      <div class="related-pill-text">
+        <div class="related-pill-q">Q1: Data pre-processing and feature engineering?</div>
+        <div class="related-pill-rel">Prerequisite — scaling is one step in the preprocessing pipeline</div>
+      </div>
+    </div>
+    <div class="related-pill" data-slug="06-009">
+      <span class="related-pill-icon">→</span>
+      <div class="related-pill-text">
+        <div class="related-pill-q">Q9: Bias-variance tradeoff?</div>
+        <div class="related-pill-rel">Related — poor scaling can mask underfitting/overfitting signals</div>
+      </div>
+    </div>
+    <div class="related-pill" data-slug="06-018">
+      <span class="related-pill-icon">→</span>
+      <div class="related-pill-text">
+        <div class="related-pill-q">Q18: Implement cosine similarity in NumPy (Amazon)</div>
+        <div class="related-pill-rel">Follow-up — cosine similarity is scale-invariant by design; contrast with Euclidean distance</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="section-label">One-liner recall</div>
+  <div class="oneliner-box">
+    <div class="oneliner-label">▸ Reconstruct from memory</div>
+    <div class="oneliner-text" data-text="Choose min-max for bounded distributions, z-score standardization for general continuous features (degrades gracefully with outliers), robust scaling when outliers are severe, and no scaling for tree models — always fit the scaler on training data only to avoid test-set leakage.">Choose min-max for bounded distributions, z-score standardization for general continuous features (degrades gracefully with outliers), robust scaling when outliers are severe, and no scaling for tree models — always fit the scaler on training data only to avoid test-set leakage.</div>
+  </div>
+</div>

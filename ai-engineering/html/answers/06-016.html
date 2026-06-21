@@ -1,0 +1,132 @@
+<div class="answer-header reveal">
+  <div class="answer-meta">
+    <span class="meta-badge meta-category">06-ml-fundamentals</span>
+    <span class="meta-badge meta-num">Q016</span>
+    <span class="meta-badge meta-status-review">review</span>
+  </div>
+  <h1 class="answer-title">Regularization — L1, L2, dropout?</h1>
+</div>
+
+<div class="answer-section reveal">
+  <div class="accordion">
+    <div class="accordion-header">
+      <span class="accordion-title">⟁ Framing — Why this is asked</span>
+      <span class="accordion-chevron">▾</span>
+    </div>
+    <div class="accordion-body">
+      <div class="framing-grid">
+        <div><div class="framing-card">
+          <div class="framing-card-title">Why asked</div>
+          <p style="font-size:13.5px;line-height:1.7;color:var(--text-dim)">The interviewer is probing foundational ML hygiene — whether you understand how to prevent overfitting and why different regularization strategies suit different problem types. For AI engineers this surfaces again in fine-tuning (QLoRA rank constraint = implicit regularization), transformer training (weight decay = L2), and dropout layers in neural architectures.</p>
+        </div></div>
+        <div><div class="framing-card">
+          <div class="framing-card-title">Trigger phrases</div>
+          <div class="trigger-list">
+              <div class="trigger-phrase">How do you prevent overfitting in a neural network?</div>
+              <div class="trigger-phrase">What regularization techniques have you used in practice?</div>
+              <div class="trigger-phrase">When would you use L1 vs L2 regularization?</div>
+          </div>
+        </div></div>
+      </div>
+      <div class="tests-block">
+        <span style="font-family:var(--mono);font-size:10px;letter-spacing:0.1em;text-transform:uppercase;color:var(--purple);margin-right:8px">Tests:</span>Understanding of the bias-variance tradeoff mechanisms and how to select the right regularization strategy for the model type and downstream requirement (sparsity vs smoothness vs stochastic).
+
+---
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="section-label">Concept</div>
+  <div class="concept-block"><p>Regularization adds a penalty to the loss function (or drops information during training) to constrain model complexity and reduce variance — preventing the model from memorizing training noise. The three core techniques are L1 (Lasso), L2 (Ridge/weight decay), and dropout, each with distinct inductive biases.</p></div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="section-label">Mechanism</div>
+  <div class="card"><p><strong>L1 regularization (Lasso):</strong></p>
+<ul class="styled-list"><li>Penalty term: <code>λ · Σ|wᵢ|</code> added to loss</li><li>Gradient: constant <code>±λ</code> sign — pushes small weights exactly to zero</li><li>Effect: <strong>sparse weight vectors</strong> — natural feature selector; many weights zero, a few large</li><li>Use when: high-dimensional data, you suspect only a subset of features are relevant, or you want an interpretable sparse model</li></ul>
+<p><strong>L2 regularization (Ridge / weight decay):</strong></p>
+<ul class="styled-list"><li>Penalty term: <code>λ · Σwᵢ²</code> added to loss</li><li>Gradient: <code>2λwᵢ</code> — shrinks weights proportionally, never reaches exactly zero</li><li>Effect: <strong>small, distributed weights</strong> — stable gradients, prevents any single weight from dominating</li><li>Use when: most features are somewhat relevant, you want smooth generalization (default for neural nets via <code>weight_decay</code> in Adam/AdamW)</li><li>AdamW is Adam with correct L2 decoupled from the adaptive learning rate — standard for transformer fine-tuning</li></ul>
+<p><strong>Dropout:</strong></p>
+<ul class="styled-list"><li>During training: randomly zero a fraction <code>p</code> (typically 0.1–0.5) of activations each forward pass</li><li>Scales activations by <code>1/(1-p)</code> at inference (inverted dropout) so expected value unchanged</li><li>Effect: forces redundant representations — network cannot rely on any single neuron; acts as ensemble averaging over exponentially many thinned subnetworks (Srivastava et al. 2014)</li><li>Use when: large neural networks with abundant training data; common in transformer FFN layers and classification heads</li><li>Note: Transformers often use low dropout (0.1) or none — attention + weight decay usually sufficient</li></ul>
+<p><strong>Combined use:</strong></p>
+<ul class="styled-list"><li>Typical transformer training: AdamW (L2 weight decay <code>1e-2</code>) + dropout <code>0.1</code> in FFN</li><li>Feature-selection pipeline: Lasso regression or L1-penalized logistic regression → select top-k → downstream model</li><li>QLoRA/LoRA rank as implicit regularization: low rank forces low-dimensional update subspace → reduces overfitting on small fine-tuning datasets</li></ul></div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="section-label">Example / Tradeoff</div>
+  <div class="card card-accent"><div class="rich-text"><div class="table-wrap"><table class="data-table"><tr><th>Technique</th><th>Effect on weights</th><th>Best for</th><th>Weakness</th></tr><tr><td>L1 (Lasso)</td><td>Sparse (exact zero)</td><td>Feature selection, high-dim linear</td><td>Non-differentiable at 0; slow convergence</td></tr><tr><td>L2 (Ridge / weight decay)</td><td>Small but non-zero</td><td>Neural nets, correlated features</td><td>Keeps all features; no sparsity</td></tr><tr><td>Dropout</td><td>Stochastic ensemble</td><td>Large NNs, prevents co-adaptation</td><td>Adds training time; wrong p hurts convergence</td></tr></table></div>
+<p><strong>Concrete scenario:</strong> Training a fraud detection gradient-boosted classifier on 500 features. L1-penalized logistic regression → 47 non-zero weights (automatic feature selection) → interpretable to compliance team. For a PyTorch transformer fine-tuned on domain data: AdamW <code>weight_decay=0.01</code> + <code>dropout=0.1</code> on attention projection layers.</p></div></div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="accordion">
+    <div class="accordion-header">
+      <span class="accordion-title">🎙 Verbal Script (3–5 min)</span>
+      <span class="accordion-chevron">▾</span>
+    </div>
+    <div class="accordion-body">
+      <div class="script-block"><div class="script-label">Opening (30s)</div><p>"I think about regularization as the three main tools you reach for when your model is overfitting: L1 for sparsity and feature selection, L2 (weight decay) for smooth generalization, and dropout for stochastic ensemble effects in neural networks. The choice depends on your model type and what you need the weights to look like."</p></div>
+      <div class="script-block"><div class="script-label">Core explanation (2–3 min)</div><p>"Let me walk through each. L1 adds the sum of absolute weight values to the loss. Because its gradient is a constant sign term, it pushes small weights all the way to zero — you end up with a sparse weight vector where irrelevant features truly drop out. That's ideal when you have hundreds of features and suspect only a handful matter, or when you need a model you can explain to a regulator.</p>
+<p>L2, or Ridge, adds the sum of squared weights. The gradient is proportional to the weight itself, so large weights shrink fast but small weights almost never reach zero. In deep learning this is called weight decay and is usually applied via AdamW, which correctly decouples the weight decay from the adaptive learning rate — standard practice for fine-tuning transformers like Llama or BERT.</p>
+<p>Dropout is different — it's not a loss penalty but a stochastic operation during training. Each forward pass, a random fraction p of neurons is zeroed out. The network is forced to learn redundant, distributed representations because it can't rely on any single activation. At inference the activations are scaled up by 1/(1-p) to match expected magnitudes. It effectively trains an ensemble of 2^n thinned networks and averages them at test time.</p>
+<p>In modern transformers you often see both: AdamW with weight_decay=0.01 handles the L2 side, and dropout=0.1 on FFN and attention layers. For fine-tuning with LoRA, the low rank itself acts as an implicit regularizer — you're constraining the update to a low-dimensional subspace."</p></div>
+      <div class="script-block"><div class="script-label">Tradeoff / production angle (1 min)</div><p>"The practical tradeoffs: L1 has a non-differentiable point at zero, which can slow optimization — coordinate descent or subgradient methods are often used instead of vanilla SGD. L2 keeps all features, which matters when features are correlated (Lasso picks one arbitrarily from a correlated group). Dropout adds noise during training, so you need more epochs, and with too-high p on already-small networks it can hurt convergence. For transformers, there's evidence that dropout can actually hurt if you have large enough data — GPT-3 was trained without dropout. So I'd say: default to L2 (weight decay) for neural networks, add light dropout (0.1) for classification heads, and reach for L1 or Elastic Net specifically when you need sparsity."</p></div>
+      <div class="script-block"><div class="script-label">Wrap-up (30s)</div><p>"So the headline is: L1 for sparse models and feature selection, L2/weight decay as the neural network default, and dropout for stochastic ensemble effects in larger networks. In practice for AI engineering, AdamW + light dropout is the go-to, with LoRA rank as an additional implicit regularization lever during fine-tuning. Happy to go deeper on any of those."</p></div>
+    </div>
+  </div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="section-label">Pitfalls</div>
+  <div class="pitfall-card">
+    <div class="pitfall-mistake"><strong>✗ Mistake</strong> Describing L1 and L2 only in terms of &quot;prevents overfitting&quot; without explaining the weight-sparsity mechanism</div>
+    <div class="pitfall-better"><strong>✓ Better</strong> Explain that L1&#x27;s constant gradient drives weights to exact zero (sparsity/feature selection) while L2&#x27;s proportional gradient keeps all weights small but non-zero; the structural difference matters for model interpretation and feature selection decisions.</div>
+  </div>
+  <div class="pitfall-card">
+    <div class="pitfall-mistake"><strong>✗ Mistake</strong> Treating dropout as a replacement for weight decay in transformers</div>
+    <div class="pitfall-better"><strong>✓ Better</strong> Note that AdamW (decoupled L2) is the standard default for transformer fine-tuning, and dropout is a complementary stochastic technique; also mention that high dropout can hurt large pre-trained models with sufficient data (GPT-3 training used none).</div>
+  </div>
+  <div class="pitfall-card">
+    <div class="pitfall-mistake"><strong>✗ Mistake</strong> Not connecting regularization to the fine-tuning context</div>
+    <div class="pitfall-better"><strong>✓ Better</strong> Mention that LoRA rank acts as implicit regularization (low-rank update subspace constrains model capacity), and QLoRA&#x27;s 4-bit quantization further reduces the effective parameter count, making regularization especially important to tune on small fine-tuning datasets.
+
+---</div>
+  </div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="section-label">Related Questions</div>
+  <div class="related-pills">
+    <div class="related-pill" data-slug="06-009">
+      <span class="related-pill-icon">→</span>
+      <div class="related-pill-text">
+        <div class="related-pill-q">Q9: Bias-variance tradeoff?</div>
+        <div class="related-pill-rel">Regularization is the primary tool for shifting the bias-variance tradeoff</div>
+      </div>
+    </div>
+    <div class="related-pill" data-slug="06-013">
+      <span class="related-pill-icon">→</span>
+      <div class="related-pill-text">
+        <div class="related-pill-q">Q13: Debug model that runs but doesn&#x27;t learn</div>
+        <div class="related-pill-rel">Over-regularization (too-high dropout or weight decay) is a cause of a model that doesn&#x27;t learn</div>
+      </div>
+    </div>
+    <div class="related-pill" data-slug="04-002">
+      <span class="related-pill-icon">→</span>
+      <div class="related-pill-text">
+        <div class="related-pill-q">Q2: What is PEFT/LoRA and when use it?</div>
+        <div class="related-pill-rel">LoRA rank as implicit regularization; QLoRA adds quantization-as-regularization during fine-tuning</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="section-label">One-liner recall</div>
+  <div class="oneliner-box">
+    <div class="oneliner-label">▸ Reconstruct from memory</div>
+    <div class="oneliner-text" data-text="L1 (Lasso) drives weights to exact zero for sparsity/feature-selection; L2 (weight decay/Ridge) shrinks all weights smoothly and is the transformer default via AdamW; dropout randomly zeros activations during training to force redundant representations — use all three together for large neural networks, and note LoRA rank as implicit regularization during fine-tuning.">L1 (Lasso) drives weights to exact zero for sparsity/feature-selection; L2 (weight decay/Ridge) shrinks all weights smoothly and is the transformer default via AdamW; dropout randomly zeros activations during training to force redundant representations — use all three together for large neural networks, and note LoRA rank as implicit regularization during fine-tuning.</div>
+  </div>
+</div>

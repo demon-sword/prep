@@ -1,0 +1,147 @@
+<div class="answer-header reveal">
+  <div class="answer-meta">
+    <span class="meta-badge meta-category">04-fine-tuning-training</span>
+    <span class="meta-badge meta-num">Q003</span>
+    <span class="meta-badge meta-status-review">review</span>
+  </div>
+  <h1 class="answer-title">QLoRA vs LoRA — when choose one?</h1>
+</div>
+
+<div class="answer-section reveal">
+  <div class="accordion">
+    <div class="accordion-header">
+      <span class="accordion-title">⟁ Framing — Why this is asked</span>
+      <span class="accordion-chevron">▾</span>
+    </div>
+    <div class="accordion-body">
+      <div class="framing-grid">
+        <div><div class="framing-card">
+          <div class="framing-card-title">Why asked</div>
+          <p style="font-size:13.5px;line-height:1.7;color:var(--text-dim)">This question tests whether a candidate can articulate the <em>specific</em> memory tradeoff that separates QLoRA from LoRA — not just &quot;QLoRA uses quantization.&quot; Interviewers want to hear you reason about GPU memory budgets, quantization impact on quality, and when each technique is appropriate for a production or research workload. It probes practical hands-on experience with modern fine-tuning pipelines.</p>
+        </div></div>
+        <div><div class="framing-card">
+          <div class="framing-card-title">Trigger phrases</div>
+          <div class="trigger-list">
+              <div class="trigger-phrase">What&#x27;s the difference between LoRA and QLoRA?</div>
+              <div class="trigger-phrase">How would you fine-tune a 70B model with limited GPU access?</div>
+              <div class="trigger-phrase">When would you reach for QLoRA over standard LoRA?</div>
+              <div class="trigger-phrase">Walk me through how QLoRA reduces memory during fine-tuning.</div>
+          </div>
+        </div></div>
+      </div>
+      <div class="tests-block">
+        <span style="font-family:var(--mono);font-size:10px;letter-spacing:0.1em;text-transform:uppercase;color:var(--purple);margin-right:8px">Tests:</span>Understanding of quantization mechanics (NF4, double quantization), memory footprint math, and the practical decision boundary between LoRA and QLoRA based on available hardware and quality requirements.
+
+---
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="section-label">Concept</div>
+  <div class="concept-block"><p><strong>LoRA</strong> fine-tunes a model by freezing the pre-trained weights in their original precision (BF16 or FP16) and training small low-rank adapter matrices on top. <strong>QLoRA</strong> (Dettmers et al., 2023) extends this by quantizing the <em>frozen</em> base model weights to 4-bit NF4 (Normal Float 4) format, then applying LoRA adapters in 16-bit precision. The result: QLoRA can fine-tune a 65B+ parameter model on a single GPU that LoRA alone cannot fit, with typically < 1% quality degradation versus full BF16 LoRA.</p></div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="section-label">Mechanism</div>
+  <div class="card"><p><strong>Memory comparison for a 7B model (A100 40GB):</strong></p>
+<div class="table-wrap"><table class="data-table"><tr><th>Technique</th><th>Base weight precision</th><th>Peak VRAM (7B)</th><th>Peak VRAM (13B)</th><th>Peak VRAM (70B)</th></tr><tr><td>Full fine-tune</td><td>BF16</td><td>~80 GB (+ Adam states)</td><td>~160 GB</td><td>~800 GB</td></tr><tr><td>LoRA (r=16)</td><td>BF16</td><td>~18 GB</td><td>~30 GB</td><td>~140 GB</td></tr><tr><td><strong>QLoRA (r=16)</strong></td><td><strong>NF4 (4-bit)</strong></td><td><strong>~9 GB</strong></td><td><strong>~16 GB</strong></td><td><strong>~48 GB</strong></td></tr></table></div>
+<p><strong>How QLoRA achieves this:</strong></p>
+<ol class="mechanism-steps"><li><strong>NF4 quantization of frozen weights</strong> — Base model weights are converted from BF16 (2 bytes/param) to 4-bit NF4 (0.5 bytes/param). NF4 is information-theoretically optimal for normally-distributed weights (which LLM weights are, empirically). This alone reduces base model memory by 4×.</li></ol>
+<ol class="mechanism-steps"><li><strong>Double quantization</strong> — The quantization constants (scale factors) used in step 1 are themselves quantized from FP32 to FP8, saving another ~0.4 bits/param on average.</li></ol>
+<ol class="mechanism-steps"><li><strong>Paged optimizers</strong> — QLoRA uses NVIDIA unified memory to page optimizer states (Adam moments) to CPU RAM when GPU VRAM is full, preventing out-of-memory crashes during gradient steps. This is critical for large models on single-GPU setups.</li></ol>
+<ol class="mechanism-steps"><li><strong>LoRA adapters in BF16</strong> — Only the trainable adapter matrices (B and A) are kept in full 16-bit precision; gradients flow through them normally. The quantized base weights are dequantized on-the-fly to BF16 for the forward pass computation, then immediately discarded.</li></ol>
+<p><strong>Decision framework:</strong></p>
+<div class="code-block-wrap"><pre class="code-block"><code>Available GPU VRAM?
+  ├── &gt; 40 GB per node AND data &gt; 10K samples AND quality matters most?
+  │     → LoRA (BF16 base, rank 16–64) — higher quality ceiling, simpler pipeline
+  ├── 16–40 GB per node (single A100 40GB / 2× A6000 48GB)?
+  │     → LoRA for models ≤ 13B; QLoRA for 13B–30B
+  └── &lt; 16 GB (RTX 3090/4090 / A10G / consumer GPU)?
+        → QLoRA required for any model &gt; 7B
+              Use: bitsandbytes NF4 + HuggingFace PEFT + TRL SFTTrainer</code></pre><button class="copy-btn">copy</button></div>
+<p><strong>QLoRA implementation (HuggingFace):</strong></p>
+<p>```python from transformers import BitsAndBytesConfig, AutoModelForCausalLM from peft import LoraConfig, get_peft_model</p>
+<p>bnb_config = BitsAndBytesConfig(     load_in_4bit=True,     bnb_4bit_quant_type="nf4",          # NF4 for normally-distributed weights     bnb_4bit_compute_dtype=torch.bfloat16,  # dequantize to BF16 for compute     bnb_4bit_use_double_quant=True,     # double quantization for extra savings )</p>
+<p>model = AutoModelForCausalLM.from_pretrained(     "meta-llama/Meta-Llama-3-8B",     quantization_config=bnb_config,     device_map="auto", )</p>
+<p>lora_config = LoraConfig(     r=16,     lora_alpha=32,     target_modules=["q_proj", "v_proj", "k_proj", "o_proj"],     lora_dropout=0.05,     task_type="CAUSAL_LM", )</p>
+<p>model = get_peft_model(model, lora_config)</p></div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="section-label">Example / Tradeoff</div>
+  <div class="card card-accent"><div class="rich-text"></div></div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="accordion">
+    <div class="accordion-header">
+      <span class="accordion-title">🎙 Verbal Script (3–5 min)</span>
+      <span class="accordion-chevron">▾</span>
+    </div>
+    <div class="accordion-body">
+      <div class="script-block"><div class="script-label">Opening (30s)</div><p>"Both LoRA and QLoRA fine-tune by training only small low-rank adapters on a frozen base model — the difference is the precision of those frozen base weights. LoRA keeps the base in BF16; QLoRA quantizes it to 4-bit NF4. That single change cuts base model VRAM by 4×, which determines which hardware you can actually train on. Let me walk through the mechanics and when I'd choose each."</p></div>
+      <div class="script-block"><div class="script-label">Core explanation (2–3 min)</div><p>"In LoRA, the frozen weights stay in BF16 — 2 bytes per parameter. For a 7B model, that's about 14 GB just for the weights, plus optimizer states and activations, so you typically need a 40GB A100 to fine-tune comfortably.</p>
+<p>QLoRA adds a quantization step: the frozen weights are converted to 4-bit NF4 format — that's 0.5 bytes per parameter, a 4× reduction. NF4 stands for 'Normal Float 4' — it's an information-theoretically optimal quantization for weights that follow a normal distribution, which LLM weights do empirically. QLoRA also uses double quantization: the quantization constants themselves are quantized from FP32 to FP8, saving another fraction of a bit per parameter.</p>
+<p>Critically, the LoRA adapter matrices — the parts that are actually trained — remain in BF16 the whole time. So the forward pass dequantizes the frozen weights on-the-fly to BF16 for the matrix multiply, then immediately drops them. The gradient only flows through the small adapter matrices.</p>
+<p>In practice: a Llama 3 13B model needs about 28 GB of VRAM with standard BF16 LoRA — that's two A100s. With QLoRA, the same model fits in 14 GB — a single A100 40GB, and the cloud GPU cost drops from ~$80 to ~$20 for the same training run.</p>
+<p>The tradeoff is a small quality loss — typically 2–3 ROUGE-L points or 1–2 points on task-specific evals — because the 4-bit representation introduces quantization error in the base model activations. For most production tasks, that's acceptable. For high-stakes domains — medical coding, legal contract review — I'd benchmark both and decide based on the quality delta."</p></div>
+      <div class="script-block"><div class="script-label">Tradeoff / production angle (1 min)</div><p>"One thing I always flag: QLoRA's quantization is on the <em>frozen base weights during training</em>, not necessarily at inference. After fine-tuning, you can merge the adapters back into the dequantized base model with <code>merge_adapter()</code> and serve in BF16 — so QLoRA training doesn't mean quantized inference unless you want it. That said, if you're cost-constrained at serving time too, you'd combine GPTQ or AWQ quantization with your merged checkpoint independently. The other consideration is paged optimizers — QLoRA uses NVIDIA unified memory to offload Adam states to CPU RAM, which prevents OOM but adds some training latency. On a single GPU, I've seen QLoRA training runs take 15–20% longer than LoRA for the same step count."</p></div>
+      <div class="script-block"><div class="script-label">Wrap-up (30s)</div><p>"So the decision rule is straightforward: if your target model fits in available VRAM with BF16 LoRA, use LoRA — simpler pipeline and higher quality ceiling. If you're memory-constrained — consumer GPUs, 30B+ models on a single node — QLoRA is the right call, with typically under 3% quality loss for a 4× memory saving. I'm happy to go deeper on the NF4 quantization math or how GPTQ/AWQ compare for inference-time quantization."</p></div>
+    </div>
+  </div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="section-label">Pitfalls</div>
+  <div class="pitfall-card">
+    <div class="pitfall-mistake"><strong>✗ Mistake</strong> Saying &quot;QLoRA is just quantized LoRA&quot; without explaining <em>what</em> is quantized (only the frozen base weights, not the trainable adapters)</div>
+    <div class="pitfall-better"><strong>✓ Better</strong> Clarify that the adapter matrices stay in BF16 for accurate gradient flow; only the frozen W_frozen is in NF4 and is dequantized on-the-fly for the forward pass, so the quality loss comes from the base activation precision, not the adapter training</div>
+  </div>
+  <div class="pitfall-card">
+    <div class="pitfall-mistake"><strong>✗ Mistake</strong> Treating QLoRA as always worse quality and not worth using</div>
+    <div class="pitfall-better"><strong>✓ Better</strong> The quality gap is typically 2–3% on most NLP tasks, and QLoRA enables a 4× VRAM reduction and proportional cost savings; for most production fine-tuning scenarios the tradeoff is clearly favorable — only rule it out after benchmarking on your specific task and quality threshold</div>
+  </div>
+  <div class="pitfall-card">
+    <div class="pitfall-mistake"><strong>✗ Mistake</strong> Confusing QLoRA (training-time technique) with GPTQ/AWQ (inference-time quantization)</div>
+    <div class="pitfall-better"><strong>✓ Better</strong> Explicitly distinguish: QLoRA quantizes the base during <em>training</em> to save VRAM; GPTQ/AWQ quantize the <em>merged final checkpoint</em> for cheaper <em>inference</em> serving; they address different bottlenecks and can be combined (fine-tune with QLoRA, then GPTQ-quantize the merged checkpoint for serving)
+
+---</div>
+  </div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="section-label">Related Questions</div>
+  <div class="related-pills">
+    <div class="related-pill" data-slug="04-002">
+      <span class="related-pill-icon">→</span>
+      <div class="related-pill-text">
+        <div class="related-pill-q">Q2: What is PEFT/LoRA and when use it?</div>
+        <div class="related-pill-rel">Prerequisite: QLoRA extends LoRA; must understand LoRA mechanics first</div>
+      </div>
+    </div>
+    <div class="related-pill" data-slug="04-012">
+      <span class="related-pill-icon">→</span>
+      <div class="related-pill-text">
+        <div class="related-pill-q">Q12: Quantization — tradeoffs between size, speed, accuracy?</div>
+        <div class="related-pill-rel">Follow-up: inference-time quantization (GPTQ, AWQ, INT8) vs QLoRA training-time quantization</div>
+      </div>
+    </div>
+    <div class="related-pill" data-slug="04-008">
+      <span class="related-pill-icon">→</span>
+      <div class="related-pill-text">
+        <div class="related-pill-q">Q8: RLHF pipeline: SFT, reward model, PPO. How does DPO simplify?</div>
+        <div class="related-pill-rel">Related: DPO alignment is commonly applied on top of a QLoRA SFT checkpoint to save GPU memory</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="section-label">One-liner recall</div>
+  <div class="oneliner-box">
+    <div class="oneliner-label">▸ Reconstruct from memory</div>
+    <div class="oneliner-text" data-text="QLoRA = LoRA + NF4 4-bit quantization of the frozen base weights + paged optimizers, cutting VRAM by ~4× at the cost of ~2–3% task quality — choose LoRA when hardware permits for maximum quality, QLoRA when VRAM is the binding constraint.">QLoRA = LoRA + NF4 4-bit quantization of the frozen base weights + paged optimizers, cutting VRAM by ~4× at the cost of ~2–3% task quality — choose LoRA when hardware permits for maximum quality, QLoRA when VRAM is the binding constraint.</div>
+  </div>
+</div>

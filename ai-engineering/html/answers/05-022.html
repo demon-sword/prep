@@ -1,0 +1,135 @@
+<div class="answer-header reveal">
+  <div class="answer-meta">
+    <span class="meta-badge meta-category">05-evaluation-metrics</span>
+    <span class="meta-badge meta-num">Q022</span>
+    <span class="meta-badge meta-status-review">review</span>
+  </div>
+  <h1 class="answer-title">Two models, same accuracy, different confidence — which choose? Calibration?</h1>
+</div>
+
+<div class="answer-section reveal">
+  <div class="accordion">
+    <div class="accordion-header">
+      <span class="accordion-title">⟁ Framing — Why this is asked</span>
+      <span class="accordion-chevron">▾</span>
+    </div>
+    <div class="accordion-body">
+      <div class="framing-grid">
+        <div><div class="framing-card">
+          <div class="framing-card-title">Why asked</div>
+          <p style="font-size:13.5px;line-height:1.7;color:var(--text-dim)">Interviewers probe whether you understand that accuracy alone is insufficient for production systems — especially in high-stakes domains (medical, financial, content moderation) where a model&#x27;s expressed confidence determines downstream actions like thresholds, routing, and HITL triggers. A well-calibrated model is one you can trust: when it says 90% confidence, it&#x27;s right 90% of the time.</p>
+        </div></div>
+        <div><div class="framing-card">
+          <div class="framing-card-title">Trigger phrases</div>
+          <div class="trigger-list">
+              <div class="trigger-phrase">Two models with the same accuracy — how do you choose between them?</div>
+              <div class="trigger-phrase">What is calibration and why does it matter?</div>
+              <div class="trigger-phrase">How do you set decision thresholds in production?</div>
+              <div class="trigger-phrase">Your model is overconfident — how do you fix it?</div>
+          </div>
+        </div></div>
+      </div>
+      <div class="tests-block">
+        <span style="font-family:var(--mono);font-size:10px;letter-spacing:0.1em;text-transform:uppercase;color:var(--purple);margin-right:8px">Tests:</span>Whether the candidate understands model calibration (reliability diagrams, ECE), can reason about threshold tuning from confidence scores, and knows practical recalibration techniques (Platt scaling, temperature scaling).
+
+---
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="section-label">Concept</div>
+  <div class="concept-block"><p><strong>Calibration</strong> measures the alignment between a model's predicted confidence (probability) and its empirical accuracy. A perfectly calibrated model produces confidence scores that match real-world outcomes: among all predictions where the model says 80% confidence, exactly 80% should be correct. Two models with identical accuracy can differ dramatically in calibration — and the better-calibrated model is almost always more useful in production.</p></div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="section-label">Mechanism</div>
+  <div class="card"><p><strong>Step 1 — Measure calibration with ECE (Expected Calibration Error):</strong></p>
+<ul class="styled-list"><li>Bin predictions by confidence (e.g., 10 buckets: 0–0.1, 0.1–0.2, …, 0.9–1.0).</li><li>For each bucket, compute |avg_confidence − accuracy|.</li><li>ECE = weighted average of bucket errors. Lower is better (0 = perfect calibration).</li><li>Plot a <strong>reliability diagram</strong>: confidence on x-axis, accuracy on y-axis. A perfectly calibrated model falls on the diagonal.</li></ul>
+<p><strong>Step 2 — Identify the calibration failure mode:</strong></p>
+<ul class="styled-list"><li><strong>Overconfident</strong> (above diagonal): model outputs 95% confidence when it's right only 80% of the time → false certainty, dangerous in medical/fraud settings.</li><li><strong>Underconfident</strong> (below diagonal): model says 60% when it's right 85% of the time → too much HITL escalation, wasted human review cycles.</li></ul>
+<p><strong>Step 3 — Recalibrate if needed:</strong></p>
+<ul class="styled-list"><li><strong>Platt scaling</strong> (logistic regression on softmax outputs): fits a sigmoid on a held-out calibration set. Works well for binary classifiers.</li><li><strong>Temperature scaling</strong>: single scalar T applied to logits before softmax — <code>softmax(logits / T)</code>. T > 1 flattens distribution (fixes overconfidence); T < 1 sharpens it. State-of-the-art default for neural nets (Guo et al. 2017).</li><li><strong>Isotonic regression</strong>: non-parametric, fits a monotone mapping from confidence to accuracy. More flexible, needs more calibration data (≥1K samples).</li></ul>
+<p><strong>Step 4 — Choose by decision use case:</strong></p>
+<div class="table-wrap"><table class="data-table"><tr><th>Use case</th><th>Prefer</th></tr><tr><td>Binary threshold (fraud, spam)</td><td>Better-calibrated model; tune threshold on PR curve</td></tr><tr><td>Ranking / top-k retrieval</td><td>Accuracy/AUC sufficient; calibration less critical</td></tr><tr><td>HITL trigger (confidence < θ)</td><td>Calibrated model essential — miscalibration drowns HITL with false alarms</td></tr></table></div>| Multi-class routing | ECE per class; ensure minority class isn't systematically overconfident |</div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="section-label">Example / Tradeoff</div>
+  <div class="card card-accent"><div class="rich-text"><p>In a <strong>content moderation classifier</strong> (same-day accuracy: both 87%), Model A has ECE 0.03 (well-calibrated), Model B has ECE 0.14 (overconfident: outputs 0.92 avg confidence on wrong predictions). Using a 0.85 confidence threshold for auto-approve:</p>
+<ul class="styled-list"><li><strong>Model A</strong>: HITL queue captures the right borderline cases; human reviewers confirm ~85% of escalated items are genuine edge cases.</li><li><strong>Model B</strong>: many policy violations auto-approved with false 0.92 confidence; HITL queue flooded by cases the model is confidently wrong about.</li></ul>
+<p>→ Choose Model A despite identical accuracy. Apply temperature scaling (T ≈ 1.4) if a model is overconfident but otherwise superior on AUC — then re-validate ECE on a held-out set before deploying.</p>
+<p><strong>Threshold tuning workflow:</strong></p>
+<ol class="mechanism-steps"><li>Generate PR curve on a calibration hold-out set.</li><li>Pick operating threshold at target precision (e.g., 95% precision for a high-stakes action).</li><li>Check ECE; apply temperature scaling if ECE > 0.05.</li><li>Monitor calibration drift monthly — distribution shift can re-break calibration.</li></ol></div></div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="accordion">
+    <div class="accordion-header">
+      <span class="accordion-title">🎙 Verbal Script (3–5 min)</span>
+      <span class="accordion-chevron">▾</span>
+    </div>
+    <div class="accordion-body">
+      <div class="script-block"><div class="script-label">Opening (30s)</div><p>"This is a question about calibration — the idea that two models can have the same raw accuracy but very different trustworthiness in production. I'd always choose the better-calibrated model for any application where the confidence score drives a downstream decision, like routing to a human reviewer or setting an auto-approve threshold."</p></div>
+      <div class="script-block"><div class="script-label">Core explanation (2–3 min)</div><p>"Let me walk through the mechanics. Calibration measures whether predicted confidence matches empirical accuracy. You measure it with Expected Calibration Error: bin predictions by confidence, compute the gap between average confidence and accuracy per bin, and take the weighted average. Perfect calibration means the model is right 80% of the time when it says 80% — it falls on the diagonal of a reliability diagram.</p>
+<p>Two failure modes: overconfident models output 95% when they're right 80% of the time — that's dangerous in medical or fraud contexts because the system auto-approves cases it gets wrong. Underconfident models say 60% when they're right 85% — that's less dangerous but drives unnecessary human escalations.</p>
+<p>To fix calibration, the go-to is <strong>temperature scaling</strong> — you divide logits by a learned scalar T before softmax. T > 1 flattens the distribution and lowers overconfidence. It's a single parameter fit on a held-out calibration set, computationally free at inference, and doesn't change accuracy. Platt scaling and isotonic regression are alternatives for binary tasks or when you have more calibration data."</p></div>
+      <div class="script-block"><div class="script-label">Tradeoff / production angle (1 min)</div><p>"The key production angle: if you're setting any confidence threshold — HITL triggers, auto-approve gates, alerting — calibration is non-negotiable. Miscalibration at ECE 0.14 on a content moderation system means your HITL queue fills up with cases the model is confidently wrong about, burning reviewer capacity on the wrong items. I'd validate ECE on a held-out set, apply temperature scaling if ECE > 0.05, and monitor calibration monthly because distribution shift will re-break it."</p></div>
+      <div class="script-block"><div class="script-label">Wrap-up (30s)</div><p>"So in summary: same accuracy, pick the better-calibrated model. Measure ECE, use a reliability diagram, apply temperature scaling to recalibrate if needed, and always monitor calibration drift in production. Happy to go deeper on threshold tuning or the Platt vs temperature scaling tradeoffs."</p></div>
+    </div>
+  </div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="section-label">Pitfalls</div>
+  <div class="pitfall-card">
+    <div class="pitfall-mistake"><strong>✗ Mistake</strong> Saying &quot;I&#x27;d just pick whichever has slightly better AUC&quot;</div>
+    <div class="pitfall-better"><strong>✓ Better</strong> Acknowledge that calibration is often more operationally important than a marginal AUC gain if confidence scores drive thresholds or HITL routing; measure ECE explicitly on a held-out calibration set.</div>
+  </div>
+  <div class="pitfall-card">
+    <div class="pitfall-mistake"><strong>✗ Mistake</strong> Treating calibration as a fixed property</div>
+    <div class="pitfall-better"><strong>✓ Better</strong> Explain that calibration drifts under distribution shift (new user cohorts, seasonal topic patterns) and must be monitored continuously, with temperature T re-fit periodically on fresh calibration data.</div>
+  </div>
+  <div class="pitfall-card">
+    <div class="pitfall-mistake"><strong>✗ Mistake</strong> Proposing Platt scaling for neural networks without caveat</div>
+    <div class="pitfall-better"><strong>✓ Better</strong> Note that temperature scaling (Guo et al. 2017) outperforms Platt scaling for deep models because it preserves the full multi-class distribution with a single parameter; Platt scaling is better suited to binary, shallow classifiers.
+
+---</div>
+  </div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="section-label">Related Questions</div>
+  <div class="related-pills">
+    <div class="related-pill" data-slug="05-019">
+      <span class="related-pill-icon">→</span>
+      <div class="related-pill-text">
+        <div class="related-pill-q">Q19: Success metrics for an ML model?</div>
+        <div class="related-pill-rel">Calibration fits within the broader success-metrics framework</div>
+      </div>
+    </div>
+    <div class="related-pill" data-slug="05-014">
+      <span class="related-pill-icon">→</span>
+      <div class="related-pill-text">
+        <div class="related-pill-q">Q14: Bias/fairness tradeoffs — example?</div>
+        <div class="related-pill-rel">Calibration across subgroups is a key fairness concern (per-group ECE)</div>
+      </div>
+    </div>
+    <div class="related-pill" data-slug="05-003">
+      <span class="related-pill-icon">→</span>
+      <div class="related-pill-text">
+        <div class="related-pill-q">Q3: Detect and mitigate hallucinations in production?</div>
+        <div class="related-pill-rel">LLM confidence scores and calibration connect to hallucination detection thresholds</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="section-label">One-liner recall</div>
+  <div class="oneliner-box">
+    <div class="oneliner-label">▸ Reconstruct from memory</div>
+    <div class="oneliner-text" data-text="Choose the better-calibrated model (lower ECE): accuracy alone ignores whether confidence scores are trustworthy for threshold-based decisions, and apply temperature scaling (T &gt; 1 for overconfident models) to fix miscalibration without changing accuracy.">Choose the better-calibrated model (lower ECE): accuracy alone ignores whether confidence scores are trustworthy for threshold-based decisions, and apply temperature scaling (T &gt; 1 for overconfident models) to fix miscalibration without changing accuracy.</div>
+  </div>
+</div>

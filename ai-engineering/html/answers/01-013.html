@@ -1,0 +1,128 @@
+<div class="answer-header reveal">
+  <div class="answer-meta">
+    <span class="meta-badge meta-category">01-llm-fundamentals</span>
+    <span class="meta-badge meta-num">Q013</span>
+    <span class="meta-badge meta-status-review">review</span>
+  </div>
+  <h1 class="answer-title">What are embeddings?</h1>
+</div>
+
+<div class="answer-section reveal">
+  <div class="accordion">
+    <div class="accordion-header">
+      <span class="accordion-title">⟁ Framing — Why this is asked</span>
+      <span class="accordion-chevron">▾</span>
+    </div>
+    <div class="accordion-body">
+      <div class="framing-grid">
+        <div><div class="framing-card">
+          <div class="framing-card-title">Why asked</div>
+          <p style="font-size:13.5px;line-height:1.7;color:var(--text-dim)">Embeddings are the foundational primitive behind RAG, semantic search, recommendation, and clustering — virtually every AI application a candidate might build. The interviewer is probing whether the candidate understands what embeddings encode (semantic meaning, not surface form), how they&#x27;re produced (encoder forward pass), and their practical constraints (dimensionality, cosine vs dot product, embedding drift, cost of re-embedding).</p>
+        </div></div>
+        <div><div class="framing-card">
+          <div class="framing-card-title">Trigger phrases</div>
+          <div class="trigger-list">
+              <div class="trigger-phrase">What are embeddings and how do you use them?</div>
+              <div class="trigger-phrase">How does semantic search work under the hood?</div>
+              <div class="trigger-phrase">Walk me through how you&#x27;d build a similarity search system.</div>
+              <div class="trigger-phrase">What&#x27;s the difference between sparse and dense vectors?</div>
+          </div>
+        </div></div>
+      </div>
+      <div class="tests-block">
+        <span style="font-family:var(--mono);font-size:10px;letter-spacing:0.1em;text-transform:uppercase;color:var(--purple);margin-right:8px">Tests:</span>Whether the candidate can translate the mathematical concept of high-dimensional vector representations into production engineering decisions: model choice, indexing strategy, distance metric, and failure modes.
+
+---
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="section-label">Concept</div>
+  <div class="concept-block"><p>Embeddings are dense, fixed-size vectors of floating-point numbers that encode the <em>semantic meaning</em> of a piece of text (or image, audio, etc.) such that similar meanings map to geometrically nearby points in that vector space. A 1,536-dimensional vector from <code>text-embedding-3-small</code> or a 768-dimensional vector from <code>bge-large-en-v1.5</code> captures enough latent structure that "automobile" and "car" land close together even though they share no characters.</p></div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="section-label">Mechanism</div>
+  <div class="card"><ol class="mechanism-steps"><li><strong>Encoding:</strong> The input text is tokenized and passed through a transformer encoder (e.g., BERT-style) or the encoder portion of a larger model. The final layer's representation — typically the <code>[CLS]</code> token or a mean-pool of all token vectors — is extracted as the embedding.</li><li><strong>Similarity:</strong> Vectors are compared using <strong>cosine similarity</strong> (angle, normalized) or <strong>dot product</strong> (magnitude-sensitive, faster with int8). For retrieval, cosine is default; for max-inner-product search (MIPS) tasks like recommendation, dot product is standard.</li><li><strong>Indexing:</strong> Billions of vectors can't be brute-force searched in <100ms. Approximate nearest neighbor (ANN) indexes — <strong>HNSW</strong> (Hierarchical Navigable Small World, used in Pinecone/Weaviate/pgvector) or <strong>IVF</strong> (inverted file, used in FAISS) — trade a small recall loss (~1–2%) for 10–100× speed gain.</li><li><strong>Storage:</strong> Pinecone, Weaviate, Qdrant, and Chroma store vectors + metadata + namespace filters. pgvector adds embeddings directly to Postgres; FAISS is an in-memory library without persistence.</li></ol></div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="section-label">Example / Tradeoff</div>
+  <div class="card card-accent"><div class="rich-text"><p><strong>Production example:</strong> At OpenAI's recommended tier, <code>text-embedding-3-large</code> (3,072 dims) costs $0.00013/1K tokens. For 10M product descriptions at avg 50 tokens each, that's ~$65 for the initial embed pass — cheap. But re-embedding when the model changes costs the same again, so <strong>embedding drift</strong> matters: if you swap the embedding model (e.g., from <code>ada-002</code> to <code>3-large</code>), all stored vectors become stale and must be re-embedded in batch before serving.</p>
+<p><strong>Tradeoff table:</strong></p>
+<div class="table-wrap"><table class="data-table"><tr><th>Dimension</th><th>Small (256–512)</th><th>Large (1536–3072)</th></tr><tr><td>Memory/vector</td><td>1 KB</td><td>6–12 KB</td></tr><tr><td>Search latency</td><td>Faster ANN</td><td>Slower unless quantized</td></tr><tr><td>Retrieval recall</td><td>Lower for subtle queries</td><td>Higher</td></tr><tr><td>Cost to store 10M</td><td>~5 GB</td><td>~30–60 GB</td></tr></table></div>
+<p><strong>When embeddings fail:</strong> Negation ("not profitable" and "profitable" are close), exact-match requirements ("invoice #A-9912"), temporal precision ("2024 Q3 report" vs "2023 Q3 report"), and highly specialized domain vocabulary (e.g., chemical formula strings) — hybrid search (dense + BM25) patches most of these.</p></div></div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="accordion">
+    <div class="accordion-header">
+      <span class="accordion-title">🎙 Verbal Script (3–5 min)</span>
+      <span class="accordion-chevron">▾</span>
+    </div>
+    <div class="accordion-body">
+      <div class="script-block"><div class="script-label">Opening (30s)</div><p>"Embeddings are the representation layer that makes semantic search possible. The core idea is simple: take any text, pass it through an encoder model, and get back a dense vector — typically 768 to 3,072 floating-point numbers — where the geometry of that space reflects semantic meaning. 'Dog' and 'puppy' land close together; 'dog' and 'CPU' land far apart."</p></div>
+      <div class="script-block"><div class="script-label">Core explanation (2–3 min)</div><p>"Here's how it works mechanically. You tokenize your text — say a chunk from a PDF — pass it through a transformer encoder like <code>bge-large-en-v1.5</code> or OpenAI's <code>text-embedding-3-small</code>. The model's final hidden state, typically mean-pooled across tokens, becomes your embedding vector.</p>
+<p>Once you have embeddings, you compare them using cosine similarity: normalize each vector to unit length, then take the dot product. Vectors that point in the same direction — same semantic content — score near 1.0; orthogonal vectors score near 0.</p>
+<p>But brute-force comparison at scale doesn't work. If you have 10 million documents, checking each one takes hundreds of milliseconds. That's where ANN indexes come in — HNSW builds a hierarchical graph structure so you can navigate from coarse-grained clusters down to exact neighbors in O(log n) hops. Pinecone and Weaviate use HNSW under the hood; FAISS supports both HNSW and IVF and is what you'd use if you're self-hosting."</p></div>
+      <div class="script-block"><div class="script-label">Tradeoff / production angle (1 min)</div><p>"The biggest production gotcha I flag is <strong>embedding drift</strong>. If you swap your embedding model — say you go from <code>ada-002</code> to <code>text-embedding-3-large</code> because recall improved — every vector in your index is now in a different space. They're literally incompatible. You have to re-embed your entire corpus and rebuild the index. For a 10M document corpus this might cost $65 and 2 hours of batch processing — manageable — but you need a plan for the cutover: dual-index serving during migration, or a maintenance window.</p>
+<p>The other failure mode is that embeddings don't handle negation, exact-match needs, or very domain-specific jargon well. That's why in production I usually pair dense embeddings with BM25 sparse retrieval — hybrid search — and let a cross-encoder reranker pick the final top-k."</p></div>
+      <div class="script-block"><div class="script-label">Wrap-up (30s)</div><p>"So: embeddings = compressed semantic representations produced by encoder models, compared with cosine similarity, indexed with HNSW or IVF for sub-100ms ANN search, stored in a vector DB. The key engineering decisions are model choice, dimensionality vs cost tradeoff, distance metric, and your re-embedding migration plan. Happy to go deeper on any of those — especially how they slot into a RAG pipeline."</p></div>
+    </div>
+  </div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="section-label">Pitfalls</div>
+  <div class="pitfall-card">
+    <div class="pitfall-mistake"><strong>✗ Mistake</strong> Describing embeddings as &quot;word2vec or one-hot encodings&quot;</div>
+    <div class="pitfall-better"><strong>✓ Better</strong> Clarify that modern embeddings come from transformer encoders (BERT-style or LLM-based), capture full-sentence context (not just token-level), and the vector space encodes semantic similarity rather than word co-occurrence statistics.</div>
+  </div>
+  <div class="pitfall-card">
+    <div class="pitfall-mistake"><strong>✗ Mistake</strong> Saying &quot;we compare embeddings with Euclidean distance&quot; without qualification</div>
+    <div class="pitfall-better"><strong>✓ Better</strong> Explain that <strong>cosine similarity is standard</strong> for text (normalizes magnitude), dot product is used when magnitude encodes relevance (recommendation), and L2/Euclidean is correct for quantized vectors or image embeddings where magnitude matters; choosing the wrong metric quietly destroys retrieval recall.</div>
+  </div>
+  <div class="pitfall-card">
+    <div class="pitfall-mistake"><strong>✗ Mistake</strong> Treating embedding models as interchangeable/plug-and-play</div>
+    <div class="pitfall-better"><strong>✓ Better</strong> Flag that <strong>switching embedding models invalidates all stored indexes</strong> (incompatible vector spaces), so model choice is a schema-level architectural commitment; always benchmark on your domain before committing.
+
+---</div>
+  </div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="section-label">Related Questions</div>
+  <div class="related-pills">
+    <div class="related-pill" data-slug="01-041">
+      <span class="related-pill-icon">→</span>
+      <div class="related-pill-text">
+        <div class="related-pill-q">Q41: What are embeddings, and how are they used in RAG?</div>
+        <div class="related-pill-rel">Application-layer follow-up — same concept applied to retrieval pipeline</div>
+      </div>
+    </div>
+    <div class="related-pill" data-slug="01-042">
+      <span class="related-pill-icon">→</span>
+      <div class="related-pill-text">
+        <div class="related-pill-q">Q42: Semantic search vs keyword search?</div>
+        <div class="related-pill-rel">Natural follow-up — when dense embeddings win vs BM25</div>
+      </div>
+    </div>
+    <div class="related-pill" data-slug="01-014">
+      <span class="related-pill-icon">→</span>
+      <div class="related-pill-text">
+        <div class="related-pill-q">Q14: How does chunking happen?</div>
+        <div class="related-pill-rel">Prerequisite — what gets embedded and how chunk size affects embedding quality</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="section-label">One-liner recall</div>
+  <div class="oneliner-box">
+    <div class="oneliner-label">▸ Reconstruct from memory</div>
+    <div class="oneliner-text" data-text="Embeddings are fixed-size dense vectors produced by transformer encoders that encode semantic meaning as geometry — similar text lands nearby — enabling ANN search via HNSW/IVF indexes in systems like Pinecone or FAISS, with the key engineering gotcha that switching embedding models invalidates every stored vector.">Embeddings are fixed-size dense vectors produced by transformer encoders that encode semantic meaning as geometry — similar text lands nearby — enabling ANN search via HNSW/IVF indexes in systems like Pinecone or FAISS, with the key engineering gotcha that switching embedding models invalidates every stored vector.</div>
+  </div>
+</div>

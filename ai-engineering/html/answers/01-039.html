@@ -1,0 +1,133 @@
+<div class="answer-header reveal">
+  <div class="answer-meta">
+    <span class="meta-badge meta-category">01-llm-fundamentals</span>
+    <span class="meta-badge meta-num">Q039</span>
+    <span class="meta-badge meta-status-review">review</span>
+  </div>
+  <h1 class="answer-title">What is tokenization, and why does it matter for cost and context windows?</h1>
+</div>
+
+<div class="answer-section reveal">
+  <div class="accordion">
+    <div class="accordion-header">
+      <span class="accordion-title">⟁ Framing — Why this is asked</span>
+      <span class="accordion-chevron">▾</span>
+    </div>
+    <div class="accordion-body">
+      <div class="framing-grid">
+        <div><div class="framing-card">
+          <div class="framing-card-title">Why asked</div>
+          <p style="font-size:13.5px;line-height:1.7;color:var(--text-dim)">This is the #1 screening question for tokenization because it pivots from &quot;what is it?&quot; (Q3) to the <em>engineering consequences</em>. Interviewers want to know whether you can reason about billing, context budget, and how token count affects architectural choices — not just recite BPE mechanics. Candidates who can quantify &quot;my prompt is 800 tokens, my retrieved context is 2 000 tokens, and I have 1 200 tokens left for the answer&quot; show real production thinking.</p>
+        </div></div>
+        <div><div class="framing-card">
+          <div class="framing-card-title">Trigger phrases</div>
+          <div class="trigger-list">
+              <div class="trigger-phrase">What is tokenization, and why does it matter for cost and context windows?</div>
+              <div class="trigger-phrase">How do tokens translate to cost?</div>
+              <div class="trigger-phrase">How do you estimate the number of tokens in a request?</div>
+              <div class="trigger-phrase">Why did my context window fill up faster than expected?</div>
+          </div>
+        </div></div>
+      </div>
+      <div class="tests-block">
+        <span style="font-family:var(--mono);font-size:10px;letter-spacing:0.1em;text-transform:uppercase;color:var(--purple);margin-right:8px">Tests:</span>Ability to translate low-level text-preprocessing concepts into concrete cost-and-capacity engineering decisions.
+
+---
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="section-label">Concept</div>
+  <div class="concept-block"><p>A <strong>token</strong> is the atomic unit an LLM reads and prices: roughly 3–4 characters of English, or ~0.75 words. Modern APIs (OpenAI, Anthropic, Google) charge <strong>per input token + per output token</strong>, and context windows are measured in tokens, not words or characters. Every engineering decision — prompt length, chunk size, retrieval top-k, output length — is fundamentally a token budget problem.</p></div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="section-label">Mechanism</div>
+  <div class="card"><p><strong>How tokenization works (brief):</strong></p>
+<ul class="styled-list"><li>BPE (GPT family via <code>tiktoken</code>) or SentencePiece splits text into frequent subword units.</li><li>Rule of thumb: <strong>1 000 English words ≈ 750 tokens</strong>; code, JSON, and non-Latin scripts tokenize less efficiently (1:1 to 2:1 ratio).</li><li><code>tiktoken</code> (Python) counts tokens exactly before sending a request — always use it or <code>cl100k_base</code> encoder to pre-validate.</li></ul>
+<p><strong>Cost impact:</strong></p>
+<div class="table-wrap"><table class="data-table"><tr><th>Component</th><th>Typical token count</th><th>GPT-4o cost (Jun 2026)</th></tr><tr><td>System prompt</td><td>300–800</td><td>$0.0015–$0.004</td></tr><tr><td>Retrieved context (top-5 chunks @ 400 tok each)</td><td>2 000</td><td>$0.010</td></tr><tr><td>User query</td><td>50–200</td><td>~$0.001</td></tr><tr><td>LLM answer</td><td>200–800</td><td>$0.010–$0.040 (output 5× more expensive)</td></tr><tr><td><strong>Total per query</strong></td><td><strong>~3 000</strong></td><td><strong>~$0.025</strong></td></tr></table></div>
+<p>At 1 M queries/day that's <strong>$25 000/day</strong> from token cost alone — making prompt compression, caching, and model tiering critical levers.</p>
+<p><strong>Context window impact:</strong></p>
+<ul class="styled-list"><li>GPT-4o: 128 K tokens max. Sounds large; a 300-page PDF ≈ 75 000 tokens, leaving little room for retrieved chunks + answer headroom.</li><li>"Lost in the middle" degrades when context > ~32 K tokens — relevant content placed in the middle of a huge context is frequently ignored.</li><li>Practical budget allocation for RAG: system prompt ≤ 10%, retrieved context ≤ 60%, query + answer headroom ≥ 30%.</li></ul>
+<p><strong>Key engineering levers:</strong></p>
+<ol class="mechanism-steps"><li><strong>Measure before you build</strong> — run <code>tiktoken.encode(prompt)</code> in unit tests; set hard limits.</li><li><strong>Compress prompts</strong> — LLMLingua / Selective Context can cut 2–3× with minimal quality loss.</li><li><strong>Right-size chunks</strong> — 400-token chunks balance context richness vs. context pollution.</li><li><strong>Cache repeated context</strong> — semantic cache (GPTCache, Redis) serves repeated queries without re-billing input tokens.</li><li><strong>Model tier</strong> — route short/simple queries to Claude Haiku or GPT-4o-mini (10–20× cheaper per token).</li></ol></div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="section-label">Example / Tradeoff</div>
+  <div class="card card-accent"><div class="rich-text"><p>A legal-document RAG system chunking 300 K contracts at 2 000 tokens each: embedding every chunk costs <strong>600 M tokens</strong> at ~$0.13/1 M = <strong>$78</strong> one-time indexing; querying with top-5 retrieval adds 10 000 tokens/query — at $0.010/query × 100 K queries/day = <strong>$1 000/day</strong> in input tokens before generation. Switching to <code>text-embedding-3-small</code> (5× cheaper) for indexing and caching the top-20% of repeated queries with Redis reduces that to <strong>~$300/day</strong> with the same answer quality — a 70% cost reduction purely from token economics.</p></div></div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="accordion">
+    <div class="accordion-header">
+      <span class="accordion-title">🎙 Verbal Script (3–5 min)</span>
+      <span class="accordion-chevron">▾</span>
+    </div>
+    <div class="accordion-body">
+      <div class="script-block"><div class="script-label">Opening (30s)</div><p>"Great question — tokenization is the billing and capacity unit of every LLM call. I'd frame my answer in two parts: how tokens relate to cost, and how they constrain context window budgeting, because both have direct architectural consequences."</p></div>
+      <div class="script-block"><div class="script-label">Core explanation (2–3 min)</div><p>"A token is roughly 3–4 characters of English text — so 1 000 words is about 750 tokens. Modern LLM APIs charge separately for input and output tokens, and output is typically 3–5× more expensive per token than input. For GPT-4o, input is about $5/1 M tokens and output is $15/1 M. That sounds cheap, but at a million queries a day with a 3 000-token average request, you're looking at $15–25 K per day just in token costs.</p>
+<p>The context window constraint is the other side. GPT-4o gives you 128 K tokens, which sounds huge, but a system prompt plus top-5 retrieved chunks plus the user query can easily consume 3–4 K tokens before the model writes a single word. If you're doing summarization over a 300-page PDF, you've burned 75 K tokens just on the document.</p>
+<p>The key tool I use is <code>tiktoken</code> — I count tokens in unit tests and set hard budget limits per component: system prompt gets 10%, retrieved context gets 60%, and the rest is answer headroom. This prevents silent over-runs at runtime."</p></div>
+      <div class="script-block"><div class="script-label">Tradeoff / production angle (1 min)</div><p>"The main tradeoff is context richness vs. cost. Adding more retrieved chunks improves answer quality up to a point, then the 'lost in the middle' effect kicks in — content placed in the middle of a long context gets underweighted. So there's a sweet spot around 4–8 chunks of 400 tokens each. Beyond that you're paying for context that hurts, not helps.</p>
+<p>For cost optimization, I layer three levers: semantic caching to skip re-computation on repeated queries, model tiering to route simple queries to smaller models, and prompt compression (LLMLingua) to shrink system prompts 2–3× with minimal quality degradation."</p></div>
+      <div class="script-block"><div class="script-label">Wrap-up (30s)</div><p>"So tokenization matters because tokens are the billing unit, the context budget, and a proxy for latency. Any AI engineer needs to be able to estimate, measure, and optimize token usage before shipping to production. Happy to go deeper on any of these levers."</p></div>
+    </div>
+  </div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="section-label">Pitfalls</div>
+  <div class="pitfall-card">
+    <div class="pitfall-mistake"><strong>✗ Mistake</strong> Saying &quot;tokens are just words&quot; and not knowing the 1 000 words ≈ 750 tokens rule</div>
+    <div class="pitfall-better"><strong>✓ Better</strong> cite the rough ratio, explain it varies (code/JSON/non-Latin are worse), and mention <code>tiktoken</code> for exact counts.</div>
+  </div>
+  <div class="pitfall-card">
+    <div class="pitfall-mistake"><strong>✗ Mistake</strong> Treating the context window as &quot;basically unlimited&quot; once you have 128 K tokens</div>
+    <div class="pitfall-better"><strong>✓ Better</strong> explain that cost scales linearly with context, output quality degrades with very long context (&quot;lost in the middle&quot;), and TTFT (time to first token) grows with prefill size.</div>
+  </div>
+  <div class="pitfall-card">
+    <div class="pitfall-mistake"><strong>✗ Mistake</strong> Forgetting that output tokens are more expensive than input tokens</div>
+    <div class="pitfall-better"><strong>✓ Better</strong> explicitly distinguish input vs. output pricing and note that long-form generation (summaries, reports) is the main cost driver, not the prompt.
+
+---</div>
+  </div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="section-label">Related Questions</div>
+  <div class="related-pills">
+    <div class="related-pill" data-slug="01-003">
+      <span class="related-pill-icon">→</span>
+      <div class="related-pill-text">
+        <div class="related-pill-q">Q3: What is tokenization and how does it affect LLM performance?</div>
+        <div class="related-pill-rel">Deeper dive into BPE mechanics and domain tokenization failures — prerequisite</div>
+      </div>
+    </div>
+    <div class="related-pill" data-slug="01-005">
+      <span class="related-pill-icon">→</span>
+      <div class="related-pill-text">
+        <div class="related-pill-q">Q5: Explain context windows and their limitations</div>
+        <div class="related-pill-rel">Context window capacity and lost-in-the-middle — direct follow-up</div>
+      </div>
+    </div>
+    <div class="related-pill" data-slug="01-009">
+      <span class="related-pill-icon">→</span>
+      <div class="related-pill-text">
+        <div class="related-pill-q">Q9: What is KV cache? How does it help in LLM inference?</div>
+        <div class="related-pill-rel">KV cache as the mechanism by which token prefill cost is amortized in multi-turn chats</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="section-label">One-liner recall</div>
+  <div class="oneliner-box">
+    <div class="oneliner-label">▸ Reconstruct from memory</div>
+    <div class="oneliner-text" data-text="Tokens are both the billing unit (input ~$5/1 M, output ~$15/1 M for GPT-4o) and the context budget — always count tokens with `tiktoken` before building, budget your context window (10% system / 60% retrieved / 30% answer headroom), and optimize via caching, compression, and model tiering.">Tokens are both the billing unit (input ~$5/1 M, output ~$15/1 M for GPT-4o) and the context budget — always count tokens with `tiktoken` before building, budget your context window (10% system / 60% retrieved / 30% answer headroom), and optimize via caching, compression, and model tiering.</div>
+  </div>
+</div>

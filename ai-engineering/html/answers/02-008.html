@@ -1,0 +1,142 @@
+<div class="answer-header reveal">
+  <div class="answer-meta">
+    <span class="meta-badge meta-category">02-rag-systems</span>
+    <span class="meta-badge meta-num">Q008</span>
+    <span class="meta-badge meta-status-review">review</span>
+  </div>
+  <h1 class="answer-title">How handle hallucination when no information is found in context?</h1>
+</div>
+
+<div class="answer-section reveal">
+  <div class="accordion">
+    <div class="accordion-header">
+      <span class="accordion-title">⟁ Framing — Why this is asked</span>
+      <span class="accordion-chevron">▾</span>
+    </div>
+    <div class="accordion-body">
+      <div class="framing-grid">
+        <div><div class="framing-card">
+          <div class="framing-card-title">Why asked</div>
+          <p style="font-size:13.5px;line-height:1.7;color:var(--text-dim)">The interviewer is probing whether you understand a critical RAG failure mode: the model confidently fabricating an answer when retrieved context contains nothing relevant. This tests production instinct — specifically, whether you know how to make a system abstain gracefully rather than hallucinate fluently. It also probes your layered defense mentality (retrieval quality → generation constraints → post-processing → monitoring).</p>
+        </div></div>
+        <div><div class="framing-card">
+          <div class="framing-card-title">Trigger phrases</div>
+          <div class="trigger-list">
+              <div class="trigger-phrase">What happens when your RAG system can&#x27;t find the answer?</div>
+              <div class="trigger-phrase">How do you prevent confident wrong answers when the docs don&#x27;t cover the topic?</div>
+              <div class="trigger-phrase">The chatbot is hallucinating when no relevant context is retrieved — how do you fix it?</div>
+              <div class="trigger-phrase">How do you handle out-of-scope queries in a RAG chatbot?</div>
+          </div>
+        </div></div>
+      </div>
+      <div class="tests-block">
+        <span style="font-family:var(--mono);font-size:10px;letter-spacing:0.1em;text-transform:uppercase;color:var(--purple);margin-right:8px">Tests:</span>Ability to design a multi-layer abstention strategy — retrieval-side confidence thresholds, generation-side grounding prompts, and post-generation faithfulness checks — rather than treating hallucination as a single-point problem.
+
+---
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="section-label">Concept</div>
+  <div class="concept-block"><p>When retrieved context contains no relevant information, an LLM without explicit constraints will "fill the gap" by generating plausible-sounding but fabricated text — the most damaging form of hallucination because it is fluent and confident. The fix is a <strong>defense-in-depth stack</strong>: (1) detect low-relevance retrieval before generation, (2) constrain the generator to cite-only answers, (3) validate outputs against the context post-generation, and (4) monitor abstention and hallucination rates in production.</p></div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="section-label">Mechanism</div>
+  <div class="card"><p><strong>Layer 1 — Retrieval confidence gating</strong> Before passing chunks to the LLM, compute a relevance score between the query and top-retrieved chunks. Two approaches:</p>
+<ul class="styled-list"><li><strong>Bi-encoder cosine similarity threshold:</strong> if <code>max(cosine_similarity(query_embedding, chunk_embeddings)) < θ</code> (e.g. θ = 0.70), skip generation and return a canned "I don't have information on that" response. Fast and cheap — no LLM call.</li><li><strong>Cross-encoder reranker score:</strong> if the cross-encoder relevance score for the top result falls below a calibrated threshold (e.g. 3.5 / 10 for ms-marco-MiniLM-L-6-v2), treat retrieval as failed.</li></ul>
+<p><strong>Layer 2 — Grounding prompt (generation constraint)</strong> When retrieval passes the threshold, still constrain generation:</p>
+<div class="code-block-wrap"><pre class="code-block"><code>System: Answer ONLY using the provided context. If the context does not contain 
+sufficient information to answer the question, say exactly: 
+&quot;I don&#x27;t have enough information to answer this.&quot; Do not infer or extrapolate.
+
+Context:
+{retrieved_chunks}
+
+Question: {user_query}</code></pre><button class="copy-btn">copy</button></div>
+<p>Set <code>temperature=0</code> for maximum determinism. The explicit refusal instruction shifts the model's prior toward abstention when evidence is thin.</p>
+<p><strong>Layer 3 — Post-generation faithfulness gate</strong> Run a faithfulness check (NLI-based or LLM-as-judge) on the generated answer vs. the retrieved context:</p>
+<ul class="styled-list"><li><strong>RAGAS <code>faithfulness</code> score:</strong> decompose the answer into atomic claims, verify each claim is entailed by the context. If score < 0.8, replace the response with the abstention message.</li><li><strong>NLI model (DeBERTa-NLI):</strong> classify each claim as <code>entailed</code> / <code>neutral</code> / <code>contradiction</code>; flag any non-entailed claims.</li><li>Cost: ~0.5–2ms for NLI, ~$0.001/check for LLM-as-judge on GPT-4o-mini.</li></ul>
+<p><strong>Layer 4 — Production monitoring</strong> Track the abstention rate and false-abstention rate in your observability stack (LangSmith, Arize, or custom):</p>
+<ul class="styled-list"><li><strong>Abstention rate too high (>30%):</strong> retrieval or threshold calibration is wrong — recalibrate θ or improve chunking/indexing.</li><li><strong>Abstention rate too low (<2%):</strong> the model is answering out-of-scope queries — check faithfulness scores and lower the threshold.</li><li><strong>Hallucination rate in golden set:</strong> run the full pipeline on a 200-question golden dataset weekly; any answer not supported by cited chunks counts as a hallucination.</li></ul></div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="section-label">Example / Tradeoff</div>
+  <div class="card card-accent"><div class="rich-text"><p>A customer support RAG bot for a SaaS product gets queries about competitor features — completely outside its knowledge base. Without gating, GPT-4 would invent plausible-sounding competitor comparisons. Stack deployed:</p>
+<ol class="mechanism-steps"><li>Cosine threshold (θ = 0.72) catches 85% of out-of-scope queries before the LLM call → saves ~$0.03/query.</li><li>Grounding prompt + <code>temperature=0</code> handles the remaining 15% where partial context exists.</li><li>RAGAS faithfulness gate catches residual hallucinations; on 500 golden evals, hallucination rate dropped from 12% to 1.4%.</li></ol>
+<p><strong>Tradeoff:</strong> Strict thresholds increase false abstentions (frustrating users with "I don't know" when the answer is actually in the KB). Tune θ on a held-out validation set; monitor false-abstention separately from hallucination rate.</p></div></div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="accordion">
+    <div class="accordion-header">
+      <span class="accordion-title">🎙 Verbal Script (3–5 min)</span>
+      <span class="accordion-chevron">▾</span>
+    </div>
+    <div class="accordion-body">
+      <div class="script-block"><div class="script-label">Opening (30s)</div><p>"This is one of the highest-risk failure modes in production RAG — when the model has nothing relevant to ground on, it fills the gap with confident hallucinations. I'd approach it as a defense-in-depth stack rather than a single prompt fix."</p></div>
+      <div class="script-block"><div class="script-label">Core explanation (2–3 min)</div><p>"The first layer is retrieval-side confidence gating. Before I even call the LLM, I compute the cosine similarity between the query embedding and the top retrieved chunk embeddings. If the maximum similarity falls below a calibrated threshold — say 0.70 — I short-circuit and return a canned 'I don't have information on that' response. No LLM call, no hallucination risk, and I save the inference cost.</p>
+<p>For queries that pass the threshold, layer two is the generation constraint. The system prompt explicitly says: 'Answer only from the provided context. If insufficient, say exactly: I don't have enough information.' I also set temperature to zero for determinism. This shifts the model's prior toward abstention on thin evidence.</p>
+<p>Layer three is a post-generation faithfulness gate. I use RAGAS faithfulness to decompose the answer into atomic claims and verify each is entailed by the retrieved context. If the faithfulness score drops below 0.8, I swap the answer for the abstention message. For lower-latency setups I use a DeBERTa NLI model — a few milliseconds versus a full LLM call.</p>
+<p>Finally, in production I monitor the abstention rate as a KPI. An abstention rate over 30% usually means my retrieval threshold is too strict or my index has coverage gaps. Under 2% might mean the model is answering out-of-scope questions it shouldn't. I calibrate on a golden validation set."</p></div>
+      <div class="script-block"><div class="script-label">Tradeoff / production angle (1 min)</div><p>"The key tension is precision versus recall on abstention: if I set the threshold too high, I frustrate users who ask legitimate questions where the answer is in the KB but retrieved at low cosine similarity — maybe because of vocabulary mismatch or a poor chunk. If I set it too low, hallucinations slip through. The right answer is to tune the threshold on a held-out set and track both rates separately. Hybrid retrieval also helps — BM25 keyword matching catches exact-match queries that dense retrieval scores low on, reducing false abstentions."</p></div>
+      <div class="script-block"><div class="script-label">Wrap-up (30s)</div><p>"So the architecture is: retrieval threshold gate → grounding prompt at T=0 → faithfulness post-check → production monitoring of abstention and hallucination rates. Happy to go deeper on any layer — threshold calibration, the faithfulness check implementation, or the monitoring pipeline."</p></div>
+    </div>
+  </div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="section-label">Pitfalls</div>
+  <div class="pitfall-card">
+    <div class="pitfall-mistake"><strong>✗ Mistake</strong> Saying &quot;just add &#x27;if you don&#x27;t know, say so&#x27; to the system prompt&quot; as the complete solution</div>
+    <div class="pitfall-better"><strong>✓ Better</strong> Explain that LLMs are trained to be helpful and will override soft instructions when context is partially relevant; you need a retrieval-side threshold <em>before</em> generation plus a post-generation faithfulness gate, not just a prompt instruction.</div>
+  </div>
+  <div class="pitfall-card">
+    <div class="pitfall-mistake"><strong>✗ Mistake</strong> Setting a single fixed threshold (e.g. &quot;I&#x27;ll use 0.7&quot;) without mentioning calibration</div>
+    <div class="pitfall-better"><strong>✓ Better</strong> &quot;I calibrate θ on a validation set of known in-scope and out-of-scope queries, tuning to maximize F1 on abstention decisions; typical range is 0.65–0.80 depending on the embedding model and domain.&quot;</div>
+  </div>
+  <div class="pitfall-card">
+    <div class="pitfall-mistake"><strong>✗ Mistake</strong> Treating hallucination rate and abstention rate as the same metric</div>
+    <div class="pitfall-better"><strong>✓ Better</strong> &quot;I track both separately: hallucination rate (answers that are wrong/not grounded) and abstention rate (legitimate questions the system refuses to answer). Optimizing one in isolation hurts the other.&quot;
+
+---</div>
+  </div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="section-label">Related Questions</div>
+  <div class="related-pills">
+    <div class="related-pill" data-slug="02-013">
+      <span class="related-pill-icon">→</span>
+      <div class="related-pill-text">
+        <div class="related-pill-q">Q13: Common RAG failure points — how debug them?</div>
+        <div class="related-pill-rel">Parent: hallucination with missing context is one of the six main failure modes</div>
+      </div>
+    </div>
+    <div class="related-pill" data-slug="02-032">
+      <span class="related-pill-icon">→</span>
+      <div class="related-pill-text">
+        <div class="related-pill-q">Q32: Hallucination when retrieved context is irrelevant or absent</div>
+        <div class="related-pill-rel">Near-duplicate from the failure modes section — deeper implementation detail</div>
+      </div>
+    </div>
+    <div class="related-pill" data-slug="01-043">
+      <span class="related-pill-icon">→</span>
+      <div class="related-pill-text">
+        <div class="related-pill-q">Q43: How do you reduce hallucinations in LLM outputs?</div>
+        <div class="related-pill-rel">Cross-category: general hallucination mitigation stack (includes non-RAG cases)</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="section-label">One-liner recall</div>
+  <div class="oneliner-box">
+    <div class="oneliner-label">▸ Reconstruct from memory</div>
+    <div class="oneliner-text" data-text="Layer the defense: cosine-similarity retrieval gate (θ ≈ 0.70) → grounding prompt + T=0 → RAGAS faithfulness post-check → production monitoring of abstention vs. hallucination rates.">Layer the defense: cosine-similarity retrieval gate (θ ≈ 0.70) → grounding prompt + T=0 → RAGAS faithfulness post-check → production monitoring of abstention vs. hallucination rates.</div>
+  </div>
+</div>

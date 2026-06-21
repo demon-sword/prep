@@ -1,0 +1,131 @@
+<div class="answer-header reveal">
+  <div class="answer-meta">
+    <span class="meta-badge meta-category">02-rag-systems</span>
+    <span class="meta-badge meta-num">Q033</span>
+    <span class="meta-badge meta-status-review">review</span>
+  </div>
+  <h1 class="answer-title">Stale indexes, embedding drift</h1>
+</div>
+
+<div class="answer-section reveal">
+  <div class="accordion">
+    <div class="accordion-header">
+      <span class="accordion-title">⟁ Framing — Why this is asked</span>
+      <span class="accordion-chevron">▾</span>
+    </div>
+    <div class="accordion-body">
+      <div class="framing-grid">
+        <div><div class="framing-card">
+          <div class="framing-card-title">Why asked</div>
+          <p style="font-size:13.5px;line-height:1.7;color:var(--text-dim)">This question probes production RAG operational maturity — most candidates design the happy-path pipeline but ignore what happens over time: source documents change, new content is added, and the embedding model itself may be swapped. Weak candidates treat the vector index as a write-once artifact; strong candidates treat it as a live data product with freshness SLOs and migration playbooks.</p>
+        </div></div>
+        <div><div class="framing-card">
+          <div class="framing-card-title">Trigger phrases</div>
+          <div class="trigger-list">
+              <div class="trigger-phrase">What happens to your RAG system when documents are updated or deleted?</div>
+              <div class="trigger-phrase">How do you keep your vector index fresh as your knowledge base changes?</div>
+              <div class="trigger-phrase">What is embedding drift and how do you handle it?</div>
+              <div class="trigger-phrase">How would you migrate to a new embedding model without downtime?</div>
+          </div>
+        </div></div>
+      </div>
+      <div class="tests-block">
+        <span style="font-family:var(--mono);font-size:10px;letter-spacing:0.1em;text-transform:uppercase;color:var(--purple);margin-right:8px">Tests:</span>Operational depth: ability to design index lifecycle management — incremental updates, deletion handling, drift detection, and zero-downtime model migrations.
+
+---
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="section-label">Concept</div>
+  <div class="concept-block"><p><strong>Stale indexes</strong> occur when the vector store falls out of sync with the source of truth: documents are updated, deleted, or added but the index isn't refreshed, causing the LLM to generate answers from outdated or irrelevant chunks. <strong>Embedding drift</strong> is a related problem: when you retrain or swap the embedding model, existing vectors are no longer comparable to new query embeddings encoded by the updated model, silently degrading retrieval quality.</p></div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="section-label">Mechanism</div>
+  <div class="card"><p><strong>Staleness — four root causes and fixes:</strong></p>
+<div class="table-wrap"><table class="data-table"><tr><th>Root cause</th><th>Symptom</th><th>Fix</th></tr><tr><td>New docs not indexed</td><td>Recall gaps on recent content</td><td>CDC pipeline (Debezium/Kafka) triggers re-ingestion on source writes</td></tr><tr><td>Updated docs with old chunks</td><td>LLM returns outdated information</td><td>Chunk-level content hash → detect delta → delete old chunks, insert new</td></tr><tr><td>Deleted docs still indexed</td><td>Ghost answers from removed content</td><td>Soft-delete flag + nightly purge job; use doc_id metadata filter</td></tr><tr><td>Embedding model swapped mid-index</td><td>Cosine similarity breaks (query vs. index encoded by different models)</td><td>Blue-green index migration — build full new index in parallel, cutover atomically</td></tr></table></div>
+<p><strong>Incremental update pattern (production):</strong></p>
+<ol class="mechanism-steps"><li>Source-of-truth systems emit events: Confluence webhook, S3 event, Postgres CDC (Debezium → Kafka topic).</li><li>Consumer computes SHA-256 hash of each document at ingest. On update, compare hash — skip if unchanged.</li><li>On delta: delete all chunks for <code>doc_id</code> from vector store (Pinecone <code>delete(filter={"doc_id": "..."})</code>, Qdrant <code>delete_points</code>), re-chunk and re-embed, upsert new chunks with updated <code>updated_at</code> metadata.</li><li>Monitor <code>index_lag_seconds</code> = now − max(<code>indexed_at</code>) per data source. Alert if lag > SLO (e.g., 15 min for real-time, 24 h for batch knowledge bases).</li></ol>
+<p><strong>Embedding drift detection and migration:</strong></p>
+<ol class="mechanism-steps"><li>Maintain a golden retrieval eval set (200–500 queries with expected doc_ids).</li><li>After any embedding model change, run eval against old index — track Recall@5 regression.</li><li>Zero-downtime migration: build new index in parallel (shadow index), route 5% of traffic via A/B shadow queries, measure Recall@5 and latency. When new index is ≥ baseline: atomic DNS/client cutover. Keep old index for 48 h rollback window.</li><li>Never mix encoders: all chunks in a live index must use the same model version. Tag chunks with <code>embedding_model</code> metadata field.</li></ol></div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="section-label">Example / Tradeoff</div>
+  <div class="card card-accent"><div class="rich-text"><p><strong>Concrete incident pattern:</strong> A legal-tech RAG system embedded 50K contracts using <code>text-embedding-ada-002</code>. Six months later they upgraded to <code>text-embedding-3-large</code> for 15% better Recall@5 on their golden set. Team swapped the query encoder without migrating the index. Cosine similarity between new query vectors and old ada-002 chunk vectors became meaningless — top-k results were near-random, deflection rate collapsed from 72% → 31% overnight. Fix: rebuild full index with <code>text-embedding-3-large</code> over a weekend, shadow-test, then cutover.</p>
+<p><strong>Cost of full rebuild vs. incremental:</strong></p>
+<ul class="styled-list"><li>Full rebuild: simple but expensive — 50K contracts × 10 chunks × 1536 dims × $0.00002/1K tokens ≈ $40; fine for a weekend migration.</li><li>Incremental CDC: ~$0/day ongoing but requires operational complexity (Kafka, hash tracking, deletion logic). Worth it for large corpora (>1M docs) or high-update-frequency sources.</li></ul></div></div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="accordion">
+    <div class="accordion-header">
+      <span class="accordion-title">🎙 Verbal Script (3–5 min)</span>
+      <span class="accordion-chevron">▾</span>
+    </div>
+    <div class="accordion-body">
+      <div class="script-block"><div class="script-label">Opening (30s)</div><p>"Stale indexes and embedding drift are the two biggest silent killers in production RAG systems. They don't throw errors — they just make the system give increasingly wrong answers. I think about them as separate problems: staleness is about keeping the index in sync with your source of truth, and drift is about keeping the index consistent when your embedding model changes."</p></div>
+      <div class="script-block"><div class="script-label">Core explanation (2–3 min)</div><p>"For staleness, the key is treating document updates as events rather than polling for changes. I'd wire up a CDC pipeline — Debezium on Postgres, or webhooks from Confluence — feeding a Kafka topic that a consumer listens to. The consumer computes a SHA-256 hash of each document at ingest and stores it alongside the chunks. On an update event, it compares the new hash, and if there's a delta: delete all chunks for that doc_id from the vector store, re-chunk, re-embed, and upsert fresh chunks with an updated <code>indexed_at</code> timestamp. I also track <code>index_lag_seconds</code> — the difference between now and the most recent <code>indexed_at</code> per data source — and alert if it exceeds the SLO. For a real-time support KB that's 15 minutes; for a static document archive that's 24 hours.</p>
+<p>For deleted documents: if a doc gets removed from the source, the old chunks will keep surfacing ghost answers. I handle this with a soft-delete flag in metadata — mark <code>deleted=true</code>, filter it from retrieval immediately, and run a nightly hard-delete purge from the vector store.</p>
+<p>For embedding drift: the golden rule is that every chunk in a live index must be encoded by the same model version. I tag every chunk with an <code>embedding_model</code> field. When we need to upgrade — say from <code>text-embedding-ada-002</code> to <code>text-embedding-3-large</code> — I do a blue-green migration: build the new index in parallel, shadow-test 5% of live traffic against it while comparing Recall@5 on a golden eval set. When the new index meets or exceeds baseline, I do an atomic cutover and keep the old index live for 48 hours as a rollback window."</p></div>
+      <div class="script-block"><div class="script-label">Tradeoff / production angle (1 min)</div><p>"The main tradeoff is operational complexity vs. cost. Full nightly rebuilds are simple — no CDC plumbing, no deletion logic — but they're expensive and slow for large corpora. Incremental CDC is cheaper per day but needs Kafka, hash tracking, and deletion idempotency. I'd choose incremental for corpora over ~500K docs or sources that update hourly. Below that, a nightly rebuild with blue-green cutover is often simpler and good enough. The critical thing either way is running your golden eval set before and after any change — without that, you won't catch drift until users are complaining."</p></div>
+      <div class="script-block"><div class="script-label">Wrap-up (30s)</div><p>"The one-liner: treat your vector index like a live database, not a build artifact — instrument <code>index_lag</code>, enforce one-model-version-per-index, and never let a query encoder update outpace an index rebuild. Happy to dig into CDC architectures or zero-downtime migration patterns."</p></div>
+    </div>
+  </div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="section-label">Pitfalls</div>
+  <div class="pitfall-card">
+    <div class="pitfall-mistake"><strong>✗ Mistake</strong> Saying &quot;just rebuild the index nightly&quot; without addressing deletion — old chunks for deleted docs remain in the index and surface ghost answers indefinitely.</div>
+    <div class="pitfall-better"><strong>✓ Better</strong> Explain the soft-delete-then-hard-purge pattern and note that Pinecone&#x27;s <code>delete(filter={&quot;doc_id&quot;: &quot;...&quot;})</code> handles this.</div>
+  </div>
+  <div class="pitfall-card">
+    <div class="pitfall-mistake"><strong>✗ Mistake</strong> Describing embedding model upgrades as &quot;just swap the model and re-embed new queries&quot; without mentioning that the existing index was encoded by the old model — this silently breaks cosine similarity for all retrieval.</div>
+    <div class="pitfall-better"><strong>✓ Better</strong> Explain the blue-green index migration: build new index in parallel, shadow-test with A/B queries, atomic cutover with rollback window.</div>
+  </div>
+  <div class="pitfall-card">
+    <div class="pitfall-mistake"><strong>✗ Mistake</strong> Treating index lag as a binary flag (&quot;fresh or stale&quot;) rather than a metric with a per-source SLO.</div>
+    <div class="pitfall-better"><strong>✓ Better</strong> Describe monitoring <code>index_lag_seconds</code> per data source with source-specific SLO thresholds and alerting.
+
+---</div>
+  </div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="section-label">Related Questions</div>
+  <div class="related-pills">
+    <div class="related-pill" data-slug="02-007">
+      <span class="related-pill-icon">→</span>
+      <div class="related-pill-text">
+        <div class="related-pill-q">Q7: How efficiently generate and store embeddings for products and queries?</div>
+        <div class="related-pill-rel">Foundation: how the index is built and updated</div>
+      </div>
+    </div>
+    <div class="related-pill" data-slug="02-011">
+      <span class="related-pill-icon">→</span>
+      <div class="related-pill-text">
+        <div class="related-pill-q">Q11: How ensure quality of data the LLM interacts with?</div>
+        <div class="related-pill-rel">Broader data quality framework that staleness fits inside</div>
+      </div>
+    </div>
+    <div class="related-pill" data-slug="02-034">
+      <span class="related-pill-icon">→</span>
+      <div class="related-pill-text">
+        <div class="related-pill-q">Q34: Weak evaluation hiding retrieval failures</div>
+        <div class="related-pill-rel">Without a golden eval set you can&#x27;t detect drift-induced regression</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="section-label">One-liner recall</div>
+  <div class="oneliner-box">
+    <div class="oneliner-label">▸ Reconstruct from memory</div>
+    <div class="oneliner-text" data-text="Stale indexes are fixed with CDC-driven incremental updates + doc_id deletion; embedding drift is prevented by tagging chunks with model version and doing blue-green parallel rebuilds before any encoder upgrade.">Stale indexes are fixed with CDC-driven incremental updates + doc_id deletion; embedding drift is prevented by tagging chunks with model version and doing blue-green parallel rebuilds before any encoder upgrade.</div>
+  </div>
+</div>

@@ -1,0 +1,140 @@
+<div class="answer-header reveal">
+  <div class="answer-meta">
+    <span class="meta-badge meta-category">03-agents-tool-use</span>
+    <span class="meta-badge meta-num">Q008</span>
+    <span class="meta-badge meta-status-review">review</span>
+  </div>
+  <h1 class="answer-title">Walk through a production-ready agent architecture.</h1>
+</div>
+
+<div class="answer-section reveal">
+  <div class="accordion">
+    <div class="accordion-header">
+      <span class="accordion-title">⟁ Framing — Why this is asked</span>
+      <span class="accordion-chevron">▾</span>
+    </div>
+    <div class="accordion-body">
+      <div class="framing-grid">
+        <div><div class="framing-card">
+          <div class="framing-card-title">Why asked</div>
+          <p style="font-size:13.5px;line-height:1.7;color:var(--text-dim)">The interviewer is testing whether you have actually <em>shipped</em> an agent system — not just prototyped one with LangChain in a notebook. Production-ready implies you&#x27;ve reasoned about failure modes (infinite loops, cost explosions, tool errors), observability (how do you debug a multi-step trace?), safety (HITL, sandboxing, prompt injection), and rollback. Candidates who describe a bare ReAct loop with no guardrails signal prototype-level experience.</p>
+        </div></div>
+        <div><div class="framing-card">
+          <div class="framing-card-title">Trigger phrases</div>
+          <div class="trigger-list">
+              <div class="trigger-phrase">Walk me through how you&#x27;d architect an agent for production</div>
+              <div class="trigger-phrase">What does a production agent look like beyond the demo?</div>
+              <div class="trigger-phrase">How would you design an agentic system that&#x27;s actually reliable?</div>
+          </div>
+        </div></div>
+      </div>
+      <div class="tests-block">
+        <span style="font-family:var(--mono);font-size:10px;letter-spacing:0.1em;text-transform:uppercase;color:var(--purple);margin-right:8px">Tests:</span>Depth of production agent experience: can you describe every layer — loop, tools, memory, orchestration, observability, safety — with concrete tooling and tradeoffs?
+
+---
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="section-label">Concept</div>
+  <div class="concept-block"><p>A production-ready agent is a <strong>stateful perceive → plan → act → observe loop</strong> wrapped in an <strong>orchestration layer</strong> that enforces budget caps, HITL triggers, retry semantics, checkpointing, and distributed tracing — on top of the core ReAct or Plan-and-Execute reasoning pattern.</p></div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="section-label">Mechanism</div>
+  <div class="card"><p>The architecture has <strong>six layers</strong>, each with a distinct responsibility:</p>
+<p><strong>1. Interface / Session layer</strong></p>
+<ul class="styled-list"><li>Accepts user input; manages session ID and conversation state</li><li>Routes to agent loop; returns streamed SSE/WebSocket responses</li><li>Tools: FastAPI + Redis session store (TTL 30 min)</li></ul>
+<p><strong>2. Orchestrator / Loop controller</strong></p>
+<ul class="styled-list"><li>Runs the agent step loop; enforces hard limits</li><li>Config: <code>max_iterations=15</code>, <code>max_tokens_per_step=2048</code>, <code>wall_clock_timeout=120s</code></li><li>On each step: calls LLM → parse action → dispatch tool → inject observation → repeat</li><li>Termination: goal-completion signal OR budget exhausted OR HITL escalation</li><li>Tools: LangGraph (<code>StateGraph</code>), custom Python loop, or CrewAI depending on multi-agent needs</li></ul>
+<p><strong>3. LLM reasoning layer</strong></p>
+<ul class="styled-list"><li>GPT-4o (or Claude 3.5 Sonnet) for planning/synthesis steps requiring deep reasoning</li><li>GPT-4o-mini for routing, tool-arg generation, and simple extraction (3–5× cheaper)</li><li>Prompt: system persona + tool schema + conversation history (sliding window ≤8K tokens) + current observation</li><li>Temperature: 0.0 for deterministic tool dispatch; 0.7 for open-ended synthesis</li></ul>
+<p><strong>4. Tool execution layer</strong></p>
+<ul class="styled-list"><li>Tools are JSON-schema–typed functions with <code>name</code>, <code>description</code>, <code>parameters</code> (required fields, constrained enums, concrete examples in <code>description</code>)</li><li>Pre-call middleware: schema validation, input sanitization, auth/credential injection, PII scrub</li><li>Execution: sandboxed for code/shell (E2B or Docker with seccomp + network egress restrictions)</li><li>Post-call: result truncation to <code>max_observation_tokens</code> (avoids context pollution), error normalization</li><li>Retry policy: up to 3 retries with exponential backoff for transient errors; idempotency key for write operations</li></ul>
+<p><strong>5. Memory layer</strong></p>
+<ul class="styled-list"><li><strong>Working memory</strong>: current context window — sliding window keeps last N messages + system prompt</li><li><strong>Episodic memory</strong>: Redis or PostgreSQL — stores prior task summaries; retrieved by session_id on continuation</li><li><strong>Semantic memory</strong>: vector store (Pinecone/Qdrant) — long-term user facts and past resolved cases retrieved via similarity search</li><li><strong>Procedural memory</strong>: hard-coded tool definitions and system prompt — how the agent "knows" what to do</li></ul>
+<p><strong>6. Observability & Safety layer</strong></p>
+<ul class="styled-list"><li>Every step emits a structured trace: <code>{step, action, tool, args, observation, token_count, latency_ms}</code></li><li>Traces exported to LangSmith or Arize Phoenix; dashboards on step count distribution, tool error rate, task completion rate</li><li>HITL triggers: LangGraph <code>interrupt_before</code> on irreversible tools (email send, DB write) or when confidence < threshold</li><li>Guardrails: NeMo Guardrails or custom Pydantic validators on output; Presidio for PII on both inputs and observations</li><li>Rollback: agent state checkpointed at each successful step (Redis); resume from last checkpoint on crash</li></ul></div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="section-label">Example / Tradeoff</div>
+  <div class="card card-accent"><div class="rich-text"><p><strong>Support-ticket routing agent (production example):</strong></p>
+<ul class="styled-list"><li>Stack: LangGraph <code>StateGraph</code> + GPT-4o-mini (routing) + GPT-4o (drafting) + 5 tools (ticket_lookup, kb_search, draft_response, escalate_to_human, update_ticket_status)</li><li>HITL: <code>interrupt_before(['update_ticket_status', 'escalate_to_human'])</code> — human approves any status change</li><li>Checkpointing: Redis-backed <code>MemorySaver</code> — restart from last good step on worker crash</li><li>Observability: LangSmith trace per ticket; p95 step count = 4, p95 wall-clock = 8s, cost/ticket ≈ $0.012</li><li>The hardest production issue: agents that "decide they're done" too early when the KB returns no results — fixed by adding an explicit <code>no_results_found</code> observation branch that forces escalation</li></ul>
+<p><strong>Key tradeoff — LangGraph DAG vs open-ended ReAct loop:</strong></p>
+<div class="table-wrap"><table class="data-table"><tr><th></th><th>LangGraph DAG</th><th>ReAct loop</th></tr><tr><td>Debuggability</td><td>High (fixed edges)</td><td>Low (dynamic branching)</td></tr><tr><td>Flexibility</td><td>Low (graph must be pre-defined)</td><td>High (any next step)</td></tr><tr><td>Cost predictability</td><td>High</td><td>Low</td></tr></table></div>| Best for | Known step sequences | Unknown-depth exploration |</div></div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="accordion">
+    <div class="accordion-header">
+      <span class="accordion-title">🎙 Verbal Script (3–5 min)</span>
+      <span class="accordion-chevron">▾</span>
+    </div>
+    <div class="accordion-body">
+      <div class="script-block"><div class="script-label">Opening (30s)</div><p>"I'd structure this as six distinct layers: an interface/session layer, a loop controller with hard budget caps, a tiered LLM reasoning layer, a sandboxed tool execution layer, a multi-tier memory system, and an observability and safety layer. Let me walk through each."</p></div>
+      <div class="script-block"><div class="script-label">Core explanation (2–3 min)</div><p>"Starting at the top — the <strong>interface layer</strong> accepts user input, creates or resumes a session stored in Redis, and streams the response back. Below that is the <strong>loop controller</strong> — this is where I'd enforce hard limits: max 15 iterations, a wall-clock timeout of 120 seconds, and a per-step token budget. Without these, you get cost explosions in production.</p>
+<p>The <strong>LLM layer</strong> is tiered: GPT-4o-mini for tool dispatch and argument generation, GPT-4o for synthesis or planning steps that need deep reasoning — about a 3–5× cost difference. Both use temperature 0 for deterministic tool calls. The prompt is: system persona + typed tool schemas + sliding window of the last N turns + the current observation.</p>
+<p>The <strong>tool layer</strong> is critical for safety. Every tool has a strict JSON schema with constrained enums and concrete examples in the description — this alone cuts hallucinated tool args by 40–60%. Pre-call middleware runs schema validation, PII scrubbing via Presidio, and auth injection. Write operations go through sandboxed execution — E2B or Docker with network egress restricted. Every write tool gets an idempotency key, and retries use exponential backoff up to 3 attempts.</p>
+<p><strong>Memory</strong> is four-tier: working memory in the context window with a sliding window cap, episodic memory in Redis for session continuity, semantic memory in Pinecone for cross-session knowledge retrieval, and procedural memory baked into the system prompt and tool definitions.</p>
+<p><strong>Observability</strong>: every step emits a structured trace to LangSmith — step number, tool called, latency, token count. HITL is wired via LangGraph's <code>interrupt_before</code> — any irreversible action like sending an email or writing to a DB pauses the loop and surfaces an approval widget."</p></div>
+      <div class="script-block"><div class="script-label">Tradeoff / production angle (1 min)</div><p>"The hardest call in production is: LangGraph DAG vs open-ended ReAct. If the task graph is knowable at design time — fixed sequence with routing — I'd use a DAG: more debuggable, cheaper, easier to test. If the step count is genuinely unknown at design time, I'd use a ReAct loop with a hard budget cap. I'd default to DAG and only move to open-loop when I have evidence the task needs it."</p></div>
+      <div class="script-block"><div class="script-label">Wrap-up (30s)</div><p>"So the production version is less about the LLM and more about the six layers around it — loop control, tool safety, memory management, and step-level observability. Happy to go deeper on any layer — HITL patterns, memory architecture, or multi-agent orchestration."</p></div>
+    </div>
+  </div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="section-label">Pitfalls</div>
+  <div class="pitfall-card">
+    <div class="pitfall-mistake"><strong>✗ Mistake</strong> Describing a ReAct loop with no budget caps, no HITL, no sandboxing — &quot;just an LLM calling tools&quot;</div>
+    <div class="pitfall-better"><strong>✓ Better</strong> Immediately lead with the three required production guardrails — <code>max_iterations</code>, HITL trigger for irreversible actions, and sandboxed execution for code/write tools; explain that without these, agents loop indefinitely and rack up unbounded costs.</div>
+  </div>
+  <div class="pitfall-card">
+    <div class="pitfall-mistake"><strong>✗ Mistake</strong> Using GPT-4o for every step in the loop without mentioning model tiering</div>
+    <div class="pitfall-better"><strong>✓ Better</strong> Distinguish routing/dispatch steps (GPT-4o-mini, cheap) from reasoning/synthesis steps (GPT-4o), and explain how model tiering cuts cost per task by 60–80% without sacrificing quality.</div>
+  </div>
+  <div class="pitfall-card">
+    <div class="pitfall-mistake"><strong>✗ Mistake</strong> Treating memory as &quot;just the context window&quot;</div>
+    <div class="pitfall-better"><strong>✓ Better</strong> Describe the four memory types (working/episodic/semantic/procedural) and explain that a production agent retrieves relevant past context from Pinecone/Redis rather than stuffing everything into one prompt, which would blow the context window and inflate cost.
+
+---</div>
+  </div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="section-label">Related Questions</div>
+  <div class="related-pills">
+    <div class="related-pill" data-slug="03-006">
+      <span class="related-pill-icon">→</span>
+      <div class="related-pill-text">
+        <div class="related-pill-q">Q6: Essential components of an agent beyond an LLM?</div>
+        <div class="related-pill-rel">prerequisite — covers each component this architecture assembles</div>
+      </div>
+    </div>
+    <div class="related-pill" data-slug="03-009">
+      <span class="related-pill-icon">→</span>
+      <div class="related-pill-text">
+        <div class="related-pill-q">Q9: What logic belongs in orchestrator vs LLM?</div>
+        <div class="related-pill-rel">follow-up — digs into the orchestrator/LLM boundary within this architecture</div>
+      </div>
+    </div>
+    <div class="related-pill" data-slug="03-020">
+      <span class="related-pill-icon">→</span>
+      <div class="related-pill-text">
+        <div class="related-pill-q">Q20: Architect an agent system: loop, tools, memory, orchestration, safety</div>
+        <div class="related-pill-rel">same concept, system-design framing — broader scope including multi-agent</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="section-label">One-liner recall</div>
+  <div class="oneliner-box">
+    <div class="oneliner-label">▸ Reconstruct from memory</div>
+    <div class="oneliner-text" data-text="A production agent wraps the ReAct loop in six layers — session/interface, loop controller (max_iterations + wall-clock timeout), tiered LLM (GPT-4o-mini for dispatch, GPT-4o for synthesis), sandboxed tool execution (E2B/Docker + idempotency keys), four-tier memory (working/episodic/semantic/procedural in Redis+Pinecone), and step-level observability with HITL on irreversible actions via LangGraph `interrupt_before`.">A production agent wraps the ReAct loop in six layers — session/interface, loop controller (max_iterations + wall-clock timeout), tiered LLM (GPT-4o-mini for dispatch, GPT-4o for synthesis), sandboxed tool execution (E2B/Docker + idempotency keys), four-tier memory (working/episodic/semantic/procedural in Redis+Pinecone), and step-level observability with HITL on irreversible actions via LangGraph `interrupt_before`.</div>
+  </div>
+</div>

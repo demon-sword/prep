@@ -1,0 +1,145 @@
+<div class="answer-header reveal">
+  <div class="answer-meta">
+    <span class="meta-badge meta-category">01-llm-fundamentals</span>
+    <span class="meta-badge meta-num">Q002</span>
+    <span class="meta-badge meta-status-review">review</span>
+  </div>
+  <h1 class="answer-title">How do transformers work?</h1>
+</div>
+
+<div class="answer-section reveal">
+  <div class="accordion">
+    <div class="accordion-header">
+      <span class="accordion-title">⟁ Framing — Why this is asked</span>
+      <span class="accordion-chevron">▾</span>
+    </div>
+    <div class="accordion-body">
+      <div class="framing-grid">
+        <div><div class="framing-card">
+          <div class="framing-card-title">Why asked</div>
+          <p style="font-size:13.5px;line-height:1.7;color:var(--text-dim)">This is the #3 most-asked question in LLM screening rounds (see Top 15 list). Interviewers want to confirm you can explain the transformer architecture clearly — not just that you&#x27;ve &quot;used&quot; LLMs, but that you understand the mechanism that makes them work. They&#x27;re probing for: knowledge of self-attention, multi-head attention, the encoder/decoder distinction, and why transformers scaled better than RNNs. Strong candidates tie the architecture to production properties (parallelism, context limits, memory).</p>
+        </div></div>
+        <div><div class="framing-card">
+          <div class="framing-card-title">Trigger phrases</div>
+          <div class="trigger-list">
+              <div class="trigger-phrase">How do transformers work?</div>
+              <div class="trigger-phrase">Walk me through the transformer architecture.</div>
+              <div class="trigger-phrase">What&#x27;s self-attention and how does it fit into the transformer?</div>
+              <div class="trigger-phrase">Why did transformers replace RNNs for NLP?</div>
+              <div class="trigger-phrase">How does a language model actually process a prompt?</div>
+          </div>
+        </div></div>
+      </div>
+      <div class="tests-block">
+        <span style="font-family:var(--mono);font-size:10px;letter-spacing:0.1em;text-transform:uppercase;color:var(--purple);margin-right:8px">Tests:</span>Depth of understanding of the core architecture: self-attention mechanism, positional encoding, feedforward sublayers, and how they compose into a stack that enables parallel training and long-range dependency modeling.
+
+---
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="section-label">Concept</div>
+  <div class="concept-block"><p>The transformer is a neural network architecture built entirely on attention mechanisms (no recurrence, no convolutions). It processes an entire input sequence in parallel, computing attention-weighted representations for each token by allowing every token to "attend" to every other token simultaneously. This parallelism enables efficient training at scale and the ability to capture long-range dependencies that RNNs struggled with.</p></div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="section-label">Mechanism</div>
+  <div class="card"><p>A transformer has two variants: <strong>encoder</strong> (BERT-style, bidirectional), <strong>decoder</strong> (GPT-style, causal/unidirectional), or <strong>encoder-decoder</strong> (T5, original "Attention Is All You Need"). Modern LLMs are decoder-only. Here's the decoder stack:</p>
+<p><strong>1. Input processing:</strong></p>
+<ul class="styled-list"><li>Text → tokens (BPE tokenization)</li><li>Token IDs → embedding vectors (shape: <code>[seq_len, d_model]</code>, e.g., 4096)</li><li>Positional encodings added — original paper used sinusoidal; modern models use RoPE (Rotary Position Embeddings) which generalizes better to longer sequences</li></ul>
+<p><strong>2. Transformer block (repeated N times, e.g., 32–96 layers in production models):</strong></p>
+<p><strong>(a) Causal Self-Attention:</strong></p>
+<ul class="styled-list"><li>For each token, compute Query (Q), Key (K), Value (V) projections via learned weight matrices: <code>Q = XW_Q</code>, <code>K = XW_K</code>, <code>V = XW_V</code></li><li>Attention scores: <code>A = softmax(QK^T / √d_k)</code> — scaled dot-product attention. The scaling by <code>√d_k</code> prevents vanishing gradients from large dot products</li><li>For decoder-only (causal) attention: a mask zeros out future positions so token i only attends to tokens ≤ i</li><li>Output: <code>Attention(Q,K,V) = A·V</code> — a weighted average of value vectors</li></ul>
+<p><strong>(b) Multi-Head Attention (MHA):</strong></p>
+<ul class="styled-list"><li>Run H parallel attention heads, each with smaller d_k = d_model/H (e.g., 128 dims per head in a 4096-dim model with 32 heads)</li><li>Each head learns different relationship patterns (syntactic, semantic, positional)</li><li>Concatenate head outputs → project back to d_model via W_O</li><li>Modern optimization: <strong>Grouped Query Attention (GQA)</strong> — multiple query heads share one K/V head, reducing KV cache size 4–8×</li></ul>
+<p><strong>(c) Feed-Forward Network (FFN):</strong></p>
+<ul class="styled-list"><li>Two linear projections with a non-linearity: <code>FFN(x) = W_2 · GELU(W_1 · x)</code></li><li>Intermediate dimension is 4× d_model (e.g., 16384 for a 4096-dim model)</li><li>Applied independently per token — this is where token-specific "computation" happens</li><li>Modern variants use SwiGLU (Llama, Mistral) instead of ReLU for better training stability</li></ul>
+<p><strong>(d) Residual connections + Layer Norm:</strong></p>
+<ul class="styled-list"><li>Each sublayer wrapped with: <code>x = LayerNorm(x + Sublayer(x))</code></li><li>Pre-norm (norm before sublayer) is now standard; more stable at scale</li></ul>
+<p><strong>3. Output:</strong></p>
+<ul class="styled-list"><li>Final hidden states → linear projection to vocabulary size (e.g., 128K) → softmax → probability distribution over next token</li></ul>
+<p><strong>Why transformers beat RNNs:</strong></p>
+<ul class="styled-list"><li><strong>Parallelism:</strong> RNNs process tokens sequentially; transformers process the full sequence at once → faster training on GPUs</li><li><strong>Long-range dependencies:</strong> RNNs suffer from vanishing gradients over long sequences; attention directly connects any two tokens in O(1) hops</li><li><strong>Scalability:</strong> transformer performance scales predictably with data and compute (Chinchilla scaling laws); RNNs didn't</li></ul></div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="section-label">Example / Tradeoff</div>
+  <div class="card card-accent"><div class="rich-text"><p><strong>Concrete example — Llama-3-8B architecture:</strong></p>
+<ul class="styled-list"><li>32 transformer layers, d_model = 4096, 32 attention heads</li><li>GQA: 8 KV heads (4 query heads share each KV head) → 4× KV cache reduction vs MHA</li><li>FFN: SwiGLU with intermediate dim 14336</li><li>RoPE positional encoding, context length 128K</li><li>Total: ~8B parameters</li></ul>
+<p><strong>Key tradeoff — attention is O(n²) in sequence length:</strong> The attention matrix is <code>[seq_len × seq_len]</code>, so doubling the context quadruples attention compute and memory. At 128K tokens, the raw attention matrix would be 16B cells — infeasible without optimizations like FlashAttention (tiled computation that avoids materializing the full matrix) and sliding window / sparse attention patterns.</p></div></div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="accordion">
+    <div class="accordion-header">
+      <span class="accordion-title">🎙 Verbal Script (3–5 min)</span>
+      <span class="accordion-chevron">▾</span>
+    </div>
+    <div class="accordion-body">
+      <div class="script-block"><div class="script-label">Opening (30s)</div><p>"The transformer is the architecture at the heart of every modern LLM, and what makes it special is that it replaced sequential processing with parallel attention — every token can directly attend to every other token simultaneously. Let me walk through the architecture layer by layer."</p></div>
+      <div class="script-block"><div class="script-label">Core explanation (2–3 min)</div><p>"I'd start with the input: text gets tokenized into subword tokens, each mapped to an embedding vector, and positional encodings are added so the model knows token order. Modern LLMs use RoPE — rotary positional embeddings — which generalize better to long contexts than the original sinusoidal encodings.</p>
+<p>Then the input passes through N stacked transformer blocks — in a production model like LLaMA-3-70B, that's 80 layers. Each block has two key components. First, multi-head self-attention: for each token, we compute three projections — Query, Key, and Value. The attention score between token i and token j is the dot product of their Q and K vectors, scaled by √d_k to prevent large values, then softmaxed to get weights. We apply those weights to the V vectors to get the output — essentially 'for each token, which other tokens should I aggregate information from, and how much?' Multi-head means we run this H times in parallel with different projections, each head specializing in different relationship patterns.</p>
+<p>For LLMs specifically, we use causal masking — token i can only attend to tokens 1 through i — so the model can't cheat by looking at future tokens during training or generation.</p>
+<p>The second component is a per-token feedforward network: two linear layers with a non-linearity (SwiGLU in modern models), with a hidden dimension 4× wider than d_model. This is where a lot of the 'computation' happens — the attention layer aggregates context, the FFN transforms it.</p>
+<p>Residual connections and layer norm wrap each sublayer, which are critical for training stability at scale."</p></div>
+      <div class="script-block"><div class="script-label">Tradeoff / production angle (1 min)</div><p>"The big architectural tradeoff is attention's quadratic complexity in sequence length. The attention matrix is seq_len × seq_len — doubling context quadruples memory and compute. FlashAttention solves this by computing attention in tiles without materializing the full matrix, cutting memory from O(n²) to O(n). GQA reduces KV cache size by sharing K/V heads across multiple Q heads — Llama-3 uses 8 KV heads for 32 query heads, a 4× reduction that's critical for serving large contexts.</p>
+<p>In production, this means you're constantly trading off context length against VRAM and latency. A 70B model with 128K context can eat 20GB just for the KV cache."</p></div>
+      <div class="script-block"><div class="script-label">Wrap-up (30s)</div><p>"So a transformer is: embed tokens + positional encoding → N × (causal self-attention + FFN + residual/norm) → project to vocabulary → sample. The magic is attention enabling parallel processing and direct long-range connections, and the scale enabling emergent capability. I can go deeper on any piece — GQA, FlashAttention, RoPE, or encoder vs decoder tradeoffs."</p></div>
+    </div>
+  </div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="section-label">Pitfalls</div>
+  <div class="pitfall-card">
+    <div class="pitfall-mistake"><strong>✗ Mistake</strong> Describing attention as just &quot;the model pays attention to important words&quot; without explaining Q/K/V matrices and the dot-product scoring mechanism</div>
+    <div class="pitfall-better"><strong>✓ Better</strong> Walk through <code>A = softmax(QK^T / √d_k) · V</code> and explain that Q and K are used for scoring relevance, V is what&#x27;s actually aggregated — without this, you haven&#x27;t explained <em>how</em> attention works.</div>
+  </div>
+  <div class="pitfall-card">
+    <div class="pitfall-mistake"><strong>✗ Mistake</strong> Forgetting the FFN sublayer and treating transformers as &quot;just attention&quot;</div>
+    <div class="pitfall-better"><strong>✓ Better</strong> Emphasize that each block has two sublayers: self-attention (for context aggregation) and FFN (per-token transformation); the FFN typically has 4× more parameters than the attention sublayer and is critical for representational power.</div>
+  </div>
+  <div class="pitfall-card">
+    <div class="pitfall-mistake"><strong>✗ Mistake</strong> Not knowing why transformers replaced RNNs — vague answers like &quot;they&#x27;re better&quot;</div>
+    <div class="pitfall-better"><strong>✓ Better</strong> State the two concrete reasons: parallelism (RNNs are sequential, transformers process all positions at once → training is 10–100× faster on GPUs) and long-range dependencies (attention directly connects any two positions in O(1), no vanishing gradient over distance).
+
+---</div>
+  </div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="section-label">Related Questions</div>
+  <div class="related-pills">
+    <div class="related-pill" data-slug="01-001">
+      <span class="related-pill-icon">→</span>
+      <div class="related-pill-text">
+        <div class="related-pill-q">Q1: How do LLMs work?</div>
+        <div class="related-pill-rel">Prerequisite overview; this is the architecture deep dive</div>
+      </div>
+    </div>
+    <div class="related-pill" data-slug="01-022">
+      <span class="related-pill-icon">→</span>
+      <div class="related-pill-text">
+        <div class="related-pill-q">Q22: What is self-attention? How does it differ from multi-head attention?</div>
+        <div class="related-pill-rel">Deep dive specifically on the attention mechanism</div>
+      </div>
+    </div>
+    <div class="related-pill" data-slug="01-023">
+      <span class="related-pill-icon">→</span>
+      <div class="related-pill-text">
+        <div class="related-pill-q">Q23: What is grouped query attention (GQA)?</div>
+        <div class="related-pill-rel">KV cache optimization covered in this answer</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="section-label">One-liner recall</div>
+  <div class="oneliner-box">
+    <div class="oneliner-label">▸ Reconstruct from memory</div>
+    <div class="oneliner-text" data-text="Transformers stack N blocks of (causal self-attention + FFN + residual/norm), where attention scores are QK^T/√d_k applied to V vectors, enabling parallel training and O(1) long-range connections — at the cost of O(n²) attention complexity addressed by FlashAttention and GQA.">Transformers stack N blocks of (causal self-attention + FFN + residual/norm), where attention scores are QK^T/√d_k applied to V vectors, enabling parallel training and O(1) long-range connections — at the cost of O(n²) attention complexity addressed by FlashAttention and GQA.</div>
+  </div>
+</div>

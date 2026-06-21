@@ -1,0 +1,141 @@
+<div class="answer-header reveal">
+  <div class="answer-meta">
+    <span class="meta-badge meta-category">03-agents-tool-use</span>
+    <span class="meta-badge meta-num">Q024</span>
+    <span class="meta-badge meta-status-review">review</span>
+  </div>
+  <h1 class="answer-title">Tool failures, retries, idempotency?</h1>
+</div>
+
+<div class="answer-section reveal">
+  <div class="accordion">
+    <div class="accordion-header">
+      <span class="accordion-title">⟁ Framing — Why this is asked</span>
+      <span class="accordion-chevron">▾</span>
+    </div>
+    <div class="accordion-body">
+      <div class="framing-grid">
+        <div><div class="framing-card">
+          <div class="framing-card-title">Why asked</div>
+          <p style="font-size:13.5px;line-height:1.7;color:var(--text-dim)">The interviewer is probing production engineering depth: can you build a reliable agent that recovers gracefully when tools fail, without causing double-writes, infinite retry loops, or cascading cost explosions? This is a senior-level safety question that separates candidates who have shipped agentic systems from those who only demo them.</p>
+        </div></div>
+        <div><div class="framing-card">
+          <div class="framing-card-title">Trigger phrases</div>
+          <div class="trigger-list">
+              <div class="trigger-phrase">What happens when a tool call fails in your agent?</div>
+              <div class="trigger-phrase">How do you handle retries without duplicating side effects?</div>
+              <div class="trigger-phrase">Walk me through your error handling strategy for tool-using agents.</div>
+          </div>
+        </div></div>
+      </div>
+      <div class="tests-block">
+        <span style="font-family:var(--mono);font-size:10px;letter-spacing:0.1em;text-transform:uppercase;color:var(--purple);margin-right:8px">Tests:</span>Whether the candidate understands idempotency as the foundational property that makes retries safe, and can design a layered retry + circuit-breaker strategy for production agent reliability.
+
+---
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="section-label">Concept</div>
+  <div class="concept-block"><p>In agentic systems, tool calls can fail transiently (network timeout, rate limit) or permanently (bad input, downstream service down). Safe recovery requires two properties working together: <strong>retries</strong> to handle transient failures, and <strong>idempotency</strong> to ensure retrying a side-effectful tool doesn't produce duplicate effects (double-charged payments, duplicate DB writes, duplicate emails sent).</p></div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="section-label">Mechanism</div>
+  <div class="card"><p><strong>Idempotency by design:</strong></p>
+<ul class="styled-list"><li>Assign every tool call a stable <code>tool_call_id</code> (e.g., <code>sha256(run_id + step_id + tool_name + args)</code>).</li><li>Pass this ID as an idempotency key to downstream APIs (Stripe, Twilio, most REST APIs support <code>Idempotency-Key</code> headers).</li><li>For internal tools (DB writes, file writes), use upsert semantics rather than insert: <code>INSERT ... ON CONFLICT (tool_call_id) DO NOTHING</code>.</li><li>For non-idempotent tools (e.g., send-email), enforce HITL gating or deduplication via a Redis <code>SETNX</code> lock on the idempotency key with a TTL.</li></ul>
+<p><strong>Retry strategy (layered):</strong></p>
+<ol class="mechanism-steps"><li><strong>Per-tool retry with exponential backoff + jitter:</strong> <code>base_delay * 2^attempt + random(0, base_delay)</code>. Typical: 3 retries, 1s/2s/4s base, max 30s.</li><li><strong>Classify errors before retrying:</strong></li></ol>
+<ul class="styled-list"><li><code>429 / 503 / network timeout</code> → retryable (transient)</li><li><code>400 / 422 / schema validation error</code> → not retryable (bad input — surface to orchestrator immediately to avoid burning retries)</li><li><code>500</code> → conditionally retryable (check if idempotent; if not, escalate)</li></ul>
+<ol class="mechanism-steps"><li><strong>Circuit breaker:</strong> After N consecutive failures (e.g., 5), stop calling that tool for T seconds (e.g., 60s) and raise a structured <code>TOOL_CIRCUIT_OPEN</code> signal to the orchestrator. The orchestrator can then reroute (use fallback tool) or HITL.</li><li><strong>Max retry budget at orchestrator level:</strong> Even if each tool allows 3 retries, cap total retries per agent run (e.g., 10 total tool retries) to prevent cost explosion.</li></ol>
+<p><strong>Tool result schema with error types:</strong></p>
+<div class="code-block-wrap"><pre class="code-block"><code>{
+  &quot;status&quot;: &quot;success&quot; | &quot;retryable_error&quot; | &quot;permanent_error&quot; | &quot;circuit_open&quot;,
+  &quot;data&quot;: {...},
+  &quot;error_code&quot;: &quot;RATE_LIMITED&quot; | &quot;INVALID_INPUT&quot; | &quot;DOWNSTREAM_DOWN&quot; | None,
+  &quot;tool_call_id&quot;: &quot;sha256-...&quot;,
+  &quot;attempt&quot;: 2
+}</code></pre><button class="copy-btn">copy</button></div>
+<p>The orchestrator routes on <code>status</code>, not raw exceptions — this keeps error handling deterministic and testable.</p></div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="section-label">Example / Tradeoff</div>
+  <div class="card card-accent"><div class="rich-text"><p><strong>Concrete example — payment tool in a billing agent:</strong></p>
+<ul class="styled-list"><li>Tool: <code>charge_customer(customer_id, amount, tool_call_id)</code></li><li>Stripe's idempotency key ensures that even if the network drops after Stripe processes the charge but before the agent receives the 200 OK, a retry with the same <code>tool_call_id</code> returns the original charge rather than creating a second one.</li><li>Without this: network partition → agent retries → customer charged twice → production incident.</li></ul>
+<p><strong>Tradeoffs:</strong></p>
+<div class="table-wrap"><table class="data-table"><tr><th>Strategy</th><th>Benefit</th><th>Cost</th></tr><tr><td>Exponential backoff + jitter</td><td>Avoids thundering herd</td><td>Adds latency on transient failures</td></tr><tr><td>Circuit breaker</td><td>Prevents cascade failures</td><td>Requires fallback logic; adds complexity</td></tr><tr><td>Idempotency keys</td><td>Safe retries for side-effectful tools</td><td>Requires downstream API support or dedup store</td></tr><tr><td>Immediate permanent-error escalation</td><td>Avoids wasting retry budget</td><td>Requires robust error classification</td></tr></table></div>
+<p><strong>LangGraph pattern:</strong> Use <code>interrupt_before</code> to pause on permanent errors and surface them to HITL rather than retrying forever. Checkpoint state before each tool call so the agent can resume from the last successful step.</p></div></div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="accordion">
+    <div class="accordion-header">
+      <span class="accordion-title">🎙 Verbal Script (3–5 min)</span>
+      <span class="accordion-chevron">▾</span>
+    </div>
+    <div class="accordion-body">
+      <div class="script-block"><div class="script-label">Opening (30s)</div><p>"Tool failure handling is one of the hardest parts of production agent engineering, because the naive approach — just retry — can cause data corruption or cost explosions. The key insight is that retries are only safe when the underlying tool is idempotent, so my answer has two parts: making tools idempotent by design, then layering retries on top."</p></div>
+      <div class="script-block"><div class="script-label">Core explanation (2–3 min)</div><p>"I'd start with idempotency. Every tool call gets a stable idempotency key — I typically compute it as a hash of the run ID, step index, tool name, and arguments. For external APIs like Stripe or Twilio, I pass this as the <code>Idempotency-Key</code> header, which their servers use to deduplicate. For internal DB writes, I use upsert semantics — <code>INSERT … ON CONFLICT DO NOTHING</code>. For tools that genuinely can't be made idempotent, like sending a notification, I gate them behind a Redis <code>SETNX</code> lock or a HITL checkpoint.</p>
+<p>On top of that, I layer a retry policy. The first thing I do is classify errors: 429s and 503s are retryable transients; 400s and schema validation errors are permanent — retrying those is wasteful and misleading. For retryable errors, I use exponential backoff with jitter to avoid thundering herd: base delay of 1s, doubling each attempt, with a random offset to spread load.</p>
+<p>Above the per-tool retry, I add a circuit breaker. After five consecutive failures from the same tool, I stop calling it for 60 seconds and emit a <code>TOOL_CIRCUIT_OPEN</code> signal to the orchestrator. The orchestrator can then reroute to a fallback tool or pause for human review. And at the orchestrator level, I cap total retries per run — say, 10 tool retries across the entire agent run — so a flaky downstream service can't burn my token budget."</p></div>
+      <div class="script-block"><div class="script-label">Tradeoff / production angle (1 min)</div><p>"The concrete failure case that motivates all of this is payment processing. If a billing agent charges a customer and the network drops before it gets the success response, the agent will retry. Without idempotency keys, the customer gets double-charged — that's a production incident. Stripe's idempotency key design means the retry returns the original charge. The flip side is that not all tools support idempotency keys natively, so for those I need the Redis dedup store or HITL gate. The overhead is worth it for any tool with financial, communication, or irreversible side effects."</p></div>
+      <div class="script-block"><div class="script-label">Wrap-up (30s)</div><p>"So in summary: idempotency makes retries safe, error classification makes retries efficient, circuit breakers prevent cascades, and an orchestrator-level retry budget prevents cost explosions. Happy to go deeper on any of the layers — the circuit breaker pattern or the LangGraph checkpoint/resume model in particular."</p></div>
+    </div>
+  </div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="section-label">Pitfalls</div>
+  <div class="pitfall-card">
+    <div class="pitfall-mistake"><strong>✗ Mistake</strong> &quot;I&#x27;d just retry failed tool calls a few times with a delay&quot;</div>
+    <div class="pitfall-better"><strong>✓ Better</strong> Explain error classification first (retryable vs permanent), then idempotency keys to make retries safe for side-effectful tools, then backoff + jitter; generic retry without these distinctions causes double-writes and burns token budget on unrecoverable errors.</div>
+  </div>
+  <div class="pitfall-card">
+    <div class="pitfall-mistake"><strong>✗ Mistake</strong> Treating all tool errors as retryable (including 400 bad-input errors)</div>
+    <div class="pitfall-better"><strong>✓ Better</strong> Surface permanent errors (schema validation failures, bad auth) immediately to the orchestrator rather than retrying; distinguish the error class before choosing a recovery path.</div>
+  </div>
+  <div class="pitfall-card">
+    <div class="pitfall-mistake"><strong>✗ Mistake</strong> Ignoring the orchestrator-level retry budget (&quot;each tool handles its own retries&quot;)</div>
+    <div class="pitfall-better"><strong>✓ Better</strong> Cap total retries per agent run at the orchestrator level; otherwise a flaky downstream service triggers N-per-tool × M-tools retries and inflates cost unpredictably.
+
+---</div>
+  </div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="section-label">Related Questions</div>
+  <div class="related-pills">
+    <div class="related-pill" data-slug="03-023">
+      <span class="related-pill-icon">→</span>
+      <div class="related-pill-text">
+        <div class="related-pill-q">Q23: Sandbox tool execution safely?</div>
+        <div class="related-pill-rel">Prerequisite — sandboxing + idempotency together form the tool safety contract</div>
+      </div>
+    </div>
+    <div class="related-pill" data-slug="03-025">
+      <span class="related-pill-icon">→</span>
+      <div class="related-pill-text">
+        <div class="related-pill-q">Q25: Biggest security risks with tool-using agents?</div>
+        <div class="related-pill-rel">Follow-up — unvalidated tool inputs are both a security risk and a source of permanent errors</div>
+      </div>
+    </div>
+    <div class="related-pill" data-slug="03-010">
+      <span class="related-pill-icon">→</span>
+      <div class="related-pill-text">
+        <div class="related-pill-q">Q10: Design a safe and debuggable agent loop</div>
+        <div class="related-pill-rel">Same concept — agent loop safety includes retry/idempotency at the loop level</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="section-label">One-liner recall</div>
+  <div class="oneliner-box">
+    <div class="oneliner-label">▸ Reconstruct from memory</div>
+    <div class="oneliner-text" data-text="Assign every tool call a stable idempotency key so retries are safe, classify errors before retrying (transient vs permanent), apply exponential-backoff-with-jitter per tool, add a circuit breaker for cascading failures, and cap total retries at the orchestrator level to bound cost.">Assign every tool call a stable idempotency key so retries are safe, classify errors before retrying (transient vs permanent), apply exponential-backoff-with-jitter per tool, add a circuit breaker for cascading failures, and cap total retries at the orchestrator level to bound cost.</div>
+  </div>
+</div>

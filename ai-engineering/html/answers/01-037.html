@@ -1,0 +1,130 @@
+<div class="answer-header reveal">
+  <div class="answer-meta">
+    <span class="meta-badge meta-category">01-llm-fundamentals</span>
+    <span class="meta-badge meta-num">Q037</span>
+    <span class="meta-badge meta-status-review">review</span>
+  </div>
+  <h1 class="answer-title">Risks of general-purpose tokenizers on legal/medical domains?</h1>
+</div>
+
+<div class="answer-section reveal">
+  <div class="accordion">
+    <div class="accordion-header">
+      <span class="accordion-title">⟁ Framing — Why this is asked</span>
+      <span class="accordion-chevron">▾</span>
+    </div>
+    <div class="accordion-body">
+      <div class="framing-grid">
+        <div><div class="framing-card">
+          <div class="framing-card-title">Why asked</div>
+          <p style="font-size:13.5px;line-height:1.7;color:var(--text-dim)">The interviewer is probing whether you understand that tokenization is not a neutral preprocessing step — it encodes assumptions about language that break badly in specialized domains. Senior engineers deploying LLMs in regulated verticals (healthcare, legal, finance) must anticipate these failure modes before they surface in production.</p>
+        </div></div>
+        <div><div class="framing-card">
+          <div class="framing-card-title">Trigger phrases</div>
+          <div class="trigger-list">
+              <div class="trigger-phrase">You&#x27;re building a RAG pipeline over legal contracts / medical notes — what risks do you see?</div>
+              <div class="trigger-phrase">Our medical chatbot keeps splitting drug names strangely — what&#x27;s happening?</div>
+              <div class="trigger-phrase">How do tokenization choices affect cost and accuracy in domain-specific applications?</div>
+          </div>
+        </div></div>
+      </div>
+      <div class="tests-block">
+        <span style="font-family:var(--mono);font-size:10px;letter-spacing:0.1em;text-transform:uppercase;color:var(--purple);margin-right:8px">Tests:</span>Whether the candidate can connect low-level tokenizer behavior to real production failures in cost, accuracy, and compliance — not just recite that BPE exists.
+
+---
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="section-label">Concept</div>
+  <div class="concept-block"><p>General-purpose tokenizers (GPT-4's <code>cl100k_base</code>, Llama's SentencePiece vocabulary) are trained on web-scale corpora that massively under-represent legal and medical text. As a result, specialized terminology is fragmented into unexpected subword pieces, inflating token counts, degrading model comprehension, and introducing subtle accuracy failures that are hard to debug.</p></div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="section-label">Mechanism</div>
+  <div class="card"><p><strong>1. Out-of-vocabulary (OOV) fragmentation</strong> BPE merges are learned from frequency on training data. Terms that appear rarely in the pretraining corpus never get high-frequency merge pairs, so they split into fine-grained subwords:</p>
+<ul class="styled-list"><li><code>"warfarin"</code> → <code>["war", "far", "in"]</code> (3 tokens, each semantically misleading)</li><li><code>"hereinafter"</code> → <code>["here", "in", "after"]</code> (legally meaningful as one word)</li><li><code>"immunoglobulin"</code> → <code>["im", "mun", "og", "lob", "ul", "in"]</code> (6 tokens)</li><li><code>"propranolol"</code> → <code>["prop", "ran", "ol", "ol"]</code> (splits at chemically irrelevant points)</li></ul>
+<p><strong>2. Downstream effects</strong></p>
+<div class="table-wrap"><table class="data-table"><tr><th>Risk</th><th>Mechanism</th><th>Production impact</th></tr><tr><td><strong>Token inflation</strong></td><td>Rare terms → many tokens</td><td>2–4× higher cost for clinical notes vs general text</td></tr><tr><td><strong>Context window pressure</strong></td><td>Long docs fragment worse</td><td>A 10-page legal brief may exhaust 8K context faster than expected</td></tr><tr><td><strong>Semantic confusion</strong></td><td><code>"warfarin"</code> splits as <code>war</code> + <code>far</code></td><td>Model attends to wrong semantic signals; dosing errors in medical QA</td></tr><tr><td><strong>Inconsistent capitalization</strong></td><td><code>"Warfarin"</code> and <code>"warfarin"</code> → different token sequences</td><td>Entity matching fails across case variations</td></tr><tr><td><strong>Numeric/code fragmentation</strong></td><td>ICD-10 codes like <code>"Z87.891"</code>, CPT codes, citation numbers (§ 14(a))</td><td>Codes split unpredictably; retrieval and extraction errors</td></tr><tr><td><strong>Negation mishandling</strong></td><td><code>"not contraindicated"</code> — negation and term may not co-occur in same attention window after chunking</td><td>Hallucinated safety claims</td></tr></table></div>
+<p><strong>3. Cost example</strong> A clinical note with 500 words of dense medical terminology may tokenize to 800–1,200 tokens with <code>cl100k_base</code> vs ~600 with a domain-adapted tokenizer. At $15/M tokens (GPT-4o input), 1M queries/day → $3,600/day extra cost from tokenization alone.</p>
+<p><strong>4. Mitigation strategies</strong></p>
+<ul class="styled-list"><li><strong>Domain-adapted tokenizer</strong>: Train SentencePiece on domain corpus (PubMed, MIMIC, legal case law). Reduces fragmentation for target vocabulary; requires fine-tuning the model too.</li><li><strong>Embedding model selection</strong>: Use domain-specific embedders — <code>BioLORD</code>, <code>PubMedBERT</code>, <code>legal-bert-base-uncased</code> — which share tokenizers with their pretraining data.</li><li><strong>Pre-tokenization normalization</strong>: Standardize abbreviations, ICD codes, drug names before tokenizing so consistent tokens are produced. Push drug name normalization (RxNorm) upstream.</li><li><strong>Chunk at semantic boundaries</strong>: Never split mid-sentence at the tokenizer boundary; use SpaCy's medical sentence tokenizer or a rules-based splitter aware of section headers (SOAP, ASSESSMENT, PLAN).</li><li><strong>Glossary injection via system prompt</strong>: For moderate-frequency terms, adding a domain glossary to the system prompt forces the model to treat key terms as meaningful units even if tokenized poorly.</li><li><strong>Retrieval-level fix</strong>: For retrieval failures due to fragmentation, add BM25 hybrid search so keyword-exact matches (ICD codes, drug names) are not lost to dense embedding approximation.</li></ul></div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="section-label">Example / Tradeoff</div>
+  <div class="card card-accent"><div class="rich-text"><p>A 2023 Stanford study on clinical NLP found that GPT-3.5 with default tokenization made 18% more drug-name errors on discharge summaries than PubMedBERT fine-tuned on the same task — a gap attributable in part to tokenizer mismatch, not just pretraining. In production, a company building a medical coding assistant (ICD-10 extraction) switched from GPT-4 with default tokenizer to a Claude + RxNorm normalization + BM25 hybrid retrieval pipeline, cutting token costs 40% and raising F1 on rare codes from 0.61 → 0.78.</p>
+<p><strong>Key tradeoff:</strong> Domain-adapted tokenizers require retraining the base model (or at minimum fine-tuning). Using an off-the-shelf model with normalization + hybrid retrieval is faster to ship but leaves some fragmentation intact. For regulated domains, the correctness risk of fragmentation often outweighs the engineering cost of normalization.</p></div></div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="accordion">
+    <div class="accordion-header">
+      <span class="accordion-title">🎙 Verbal Script (3–5 min)</span>
+      <span class="accordion-chevron">▾</span>
+    </div>
+    <div class="accordion-body">
+      <div class="script-block"><div class="script-label">Opening (30s)</div><p>"This is a really practical question that hits hard in production. General-purpose tokenizers are trained on web text, so they're optimized for common English — but legal and medical language is a different beast: long compound words, alphanumeric codes, Latin roots, and negation patterns. Let me walk through the specific failure modes and then how I'd mitigate them."</p></div>
+      <div class="script-block"><div class="script-label">Core explanation (2–3 min)</div><p>"The root issue is BPE tokenization. Merge rules are learned from frequency — so words that appear rarely in the pretraining corpus never form stable tokens. Take 'warfarin,' a common anticoagulant. It might tokenize as 'war' + 'far' + 'in' — three tokens that each carry misleading semantics. The model is now attending to 'war' and 'far' when it should be thinking about blood thinning.</p>
+<p>This creates three concrete risks: first, token inflation — clinical notes can cost 2–4× more to process than general text because rare terms fragment. Second, semantic confusion — if the model sees wrong subwords, it may generate wrong dosing guidance or miss negations. Third, code fragmentation — ICD-10 codes like 'Z87.891' or legal citations like '§14(a)' split unpredictably, so extraction tasks fail.</p>
+<p>For legal text, the problem is slightly different: terms like 'hereinafter,' 'indemnification,' or 'notwithstanding' are single legal units that fragment into 3–4 tokens. The model can still often recover meaning from context, but when you're doing entity extraction or contract clause classification, you see precision drop on rare clause types."</p></div>
+      <div class="script-block"><div class="script-label">Tradeoff / production angle (1 min)</div><p>"The gold-standard fix is a domain-adapted tokenizer trained on PubMed or legal case law — but that means retraining or fine-tuning the base model, which is expensive. The pragmatic production approach I'd take first is: one, normalize input with RxNorm for drugs or a legal glossary; two, add BM25 hybrid retrieval so exact-match codes aren't lost; three, use domain-specific embedders like BioLORD or legal-bert for the vector search layer. These don't fix the tokenizer, but they patch the most critical failure modes without retraining."</p></div>
+      <div class="script-block"><div class="script-label">Wrap-up (30s)</div><p>"The summary: general-purpose tokenizers are a hidden cost and accuracy risk in specialized domains. The failure mode is predictable — vocabulary mismatch → fragmentation → semantic confusion or token bloat. Fix it at the normalization and retrieval layer first; if quality still isn't there, invest in domain-adapted embedders. Happy to go deeper on any of those mitigations."</p></div>
+    </div>
+  </div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="section-label">Pitfalls</div>
+  <div class="pitfall-card">
+    <div class="pitfall-mistake"><strong>✗ Mistake</strong> Saying &quot;tokenization is just preprocessing, it doesn&#x27;t affect model quality&quot;</div>
+    <div class="pitfall-better"><strong>✓ Better</strong> Explain that fragmented tokens directly affect attention patterns, semantic understanding, and extraction accuracy; give a concrete example like drug name splitting.</div>
+  </div>
+  <div class="pitfall-card">
+    <div class="pitfall-mistake"><strong>✗ Mistake</strong> Treating this as a purely theoretical problem without connecting to cost</div>
+    <div class="pitfall-better"><strong>✓ Better</strong> Quantify the token inflation (2–4× for clinical text) and translate to dollar impact at scale (e.g., $3,600/day extra at 1M queries/day with GPT-4o pricing).</div>
+  </div>
+  <div class="pitfall-card">
+    <div class="pitfall-mistake"><strong>✗ Mistake</strong> Proposing &quot;just fine-tune the model&quot; as the first solution without mentioning cheaper normalization fixes</div>
+    <div class="pitfall-better"><strong>✓ Better</strong> Start with upstream normalization (RxNorm, legal glossary), hybrid search, and domain-specific embedders; reserve retraining for when those aren&#x27;t enough.
+
+---</div>
+  </div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="section-label">Related Questions</div>
+  <div class="related-pills">
+    <div class="related-pill" data-slug="01-003">
+      <span class="related-pill-icon">→</span>
+      <div class="related-pill-text">
+        <div class="related-pill-q">Q3: What is tokenization and how does it affect LLM performance?</div>
+        <div class="related-pill-rel">Prerequisite — core tokenization mechanics (BPE, WordPiece)</div>
+      </div>
+    </div>
+    <div class="related-pill" data-slug="01-024">
+      <span class="related-pill-icon">→</span>
+      <div class="related-pill-text">
+        <div class="related-pill-q">Q24: BPE vs WordPiece vs character-level tokenization — tradeoffs?</div>
+        <div class="related-pill-rel">Sibling — algorithm-level tradeoffs that explain why fragmentation happens</div>
+      </div>
+    </div>
+    <div class="related-pill" data-slug="01-014">
+      <span class="related-pill-icon">→</span>
+      <div class="related-pill-text">
+        <div class="related-pill-q">Q14: How does chunking happen?</div>
+        <div class="related-pill-rel">Follow-up — domain-aware chunking at sentence/section boundaries mitigates some tokenization failures</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="section-label">One-liner recall</div>
+  <div class="oneliner-box">
+    <div class="oneliner-label">▸ Reconstruct from memory</div>
+    <div class="oneliner-text" data-text="General-purpose tokenizers fragment rare medical/legal terms (e.g., &quot;warfarin&quot; → [&quot;war&quot;,&quot;far&quot;,&quot;in&quot;]), inflating token costs 2–4× and degrading accuracy — mitigate with upstream normalization, domain embedders, and BM25 hybrid retrieval before investing in retraining.">General-purpose tokenizers fragment rare medical/legal terms (e.g., &quot;warfarin&quot; → [&quot;war&quot;,&quot;far&quot;,&quot;in&quot;]), inflating token costs 2–4× and degrading accuracy — mitigate with upstream normalization, domain embedders, and BM25 hybrid retrieval before investing in retraining.</div>
+  </div>
+</div>

@@ -1,0 +1,128 @@
+<div class="answer-header reveal">
+  <div class="answer-meta">
+    <span class="meta-badge meta-category">01-llm-fundamentals</span>
+    <span class="meta-badge meta-num">Q012</span>
+    <span class="meta-badge meta-status-review">review</span>
+  </div>
+  <h1 class="answer-title">What&#x27;s an RAG model? Explain the complete process.</h1>
+</div>
+
+<div class="answer-section reveal">
+  <div class="accordion">
+    <div class="accordion-header">
+      <span class="accordion-title">⟁ Framing — Why this is asked</span>
+      <span class="accordion-chevron">▾</span>
+    </div>
+    <div class="accordion-body">
+      <div class="framing-grid">
+        <div><div class="framing-card">
+          <div class="framing-card-title">Why asked</div>
+          <p style="font-size:13.5px;line-height:1.7;color:var(--text-dim)">Interviewers use this as a gating question at technical screens and deep dives. It distinguishes candidates who can parrot a definition (&quot;retrieval-augmented generation&quot;) from those who understand the full production pipeline — including chunking strategy, embedding choice, retrieval failures, and evaluation. It&#x27;s also a warm-up for system design rounds where a RAG pipeline is the core deliverable.</p>
+        </div></div>
+        <div><div class="framing-card">
+          <div class="framing-card-title">Trigger phrases</div>
+          <div class="trigger-list">
+              <div class="trigger-phrase">What is RAG and how does it work?</div>
+              <div class="trigger-phrase">Walk me through how you&#x27;d build a RAG system.</div>
+              <div class="trigger-phrase">How would you use GPT-4 to answer questions from our internal documents?</div>
+          </div>
+        </div></div>
+      </div>
+      <div class="tests-block">
+        <span style="font-family:var(--mono);font-size:10px;letter-spacing:0.1em;text-transform:uppercase;color:var(--purple);margin-right:8px">Tests:</span>End-to-end pipeline fluency: can the candidate describe the 9 stages of a production RAG system, name the failure points at each stage, and explain why RAG is often better than fine-tuning for knowledge injection.
+
+---
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="section-label">Concept</div>
+  <div class="concept-block"><p>RAG (Retrieval-Augmented Generation) is an architecture that gives an LLM access to an external knowledge store at inference time — rather than baking knowledge into model weights via fine-tuning. The model receives a query, relevant documents are retrieved from a vector store, and those documents are injected into the prompt as context before generation. This keeps the model's parametric knowledge general while the retrieved context supplies up-to-date, domain-specific facts.</p></div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="section-label">Mechanism</div>
+  <div class="card"><p>A production RAG system has two main phases: <strong>offline indexing</strong> and <strong>online serving</strong>.</p>
+<p><strong>Offline (indexing pipeline):</strong></p>
+<ol class="mechanism-steps"><li><strong>Ingest</strong> — load raw documents (PDFs, HTML, databases). Handle updates via change-data-capture or periodic re-index.</li><li><strong>Chunk</strong> — split documents into retrievable units. Fixed-size (512 tokens) is simple; semantic / parent-child chunking (LlamaIndex) preserves context. Chunk size is the single biggest tuning lever.</li><li><strong>Embed</strong> — encode each chunk with an embedding model (OpenAI <code>text-embedding-3-large</code>, Cohere <code>embed-v3</code>, or <code>bge-large-en</code> for self-hosted). Store the dense vectors.</li><li><strong>Index</strong> — insert vectors into a vector DB (Pinecone, Weaviate, pgvector, FAISS). Use HNSW for ANN search at recall/latency tradeoff. Optionally build a BM25 sparse index in parallel for hybrid search.</li></ol>
+<p><strong>Online (serving pipeline):</strong></p>
+<ol class="mechanism-steps"><li><strong>Retrieve</strong> — encode the user query, run ANN top-k (k=10–20) against the vector DB. Apply metadata filters (date, source, tenant) at the DB layer.</li><li><strong>Rerank</strong> — optionally pass top-k results through a cross-encoder (Cohere Rerank, <code>bge-reranker-v2</code>) to re-score by query-document relevance and keep top-3–5. This improves precision without hurting recall.</li><li><strong>Generate</strong> — assemble retrieved chunks into the prompt context and call the LLM (GPT-4o, Claude 3.5 Sonnet). Place most-relevant chunks at the beginning or end of context — not the middle — to avoid "lost in the middle" degradation.</li><li><strong>Evaluate</strong> — measure faithfulness (does the answer stick to the retrieved context?), answer relevancy, and context precision/recall using RAGAS or a custom LLM-as-judge harness.</li><li><strong>Observe</strong> — trace every request end-to-end (LangSmith, Phoenix/Arize). Maintain a golden QA set; run regression before any index or prompt change.</li></ol></div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="section-label">Example / Tradeoff</div>
+  <div class="card card-accent"><div class="rich-text"><p>At a customer support chatbot serving 500K queries/day:</p>
+<ul class="styled-list"><li><strong>Chunk size tradeoff</strong>: 256-token chunks give precise retrieval but may split key answers across chunks; 1024-token chunks capture more context but dilute relevance scores and inflate prompt cost.</li><li><strong>Retrieval vs fine-tuning</strong>: fine-tuning a model on support docs would lock knowledge at training time and cost $5K+; a nightly re-index costs ~$50/month and keeps answers current.</li><li><strong>Reranking cost</strong>: a cross-encoder adds ~30ms per query and reduces hallucination-on-wrong-context by ~40% in A/B tests. Worth it for high-stakes domains; skip for latency-sensitive chat.</li><li><strong>Evaluation</strong>: RAGAS metrics — faithfulness >0.85, answer relevancy >0.80 — gate weekly model upgrades.</li></ul></div></div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="accordion">
+    <div class="accordion-header">
+      <span class="accordion-title">🎙 Verbal Script (3–5 min)</span>
+      <span class="accordion-chevron">▾</span>
+    </div>
+    <div class="accordion-body">
+      <div class="script-block"><div class="script-label">Opening (30s)</div><p>"RAG stands for Retrieval-Augmented Generation. The core idea is that instead of baking all domain knowledge into model weights, you retrieve relevant documents at query time and inject them as context. I'll walk through the full pipeline — there are two phases: offline indexing and online serving — and then highlight where things typically go wrong in production."</p></div>
+      <div class="script-block"><div class="script-label">Core explanation (2–3 min)</div><p>"On the offline side, I start with ingestion — loading PDFs, databases, HTML, whatever the knowledge source is — and I need a strategy for updates: either event-driven re-indexing or a nightly batch job. Then comes chunking: I'm splitting documents into retrievable units. The chunk size is probably the single most impactful tuning decision. Too small and you miss context; too large and retrieval scores get diluted. I often start with 512-token chunks with 50-token overlap, then experiment.</p>
+<p>Each chunk gets embedded — turned into a dense vector using a model like OpenAI's <code>text-embedding-3-large</code> or <code>bge-large-en</code> if I need self-hosted. Those vectors go into a vector database — Pinecone, Weaviate, pgvector — indexed with HNSW for fast approximate nearest-neighbor search.</p>
+<p>At query time, the user's question is embedded the same way, and I retrieve the top-k most similar chunks — typically k=10 to 20. If the vocabulary mismatch is likely (technical terms, product names), I'll run hybrid search: BM25 for exact keyword matching combined with dense retrieval, fused via Reciprocal Rank Fusion. Then I pass the top candidates through a cross-encoder reranker to sharpen precision before sending the top 3–5 into the prompt. The LLM generates a grounded answer — and critically, I place the most-relevant chunks at the start or end of context to avoid the 'lost in the middle' phenomenon."</p></div>
+      <div class="script-block"><div class="script-label">Tradeoff / production angle (1 min)</div><p>"The most common failure arc I've seen: retrieval silently degrades — wrong chunks come back — and the LLM still produces fluent-sounding answers, which users initially trust. That's why evaluation is non-negotiable: I run RAGAS metrics on a golden QA set — faithfulness, context precision, answer relevancy — and gate any index or prompt change on those numbers. I also instrument full request traces (LangSmith or Phoenix) so when a user flags a wrong answer, I can replay the exact retrieval and generation steps."</p></div>
+      <div class="script-block"><div class="script-label">Wrap-up (30s)</div><p>"So RAG is a 9-stage pipeline, not a library call. The two most critical decisions are chunk size and retrieval quality — everything else is relatively straightforward. Happy to go deeper on any stage, or I can walk through how I'd evaluate this system end-to-end."</p></div>
+    </div>
+  </div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="section-label">Pitfalls</div>
+  <div class="pitfall-card">
+    <div class="pitfall-mistake"><strong>✗ Mistake</strong> Describing RAG as &quot;embed documents, store in a vector DB, retrieve and generate&quot; — stopping at 3 steps.</div>
+    <div class="pitfall-better"><strong>✓ Better</strong> Walk the full 9-stage pipeline including chunking strategy, reranking, evaluation with RAGAS, and observability/tracing. Interviewers at FAANG and AI startups expect production depth.</div>
+  </div>
+  <div class="pitfall-card">
+    <div class="pitfall-mistake"><strong>✗ Mistake</strong> Saying &quot;RAG prevents hallucinations&quot; without qualification.</div>
+    <div class="pitfall-better"><strong>✓ Better</strong> RAG reduces hallucinations by grounding generation in retrieved context, but the LLM can still hallucinate if the retrieved chunks are irrelevant or if it ignores them. Faithfulness scoring (RAGAS) and a temperature=0 setting are needed to make that claim defensible.</div>
+  </div>
+  <div class="pitfall-card">
+    <div class="pitfall-mistake"><strong>✗ Mistake</strong> Recommending fine-tuning first, then RAG if it doesn&#x27;t work.</div>
+    <div class="pitfall-better"><strong>✓ Better</strong> The decision tree is prompt engineering → RAG → fine-tune. RAG should be the first tool for knowledge injection because it&#x27;s cheaper to update, auditable, and doesn&#x27;t require retraining.
+
+---</div>
+  </div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="section-label">Related Questions</div>
+  <div class="related-pills">
+    <div class="related-pill" data-slug="01-013">
+      <span class="related-pill-icon">→</span>
+      <div class="related-pill-text">
+        <div class="related-pill-q">Q13: What are embeddings?</div>
+        <div class="related-pill-rel">Direct prerequisite — embeddings power RAG retrieval</div>
+      </div>
+    </div>
+    <div class="related-pill" data-slug="01-005">
+      <span class="related-pill-icon">→</span>
+      <div class="related-pill-text">
+        <div class="related-pill-q">Q5: Explain context windows and their limitations</div>
+        <div class="related-pill-rel">Context window limits constrain how many retrieved chunks fit in the prompt</div>
+      </div>
+    </div>
+    <div class="related-pill" data-slug="01-001">
+      <span class="related-pill-icon">→</span>
+      <div class="related-pill-text">
+        <div class="related-pill-q">Q1: How do LLMs work?</div>
+        <div class="related-pill-rel">Foundation — RAG extends the base LLM generation loop</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="section-label">One-liner recall</div>
+  <div class="oneliner-box">
+    <div class="oneliner-label">▸ Reconstruct from memory</div>
+    <div class="oneliner-text" data-text="RAG is a 9-stage offline+online pipeline (ingest → chunk → embed → index → retrieve → rerank → generate → evaluate → observe) that grounds LLM generation in live retrieved context instead of baked-in weights, making knowledge cheap to update and answers auditable.">RAG is a 9-stage offline+online pipeline (ingest → chunk → embed → index → retrieve → rerank → generate → evaluate → observe) that grounds LLM generation in live retrieved context instead of baked-in weights, making knowledge cheap to update and answers auditable.</div>
+  </div>
+</div>

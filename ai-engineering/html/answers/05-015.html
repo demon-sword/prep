@@ -1,0 +1,135 @@
+<div class="answer-header reveal">
+  <div class="answer-meta">
+    <span class="meta-badge meta-category">05-evaluation-metrics</span>
+    <span class="meta-badge meta-num">Q015</span>
+    <span class="meta-badge meta-status-review">review</span>
+  </div>
+  <h1 class="answer-title">Time to first token — why matter for UX?</h1>
+</div>
+
+<div class="answer-section reveal">
+  <div class="accordion">
+    <div class="accordion-header">
+      <span class="accordion-title">⟁ Framing — Why this is asked</span>
+      <span class="accordion-chevron">▾</span>
+    </div>
+    <div class="accordion-body">
+      <div class="framing-grid">
+        <div><div class="framing-card">
+          <div class="framing-card-title">Why asked</div>
+          <p style="font-size:13.5px;line-height:1.7;color:var(--text-dim)">The interviewer is probing whether you understand the production latency landscape of LLM systems at a user-experience level. TTFT is the dominant UX lever in streaming GenAI products — users perceive a responsive system the moment the first token appears, even if total generation time is long. A candidate who conflates TTFT with total latency, or who can&#x27;t name the architectural knobs that control it, signals they haven&#x27;t shipped a real streaming LLM product.</p>
+        </div></div>
+        <div><div class="framing-card">
+          <div class="framing-card-title">Trigger phrases</div>
+          <div class="trigger-list">
+              <div class="trigger-phrase">How do you reduce latency in GenAI applications?</div>
+              <div class="trigger-phrase">What latency metric matters most for UX in a streaming chatbot?</div>
+              <div class="trigger-phrase">Walk me through how you&#x27;d improve perceived responsiveness in an LLM product.</div>
+              <div class="trigger-phrase">Why is time to first token different from total generation time?</div>
+          </div>
+        </div></div>
+      </div>
+      <div class="tests-block">
+        <span style="font-family:var(--mono);font-size:10px;letter-spacing:0.1em;text-transform:uppercase;color:var(--purple);margin-right:8px">Tests:</span>Understanding of the prefill/decode split in LLM inference and how to optimise the user-perceived responsiveness of streaming LLM applications in production.
+
+---
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="section-label">Concept</div>
+  <div class="concept-block"><p><strong>Time to first token (TTFT)</strong> is the wall-clock duration from when the API request is sent to when the first output token is streamed back to the client. It is distinct from <strong>total generation latency</strong> (time to last token, TTLT) and <strong>throughput</strong> (tokens/second). TTFT governs perceived responsiveness: users tolerate long total generation times if the UI starts rendering within ~200–500 ms, but a blank screen for 2+ seconds triggers frustration and abandonment.</p></div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="section-label">Mechanism</div>
+  <div class="card"><p>LLM inference has two phases:</p>
+<div class="table-wrap"><table class="data-table"><tr><th>Phase</th><th>What happens</th><th>Latency characteristic</th></tr><tr><td><strong>Prefill</strong></td><td>All input tokens processed in one forward pass; KV cache populated</td><td>Scales with prompt length (more tokens → longer prefill)</td></tr><tr><td><strong>Decode</strong></td><td>One token generated per forward pass; memory-bandwidth-bound</td><td>Scales with output length (number of tokens generated)</td></tr></table></div>
+<p>TTFT = <strong>network round-trip + prefill time</strong>. The decode phase does not contribute to TTFT — it is post-first-token.</p>
+<p>Key drivers of high TTFT:</p>
+<ol class="mechanism-steps"><li><strong>Long prompts</strong> — each token in the prompt must be processed in the prefill pass. A 10K-token RAG context prefills 5–10× slower than a 1K prompt.</li><li><strong>Queuing / batching</strong> — shared inference servers (vLLM, TGI) batch requests to maximise GPU utilisation; a request may wait for the current batch to finish before its prefill starts.</li><li><strong>Cold starts</strong> — serverless deployments (Lambda, Cloud Run) can add 1–5 s for container warm-up.</li><li><strong>Model size</strong> — a 70B model has more prefill FLOP than a 7B model for the same prompt.</li></ol>
+<p><strong>Mitigations (in order of impact):</strong></p>
+<ol class="mechanism-steps"><li><strong>Prompt compression</strong> — LLMLingua, selective context, or semantic caching reduces prefill length and thus TTFT. Cutting a 4K prompt to 1.5K can halve prefill time.</li><li><strong>Streaming responses</strong> — enable streaming in the API call so the client renders tokens as they arrive; TTFT feels faster even if TTLT is unchanged.</li><li><strong>Model tiering / speculative decoding</strong> — route simple queries to a smaller model (GPT-4o-mini, Llama 3 8B) with faster prefill; use speculative decoding on the large model to parallelise decode.</li><li><strong>Semantic caching</strong> — exact cache hit (GPTCache, Redis) returns the full response in <10 ms, eliminating prefill entirely.</li><li><strong>Continuous batching + priority queues</strong> — vLLM's PagedAttention + continuous batching lets new requests interleave with in-flight decodes rather than waiting for full-batch completion, reducing queue wait.</li><li><strong>Compute-optimised infrastructure</strong> — H100s prefill ~2× faster than A100s for identical models; TPU v5e gives high prefill throughput for long documents.</li></ol></div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="section-label">Example / Tradeoff</div>
+  <div class="card card-accent"><div class="rich-text"><p>At a customer-support chatbot serving 500K queries/day with an average 2.5K-token RAG context:</p>
+<div class="table-wrap"><table class="data-table"><tr><th>Configuration</th><th>TTFT (p50)</th><th>TTFT (p95)</th><th>Total latency (p50)</th></tr><tr><td>GPT-4o, no caching</td><td>1.8 s</td><td>4.2 s</td><td>8.5 s</td></tr><tr><td>GPT-4o-mini, no caching</td><td>0.7 s</td><td>1.9 s</td><td>4.2 s</td></tr><tr><td>GPT-4o + semantic cache (30% hit)</td><td>0.6 s effective</td><td>1.4 s effective</td><td>3.1 s effective</td></tr><tr><td>GPT-4o-mini + LLMLingua (40% compression)</td><td>0.4 s</td><td>1.1 s</td><td>2.8 s</td></tr></table></div>
+<p><strong>Key tradeoff:</strong> Reducing TTFT via model downtiering (GPT-4o → GPT-4o-mini) also reduces cost ~15× but may reduce answer quality. Validate quality regression with RAGAS faithfulness and golden-dataset accuracy before switching. Semantic caching achieves both TTFT reduction and cost savings without quality loss, but only for repeated queries.</p>
+<p><strong>Streaming vs TTLT tradeoff:</strong> Streaming does not reduce TTLT — it only improves perceived latency. For use cases where the full response must be post-processed (e.g., NLI faithfulness check, JSON parsing), you may not be able to stream, and TTFT becomes less important than TTLT.</p></div></div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="accordion">
+    <div class="accordion-header">
+      <span class="accordion-title">🎙 Verbal Script (3–5 min)</span>
+      <span class="accordion-chevron">▾</span>
+    </div>
+    <div class="accordion-body">
+      <div class="script-block"><div class="script-label">Opening (30s)</div><p>"TTFT — time to first token — is the latency metric that most directly controls perceived responsiveness in a streaming LLM product. It's the time from when I send the request to when the first output token appears on the user's screen. I think of it as the 'blank screen' metric — users tolerate long generation if they see <em>something</em> fast, but a blank screen over 500ms starts feeling broken."</p></div>
+      <div class="script-block"><div class="script-label">Core explanation (2–3 min)</div><p>"The reason TTFT is a distinct metric comes from how LLM inference works. There are two phases: prefill and decode. In prefill, all input tokens are processed in one forward pass and the KV cache is populated — this phase scales with prompt length and is the main driver of TTFT. Once prefill is done, the model decodes one token per forward pass, which is memory-bandwidth-bound. So TTFT is basically: network round trip plus prefill time. The decode phase doesn't contribute to TTFT at all.</p>
+<p>The biggest enemy of TTFT in production is a long prompt. A 10K-token RAG context with all retrieved documents takes 5–10× longer to prefill than a 1K prompt. So my first lever is prompt compression — tools like LLMLingua or aggressive context selection can cut prompts by 40–60%, cutting TTFT in half.</p>
+<p>The second lever is streaming. If I enable token streaming on the API call, the client starts rendering as soon as the first decode token arrives. That doesn't reduce TTFT in the strict sense — prefill still happens before any token is emitted — but it makes the product feel responsive and cuts perceived latency dramatically.</p>
+<p>The third lever is model tiering. A 7B or 8B model like GPT-4o-mini or Llama 3 8B has a much smaller prefill footprint than GPT-4 70B for the same prompt, so TTFT is 2–3× faster. The tradeoff is answer quality, which I'd validate with a golden dataset before switching.</p>
+<p>And the fourth lever — semantic caching — is the nuclear option: if the query is a near-duplicate of something cached (GPTCache with cosine similarity ≥ 0.93), I return the full response in under 10 ms, bypassing prefill entirely."</p></div>
+      <div class="script-block"><div class="script-label">Tradeoff / production angle (1 min)</div><p>"The subtle tradeoff is that reducing TTFT can conflict with post-processing requirements. If I need to run a RAGAS faithfulness check or parse the output as structured JSON before showing it to the user, I can't stream, and TTFT becomes irrelevant — what matters is TTLT. So the right metric depends on the product architecture. For chat UIs, stream and optimise TTFT. For batch pipelines or API responses that require the full output before processing, optimise TTLT instead. I'd always instrument both separately in my monitoring stack."</p></div>
+      <div class="script-block"><div class="script-label">Wrap-up (30s)</div><p>"So TTFT matters because it controls the 'blank screen' moment in streaming AI products. The levers are prompt compression, streaming, model tiering, and semantic caching — in that order of implementation difficulty. I'd track TTFT separately from TTLT and total cost in production dashboards, with a p95 SLO of around 500ms–1s for a chatbot use case."</p></div>
+    </div>
+  </div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="section-label">Pitfalls</div>
+  <div class="pitfall-card">
+    <div class="pitfall-mistake"><strong>✗ Mistake</strong> Treating TTFT and total latency as the same thing, saying &quot;just stream the response&quot; without explaining that TTFT still depends on prefill time</div>
+    <div class="pitfall-better"><strong>✓ Better</strong> Distinguish the prefill (TTFT driver) from decode (TTLT driver), explain streaming only helps perceived latency not actual TTFT, and name concrete levers like prompt compression and model tiering that actually reduce prefill time.</div>
+  </div>
+  <div class="pitfall-card">
+    <div class="pitfall-mistake"><strong>✗ Mistake</strong> Recommending semantic caching as the only TTFT solution without discussing cache hit rate, TTL invalidation, or the staleness tradeoff</div>
+    <div class="pitfall-better"><strong>✓ Better</strong> Explain that semantic caching only helps for repeated/near-duplicate queries (30–40% hit rate typical), requires a similarity threshold (0.92–0.97), and needs TTL tied to knowledge-base freshness; for novel queries, you need other levers.</div>
+  </div>
+  <div class="pitfall-card">
+    <div class="pitfall-mistake"><strong>✗ Mistake</strong> Ignoring the streaming-vs-post-processing conflict — saying &quot;always stream&quot; without noting that structured output, NLI checks, or citation validation require the full response before rendering</div>
+    <div class="pitfall-better"><strong>✓ Better</strong> Clarify that streaming is only viable when the client can render partial text; for JSON-mode or faithfulness-gated responses, optimise TTLT instead.
+
+---</div>
+  </div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="section-label">Related Questions</div>
+  <div class="related-pills">
+    <div class="related-pill" data-slug="07-003">
+      <span class="related-pill-icon">→</span>
+      <div class="related-pill-text">
+        <div class="related-pill-q">Q11: How do you reduce latency in GenAI applications?</div>
+        <div class="related-pill-rel">Broader latency framework of which TTFT is one dimension</div>
+      </div>
+    </div>
+    <div class="related-pill" data-slug="01-009">
+      <span class="related-pill-icon">→</span>
+      <div class="related-pill-text">
+        <div class="related-pill-q">Q9: What is KV cache? How does it help in LLM inference?</div>
+        <div class="related-pill-rel">KV cache is the mechanism that prefill populates; understanding it explains TTFT</div>
+      </div>
+    </div>
+    <div class="related-pill" data-slug="05-012">
+      <span class="related-pill-icon">→</span>
+      <div class="related-pill-text">
+        <div class="related-pill-q">Q12: Operational/business metrics: win rate, deflection rate, p95 latency?</div>
+        <div class="related-pill-rel">TTFT p95 is one of the production SLOs in the business metrics stack</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="section-label">One-liner recall</div>
+  <div class="oneliner-box">
+    <div class="oneliner-label">▸ Reconstruct from memory</div>
+    <div class="oneliner-text" data-text="TTFT = network + prefill time (not decode); reduce it via prompt compression, streaming, model tiering, and semantic caching, and monitor p95 separately from total generation latency.">TTFT = network + prefill time (not decode); reduce it via prompt compression, streaming, model tiering, and semantic caching, and monitor p95 separately from total generation latency.</div>
+  </div>
+</div>

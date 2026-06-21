@@ -1,0 +1,142 @@
+<div class="answer-header reveal">
+  <div class="answer-meta">
+    <span class="meta-badge meta-category">02-rag-systems</span>
+    <span class="meta-badge meta-num">Q014</span>
+    <span class="meta-badge meta-status-review">review</span>
+  </div>
+  <h1 class="answer-title">How protect sensitive/confidential data in a RAG pipeline?</h1>
+</div>
+
+<div class="answer-section reveal">
+  <div class="accordion">
+    <div class="accordion-header">
+      <span class="accordion-title">⟁ Framing — Why this is asked</span>
+      <span class="accordion-chevron">▾</span>
+    </div>
+    <div class="accordion-body">
+      <div class="framing-grid">
+        <div><div class="framing-card">
+          <div class="framing-card-title">Why asked</div>
+          <p style="font-size:13.5px;line-height:1.7;color:var(--text-dim)">This question probes production maturity and security consciousness. Interviewers want to know whether you think about data governance from the start or bolt it on as an afterthought. It tests knowledge of where data exposure happens in a RAG pipeline (ingestion, indexing, retrieval, generation, logs) and what concrete controls exist at each layer.</p>
+        </div></div>
+        <div><div class="framing-card">
+          <div class="framing-card-title">Trigger phrases</div>
+          <div class="trigger-list">
+              <div class="trigger-phrase">How would you handle PII in a RAG system?</div>
+              <div class="trigger-phrase">Our knowledge base has confidential HR / legal / financial documents — how do you protect them?</div>
+              <div class="trigger-phrase">Walk me through your data security approach for a RAG pipeline.</div>
+              <div class="trigger-phrase">What happens if a user queries for data they shouldn&#x27;t see?</div>
+          </div>
+        </div></div>
+      </div>
+      <div class="tests-block">
+        <span style="font-family:var(--mono);font-size:10px;letter-spacing:0.1em;text-transform:uppercase;color:var(--purple);margin-right:8px">Tests:</span>Ability to reason about a defense-in-depth data security architecture across the full RAG pipeline — ingestion, retrieval, generation, and logging — using concrete tooling and access control patterns.
+
+---
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="section-label">Concept</div>
+  <div class="concept-block"><p>Sensitive data protection in RAG requires controls at <strong>five distinct layers</strong>: (1) ingestion / PII scrubbing, (2) access-controlled indexing, (3) retrieval-time ACL enforcement, (4) generation-time prompt hygiene, and (5) logging / observability redaction. Any single-layer approach leaves the other four exposed.</p></div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="section-label">Mechanism</div>
+  <div class="card"><p><strong>Layer 1 — Ingestion: PII detection and redaction</strong></p>
+<ul class="styled-list"><li>Run Microsoft Presidio (or AWS Comprehend) on every document before chunking.</li><li>Detect entities: SSN, credit card numbers, email addresses, phone numbers, medical record numbers (HIPAA).</li><li>Action: redact (<code>[REDACTED]</code>) or pseudonymize (replace with a consistent token for intra-doc coherence) before text reaches the chunker.</li><li>Store original (unredacted) documents in a separate, access-controlled vault (e.g., S3 with KMS encryption + restrictive IAM policy); the vector store only holds sanitized text.</li></ul>
+<p><strong>Layer 2 — Indexing: document-level ACL metadata</strong></p>
+<ul class="styled-list"><li>Attach security metadata to every chunk at index time: <code>{"doc_id": "hr-review-2025", "acl": ["group:hr", "group:legal"], "classification": "confidential"}</code>.</li><li>Pinecone, Weaviate, and Qdrant all support metadata filtering; Elasticsearch has document-level security.</li><li>Never store raw sensitive fields (SSNs, salary) as filterable metadata — only ACL group identifiers.</li></ul>
+<p><strong>Layer 3 — Retrieval: per-user ACL enforcement</strong></p>
+<ul class="styled-list"><li>Before executing the ANN query, resolve the caller's identity (OAuth2 / Okta token) to their group memberships.</li><li>Inject an ACL filter into every vector query: <code>filter={"acl": {"$in": user_groups}}</code>.</li><li>This is the critical gate — if retrieval is bypassed, every downstream layer is irrelevant. Test it with dedicated security tests that verify a user from group A cannot retrieve group B documents.</li><li>For Elasticsearch hybrid retrieval: apply the same document-level security (<code>_security</code> plugin or equivalent index-alias-based isolation).</li></ul>
+<p><strong>Layer 4 — Generation: prompt hygiene and output filtering</strong></p>
+<ul class="styled-list"><li>System prompt instructs the model not to reproduce verbatim sensitive content and to cite sources rather than quote at length.</li><li>Post-generation: run a second Presidio pass on the LLM response before returning it to the user — catches cases where the model hallucinated or echoed PII from retrieved context.</li><li>Consider differential privacy-style output filtering for medical / financial contexts (e.g., never output a string matching <code>\d{3}-\d{2}-\d{4}</code> SSN pattern).</li></ul>
+<p><strong>Layer 5 — Logging and observability</strong></p>
+<ul class="styled-list"><li>Redact queries and retrieved chunks in tracing systems (LangSmith, Langfuse, Datadog) before storage.</li><li>Log access events (who queried, which doc IDs were retrieved) for audit, but not the actual content of sensitive chunks.</li><li>Rotate and encrypt logs; apply the same retention policy as the source documents.</li></ul>
+<p><strong>Encryption and transport</strong></p>
+<ul class="styled-list"><li>All data in transit: TLS 1.3.</li><li>All data at rest: AES-256 (S3 SSE-KMS, Pinecone at-rest encryption).</li><li>Embedding vectors themselves can encode semantic information — treat the vector store as sensitive infrastructure, not just a performance cache.</li></ul></div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="section-label">Example / Tradeoff</div>
+  <div class="card card-accent"><div class="rich-text"><p><strong>Concrete stack (regulated HR knowledge base):</strong></p>
+<ul class="styled-list"><li>Presidio → MinHash dedup → parent-child chunker → Pinecone (ACL metadata) + Elasticsearch (doc security plugin)</li><li>Retrieval: Okta group resolution → Pinecone metadata filter <code>{"acl": {"$in": groups}}</code> + ES doc-level security</li><li>Generation: GPT-4o-mini T=0 with grounding prompt + Presidio post-gen scan</li><li>Logging: Langfuse with PII fields redacted via custom middleware before storage</li></ul>
+<p><strong>Tradeoff — pseudonymization vs redaction:</strong></p>
+<ul class="styled-list"><li>Redaction (<code>[REDACTED]</code>) breaks intra-document coreference (e.g., "John Doe was promoted… he then…" loses the referent).</li><li>Pseudonymization (consistent fake token per entity per document) preserves coherence but requires a secure entity-token mapping store; adds complexity and a new attack surface.</li><li>For most RAG pipelines: redact at ingestion, preserve structure with parent-child chunking, and if coreference matters, use sentence-window retrieval to bring surrounding context without exposing the entity value.</li></ul>
+<p><strong>Scale consideration:</strong> At 1M+ documents, PII scanning becomes a bottleneck. Run Presidio async in a processing queue (SQS + Lambda or Kafka), not synchronously in the ingestion path. Budget ~50ms/doc for Presidio on CPU; GPU-accelerated NER (spaCy with cuBLAS) can 10× throughput.</p></div></div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="accordion">
+    <div class="accordion-header">
+      <span class="accordion-title">🎙 Verbal Script (3–5 min)</span>
+      <span class="accordion-chevron">▾</span>
+    </div>
+    <div class="accordion-body">
+      <div class="script-block"><div class="script-label">Opening (30s)</div><p>"Great question — this is something I think about in layers, because a RAG pipeline has at least five places where sensitive data can leak, and securing only one leaves the rest open. I'd walk through ingestion, indexing, retrieval, generation, and logging."</p></div>
+      <div class="script-block"><div class="script-label">Core explanation (2–3 min)</div><p>"Starting at ingestion: before any document gets chunked, I'd run Microsoft Presidio to detect and redact PII — SSNs, email addresses, credit card numbers, whatever's relevant to the domain. The original, unredacted documents live in an encrypted S3 vault with tight IAM policies; only the sanitized text reaches the vector store.</p>
+<p>At the indexing layer, I'd attach ACL metadata to every chunk — something like <code>acl: ['group:hr', 'group:legal']</code> — using the vector DB's metadata filtering. Pinecone, Qdrant, and Weaviate all support this. The key discipline is that sensitive values like salary figures never go into filterable metadata fields.</p>
+<p>The most critical layer is retrieval. When a user query comes in, I resolve their identity via the OAuth2 token — say Okta group memberships — and inject an ACL filter into the ANN query before it hits the index. This is the security gate that everything else depends on. I'd have dedicated security tests that assert group-A users cannot retrieve group-B documents, run on every deploy.</p>
+<p>At the generation layer, my system prompt instructs the model to cite sources rather than quote verbatim, and I run a second Presidio pass on the LLM response before it goes back to the user. That catches cases where the model echoed PII from retrieved context.</p>
+<p>Finally, for logging and observability — I'd redact sensitive content from traces in tools like Langfuse or Datadog, and log access events (who retrieved which doc IDs) for audit purposes without storing the chunk content itself."</p></div>
+      <div class="script-block"><div class="script-label">Tradeoff / production angle (1 min)</div><p>"The main tradeoff I'd flag is pseudonymization vs redaction. Pseudonymization — replacing a name with a consistent fake token — preserves coreference chains within a document, which matters for narratives, but it adds a new secure mapping store to maintain. For most RAG pipelines I'd start with redaction and only add pseudonymization if context coherence is causing retrieval quality issues.</p>
+<p>At scale, PII scanning becomes a throughput bottleneck. Presidio on CPU takes about 50ms per document; at 1M documents that's hours of synchronous blocking. I'd move it to an async processing queue — SQS and Lambda or Kafka — and use GPU-accelerated NER if throughput demands it."</p></div>
+      <div class="script-block"><div class="script-label">Wrap-up (30s)</div><p>"So the mental model is: defense in depth across five layers, with retrieval-time ACL enforcement as the critical gate. I'd love to go deeper on any layer — the ACL filter injection, the PII scanning approach, or the logging redaction patterns."</p></div>
+    </div>
+  </div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="section-label">Pitfalls</div>
+  <div class="pitfall-card">
+    <div class="pitfall-mistake"><strong>✗ Mistake</strong> Saying &quot;we encrypt the data at rest and in transit&quot; as the complete answer</div>
+    <div class="pitfall-better"><strong>✓ Better</strong> Encryption covers transport and storage but does nothing to prevent an authenticated user from retrieving documents outside their access scope; ACL enforcement at retrieval time is the real gate.</div>
+  </div>
+  <div class="pitfall-card">
+    <div class="pitfall-mistake"><strong>✗ Mistake</strong> Scrubbing PII from the final LLM response only, ignoring the retrieval context</div>
+    <div class="pitfall-better"><strong>✓ Better</strong> Presidio (or equivalent) must run at ingestion before chunks reach the index; a model can reproduce PII from its context window even if you filter its output, so the source data must be clean.</div>
+  </div>
+  <div class="pitfall-card">
+    <div class="pitfall-mistake"><strong>✗ Mistake</strong> Storing ACL-sensitive field values (salary, SSN) as vector metadata for filtering purposes</div>
+    <div class="pitfall-better"><strong>✓ Better</strong> Store only group/role identifiers in metadata; keep sensitive field values in a separate encrypted store; never let filterable metadata be a data exfiltration channel.
+
+---</div>
+  </div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="section-label">Related Questions</div>
+  <div class="related-pills">
+    <div class="related-pill" data-slug="02-011">
+      <span class="related-pill-icon">→</span>
+      <div class="related-pill-text">
+        <div class="related-pill-q">Q11: How ensure quality of data the LLM interacts with?</div>
+        <div class="related-pill-rel">prerequisite — data quality controls are the foundation for security controls</div>
+      </div>
+    </div>
+    <div class="related-pill" data-slug="02-010">
+      <span class="related-pill-icon">→</span>
+      <div class="related-pill-text">
+        <div class="related-pill-q">Q10: Design a Q&amp;A system over internal documentation</div>
+        <div class="related-pill-rel">same architecture, adds ACL enforcement as a primary design constraint</div>
+      </div>
+    </div>
+    <div class="related-pill" data-slug="02-008">
+      <span class="related-pill-icon">→</span>
+      <div class="related-pill-text">
+        <div class="related-pill-q">Q8: How handle hallucination when no information is found in context?</div>
+        <div class="related-pill-rel">related — abstention and grounding prompts serve double duty: accuracy and preventing data leakage via confabulation</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="section-label">One-liner recall</div>
+  <div class="oneliner-box">
+    <div class="oneliner-label">▸ Reconstruct from memory</div>
+    <div class="oneliner-text" data-text="Protect RAG data with five layers: Presidio PII redaction at ingestion, ACL metadata on every chunk, per-user group filter injected at retrieval (the critical gate), Presidio post-gen scan on LLM output, and PII-redacted logs — encryption alone is not access control.">Protect RAG data with five layers: Presidio PII redaction at ingestion, ACL metadata on every chunk, per-user group filter injected at retrieval (the critical gate), Presidio post-gen scan on LLM output, and PII-redacted logs — encryption alone is not access control.</div>
+  </div>
+</div>

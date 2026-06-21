@@ -1,0 +1,138 @@
+<div class="answer-header reveal">
+  <div class="answer-meta">
+    <span class="meta-badge meta-category">02-rag-systems</span>
+    <span class="meta-badge meta-num">Q019</span>
+    <span class="meta-badge meta-status-review">review</span>
+  </div>
+  <h1 class="answer-title">Scale RAG to 10M+ articles — sharding, caching, retrieval optimization</h1>
+</div>
+
+<div class="answer-section reveal">
+  <div class="accordion">
+    <div class="accordion-header">
+      <span class="accordion-title">⟁ Framing — Why this is asked</span>
+      <span class="accordion-chevron">▾</span>
+    </div>
+    <div class="accordion-body">
+      <div class="framing-grid">
+        <div><div class="framing-card">
+          <div class="framing-card-title">Why asked</div>
+          <p style="font-size:13.5px;line-height:1.7;color:var(--text-dim)">This is a senior-level system design question that probes whether a candidate can reason about RAG beyond a single-machine prototype. Interviewers want to see awareness of distributed vector index sharding, caching hierarchies, retrieval latency budgets, and operational cost control at internet scale. It specifically tests production architecture instincts, not just algorithm knowledge.</p>
+        </div></div>
+        <div><div class="framing-card">
+          <div class="framing-card-title">Trigger phrases</div>
+          <div class="trigger-list">
+              <div class="trigger-phrase">Scale RAG to 10M+ articles</div>
+              <div class="trigger-phrase">Your RAG system works for 10K docs — how do you scale it to 50 million?</div>
+              <div class="trigger-phrase">We&#x27;re ingesting the whole web — how do you make retrieval still fast?</div>
+              <div class="trigger-phrase">How would you handle 10M+ documents in your vector store?</div>
+          </div>
+        </div></div>
+      </div>
+      <div class="tests-block">
+        <span style="font-family:var(--mono);font-size:10px;letter-spacing:0.1em;text-transform:uppercase;color:var(--purple);margin-right:8px">Tests:</span>Whether the candidate can design a distributed RAG architecture with sharded vector indexes, multi-layer caching, and retrieval latency controls at scale.
+
+---
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="section-label">Concept</div>
+  <div class="concept-block"><p>At 10M+ articles, a single-node vector index saturates memory and query throughput. The solution is a distributed RAG architecture built on three pillars: <strong>shard the index horizontally</strong>, <strong>cache aggressively at multiple layers</strong>, and <strong>stage the retrieval pipeline</strong> (approximate ANN → lightweight rerank on top-N, not all N).</p></div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="section-label">Mechanism</div>
+  <div class="card"><p><strong>1. Index sharding</strong></p>
+<ul class="styled-list"><li>Partition the corpus across multiple index shards (e.g., by topic cluster, source domain, or hash of doc ID)</li><li>Each shard runs its own HNSW or IVF index; query fan-out hits all shards in parallel and merges results</li><li>Managed services: Pinecone (pods auto-shard), Qdrant (sharded collections), Weaviate (multi-node clusters), or self-hosted FAISS with a scatter-gather service layer</li><li>Rule of thumb: keep each shard ≤ 5M vectors for <50ms ANN latency on 1536-dim embeddings on A100-class GPU; at 10M articles with parent-child chunking you may have 30–60M vectors total, so 10–15 shards</li></ul>
+<p><strong>2. Multi-layer caching</strong></p>
+<div class="table-wrap"><table class="data-table"><tr><th>Cache layer</th><th>What's cached</th><th>Tool</th><th>TTL</th></tr><tr><td>Query embedding cache</td><td>Embedding vector for identical query strings</td><td>Redis (key: SHA256 of query text)</td><td>1 h</td></tr><tr><td>Semantic similarity cache</td><td>Full retrieval result for near-duplicate queries (cosine ≥ 0.97)</td><td>GPTCache / custom Redis+Pinecone combo</td><td>15 min</td></tr><tr><td>Response cache</td><td>Final LLM answer for identical (query, top-k context) pairs</td><td>Redis / CDN edge cache</td><td>5–30 min</td></tr></table></div>
+<p>Semantic caching is the highest-leverage lever: at scale, 20–40% of queries are near-duplicates, reducing LLM calls and p95 latency significantly.</p>
+<p><strong>3. Retrieval pipeline staging</strong></p>
+<ul class="styled-list"><li>Stage 1: ANN over shards — top-100 candidates, ~20–40ms</li><li>Stage 2: BM25 or lightweight bi-encoder rerank on top-100 → top-20, ~10–20ms</li><li>Stage 3: Cross-encoder rerank on top-20 → top-5 for generation, ~80–120ms (only on ambiguous or high-stakes queries)</li><li>Skip cross-encoder for high-confidence ANN matches (cosine > 0.92) to save ~100ms</li></ul>
+<p><strong>4. Ingestion at scale</strong></p>
+<ul class="styled-list"><li>Async batch embedding pipeline: pull new/updated docs from Kafka → deduplicate via MinHash → chunk (parent-child) → embed in batches of 2048 (OpenAI) or self-hosted BGE on GPU → write to shards</li><li>CDC (Debezium) or webhook triggers for incremental index updates; avoid full re-indexing</li><li>Maintain a "freshness score" in metadata for recency boosting</li></ul>
+<p><strong>5. Query routing</strong></p>
+<ul class="styled-list"><li>Route navigational queries (exact article name) → BM25 only, skips ANN entirely</li><li>Route semantic queries → full hybrid pipeline</li><li>Route repetitive/cached queries → response cache, zero LLM calls</li></ul></div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="section-label">Example / Tradeoff</div>
+  <div class="card card-accent"><div class="rich-text"><p><strong>Wikipedia-scale example:</strong> 10M articles → ~60M chunks (parent-child) → 60M × 1536-dim float32 = ~370 GB of raw vectors. Pinecone p2 pods hold ~5M vectors each at the s1 size → need ~12 pods. At $0.096/hour per pod = ~$35/day just for index hosting. At this scale, self-hosting Qdrant on 4× A100 80GB nodes becomes cost-competitive (~$8/hr total vs $28/hr Pinecone equivalent) — worth evaluating at 50M+ queries/day.</p>
+<p><strong>Latency budget (p95 target ≤ 500ms end-to-end):</strong></p>
+<div class="table-wrap"><table class="data-table"><tr><th>Stage</th><th>Budget</th></tr><tr><td>Embedding the query</td><td>20ms</td></tr><tr><td>Cache lookup</td><td>5ms</td></tr><tr><td>ANN fan-out across shards</td><td>40ms</td></tr><tr><td>BM25 rerank</td><td>15ms</td></tr><tr><td>Cross-encoder rerank (optional)</td><td>100ms</td></tr><tr><td>LLM generation (streaming)</td><td>300ms</td></tr></table></div>| **Total** | **~480ms** |</div></div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="accordion">
+    <div class="accordion-header">
+      <span class="accordion-title">🎙 Verbal Script (3–5 min)</span>
+      <span class="accordion-chevron">▾</span>
+    </div>
+    <div class="accordion-body">
+      <div class="script-block"><div class="script-label">Opening (30s)</div><p>"Scaling RAG to 10M+ articles hits three constraints simultaneously: the vector index no longer fits on one node, retrieval latency blows up without caching, and ingestion needs to be continuous without full re-indexing. I'd address each of those independently. Let me walk through sharding, caching, and pipeline staging."</p></div>
+      <div class="script-block"><div class="script-label">Core explanation (2–3 min)</div><p>"First, index sharding. At 10M articles with parent-child chunking, you're looking at 30–60 million vectors. A single HNSW index at that scale would need ~200GB of RAM and query latency climbs past 100ms. The fix is horizontal sharding — partition the corpus across 10–15 shards, each holding 5M vectors, with a scatter-gather service that fans queries out to all shards in parallel and merges the top-K results. Managed options like Pinecone or Qdrant handle this automatically; at very high scale you'd consider self-hosted Qdrant for cost control.</p>
+<p>Second, multi-layer caching. At scale, 20–40% of queries are near-duplicates. I'd build three cache layers: a query embedding cache in Redis keyed on the query string's hash, a semantic similarity cache using something like GPTCache that returns stored results for queries with cosine similarity ≥ 0.97, and a response cache for identical (query, context) pairs. This cuts LLM calls dramatically and is the cheapest latency win.</p>
+<p>Third, pipeline staging. Rather than running a cross-encoder on all candidates, I stage it: ANN gives top-100 in ~40ms, BM25 or a lightweight bi-encoder reranks to top-20 in ~15ms, and a cross-encoder only runs on ambiguous queries to produce the final top-5. High-confidence ANN matches skip the cross-encoder entirely, saving ~100ms.</p>
+<p>For ingestion, I'd use a Kafka-driven async pipeline: docs arrive via CDC from the source system, get deduplicated with MinHash, chunked with parent-child strategy, embedded in GPU batches, and written to index shards incrementally — never a full re-index."</p></div>
+      <div class="script-block"><div class="script-label">Tradeoff / production angle (1 min)</div><p>"The main tensions are cost vs. latency vs. freshness. Pinecone is easy to operate but costs ~$35/day at 60M vectors; self-hosted Qdrant halves that at 50M+ queries/day but requires ML infra. The semantic cache improves both cost and latency but introduces a staleness window — if an article is updated and the cache hasn't expired, users get stale answers. I'd manage that by setting cache TTLs to match source update frequency: news → 5-minute TTL, internal docs → 30-minute TTL, legal/compliance docs → no response cache at all.</p>
+<p>Another gotcha: scatter-gather across 15 shards means your p99 latency is the slowest shard's latency. I'd add a speculative timeout — if 80% of shards respond within 35ms, return the partial result rather than waiting for the stragglers."</p></div>
+      <div class="script-block"><div class="script-label">Wrap-up (30s)</div><p>"So the short version: shard the vector index to keep per-shard ANN fast, cache at the semantic layer to avoid redundant LLM calls, stage the reranking pipeline to apply expensive cross-encoders only where needed, and drive ingestion through a CDC-triggered async pipeline for continuous freshness. Happy to go deeper on any of those layers."</p></div>
+    </div>
+  </div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="section-label">Pitfalls</div>
+  <div class="pitfall-card">
+    <div class="pitfall-mistake"><strong>✗ Mistake</strong> Saying &quot;just use a bigger Pinecone tier&quot; without discussing shard fan-out, scatter-gather latency, or p99 tail latency from the slowest shard</div>
+    <div class="pitfall-better"><strong>✓ Better</strong> Explain sharding mechanics, how top-K results are merged across shards, and the speculative-timeout pattern to bound p99</div>
+  </div>
+  <div class="pitfall-card">
+    <div class="pitfall-mistake"><strong>✗ Mistake</strong> Mentioning caching only at the response level (full LLM output cache) without the semantic similarity layer</div>
+    <div class="pitfall-better"><strong>✓ Better</strong> Walk through all three cache layers (embedding → semantic → response) and explain that semantic caching is the biggest win because 20–40% of production queries are near-duplicates</div>
+  </div>
+  <div class="pitfall-card">
+    <div class="pitfall-mistake"><strong>✗ Mistake</strong> Describing re-indexing as a batch job that runs nightly</div>
+    <div class="pitfall-better"><strong>✓ Better</strong> Explain CDC-triggered incremental ingestion (Debezium/Kafka) so the index stays fresh without expensive full re-indexes, and note that embedding drift requires a re-embedding campaign when switching models
+
+---</div>
+  </div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="section-label">Related Questions</div>
+  <div class="related-pills">
+    <div class="related-pill" data-slug="02-017">
+      <span class="related-pill-icon">→</span>
+      <div class="related-pill-text">
+        <div class="related-pill-q">Q17: What is hybrid search? When combine vector + BM25?</div>
+        <div class="related-pill-rel">Prerequisite — hybrid search is the retrieval core inside each shard</div>
+      </div>
+    </div>
+    <div class="related-pill" data-slug="02-018">
+      <span class="related-pill-icon">→</span>
+      <div class="related-pill-text">
+        <div class="related-pill-q">Q18: What is re-ranking? Cross-encoder vs bi-encoder?</div>
+        <div class="related-pill-rel">Pipeline stage 3 in the scaled architecture</div>
+      </div>
+    </div>
+    <div class="related-pill" data-slug="02-025">
+      <span class="related-pill-icon">→</span>
+      <div class="related-pill-text">
+        <div class="related-pill-q">Q25: Semantic caching — reduce cost and latency?</div>
+        <div class="related-pill-rel">Deep dive on the semantic cache layer described here</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="section-label">One-liner recall</div>
+  <div class="oneliner-box">
+    <div class="oneliner-label">▸ Reconstruct from memory</div>
+    <div class="oneliner-text" data-text="Scale RAG to 10M+ docs via horizontal shard fan-out (5M vectors/shard → scatter-gather merge), three-layer caching (embedding → semantic similarity → response), staged retrieval (ANN top-100 → BM25 rerank top-20 → cross-encoder top-5), and CDC-driven incremental ingestion — never full re-index.">Scale RAG to 10M+ docs via horizontal shard fan-out (5M vectors/shard → scatter-gather merge), three-layer caching (embedding → semantic similarity → response), staged retrieval (ANN top-100 → BM25 rerank top-20 → cross-encoder top-5), and CDC-driven incremental ingestion — never full re-index.</div>
+  </div>
+</div>

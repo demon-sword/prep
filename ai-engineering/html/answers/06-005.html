@@ -1,0 +1,127 @@
+<div class="answer-header reveal">
+  <div class="answer-meta">
+    <span class="meta-badge meta-category">06-ml-fundamentals</span>
+    <span class="meta-badge meta-num">Q005</span>
+    <span class="meta-badge meta-status-review">review</span>
+  </div>
+  <h1 class="answer-title">Data parallelism for single-request assistant?</h1>
+</div>
+
+<div class="answer-section reveal">
+  <div class="accordion">
+    <div class="accordion-header">
+      <span class="accordion-title">⟁ Framing — Why this is asked</span>
+      <span class="accordion-chevron">▾</span>
+    </div>
+    <div class="accordion-body">
+      <div class="framing-grid">
+        <div><div class="framing-card">
+          <div class="framing-card-title">Why asked</div>
+          <p style="font-size:13.5px;line-height:1.7;color:var(--text-dim)">The interviewer is probing whether the candidate understands the distinction between <em>training-time</em> parallelism strategies (data parallelism, model parallelism, pipeline parallelism) and <em>inference-time</em> serving architecture. It tests whether you can avoid confusing a distributed training concept with a production-serving scenario, and whether you understand the latency vs. throughput axis clearly.</p>
+        </div></div>
+        <div><div class="framing-card">
+          <div class="framing-card-title">Trigger phrases</div>
+          <div class="trigger-list">
+              <div class="trigger-phrase">Would you use data parallelism to serve a personal assistant with one request at a time?</div>
+              <div class="trigger-phrase">How do you optimize for a single-user assistant — throughput or latency?</div>
+              <div class="trigger-phrase">What parallelism strategy applies when you have just one request in flight?</div>
+          </div>
+        </div></div>
+      </div>
+      <div class="tests-block">
+        <span style="font-family:var(--mono);font-size:10px;letter-spacing:0.1em;text-transform:uppercase;color:var(--purple);margin-right:8px">Tests:</span>Whether the candidate knows that data parallelism targets <em>throughput</em> (many requests), while a single-request interactive assistant needs <em>latency</em> optimizations — and can articulate the correct levers for each.
+
+---
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="section-label">Concept</div>
+  <div class="concept-block"><p>Data parallelism is a <strong>training-time</strong> technique that splits a dataset across multiple GPU workers, each holding a full model replica, then aggregates gradients (via AllReduce) to update shared weights. At <strong>inference time</strong> for a <em>single-request</em> personal assistant, data parallelism is irrelevant — there is no batch of examples to parallelize over. The relevant lever is latency, not throughput.</p></div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="section-label">Mechanism</div>
+  <div class="card"><p><strong>Data parallelism (training context):</strong></p>
+<ol class="mechanism-steps"><li>Copy model weights to N GPUs (DDP in PyTorch / FSDP for very large models).</li><li>Split each mini-batch across GPUs — each GPU processes its shard independently (forward + backward).</li><li>AllReduce gradients across workers; each GPU applies the same parameter update.</li><li>Scales throughput linearly with GPU count; communication overhead grows with model size.</li></ol>
+<p><strong>Single-request inference (what actually matters):</strong></p>
+<ul class="styled-list"><li>One request in flight means batch size = 1; data parallelism adds zero value.</li><li>Latency-critical levers: <strong>streaming (SSE)</strong> for first-token UX, <strong>model tiering</strong> (use GPT-4o-mini / a small local model), <strong>KV cache</strong> (avoid re-prefilling on follow-ups), <strong>quantization</strong> (INT8/AWQ reduces memory bandwidth pressure), <strong>semantic caching</strong> (skip LLM call on repeated queries).</li><li>For a <em>very large</em> model that doesn't fit on one GPU, <strong>tensor parallelism</strong> (split weight matrices across GPUs, e.g., Megatron-LM) or <strong>pipeline parallelism</strong> (split layers across GPUs) are the inference-time parallelism strategies — not data parallelism.</li></ul></div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="section-label">Example / Tradeoff</div>
+  <div class="card card-accent"><div class="rich-text"><p>A personal voice assistant running Llama 3 8B on a single A100 (80 GB): the entire model fits, batch size = 1, TTFT target < 200 ms. The correct optimization is <strong>INT8 quantization</strong> (2× throughput, memory bandwidth halved) + <strong>streaming tokens over WebSocket</strong> so the user hears output within 100 ms. If the model were Llama 3 70B (140 GB), one A100 is insufficient — you'd split with <strong>tensor parallelism across 2 × A100s</strong> (Megatron-style), not data parallelism. vLLM supports tensor parallelism via <code>--tensor-parallel-size 2</code> with near-linear latency improvement.</p>
+<div class="table-wrap"><table class="data-table"><tr><th>Scenario</th><th>Right technique</th><th>Why</th></tr><tr><td>Training on 1 M examples</td><td>Data parallelism (DDP/FSDP)</td><td>Throughput — many data points</td></tr><tr><td>1-request assistant, model fits on 1 GPU</td><td>Streaming + quantization + KV cache</td><td>Latency — single user</td></tr><tr><td>1-request assistant, model too large for 1 GPU</td><td>Tensor parallelism (Megatron/vLLM)</td><td>Latency — model sharding</td></tr></table></div>| High-concurrency API (1 000 req/s) | Data parallelism of inference replicas behind load balancer | Throughput — many requests |</div></div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="accordion">
+    <div class="accordion-header">
+      <span class="accordion-title">🎙 Verbal Script (3–5 min)</span>
+      <span class="accordion-chevron">▾</span>
+    </div>
+    <div class="accordion-body">
+      <div class="script-block"><div class="script-label">Opening (30s)</div><p>"This is a great question because it forces a distinction between training-time and inference-time parallelism. Data parallelism is a training concept — it helps you process large datasets faster by splitting them across GPU workers. For a single-request personal assistant, it doesn't apply at inference time."</p></div>
+      <div class="script-block"><div class="script-label">Core explanation (2–3 min)</div><p>"Let me break down what data parallelism actually is first. In training, you copy the full model to N GPUs, split your mini-batch, run forward and backward passes in parallel on each GPU, then AllReduce the gradients so all workers stay in sync. This scales training throughput linearly with GPU count — it's how large models are trained in hours rather than weeks.</p>
+<p>Now at inference for a personal assistant handling one request at a time — your batch size is literally 1. There's no dataset to split. The bottleneck is <em>latency</em>, not throughput. The levers I'd reach for are: streaming tokens over SSE so the user sees output within 100–200 ms (TTFT), quantization to reduce memory bandwidth pressure on the GPU, semantic caching to skip the LLM call on repeated queries, and model tiering — use a smaller model like GPT-4o-mini or a local Llama 3 8B for routine turns and escalate to a larger model only when needed.</p>
+<p>The <em>only</em> inference-time parallelism that helps latency for a single request is <strong>tensor parallelism</strong> — splitting weight matrices across multiple GPUs — which is what vLLM's <code>--tensor-parallel-size</code> flag does. That's relevant if your model is too large to fit on one GPU."</p></div>
+      <div class="script-block"><div class="script-label">Tradeoff / production angle (1 min)</div><p>"The tradeoff to flag is: more GPU replicas behind a load balancer (replica parallelism / horizontal scaling) increases <em>throughput</em> at the cost of more hardware — that's relevant if you have 1 000 concurrent users, not one. For a single-user assistant, adding replicas gives you nothing but redundancy. The winning answer is: optimize for latency via streaming, quantization, and a well-sized model."</p></div>
+      <div class="script-block"><div class="script-label">Wrap-up (30s)</div><p>"So the short answer: data parallelism is a training strategy, not an inference latency strategy. For a single-request personal assistant, I'd focus on streaming output, quantized model weights (INT8 or AWQ), KV cache reuse across turns, and model tiering — and add tensor parallelism only if the model doesn't fit on a single GPU."</p></div>
+    </div>
+  </div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="section-label">Pitfalls</div>
+  <div class="pitfall-card">
+    <div class="pitfall-mistake"><strong>✗ Mistake</strong> Saying &quot;I&#x27;d use data parallelism to speed up the assistant&#x27;s responses&quot;</div>
+    <div class="pitfall-better"><strong>✓ Better</strong> Recognize that data parallelism is a <em>training</em> concept; at inference with batch size = 1, the right lever is latency-oriented (streaming, quantization, model tiering, KV cache), not dataset-splitting parallelism.</div>
+  </div>
+  <div class="pitfall-card">
+    <div class="pitfall-mistake"><strong>✗ Mistake</strong> Conflating data parallelism with horizontal replica scaling</div>
+    <div class="pitfall-better"><strong>✓ Better</strong> Clarify that running multiple inference replicas behind a load balancer increases <em>throughput</em> (many concurrent users), not per-request latency; for a single user, replicas give redundancy but don&#x27;t reduce TTFT.</div>
+  </div>
+  <div class="pitfall-card">
+    <div class="pitfall-mistake"><strong>✗ Mistake</strong> Jumping to tensor parallelism as the default answer for all inference scenarios</div>
+    <div class="pitfall-better"><strong>✓ Better</strong> Note that tensor parallelism only helps when the model doesn&#x27;t fit on one GPU; for a Llama 3 8B on an A100, single-GPU + quantization + streaming beats multi-GPU communication overhead.
+
+---</div>
+  </div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="section-label">Related Questions</div>
+  <div class="related-pills">
+    <div class="related-pill" data-slug="06-004">
+      <span class="related-pill-icon">→</span>
+      <div class="related-pill-text">
+        <div class="related-pill-q">Q4: Optimize for latency or throughput? (personal assistant)</div>
+        <div class="related-pill-rel">Parent question — this Q is a follow-up on parallelism specifically</div>
+      </div>
+    </div>
+    <div class="related-pill" data-slug="01-009">
+      <span class="related-pill-icon">→</span>
+      <div class="related-pill-text">
+        <div class="related-pill-q">Q9: What is KV cache? How does it help in LLM inference?</div>
+        <div class="related-pill-rel">KV cache is the key inference-time latency lever for sequential turns</div>
+      </div>
+    </div>
+    <div class="related-pill" data-slug="04-012">
+      <span class="related-pill-icon">→</span>
+      <div class="related-pill-text">
+        <div class="related-pill-q">Q12: Quantization — tradeoffs between size, speed, accuracy</div>
+        <div class="related-pill-rel">Quantization is the primary memory-bandwidth optimization for single-GPU inference</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="section-label">One-liner recall</div>
+  <div class="oneliner-box">
+    <div class="oneliner-label">▸ Reconstruct from memory</div>
+    <div class="oneliner-text" data-text="Data parallelism is a training-throughput technique (split dataset across GPU replicas + AllReduce); for a single-request assistant at inference time, the right levers are streaming, quantization, KV cache reuse, and model tiering — not dataset parallelism.">Data parallelism is a training-throughput technique (split dataset across GPU replicas + AllReduce); for a single-request assistant at inference time, the right levers are streaming, quantization, KV cache reuse, and model tiering — not dataset parallelism.</div>
+  </div>
+</div>

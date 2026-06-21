@@ -1,0 +1,135 @@
+<div class="answer-header reveal">
+  <div class="answer-meta">
+    <span class="meta-badge meta-category">05-evaluation-metrics</span>
+    <span class="meta-badge meta-num">Q005</span>
+    <span class="meta-badge meta-status-review">review</span>
+  </div>
+  <h1 class="answer-title">Reduce hallucinations in a medical chatbot?</h1>
+</div>
+
+<div class="answer-section reveal">
+  <div class="accordion">
+    <div class="accordion-header">
+      <span class="accordion-title">⟁ Framing — Why this is asked</span>
+      <span class="accordion-chevron">▾</span>
+    </div>
+    <div class="accordion-body">
+      <div class="framing-grid">
+        <div><div class="framing-card">
+          <div class="framing-card-title">Why asked</div>
+          <p style="font-size:13.5px;line-height:1.7;color:var(--text-dim)">Medical AI is the highest-stakes domain for hallucinations — a fabricated drug dosage or contraindication can cause patient harm. Interviewers use this question to test whether a candidate understands that the general hallucination mitigation playbook must be hardened for regulated, safety-critical contexts: tighter retrieval gates, stronger post-generation validation, mandatory audit trails, and HITL escalation. It also probes domain-specific awareness (medical terminology, clinical workflows, HIPAA).</p>
+        </div></div>
+        <div><div class="framing-card">
+          <div class="framing-card-title">Trigger phrases</div>
+          <div class="trigger-list">
+              <div class="trigger-phrase">How would you reduce hallucinations in a medical chatbot?</div>
+              <div class="trigger-phrase">You&#x27;re building a clinical assistant — how do you ensure it doesn&#x27;t make up drug information?</div>
+              <div class="trigger-phrase">Your healthcare chatbot is confidently giving wrong dosage advice — how do you fix it?</div>
+          </div>
+        </div></div>
+      </div>
+      <div class="tests-block">
+        <span style="font-family:var(--mono);font-size:10px;letter-spacing:0.1em;text-transform:uppercase;color:var(--purple);margin-right:8px">Tests:</span>Ability to apply layered hallucination mitigation in a high-stakes regulated domain, including domain-specific retrieval, NLI validation, HITL design, and compliance-aware logging.
+
+---
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="section-label">Concept</div>
+  <div class="concept-block"><p>In a medical chatbot, hallucinations are not just a quality problem — they are a safety and liability problem. The standard defense-in-depth stack (retrieval grounding, T=0, faithfulness gate) applies, but every layer is tightened: retrieval uses curated medical corpora (not general web), post-generation validation uses NLI entailment (not just LLM judge) for auditability, HITL escalation is mandatory for clinical-action questions, and all outputs are logged for compliance (HIPAA). Domain-adapted embeddings and terminology normalization address the medical vocabulary gap that breaks general-purpose RAG.</p></div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="section-label">Mechanism</div>
+  <div class="card"><p><strong>Layer 1 — Curated, domain-specific retrieval (the most important layer)</strong></p>
+<ul class="styled-list"><li>Source only from authoritative corpora: <strong>UpToDate</strong>, <strong>PubMed</strong>, <strong>FDA drug label database</strong>, <strong>clinical guidelines</strong> (ACC, NICE, WHO) — not general web or Wikipedia.</li><li>Index with <strong>BioLORD</strong> or <strong>PubMedBERT</strong> embeddings (not <code>text-embedding-ada-002</code>) to avoid tokenization failures on clinical terms (warfarin, metformin, ICD-10 codes).</li><li>Use <strong>hybrid BM25 + dense retrieval with RRF</strong> — medical queries often include exact drug names, ICD-10 codes, dosage units that BM25 handles better than dense-only.</li><li>Apply a <strong>cosine similarity retrieval gate</strong> (θ ≥ 0.75 for medical, vs 0.70 generic) — if no chunk clears the threshold, return a graceful "I don't have authoritative information on that" abstention rather than generating from parametric memory.</li><li>Add <strong>metadata filters</strong>: indication, drug class, guideline version, publication year — to surface the most current recommendations.</li></ul>
+<p><strong>Layer 2 — Grounding prompt at T=0</strong></p>
+<ul class="styled-list"><li>Closed-world instruction: <code>"Answer ONLY using the clinical passages provided below. If the answer is not in the passages, say: 'I don't have reliable information on this — please consult a clinician.' Do not use prior medical knowledge."</code></li><li>Set <code>temperature=0</code> for all clinical responses.</li><li>Require <strong>inline citations</strong>: <code>[Source: ACC/AHA Guidelines 2023, p.12]</code> — forces the model to anchor each claim and makes faithfulness verifiable.</li><li><strong>Scope restriction prompt</strong>: distinguish information vs advice — <code>"Provide clinical information, not personalized medical advice."</code></li></ul>
+<p><strong>Layer 3 — Synchronous NLI entailment validation (not async for medical)</strong></p>
+<ul class="styled-list"><li>Run <strong>DeBERTa-v3 NLI</strong> (<code>cross-encoder/nli-deberta-v3-large</code>) on every output sentence vs its cited source chunk.</li><li>If any sentence receives a <code>contradiction</code> label → <strong>block the response</strong> and return the abstention message.</li><li>If entailment score < 0.80 → route to HITL review queue, do not return to user.</li><li>NLI is preferred over LLM-as-judge here: it's auditable, deterministic, fast (~50ms), and does not itself hallucinate.</li><li>For drug dosage, contraindications, and adverse event claims: apply a <strong>regex/NER extraction step</strong> (SpaCy + medspaCy) to identify numeric claims and verify against structured drug database (RxNorm/OpenFDA API).</li></ul>
+<p><strong>Layer 4 — HITL escalation for high-risk query classes</strong></p>
+<ul class="styled-list"><li>Classify every query into risk tiers using a lightweight classifier (GPT-4o-mini or fine-tuned BERT):</li><li><strong>Tier 1</strong> (general info: "What is metformin?"): auto-respond with NLI-validated output.</li><li><strong>Tier 2</strong> (clinical guidance: "What is the standard first-line treatment for T2DM?"): auto-respond + log for clinician spot-check.</li><li><strong>Tier 3</strong> (patient-specific advice: "Should I take 1000mg metformin given my kidney disease?"): block auto-response → escalate to clinician queue + show: "This question requires a clinician review."</li><li>Hard-block any query containing personal pronouns ("my", "I") combined with medication + dosage — these are patient-specific advice requests.</li></ul>
+<p><strong>Layer 5 — Compliance-aware logging and monitoring</strong></p>
+<ul class="styled-list"><li>Log all queries, retrieved chunks, and responses to <strong>HIPAA-compliant</strong> storage (PHI pseudonymized with Presidio before logging).</li><li>Track <code>hallucination_rate</code> (NLI contradiction detections / total responses) as a separate SLO — alert at >0.5% (tighter than generic 2% SLO).</li><li>Run nightly <strong>golden dataset regression</strong> (500 Q&A pairs, human-labeled faithfulness) on every model or embedding change before deployment.</li><li>Retain audit trail for <strong>6 years</strong> (HIPAA minimum) — immutable S3 with Object Lock.</li></ul></div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="section-label">Example / Tradeoff</div>
+  <div class="card card-accent"><div class="rich-text"><p>A clinical decision support chatbot at a hospital system:</p>
+<ul class="styled-list"><li><strong>Stack:</strong> PubMedBERT embeddings → Pinecone + Elasticsearch BM25 hybrid → GPT-4o at T=0 with closed-world prompt + citation requirement → DeBERTa NLI gate (sync, 50ms) → tier classifier for HITL routing.</li><li><strong>Before:</strong> general-purpose RAG with <code>text-embedding-ada-002</code> + GPT-4o at T=0.7 → 6.4% hallucination rate on drug dosage queries (model blended parametric knowledge with retrieved context).</li><li><strong>After domain adaptation:</strong> PubMedBERT + hybrid retrieval + NLI gate → 0.4% hallucination rate; NLI gate blocked 3.2% of responses that would have contained contradictions.</li><li><strong>HITL impact:</strong> tier-3 escalation caught 100% of patient-specific advice requests; clinician review queue processed ~8% of daily queries.</li></ul>
+<p><strong>Tradeoff table:</strong></p>
+<div class="table-wrap"><table class="data-table"><tr><th>Technique</th><th>Latency added</th><th>Hallucination reduction</th><th>Medical necessity</th></tr><tr><td>Domain embeddings (PubMedBERT)</td><td>None</td><td>~40% on clinical terms</td><td>High — generic embeds fail on ICD/drug codes</td></tr><tr><td>Hybrid BM25+dense + retrieval gate</td><td>+30ms</td><td>~30%</td><td>High — exact drug names need BM25</td></tr><tr><td>T=0 + closed-world prompt</td><td>None</td><td>~25–35%</td><td>Essential</td></tr><tr><td>Sync NLI entailment gate</td><td>+50ms</td><td>Catches ~3% residual</td><td>Essential for medical</td></tr></table></div>| HITL tier-3 escalation | High (human) | Near-perfect for clinical advice | Required for safety |</div></div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="accordion">
+    <div class="accordion-header">
+      <span class="accordion-title">🎙 Verbal Script (3–5 min)</span>
+      <span class="accordion-chevron">▾</span>
+    </div>
+    <div class="accordion-body">
+      <div class="script-block"><div class="script-label">Opening (30s)</div><p>"Medical chatbots are the hardest hallucination problem because the cost of a wrong answer isn't a bad user experience — it's a patient safety incident. So I'd apply the standard defense-in-depth stack but tighten every layer for the clinical domain: curated retrieval from authoritative medical sources, synchronous NLI validation rather than async, mandatory HITL for patient-specific advice, and HIPAA-compliant audit logging."</p></div>
+      <div class="script-block"><div class="script-label">Core explanation (2–3 min)</div><p>"I'd start with retrieval, because it's the highest-leverage layer. In a general RAG system I'd use text-embedding-ada-002 and retrieve from a broad corpus. For medical, I'd swap to PubMedBERT or BioLORD embeddings — these are trained on clinical text and correctly encode terms like warfarin, metformin, and ICD-10 codes that general tokenizers fragment. I'd source exclusively from curated authoritative corpora: UpToDate, FDA drug labels, PubMed, ACC/AHA guidelines. And I'd use hybrid BM25+dense retrieval because drug names and dosage units are exact-match queries that BM25 handles better than dense-only. The retrieval gate threshold I'd set at 0.75 cosine similarity — stricter than a generic 0.70 — because in medicine I'd rather abstain than hallucinate.</p>
+<p>At the prompt layer: closed-world instruction at T=0 with mandatory inline citations. Every claim must reference a specific source chunk. For post-generation validation, I'd use synchronous DeBERTa NLI — not async like in a consumer app. If any sentence contradicts its cited source, I block the response immediately. In medicine, a 50ms latency penalty for NLI validation is an easy tradeoff against a hallucinated contraindication.</p>
+<p>For query routing, I'd implement a tier classifier: general info questions auto-respond, clinical guidance questions get logged for spot-check, and anything that reads as patient-specific advice — 'my', 'I', combined with dosage or medication — gets hard-blocked and escalated to a clinician queue."</p></div>
+      <div class="script-block"><div class="script-label">Tradeoff / production angle (1 min)</div><p>"The main tension is between coverage and latency. Synchronous NLI adds ~50ms; HITL escalation adds minutes to hours. The right threshold depends on use case: a patient-facing consumer app needs aggressive HITL; a tool used by clinicians who can interpret uncertain answers can run with lighter guardrails but still needs the NLI gate. I'd also monitor hallucination rate as a separate SLO at 0.5%, not 2%, and run golden-dataset regression before every model or embedding change — not just on release."</p></div>
+      <div class="script-block"><div class="script-label">Wrap-up (30s)</div><p>"So the medical stack is: domain embeddings + curated retrieval + strict cosine gate → closed-world prompt at T=0 with citations → synchronous NLI entailment → HITL tier routing → HIPAA-compliant audit trail. The key difference from a general chatbot is that every layer is tighter and the fallback is always abstention, never a confident guess. Happy to go deeper on any layer — NLI gate design, tier classifier training, or the HIPAA logging architecture."</p></div>
+    </div>
+  </div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="section-label">Pitfalls</div>
+  <div class="pitfall-card">
+    <div class="pitfall-mistake"><strong>✗ Mistake</strong> Saying &quot;I&#x27;d lower the temperature to 0 and add a good system prompt&quot; without mentioning domain-adapted embeddings</div>
+    <div class="pitfall-better"><strong>✓ Better</strong> Explain that general-purpose embeddings fragment clinical terminology (ICD-10 codes, drug names), causing retrieval failures that a good prompt cannot fix; PubMedBERT or BioLORD embeddings are the first-order fix.</div>
+  </div>
+  <div class="pitfall-card">
+    <div class="pitfall-mistake"><strong>✗ Mistake</strong> Using async RAGAS faithfulness monitoring (acceptable for consumer apps) without noting that medical requires synchronous NLI blocking</div>
+    <div class="pitfall-better"><strong>✓ Better</strong> Explain that in medical contexts you cannot let a hallucinated response reach the user even once; the NLI gate must be synchronous and must block, not just log, contradictions.</div>
+  </div>
+  <div class="pitfall-card">
+    <div class="pitfall-mistake"><strong>✗ Mistake</strong> Not mentioning HITL escalation for patient-specific advice queries</div>
+    <div class="pitfall-better"><strong>✓ Better</strong> Describe the tier classifier pattern: automatically detect &quot;patient-specific advice&quot; queries using personal pronouns + medication + dosage combination, and route these to a clinician queue rather than generating any auto-response.
+
+---</div>
+  </div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="section-label">Related Questions</div>
+  <div class="related-pills">
+    <div class="related-pill" data-slug="05-003">
+      <span class="related-pill-icon">→</span>
+      <div class="related-pill-text">
+        <div class="related-pill-q">Q3: Detect and mitigate hallucinations in production</div>
+        <div class="related-pill-rel">Parent concept — general 4-layer stack; this Q applies it to a regulated domain</div>
+      </div>
+    </div>
+    <div class="related-pill" data-slug="05-004">
+      <span class="related-pill-icon">→</span>
+      <div class="related-pill-text">
+        <div class="related-pill-q">Q4: Prevent factual errors in summarization</div>
+        <div class="related-pill-rel">Same NLI entailment gate pattern; medical chatbot has synchronous rather than async variant</div>
+      </div>
+    </div>
+    <div class="related-pill" data-slug="05-008">
+      <span class="related-pill-icon">→</span>
+      <div class="related-pill-text">
+        <div class="related-pill-q">Q8: Measure hallucination rate in production</div>
+        <div class="related-pill-rel">How to instrument and SLO the hallucination rate this architecture is designed to minimize</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="section-label">One-liner recall</div>
+  <div class="oneliner-box">
+    <div class="oneliner-label">▸ Reconstruct from memory</div>
+    <div class="oneliner-text" data-text="Medical chatbot hallucinations require domain embeddings (PubMedBERT), curated-source-only hybrid retrieval with a strict cosine gate, closed-world T=0 prompt with citations, synchronous DeBERTa NLI blocking (not async), and HITL escalation for any patient-specific advice query.">Medical chatbot hallucinations require domain embeddings (PubMedBERT), curated-source-only hybrid retrieval with a strict cosine gate, closed-world T=0 prompt with citations, synchronous DeBERTa NLI blocking (not async), and HITL escalation for any patient-specific advice query.</div>
+  </div>
+</div>

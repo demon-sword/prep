@@ -1,0 +1,161 @@
+<div class="answer-header reveal">
+  <div class="answer-meta">
+    <span class="meta-badge meta-category">02-rag-systems</span>
+    <span class="meta-badge meta-num">Q002</span>
+    <span class="meta-badge meta-status-review">review</span>
+  </div>
+  <h1 class="answer-title">How would you design an LLM-powered enterprise search system?</h1>
+</div>
+
+<div class="answer-section reveal">
+  <div class="accordion">
+    <div class="accordion-header">
+      <span class="accordion-title">⟁ Framing — Why this is asked</span>
+      <span class="accordion-chevron">▾</span>
+    </div>
+    <div class="accordion-body">
+      <div class="framing-grid">
+        <div><div class="framing-card">
+          <div class="framing-card-title">Why asked</div>
+          <p style="font-size:13.5px;line-height:1.7;color:var(--text-dim)">This question tests whether you understand the difference between a <em>demo RAG app</em> and a <em>production-grade enterprise search platform</em>. Interviewers want to see: (1) multi-source data federation across heterogeneous corpora (Confluence, Slack, Salesforce, SharePoint, email, code repos); (2) access control and permission propagation so users only retrieve what they&#x27;re authorized to see; (3) relevance architecture at scale (billions of docs, sub-100ms retrieval); (4) how you measure and iterate on search quality in an org where &quot;ground truth&quot; is hard to define; and (5) cost/latency tradeoffs between different user segments (executives vs. support agents vs. engineers).</p>
+        </div></div>
+        <div><div class="framing-card">
+          <div class="framing-card-title">Trigger phrases</div>
+          <div class="trigger-list">
+              <div class="trigger-phrase">How would you design an LLM-powered enterprise search system?</div>
+              <div class="trigger-phrase">Walk me through building a search experience like Glean or Notion AI across our internal tools.</div>
+              <div class="trigger-phrase">We have data in Confluence, Slack, Salesforce, and GitHub — how do you build unified search?</div>
+              <div class="trigger-phrase">How would you replace our internal Elasticsearch search with something AI-powered?</div>
+          </div>
+        </div></div>
+      </div>
+      <div class="tests-block">
+        <span style="font-family:var(--mono);font-size:10px;letter-spacing:0.1em;text-transform:uppercase;color:var(--purple);margin-right:8px">Tests:</span>System design maturity at the intersection of LLM generation, multi-source retrieval, permission-aware access control, and production quality measurement.
+
+---
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="section-label">Concept</div>
+  <div class="concept-block"><p>An LLM-powered enterprise search system unifies an organization's heterogeneous data silos into a single retrieval surface, then layers an LLM on top to synthesize answers — not just return links. The fundamental challenge vs. a public RAG system is <strong>permission-aware retrieval</strong>: a junior engineer must not retrieve a board-level financial doc, even if it is semantically relevant to their query. Everything else — chunking, embedding, ranking — is layered on top of this access-control foundation.</p></div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="section-label">Mechanism</div>
+  <div class="card"><p><strong>Architecture has four planes:</strong></p>
+<p><strong>1. Connectors & Ingestion (offline)</strong></p>
+<div class="table-wrap"><table class="data-table"><tr><th>Source</th><th>Connector pattern</th><th>Sync cadence</th></tr><tr><td>Confluence / Notion</td><td>OAuth2 REST API + webhook on page update</td><td>Near-real-time (webhook) + nightly full crawl</td></tr><tr><td>Slack / Teams</td><td>Events API + message history crawl</td><td>Real-time (events) for new messages; daily for threads</td></tr><tr><td>GitHub / GitLab</td><td>Webhooks on push; code files + PR descriptions</td><td>Per-push; exclude secrets (<code>.env</code>, credentials)</td></tr><tr><td>Salesforce / HubSpot</td><td>Streaming API for CRM records</td><td>Polling / event-driven</td></tr><tr><td>Email (Exchange/Gmail)</td><td>IMAP or Graph API</td><td>Batch nightly; high PII risk — often excluded</td></tr><tr><td>SharePoint / Drive</td><td>Delta query</td><td>Near-real-time</td></tr></table></div>
+<p>Each connector normalizes documents into a <strong>canonical schema</strong>: <code>{id, source, content, metadata, acl, updated_at, checksum}</code>. A change-detection layer (hash-diff or last-modified) suppresses full re-index churn.</p>
+<p><strong>2. ACL-Aware Index (the hardest part)</strong></p>
+<p>Every chunk in the vector store carries an <strong>ACL token list</strong> — the set of user/group IDs authorized to see it. At query time, the retrieval is pre-filtered by the calling user's identity:</p>
+<div class="code-block-wrap"><pre class="code-block"><code>retrieve(query, user_id):
+  user_groups = identity_service.get_groups(user_id)  # cached, TTL 60s
+  results = vector_db.search(
+      query_vector,
+      filter={&quot;acl&quot;: {&quot;$overlap&quot;: user_groups}},  # Pinecone metadata filter
+      top_k=50
+  )</code></pre><button class="copy-btn">copy</button></div>
+<p>This is <strong>non-negotiable</strong> — ACL enforcement cannot live only in the application layer (a bug there leaks data). It must be enforced at the retrieval layer. Pinecone, Qdrant, and Weaviate all support metadata filtering on vector search; push ACL lists into each chunk's metadata at index time.</p>
+<p><strong>3. Retrieval & Ranking (online)</strong></p>
+<div class="code-block-wrap"><pre class="code-block"><code>User query
+  → Query understanding (intent classification: Q&amp;A vs. navigation vs. lookup)
+  → Query rewriting (HyDE or simple expansion for recall)
+  → Hybrid retrieval: dense HNSW + BM25 with ACL filter
+      → RRF fusion → top-50
+  → Cross-encoder reranker (Cohere Rerank v3 or ms-marco-MiniLM) → top-5
+  → LLM synthesis (GPT-4o-mini or Claude Haiku for cost; GPT-4o for complex)
+  → Response with citations + source links + freshness timestamps</code></pre><button class="copy-btn">copy</button></div>
+<p><strong>Query understanding</strong> is important at enterprise scale:</p>
+<ul class="styled-list"><li>Navigation queries ("where is the PTO policy?") → just return the URL, skip LLM synthesis</li><li>Factual lookups ("what is our Q3 revenue?") → LLM synthesis with citations</li><li>Exploratory queries ("what decisions were made about Project X?") → multi-chunk synthesis, longer answer</li></ul>
+<p><strong>4. Quality & Observability</strong></p>
+<div class="table-wrap"><table class="data-table"><tr><th>Layer</th><th>Metric</th><th>Tool</th></tr><tr><td>Retrieval offline</td><td>NDCG@5, MRR, recall@5 on golden set</td><td>RAGAS, custom eval harness</td></tr><tr><td>Generation offline</td><td>Faithfulness, answer relevancy</td><td>RAGAS</td></tr><tr><td>Production</td><td>Click-through rate (CTR), thumbs-up rate, zero-result rate, p95 latency, cost/query</td><td>Prometheus + Grafana</td></tr></table></div>| Continuous learning | Clicked results → implicit positive signal; reformulated queries → implicit negative | Fine-tune embedder or reranker over 3–6 months |</div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="section-label">Example / Tradeoff</div>
+  <div class="card card-accent"><div class="rich-text"><p><strong>Concrete stack (mid-size company, ~5M internal documents):</strong></p>
+<ul class="styled-list"><li>Connectors: custom OAuth adapters + Airbyte for commodity sources</li><li>Normalization: Apache Kafka topic per source → Flink processor → canonical schema</li><li>Embedding: <code>text-embedding-3-large</code> for English, <code>multilingual-e5-large</code> for global orgs; batch pipeline via Celery/Ray</li><li>Vector store: <strong>Qdrant</strong> self-hosted (ACL metadata filters, payload indexing, open-source) or <strong>Pinecone</strong> serverless for managed</li><li>BM25: Elasticsearch with per-index ACL field filter</li><li>Reranker: Cohere Rerank v3 (API) or <code>cross-encoder/ms-marco-MiniLM-L-12-v2</code> (self-hosted, ~15ms at top-50)</li><li>LLM: GPT-4o-mini (85% of queries) + GPT-4o (complex reasoning, triggered by classifier)</li><li>Auth: SAML/OIDC SSO → group membership from IdP (Okta, Azure AD) cached in Redis TTL 60s</li></ul>
+<p><strong>Tradeoff: freshness vs. relevance</strong></p>
+<ul class="styled-list"><li>Stale index: a document updated 10 minutes ago won't appear in results. For volatile sources (Slack, email), you need near-real-time sync or a freshness penalty heuristic that surfaces recently-modified docs higher.</li><li>Solution: maintain a "recency bucket" — docs modified in the last 24h get a freshness score boost (e.g., multiply relevance score by 1.2), avoiding full re-embed for every edit.</li></ul>
+<p><strong>Scale numbers:</strong></p>
+<ul class="styled-list"><li>5M docs × 3 chunks/doc avg = 15M vectors at 1536-dim = ~90GB in memory (Qdrant) or ~$450/mo (Pinecone serverless)</li><li>p95 retrieval: ~120ms (HNSW + filter) + 200ms (rerank) = ~320ms retrieval; LLM adds 500–800ms</li><li>Cost: $0.004–0.006/query at scale with 4o-mini; semantic caching (GPTCache) cuts ~30% for FAQ-heavy usage</li></ul></div></div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="accordion">
+    <div class="accordion-header">
+      <span class="accordion-title">🎙 Verbal Script (3–5 min)</span>
+      <span class="accordion-chevron">▾</span>
+    </div>
+    <div class="accordion-body">
+      <div class="script-block"><div class="script-label">Opening (30s)</div><p>"I'd think about this in four layers: connectors that normalize all your data sources into a common format, an ACL-aware index that enforces permissions at retrieval time (not just in the application layer), a hybrid retrieval and reranking pipeline to get the most relevant content to the LLM, and a quality loop that improves relevance over time using implicit signals. Let me walk through each."</p></div>
+      <div class="script-block"><div class="script-label">Core explanation (2–3 min)</div><p>"The first challenge that's unique to enterprise search versus a public RAG system is access control. Every document chunk needs to carry its ACL — the list of user and group IDs allowed to see it — as metadata in the vector store. At query time, I filter by the calling user's group membership before doing ANN search. This is non-negotiable: you can't enforce permissions only at the application layer because one missed code path leaks data.</p>
+<p>For connectors, I'd build source-specific adapters for each system — Confluence, Slack, GitHub, Salesforce — each producing a canonical document schema with content, metadata, ACL, and a checksum for change detection. I'd stream these through a Kafka topic into a normalization layer, then batch-embed with text-embedding-3-large for English content.</p>
+<p>The retrieval layer is hybrid: dense HNSW for semantic similarity plus BM25 for exact-match terms like product names, ticket IDs, and code identifiers. I'd fuse with Reciprocal Rank Fusion to get 50 candidates, then run a cross-encoder reranker — either Cohere Rerank or a self-hosted ms-marco model — to get down to 5 genuinely relevant chunks before the LLM sees anything.</p>
+<p>I'd also add query understanding upfront: if the query looks like navigation ('where is the expense policy?'), I skip LLM synthesis entirely and just surface the document link — that's 20–30% of enterprise search queries and costs nothing to serve correctly."</p></div>
+      <div class="script-block"><div class="script-label">Tradeoff / production angle (1 min)</div><p>"The hardest operational challenge is freshness. Slack messages from 10 minutes ago matter for enterprise search; the nightly re-index cadence that works for support docs doesn't cut it here. I'd run near-real-time event-driven sync for high-velocity sources (Slack, email, Jira comments) with a freshness score boost for recently modified docs, so users don't distrust the system when they search for something they just saw.</p>
+<p>For quality, I'd set up a golden query set — 500 representative queries across departments — with expected answer docs and expected answer content. Offline RAGAS metrics gate every retrieval or embedding change. In production, I'd track zero-result rate, thumbs-up/down, and query reformulations as implicit signals; after a few months, I'd fine-tune the reranker on clicked results to improve domain-specific relevance."</p></div>
+      <div class="script-block"><div class="script-label">Wrap-up (30s)</div><p>"The system that trips most teams up is treating enterprise search like a public RAG demo — they skip ACL enforcement, use a single embedding model for all source types, and have no quality measurement. Get the permission layer right at index time, add hybrid retrieval for exact-match terms, and build a golden dataset before you ship. Happy to go deeper on any piece — ACL propagation, connector design, or the freshness vs. relevance tradeoff."</p></div>
+    </div>
+  </div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="section-label">Pitfalls</div>
+  <div class="pitfall-card">
+    <div class="pitfall-mistake"><strong>✗ Mistake</strong> Describing the system without mentioning access control</div>
+    <div class="pitfall-better"><strong>✓ Better</strong> &quot;ACL enforcement is the first thing I&#x27;d design: every chunk in the vector store carries a list of authorized user/group IDs from the source system, and retrieval filters on that list using the caller&#x27;s identity — enforced at the DB layer, not just in application code.&quot;</div>
+  </div>
+  <div class="pitfall-card">
+    <div class="pitfall-mistake"><strong>✗ Mistake</strong> Using a single uniform embedding model and chunking strategy for all sources</div>
+    <div class="pitfall-better"><strong>✓ Better</strong> &quot;Slack messages (short, informal) need different chunking than Confluence pages (long, structured with headers). I&#x27;d tune chunk size and embedding model per source type, and consider a multilingual model if the org is global.&quot;</div>
+  </div>
+  <div class="pitfall-card">
+    <div class="pitfall-mistake"><strong>✗ Mistake</strong> Saying &quot;I&#x27;d just use GPT-4 for everything&quot; without segmenting query types</div>
+    <div class="pitfall-better"><strong>✓ Better</strong> &quot;Navigation queries (30% of volume) get no LLM call — just a direct link. Simple factual queries go to GPT-4o-mini. Only complex synthesis queries (10%) justify GPT-4o, which I&#x27;d trigger via an intent classifier.&quot;</div>
+  </div>
+  <div class="pitfall-card">
+    <div class="pitfall-mistake"><strong>✗ Mistake</strong> No plan for keeping the index fresh for real-time sources like Slack</div>
+    <div class="pitfall-better"><strong>✓ Better</strong> &quot;High-velocity sources need near-real-time event-driven sync with a freshness score boost; I&#x27;d separate them from slow-moving docs that can tolerate a nightly crawl.&quot;
+
+---</div>
+  </div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="section-label">Related Questions</div>
+  <div class="related-pills">
+    <div class="related-pill" data-slug="02-001">
+      <span class="related-pill-icon">→</span>
+      <div class="related-pill-text">
+        <div class="related-pill-q">Q1: Design a RAG system for a customer support chatbot</div>
+        <div class="related-pill-rel">Simpler single-source RAG; foundation for this multi-source design</div>
+      </div>
+    </div>
+    <div class="related-pill" data-slug="02-017">
+      <span class="related-pill-icon">→</span>
+      <div class="related-pill-text">
+        <div class="related-pill-q">Q17: What is hybrid search? When combine vector + BM25?</div>
+        <div class="related-pill-rel">Core retrieval strategy used in enterprise search</div>
+      </div>
+    </div>
+    <div class="related-pill" data-slug="02-014">
+      <span class="related-pill-icon">→</span>
+      <div class="related-pill-text">
+        <div class="related-pill-q">Q14: How protect sensitive/confidential data in a RAG pipeline?</div>
+        <div class="related-pill-rel">Expands on ACL enforcement and PII handling introduced here</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="section-label">One-liner recall</div>
+  <div class="oneliner-box">
+    <div class="oneliner-label">▸ Reconstruct from memory</div>
+    <div class="oneliner-text" data-text="Enterprise search = multi-source ACL-aware RAG: normalize all sources into a canonical schema with ACL metadata, enforce permissions at vector retrieval time (not app layer), use hybrid search + cross-encoder reranking, segment queries by type (navigation vs. factual vs. exploratory), and measure with a golden dataset + production click signals.">Enterprise search = multi-source ACL-aware RAG: normalize all sources into a canonical schema with ACL metadata, enforce permissions at vector retrieval time (not app layer), use hybrid search + cross-encoder reranking, segment queries by type (navigation vs. factual vs. exploratory), and measure with a golden dataset + production click signals.</div>
+  </div>
+</div>

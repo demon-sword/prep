@@ -1,0 +1,129 @@
+<div class="answer-header reveal">
+  <div class="answer-meta">
+    <span class="meta-badge meta-category">01-llm-fundamentals</span>
+    <span class="meta-badge meta-num">Q045</span>
+    <span class="meta-badge meta-status-review">review</span>
+  </div>
+  <h1 class="answer-title">When set temperature to 0 vs higher values?</h1>
+</div>
+
+<div class="answer-section reveal">
+  <div class="accordion">
+    <div class="accordion-header">
+      <span class="accordion-title">⟁ Framing — Why this is asked</span>
+      <span class="accordion-chevron">▾</span>
+    </div>
+    <div class="accordion-body">
+      <div class="framing-grid">
+        <div><div class="framing-card">
+          <div class="framing-card-title">Why asked</div>
+          <p style="font-size:13.5px;line-height:1.7;color:var(--text-dim)">Interviewers use this question to check whether you understand sampling mechanics well enough to make deliberate, defensible production decisions — not just copy default configs. It reveals whether you think about correctness vs creativity, determinism vs diversity, and how those tradeoffs map to specific use cases like RAG answer generation, code synthesis, or creative writing.</p>
+        </div></div>
+        <div><div class="framing-card">
+          <div class="framing-card-title">Trigger phrases</div>
+          <div class="trigger-list">
+              <div class="trigger-phrase">When would you set temperature to 0 vs something higher?</div>
+              <div class="trigger-phrase">What temperature do you use for factual/code/creative tasks?</div>
+              <div class="trigger-phrase">How do you control randomness in LLM outputs?</div>
+              <div class="trigger-phrase">Why did you choose that temperature in your system?</div>
+          </div>
+        </div></div>
+      </div>
+      <div class="tests-block">
+        <span style="font-family:var(--mono);font-size:10px;letter-spacing:0.1em;text-transform:uppercase;color:var(--purple);margin-right:8px">Tests:</span>Ability to map sampling parameters to production requirements (correctness, reproducibility, diversity) and articulate the underlying mechanism.
+
+---
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="section-label">Concept</div>
+  <div class="concept-block"><p>Temperature controls the "sharpness" of the next-token probability distribution: <strong>T=0</strong> collapses it to a deterministic argmax (greedy decoding), while <strong>T>1</strong> flattens it toward uniform randomness. The right value depends on whether the task rewards precision (RAG, code, SQL) or variety (brainstorming, creative writing, persona chat).</p></div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="section-label">Mechanism</div>
+  <div class="card"><p>Before sampling, each logit <code>z_i</code> is divided by the temperature T:</p>
+<div class="code-block-wrap"><pre class="code-block"><code>p_i = softmax(z_i / T)</code></pre><button class="copy-btn">copy</button></div>
+<ul class="styled-list"><li><strong>T → 0</strong>: the highest-logit token dominates; output is deterministic and reproducible (same prompt → same output every time).  </li><li><strong>T = 1</strong>: raw model probabilities used as-is (default training distribution).  </li><li><strong>T > 1</strong>: distribution flattened — lower-probability tokens become more likely, increasing diversity but also incoherence risk.  </li><li><strong>T < 1</strong> (e.g. 0.2–0.5): distribution sharpened — favors the model's top choices, reducing variance without full determinism.</li></ul>
+<p>In practice, <code>temperature=0</code> is implemented as <strong>greedy decoding</strong> (argmax) rather than literal division-by-zero. Most inference engines (vLLM, TGI, OpenAI API) treat <code>temperature=0</code> as an alias for greedy sampling.</p></div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="section-label">Example / Tradeoff</div>
+  <div class="card card-accent"><div class="rich-text"><div class="table-wrap"><table class="data-table"><tr><th>Use case</th><th>Recommended T</th><th>Reason</th></tr><tr><td>RAG answer generation</td><td>0 – 0.2</td><td>Faithfulness to retrieved context; reproducibility for regression testing</td></tr><tr><td>Code generation (function bodies)</td><td>0 – 0.1</td><td>Correctness > creativity; pass@1 is key</td></tr><tr><td>SQL / structured output</td><td>0</td><td>One right answer; JSON schema validation easier at T=0</td></tr><tr><td>Chat / customer support</td><td>0.5 – 0.7</td><td>Natural but not wild; consistent enough for evaluation</td></tr><tr><td>Creative writing / marketing copy</td><td>0.8 – 1.2</td><td>Diversity matters; multiple generations compared</td></tr><tr><td>Brainstorming / ideation</td><td>1.0 – 1.5</td><td>Intentional exploration of long-tail ideas</td></tr></table></div>
+<p><strong>Production note:</strong> OpenAI's API defaults to <code>temperature=1</code>; vLLM defaults to <code>temperature=0</code> for batch inference. Always set explicitly. For self-consistency prompting (multiple samples → majority vote), use T=0.5–0.7 to get meaningful diversity across samples.</p>
+<p><strong>Interaction with top-p:</strong> Temperature and top-p (nucleus sampling) are often used together. A common production config for factual RAG: <code>temperature=0.1, top_p=0.95</code> — the top-p cap prevents rare-token hallucinations even when a slightly elevated temperature is used for minor naturalness. Never combine T=0 with top-p filtering — they conflict (greedy ignores sampling).</p></div></div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="accordion">
+    <div class="accordion-header">
+      <span class="accordion-title">🎙 Verbal Script (3–5 min)</span>
+      <span class="accordion-chevron">▾</span>
+    </div>
+    <div class="accordion-body">
+      <div class="script-block"><div class="script-label">Opening (30s)</div><p>"Temperature controls how sharp or flat the model's probability distribution is when sampling the next token. The decision really comes down to: does this task have a single correct answer, or do we want diversity? I think about it as a precision-vs-creativity dial."</p></div>
+      <div class="script-block"><div class="script-label">Core explanation (2–3 min)</div><p>"Mechanically, every logit gets divided by T before the softmax. At T=0 — which the API treats as greedy, argmax decoding — the highest-probability token always wins. Same prompt gives the same output every time. That's what you want for RAG answer generation, SQL synthesis, or structured JSON output, because reproducibility matters and hallucinating an alternative phrasing is a risk.</p>
+<p>As T goes up toward 1, you're using the model's raw training distribution — the defaults. Above 1, you're flattening the distribution, making surprising tokens more likely. That's useful for brainstorming or creative writing but harmful for factual tasks.</p>
+<p>In my systems I use three tiers: zero or near-zero for anything where correctness is the metric (code, SQL, RAG grounding), 0.5–0.7 for conversational responses that need to feel natural, and 0.8–1.2 for intentional creative diversity. I also always set this explicitly — OpenAI defaults to 1, vLLM defaults to 0, so leaving it unset causes inconsistency between environments."</p></div>
+      <div class="script-block"><div class="script-label">Tradeoff / production angle (1 min)</div><p>"The one nuance is self-consistency prompting — where you generate N samples and take the majority answer. There you actually want T around 0.5–0.7 to get meaningful sample diversity, otherwise at T=0 you get N identical answers. And you need to be careful combining temperature with top-p: at T=0 you're doing greedy, so top-p filtering is ignored. I set them consistently and document both in the system config so there are no surprises when switching inference backends."</p></div>
+      <div class="script-block"><div class="script-label">Wrap-up (30s)</div><p>"So the short answer: T=0 for anything requiring correctness or regression-testable determinism; higher values when diversity or naturalness is the goal. Happy to go deeper on top-p, top-k, or how speculative decoding interacts with temperature."</p></div>
+    </div>
+  </div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="section-label">Pitfalls</div>
+  <div class="pitfall-card">
+    <div class="pitfall-mistake"><strong>✗ Mistake</strong> Saying &quot;I use temperature=1 by default because that&#x27;s the standard&quot;</div>
+    <div class="pitfall-better"><strong>✓ Better</strong> Explain that T=1 is the raw training distribution and is rarely optimal for production; most factual/code tasks benefit from T=0 or T&lt;0.5.</div>
+  </div>
+  <div class="pitfall-card">
+    <div class="pitfall-mistake"><strong>✗ Mistake</strong> Conflating temperature with top-p — e.g. &quot;I set both to 0 for determinism&quot;</div>
+    <div class="pitfall-better"><strong>✓ Better</strong> Clarify that T=0 means greedy decoding (top-p becomes irrelevant); and that top-p and temperature serve complementary roles when T&gt;0.</div>
+  </div>
+  <div class="pitfall-card">
+    <div class="pitfall-mistake"><strong>✗ Mistake</strong> Not mentioning reproducibility implications</div>
+    <div class="pitfall-better"><strong>✓ Better</strong> Point out that T=0 enables deterministic regression testing (same prompt → same output across runs), which is critical for golden-dataset evaluation.
+
+---</div>
+  </div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="section-label">Related Questions</div>
+  <div class="related-pills">
+    <div class="related-pill" data-slug="01-007">
+      <span class="related-pill-icon">→</span>
+      <div class="related-pill-text">
+        <div class="related-pill-q">Q7: What is temperature and top-p sampling? How do they affect outputs?</div>
+        <div class="related-pill-rel">Deeper mechanism; this note focuses on the decision of *when* to use each value</div>
+      </div>
+    </div>
+    <div class="related-pill" data-slug="01-032">
+      <span class="related-pill-icon">→</span>
+      <div class="related-pill-text">
+        <div class="related-pill-q">Q32: Beam search, top-k, top-p — when use each?</div>
+        <div class="related-pill-rel">Sibling question covering other decoding strategies</div>
+      </div>
+    </div>
+    <div class="related-pill" data-slug="01-043">
+      <span class="related-pill-icon">→</span>
+      <div class="related-pill-text">
+        <div class="related-pill-q">Q43: How do you reduce hallucinations in LLM outputs?</div>
+        <div class="related-pill-rel">Temperature=0 is one layer in the hallucination mitigation stack</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="section-label">One-liner recall</div>
+  <div class="oneliner-box">
+    <div class="oneliner-label">▸ Reconstruct from memory</div>
+    <div class="oneliner-text" data-text="Set T=0 for correctness and reproducibility (RAG, code, SQL); increase toward 0.7–1.2 only when diversity or naturalness is the goal, and always set it explicitly since defaults differ across inference engines.">Set T=0 for correctness and reproducibility (RAG, code, SQL); increase toward 0.7–1.2 only when diversity or naturalness is the goal, and always set it explicitly since defaults differ across inference engines.</div>
+  </div>
+</div>

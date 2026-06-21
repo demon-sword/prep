@@ -1,0 +1,129 @@
+<div class="answer-header reveal">
+  <div class="answer-meta">
+    <span class="meta-badge meta-category">03-agents-tool-use</span>
+    <span class="meta-badge meta-num">Q018</span>
+    <span class="meta-badge meta-status-review">review</span>
+  </div>
+  <h1 class="answer-title">Stateless vs stateful agents?</h1>
+</div>
+
+<div class="answer-section reveal">
+  <div class="accordion">
+    <div class="accordion-header">
+      <span class="accordion-title">⟁ Framing — Why this is asked</span>
+      <span class="accordion-chevron">▾</span>
+    </div>
+    <div class="accordion-body">
+      <div class="framing-grid">
+        <div><div class="framing-card">
+          <div class="framing-card-title">Why asked</div>
+          <p style="font-size:13.5px;line-height:1.7;color:var(--text-dim)">The interviewer is probing whether you understand production agent architecture — specifically how session context, cost, and failure-recovery tradeoffs inform the choice between stateless and stateful designs. It surfaces experience with real multi-turn agent deployments where state management becomes the dominant engineering challenge.</p>
+        </div></div>
+        <div><div class="framing-card">
+          <div class="framing-card-title">Trigger phrases</div>
+          <div class="trigger-list">
+              <div class="trigger-phrase">How does your agent remember what happened in earlier steps?</div>
+              <div class="trigger-phrase">What happens if your agent crashes mid-task — does it restart from scratch?</div>
+              <div class="trigger-phrase">How do you handle multi-turn conversations in your agent?</div>
+              <div class="trigger-phrase">Walk me through how you&#x27;d architect a long-running agent that needs to pick up where it left off.</div>
+          </div>
+        </div></div>
+      </div>
+      <div class="tests-block">
+        <span style="font-family:var(--mono);font-size:10px;letter-spacing:0.1em;text-transform:uppercase;color:var(--purple);margin-right:8px">Tests:</span>Whether you can articulate the memory/cost/resilience tradeoff and name concrete storage backends — not just say &quot;stateful is better.&quot;
+
+---
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="section-label">Concept</div>
+  <div class="concept-block"><p>A <strong>stateless agent</strong> treats each invocation as independent — it receives the full context it needs in the prompt and produces a response with no memory of prior turns. A <strong>stateful agent</strong> maintains persistent state between invocations — session history, intermediate results, tool outputs — stored externally (Redis, Postgres, a vector store) and loaded selectively per turn. The choice is fundamentally a tradeoff between simplicity/scalability and resilience/continuity.</p></div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="section-label">Mechanism</div>
+  <div class="card"><p><strong>Stateless agent pattern:</strong></p>
+<ul class="styled-list"><li>Each API call includes the full conversation history in the prompt (up to the context window)</li><li>No external storage required; trivially horizontally scalable</li><li>Fails on: long tasks (context window overflow), crash recovery (all progress lost), cost (resending full history every turn)</li><li>Best for: short-lived Q&A, single-turn tool calls, simple chatbots under ~10 turns</li></ul>
+<p><strong>Stateful agent pattern:</strong></p>
+<ul class="styled-list"><li>Orchestrator writes state to an external store after every step:</li><li><strong>Working memory (in-context):</strong> last N turns + current plan, loaded from Redis/Postgres</li><li><strong>Episodic memory (vector store):</strong> past task summaries, searchable by semantic similarity (Pinecone, Qdrant)</li><li><strong>Checkpoints:</strong> full agent state snapshot after each tool call — enables resume on crash</li><li>On resume: load checkpoint, inject last-N turns, continue from the saved step index</li><li>Best for: multi-step research tasks, long-horizon agentic workflows (>10 turns), tasks requiring crash recovery, regulated domains needing audit trails</li></ul>
+<p><strong>Implementation with LangGraph:</strong> ```python</p></div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="section-label">Example / Tradeoff</div>
+  <div class="card card-accent"><div class="rich-text"></div></div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="accordion">
+    <div class="accordion-header">
+      <span class="accordion-title">🎙 Verbal Script (3–5 min)</span>
+      <span class="accordion-chevron">▾</span>
+    </div>
+    <div class="accordion-body">
+      <div class="script-block"><div class="script-label">Opening (30s)</div><p>"The stateless vs stateful distinction comes down to where you store the agent's working memory — in the prompt or externally. I'll walk through both patterns, when each is appropriate, and the production tradeoffs that drive the choice."</p></div>
+      <div class="script-block"><div class="script-label">Core explanation (2–3 min)</div><p>"A stateless agent is simple: every call gets the full conversation history stuffed into the prompt. No external storage, trivially scalable, but two problems emerge quickly. First, context window pressure — at 10 turns with 2K tokens each you're at 20K tokens per call, just for history. Second, zero crash recovery — if the agent dies at step 7 of 10, you restart from scratch.</p>
+<p>A stateful agent externalizes that memory. After every step, the orchestrator checkpoints state to something like Redis for the recent window and Postgres for the full audit log. When the next turn starts, you load just the last three turns plus a rolling summary — maybe 2K tokens instead of 20K. And if the agent crashes, you resume from the last checkpoint via a thread ID, picking up at step N minus one.</p>
+<p>In LangGraph this is built-in with the PostgresSaver checkpointer — you compile the graph with it and pass the same thread_id on resume. The graph replays confirmed steps from the journal and only re-executes from the failure point."</p></div>
+      <div class="script-block"><div class="script-label">Tradeoff / production angle (1 min)</div><p>"The cost side is significant. If I have 1,000 concurrent agent sessions at 10 turns each and every turn resends 8K tokens of history, that's 80M context tokens per day — at $0.15/1M that's $12/day just for context overhead. Stateful with selective loading drops that to roughly 20M tokens, a 75% reduction.</p>
+<p>The complexity cost is real too — now I need Redis TTLs, cache invalidation, Postgres schema migrations, and consistent reads across replicas. So my heuristic is: stateless for tasks under 5 turns or under 30 seconds, stateful for anything longer or in regulated domains where you need the audit trail."</p></div>
+      <div class="script-block"><div class="script-label">Wrap-up (30s)</div><p>"So the answer is: stateless for simplicity and short tasks, stateful when you need crash recovery, cost efficiency at scale, or audit trails. The key engineering question is where you draw the checkpoint boundary — after each tool call is usually the right granularity. Happy to go deeper on checkpoint storage options or the LangGraph implementation."</p></div>
+    </div>
+  </div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="section-label">Pitfalls</div>
+  <div class="pitfall-card">
+    <div class="pitfall-mistake"><strong>✗ Mistake</strong> Saying &quot;stateful agents are always better because they have memory&quot;</div>
+    <div class="pitfall-better"><strong>✓ Better</strong> Explain that stateless is the right default for short tasks; stateful adds storage complexity, cache invalidation risk, and consistency requirements that aren&#x27;t worth it for simple Q&amp;A or single-turn workflows.</div>
+  </div>
+  <div class="pitfall-card">
+    <div class="pitfall-mistake"><strong>✗ Mistake</strong> Treating &quot;stateful&quot; as just &quot;store the full chat history in a DB and reload it every turn&quot;</div>
+    <div class="pitfall-better"><strong>✓ Better</strong> Explain selective loading (last N turns + rolling summary), checkpoint granularity (per-step vs per-session), and episodic memory (vector store for semantically relevant past context) as distinct mechanisms that prevent context bloat.</div>
+  </div>
+  <div class="pitfall-card">
+    <div class="pitfall-mistake"><strong>✗ Mistake</strong> Ignoring crash recovery as a stateful benefit</div>
+    <div class="pitfall-better"><strong>✓ Better</strong> Name checkpoint-based resumability explicitly: &quot;If the agent dies at step 7 of 10, stateful lets me resume from step 6 via thread_id; stateless means restart from zero — unacceptable for a 30-minute task.&quot;
+
+---</div>
+  </div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="section-label">Related Questions</div>
+  <div class="related-pills">
+    <div class="related-pill" data-slug="03-006">
+      <span class="related-pill-icon">→</span>
+      <div class="related-pill-text">
+        <div class="related-pill-q">Q6: Essential components of an agent beyond an LLM?</div>
+        <div class="related-pill-rel">Memory taxonomy (working/episodic/semantic/procedural) underpins stateful agent design</div>
+      </div>
+    </div>
+    <div class="related-pill" data-slug="03-027">
+      <span class="related-pill-icon">→</span>
+      <div class="related-pill-text">
+        <div class="related-pill-q">Q27: Types of memory: working, episodic, semantic, procedural?</div>
+        <div class="related-pill-rel">Direct extension — maps memory types to stateful storage backends</div>
+      </div>
+    </div>
+    <div class="related-pill" data-slug="03-010">
+      <span class="related-pill-icon">→</span>
+      <div class="related-pill-text">
+        <div class="related-pill-q">Q10: Design a safe and debuggable agent loop</div>
+        <div class="related-pill-rel">Checkpointing for resumability is a core safety/debuggability mechanism</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="section-label">One-liner recall</div>
+  <div class="oneliner-box">
+    <div class="oneliner-label">▸ Reconstruct from memory</div>
+    <div class="oneliner-text" data-text="Stateless agents inject full history into every prompt (simple, no recovery); stateful agents checkpoint to Redis/Postgres after each step (crash-resilient, 60–75% lower context cost at scale, needed for audit trails) — choose stateful once tasks exceed ~5 turns or 30 seconds.">Stateless agents inject full history into every prompt (simple, no recovery); stateful agents checkpoint to Redis/Postgres after each step (crash-resilient, 60–75% lower context cost at scale, needed for audit trails) — choose stateful once tasks exceed ~5 turns or 30 seconds.</div>
+  </div>
+</div>

@@ -1,0 +1,136 @@
+<div class="answer-header reveal">
+  <div class="answer-meta">
+    <span class="meta-badge meta-category">01-llm-fundamentals</span>
+    <span class="meta-badge meta-num">Q034</span>
+    <span class="meta-badge meta-status-review">review</span>
+  </div>
+  <h1 class="answer-title">Why is LLM inference memory-bounded?</h1>
+</div>
+
+<div class="answer-section reveal">
+  <div class="accordion">
+    <div class="accordion-header">
+      <span class="accordion-title">⟁ Framing — Why this is asked</span>
+      <span class="accordion-chevron">▾</span>
+    </div>
+    <div class="accordion-body">
+      <div class="framing-grid">
+        <div><div class="framing-card">
+          <div class="framing-card-title">Why asked</div>
+          <p style="font-size:13.5px;line-height:1.7;color:var(--text-dim)">This question probes whether you understand the <em>actual</em> hardware bottleneck in production LLM serving — not the theoretical compute cost, but the practical memory-bandwidth wall that dominates decode latency. Senior candidates are expected to reason about GPU memory bandwidth, arithmetic intensity, and how design decisions like GQA, quantization, and speculative decoding shift the bottleneck.</p>
+        </div></div>
+        <div><div class="framing-card">
+          <div class="framing-card-title">Trigger phrases</div>
+          <div class="trigger-list">
+              <div class="trigger-phrase">Why doesn&#x27;t throwing more GPU compute speed up generation?</div>
+              <div class="trigger-phrase">What&#x27;s the real bottleneck in LLM serving throughput?</div>
+              <div class="trigger-phrase">Why is decode so much slower than prefill?</div>
+              <div class="trigger-phrase">How does PagedAttention / vLLM actually help?</div>
+          </div>
+        </div></div>
+      </div>
+      <div class="tests-block">
+        <span style="font-family:var(--mono);font-size:10px;letter-spacing:0.1em;text-transform:uppercase;color:var(--purple);margin-right:8px">Tests:</span>Understanding of the memory-bandwidth bottleneck in autoregressive decode and how production systems (vLLM, TGI, GQA, quantization) address it.
+
+---
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="section-label">Concept</div>
+  <div class="concept-block"><p>LLM inference during the <strong>decode phase</strong> is memory-bandwidth-bound, not compute-bound. For each new token generated, the GPU must load all model weights from HBM (high-bandwidth memory) into SRAM — but the actual arithmetic performed on those weights is tiny (just one token's worth of activations). The ratio of compute operations to bytes transferred — called <strong>arithmetic intensity</strong> — is far too low to keep GPU cores busy; the bottleneck is how fast weights can be streamed from memory, not how fast the cores multiply.</p></div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="section-label">Mechanism</div>
+  <div class="card"><p><strong>Two phases of inference:</strong></p>
+<div class="table-wrap"><table class="data-table"><tr><th>Phase</th><th>Behavior</th><th>Bottleneck</th></tr><tr><td><strong>Prefill</strong></td><td>Process all prompt tokens in parallel (one big matrix-matrix multiply)</td><td>Compute-bound (high arithmetic intensity)</td></tr><tr><td><strong>Decode</strong></td><td>Generate one token at a time (matrix-vector multiply per step)</td><td>Memory-bandwidth-bound (low arithmetic intensity)</td></tr></table></div>
+<p><strong>Why decode is memory-bound:</strong></p>
+<ul class="styled-list"><li>A 70B-parameter model in FP16 requires ~140 GB of weight data.</li><li>Each decode step loads all 140 GB of weights from HBM to perform a tiny matrix-vector product (~140 GB × 2 flops/byte = ~280 GFLOPs of work).</li><li>An A100 80 GB GPU delivers ~2 TB/s HBM bandwidth but ~312 TFLOPS of FP16 compute.</li><li>Arithmetic intensity needed to be compute-bound: ~312 TFLOPS / 2 TB/s = ~156 FLOPs/byte.</li><li>Actual decode intensity: ~2 FLOPs/byte (one token). <strong>75× below the roofline</strong> — solidly memory-bound.</li></ul>
+<p><strong>KV cache compounds the problem:</strong></p>
+<ul class="styled-list"><li>Every decode step must also load cached K/V tensors for all prior tokens from HBM.</li><li>KV cache size: <code>2 × num_layers × num_heads × head_dim × seq_len × batch × dtype_bytes</code>.</li><li>For a 70B model at 4K context, batch=16: ~20 GB of KV cache — eating into the already-tight 80 GB HBM budget.</li></ul>
+<p><strong>Production consequences:</strong></p>
+<ul class="styled-list"><li>Increasing batch size is the primary lever: with B=64 requests sharing a decode step, the same weight load serves 64 tokens, raising effective arithmetic intensity.</li><li>But batch size is limited by KV cache memory — hence vLLM's <strong>PagedAttention</strong>: KV cache blocks are allocated on demand (like OS virtual memory paging), minimizing waste from reserved-but-unused slots, allowing 2–4× larger effective batch sizes.</li></ul></div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="section-label">Example / Tradeoff</div>
+  <div class="card card-accent"><div class="rich-text"><p><strong>vLLM benchmark (A100 80 GB, LLaMA-2 13B):</strong></p>
+<ul class="styled-list"><li>Naïve HuggingFace serving: ~400 tokens/s throughput at batch=1, stalls at batch=8 (OOM).</li><li>vLLM with PagedAttention: ~2,400 tokens/s at batch=32+ — ~6× improvement, same hardware.</li></ul>
+<p><strong>GQA (Grouped Query Attention)</strong> directly attacks KV cache bandwidth: Llama 3 70B uses 8 KV heads instead of 64, reducing KV cache size by 8×, freeing HBM for larger batches.</p>
+<p><strong>Quantization (INT8/INT4):</strong> halving weight size halves memory-bandwidth requirement per step, nearly doubling decode throughput — e.g., AWQ INT4 on Llama 3 70B cuts per-step weight load from ~140 GB to ~35 GB, roughly 4× faster decode on bandwidth-limited GPUs.</p>
+<p><strong>Speculative decoding</strong> side-steps per-step bandwidth cost: a small draft model proposes N tokens, the large model verifies all N in one prefill-like step (compute-bound again), accepting tokens that match. Effective throughput can double at no accuracy cost.</p></div></div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="accordion">
+    <div class="accordion-header">
+      <span class="accordion-title">🎙 Verbal Script (3–5 min)</span>
+      <span class="accordion-chevron">▾</span>
+    </div>
+    <div class="accordion-body">
+      <div class="script-block"><div class="script-label">Opening (30s)</div><p>"LLM inference has two distinct phases with completely different bottlenecks — and most people conflate them. Prefill, where you process the prompt, is compute-bound: lots of tokens, big matrix multiplications, GPUs are happy. Decode, where you generate one token at a time, is memory-bandwidth-bound, and that's the production problem I want to explain."</p></div>
+      <div class="script-block"><div class="script-label">Core explanation (2–3 min)</div><p>"During decode, the model has to load all its weights from HBM into SRAM for every single token it generates. For a 70B model in FP16, that's 140 gigabytes of data movement per step — but you only do a matrix-vector multiply on that data, not a matrix-matrix multiply. The arithmetic intensity, meaning FLOPs per byte transferred, is around 2 — but a modern A100 needs about 156 FLOPs per byte to stay compute-bound. So the GPU cores are sitting idle more than 90% of the time waiting for data to arrive from HBM.</p>
+<p>The KV cache makes this worse. Every decode step also loads cached keys and values for all prior tokens. At long contexts with large batches, the KV cache itself can consume tens of gigabytes of HBM, crowding out space for more requests.</p>
+<p>The primary fix is batch size: if you serve 64 requests simultaneously, one weight-load services 64 tokens, pushing arithmetic intensity up toward the compute-bound region. But bigger batches demand more KV cache memory — which is exactly what vLLM's PagedAttention solves. It treats KV cache blocks like OS virtual memory pages, allocating them on demand rather than reserving contiguous chunks upfront. In practice this gives 2–4× more effective batch capacity on the same hardware."</p></div>
+      <div class="script-block"><div class="script-label">Tradeoff / production angle (1 min)</div><p>"There are several complementary levers. GQA — which Llama 3 uses — reduces KV heads from 64 to 8, shrinking KV cache by 8× and freeing HBM headroom for more concurrent requests. Quantization (INT4/INT8) halves or quarters the weight data per step, nearly linearly improving decode throughput on bandwidth-limited cards. Speculative decoding converts the bottleneck from many small memory-bound steps to fewer large compute-bound verification steps, roughly doubling throughput for low-entropy outputs.</p>
+<p>The tradeoff to watch is that quantization trades accuracy for bandwidth; speculative decoding adds latency variance on high-entropy outputs; and aggressive batching increases p99 latency for individual requests even as throughput climbs."</p></div>
+      <div class="script-block"><div class="script-label">Wrap-up (30s)</div><p>"So the key mental model is: decode is a streaming problem, not a compute problem. Every optimization that either reduces bytes read per step (GQA, quantization) or amortizes reads across more tokens (batching, speculative decoding) moves the needle. Happy to go deeper on PagedAttention mechanics or the speculative decoding acceptance criterion."</p></div>
+    </div>
+  </div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="section-label">Pitfalls</div>
+  <div class="pitfall-card">
+    <div class="pitfall-mistake"><strong>✗ Mistake</strong> Saying &quot;LLM inference is slow because the model is big and needs lots of compute&quot;</div>
+    <div class="pitfall-better"><strong>✓ Better</strong> Distinguish prefill (compute-bound) from decode (memory-bandwidth-bound); the bottleneck during generation is <em>data movement</em>, not arithmetic.</div>
+  </div>
+  <div class="pitfall-card">
+    <div class="pitfall-mistake"><strong>✗ Mistake</strong> Claiming more GPU cores or higher TFLOPS directly speeds up decode</div>
+    <div class="pitfall-better"><strong>✓ Better</strong> Explain that decode arithmetic intensity (~2 FLOPs/byte) is far below the compute-bound threshold (~156 FLOPs/byte on A100); adding cores helps prefill, not decode.</div>
+  </div>
+  <div class="pitfall-card">
+    <div class="pitfall-mistake"><strong>✗ Mistake</strong> Describing vLLM/PagedAttention as &quot;just a memory optimization&quot; without connecting it to batch size and throughput</div>
+    <div class="pitfall-better"><strong>✓ Better</strong> Explain that PagedAttention&#x27;s real impact is allowing 2–4× larger effective batches (which directly raises arithmetic intensity and throughput) by eliminating KV cache fragmentation.
+
+---</div>
+  </div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="section-label">Related Questions</div>
+  <div class="related-pills">
+    <div class="related-pill" data-slug="01-009">
+      <span class="related-pill-icon">→</span>
+      <div class="related-pill-text">
+        <div class="related-pill-q">Q9: What is KV cache? How does it help in LLM inference?</div>
+        <div class="related-pill-rel">Prerequisite — KV cache mechanics underpin the memory-bound argument</div>
+      </div>
+    </div>
+    <div class="related-pill" data-slug="01-023">
+      <span class="related-pill-icon">→</span>
+      <div class="related-pill-text">
+        <div class="related-pill-q">Q23: What is grouped query attention (GQA)?</div>
+        <div class="related-pill-rel">Direct mitigation — GQA reduces KV cache size and memory bandwidth per step</div>
+      </div>
+    </div>
+    <div class="related-pill" data-slug="01-033">
+      <span class="related-pill-icon">→</span>
+      <div class="related-pill-text">
+        <div class="related-pill-q">Q33: What is FlashAttention and how does it work?</div>
+        <div class="related-pill-rel">Related optimization — FA reduces HBM reads during prefill via tiling</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="section-label">One-liner recall</div>
+  <div class="oneliner-box">
+    <div class="oneliner-label">▸ Reconstruct from memory</div>
+    <div class="oneliner-text" data-text="LLM decode is memory-bandwidth-bound because each generated token requires loading all model weights and KV cache from HBM (~140 GB for 70B) for only ~2 FLOPs/byte of actual arithmetic — far below the compute-bound threshold — making batch size, GQA, quantization, and PagedAttention the key production levers.">LLM decode is memory-bandwidth-bound because each generated token requires loading all model weights and KV cache from HBM (~140 GB for 70B) for only ~2 FLOPs/byte of actual arithmetic — far below the compute-bound threshold — making batch size, GQA, quantization, and PagedAttention the key production levers.</div>
+  </div>
+</div>

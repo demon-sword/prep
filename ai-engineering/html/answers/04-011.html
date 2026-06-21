@@ -1,0 +1,140 @@
+<div class="answer-header reveal">
+  <div class="answer-meta">
+    <span class="meta-badge meta-category">04-fine-tuning-training</span>
+    <span class="meta-badge meta-num">Q011</span>
+    <span class="meta-badge meta-status-review">review</span>
+  </div>
+  <h1 class="answer-title">Convert implicit user behavior (edits, acceptance) into training signals?</h1>
+</div>
+
+<div class="answer-section reveal">
+  <div class="accordion">
+    <div class="accordion-header">
+      <span class="accordion-title">⟁ Framing — Why this is asked</span>
+      <span class="accordion-chevron">▾</span>
+    </div>
+    <div class="accordion-body">
+      <div class="framing-grid">
+        <div><div class="framing-card">
+          <div class="framing-card-title">Why asked</div>
+          <p style="font-size:13.5px;line-height:1.7;color:var(--text-dim)">This question probes whether you can close the product feedback loop — turning real user behavior (completions accepted, edits made, thumbs up/down) into labeled data that improves the model over time. Interviewers at companies shipping AI-assisted writing, coding, or search tools ask this to distinguish candidates who treat the model as a static artifact from those who architect self-improving systems. It blends data engineering, reward modeling, and RLHF/DPO pipeline thinking.</p>
+        </div></div>
+        <div><div class="framing-card">
+          <div class="framing-card-title">Trigger phrases</div>
+          <div class="trigger-list">
+              <div class="trigger-phrase">How do you make your model better over time from user feedback?</div>
+              <div class="trigger-phrase">We ship a code completion tool — how do you turn editor telemetry into training data?</div>
+              <div class="trigger-phrase">What implicit signals can replace human labelers?</div>
+              <div class="trigger-phrase">How do you build a feedback loop for a writing assistant?</div>
+          </div>
+        </div></div>
+      </div>
+      <div class="tests-block">
+        <span style="font-family:var(--mono);font-size:10px;letter-spacing:0.1em;text-transform:uppercase;color:var(--purple);margin-right:8px">Tests:</span>Ability to design a production data flywheel that converts noisy implicit behavioral signals into clean labeled pairs suitable for preference alignment (DPO/RLHF).
+
+---
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="section-label">Concept</div>
+  <div class="concept-block"><p>Implicit behavioral signals — such as accepting vs. dismissing a suggestion, editing a generated passage, or dwelling on a completion without using it — encode user preference without requiring explicit ratings. Converting them into training data requires: (1) signal taxonomy and noise filtering, (2) pair construction (chosen vs. rejected), and (3) safe integration into a preference-alignment pipeline (DPO or reward model training).</p></div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="section-label">Mechanism</div>
+  <div class="card"><p><strong>Step 1 — Signal taxonomy (what to log)</strong></p>
+<div class="table-wrap"><table class="data-table"><tr><th>Signal</th><th>Interpretation</th><th>Noise level</th></tr><tr><td>Acceptance (no edit within N seconds)</td><td>Strong positive</td><td>Low</td></tr><tr><td>Acceptance + minor edit (<20% tokens changed)</td><td>Moderate positive</td><td>Low</td></tr><tr><td>Acceptance + heavy edit (>50% tokens changed)</td><td>Weak positive / negative</td><td>Medium</td></tr><tr><td>Dismissal / regeneration</td><td>Negative</td><td>Low</td></tr><tr><td>Copy-without-acceptance (clipboard)</td><td>Positive</td><td>Medium</td></tr><tr><td>Dwell time > threshold, then dismiss</td><td>Weak negative</td><td>High</td></tr><tr><td>Downstream engagement (commit, publish)</td><td>Strong positive</td><td>Medium</td></tr></table></div>
+<p>Log with: <code>{session_id, request_id, prompt_hash, generated_text, signal_type, edit_distance, latency_ms, timestamp}</code>.</p>
+<p><strong>Step 2 — Noise reduction and pairing</strong></p>
+<p>Raw signals are noisy; apply a cleaning pipeline before training:</p>
+<ol class="mechanism-steps"><li><strong>Dedup by prompt hash</strong> — collapse near-identical prompts (MinHash cosine > 0.95).</li><li><strong>Confidence weighting</strong> — weight samples by signal clarity: acceptance=1.0, heavy-edit=0.3, dwell-dismiss=0.1.</li><li><strong>Construct preference pairs</strong> — for each accepted completion, find a rejected alternative from the same session or a generation with low engagement on the same prompt. Pair format: <code>{prompt, chosen, rejected}</code> — the DPO training format.</li><li><strong>Edit reconstruction</strong> — when a user edits a completion, treat the original as <code>rejected</code> and the edited version as <code>chosen</code>. Validate: edit distance > 10% to exclude trivial corrections; edit distance < 80% to exclude wholesale rewrites.</li><li><strong>Human audit sample</strong> — spot-check 1–2% of pairs; reject pairs where <code>chosen</code> is objectively lower quality (guards against adversarial edits).</li></ol>
+<p><strong>Step 3 — Training integration</strong></p>
+<div class="table-wrap"><table class="data-table"><tr><th>Pipeline</th><th>When to use</th><th>Tooling</th></tr><tr><td>DPO (Direct Preference Optimization)</td><td>Sufficient pairs (>10K), no reward model wanted</td><td><code>trl.DPOTrainer</code>, Axolotl</td></tr><tr><td>RLHF (reward model + PPO)</td><td>Complex multi-dimensional reward (quality + latency + safety)</td><td><code>trl.PPOTrainer</code></td></tr><tr><td>Reward model only</td><td>Use model score as production quality signal</td><td><code>trl.RewardTrainer</code></td></tr></table></div>
+<p><strong>Step 4 — Feedback loop cadence</strong></p>
+<ul class="styled-list"><li>Collect signals continuously via event stream (Kafka/Kinesis).</li><li>Batch into weekly DPO fine-tune jobs on the latest adapter checkpoint (LoRA on top of frozen base).</li><li>Shadow-evaluate new adapter against current production on a golden holdout set (ROUGE-L, human eval on 200-sample slice).</li><li>Canary 5% traffic → promote if win rate ≥ 55% on A/B test.</li></ul></div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="section-label">Example / Tradeoff</div>
+  <div class="card card-accent"><div class="rich-text"><p><strong>GitHub Copilot</strong> publicly uses acceptance rate as a primary implicit signal. Internally, they construct preference pairs from accepted vs. dismissed completions and use them to fine-tune the completion model. Acceptance rate improved from ~27% (early) to ~35%+ after several feedback-loop training cycles.</p>
+<p><strong>Concrete tradeoff — selection bias:</strong> users who accept suggestions tend to be less experienced, so the "chosen" pool skews toward simpler, shorter completions. Mitigate by stratifying pairs by user cohort (novice vs. expert) and weighting expert-user signals more heavily in the DPO loss. Without this correction, models drift toward verbose-but-acceptable over precise-and-expert outputs.</p>
+<p><strong>Scale consideration:</strong> at 1M daily active users generating 10 completions each, you have 10M raw events/day. After dedup and noise filtering, expect 200K–500K usable pairs/week — more than sufficient for weekly LoRA DPO fine-tuning (typical DPO runs need 10K–100K pairs).</p></div></div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="accordion">
+    <div class="accordion-header">
+      <span class="accordion-title">🎙 Verbal Script (3–5 min)</span>
+      <span class="accordion-chevron">▾</span>
+    </div>
+    <div class="accordion-body">
+      <div class="script-block"><div class="script-label">Opening (30s)</div><p>"The question is really about closing the product flywheel — turning behavioral telemetry into labeled preference data that feeds back into the model. I'd break it into four stages: signal taxonomy, noise filtering and pair construction, DPO or RLHF integration, and the deployment cadence."</p></div>
+      <div class="script-block"><div class="script-label">Core explanation (2–3 min)</div><p>"I'd start by categorizing the signals by reliability. Clean acceptances — where the user accepts within a few seconds and makes no significant edits — are strong positives. Dismissals and regenerations are clean negatives. The messy middle is edits: if someone accepts and changes less than 20% of the tokens, I treat that as a moderate positive. If they rewrite more than 50%, the original is effectively rejected and the final version is the chosen output.</p>
+<p>I'd log all of this as an event stream — prompt hash, generated text, signal type, edit distance — and stream it into Kafka. Weekly, I'd run a cleaning pipeline: deduplicate by prompt hash using MinHash, weight samples by signal clarity, then construct preference pairs in DPO format: chosen and rejected for each prompt.</p>
+<p>The key validation step is edit reconstruction: when a user edits a completion, the original becomes rejected and their final version becomes chosen. But I validate that the edit distance is between 10% and 80% of the tokens — below 10% it's a trivial correction, above 80% it's essentially a new document and the pair is misleading.</p>
+<p>Then I feed these pairs into DPO fine-tuning on a LoRA adapter — it's fast and cheap, no separate reward model needed. I run a shadow evaluation against a golden holdout set before promoting to production, and A/B test at 5% traffic with a win-rate threshold of 55%."</p></div>
+      <div class="script-block"><div class="script-label">Tradeoff / production angle (1 min)</div><p>"The biggest production risk is selection bias: users who accept suggestions may be less expert, so the 'chosen' pool drifts toward simpler outputs. I mitigate by stratifying by user cohort and up-weighting expert-user signals. A second risk is adversarial edits — a user who deliberately degrades the output before accepting. A 1–2% human audit sample of pairs catches the egregious cases. At 1M DAU and 10 completions each, you have 10M raw events daily, which filters down to maybe 300K usable pairs per week — more than enough for a weekly LoRA DPO cycle."</p></div>
+      <div class="script-block"><div class="script-label">Wrap-up (30s)</div><p>"So the core pattern is: log behavioral signals, construct clean preference pairs with edit reconstruction, run weekly DPO fine-tuning on a LoRA adapter, and A/B gate before promoting. This turns every user interaction into a labeled training example without a human-annotation budget. Happy to go deeper on the DPO loss formulation or the selection-bias mitigation."</p></div>
+    </div>
+  </div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="section-label">Pitfalls</div>
+  <div class="pitfall-card">
+    <div class="pitfall-mistake"><strong>✗ Mistake</strong> Treating raw acceptance rate as a direct reward signal and plugging it into a reward model without noise filtering</div>
+    <div class="pitfall-better"><strong>✓ Better</strong> Explain that raw signals are noisy (selection bias, adversarial edits, dwell-without-use), and describe the cleaning pipeline (dedup, confidence weighting, edit-distance bounds) before pair construction.</div>
+  </div>
+  <div class="pitfall-card">
+    <div class="pitfall-mistake"><strong>✗ Mistake</strong> Saying &quot;we&#x27;d collect thumbs up/down&quot; when the question explicitly says <em>implicit</em> signals (edits, acceptance)</div>
+    <div class="pitfall-better"><strong>✓ Better</strong> Focus on behavioral signals (accept/dismiss/edit delta) and explain how they serve as surrogate labels; mention that explicit feedback is a complement, not a substitute.</div>
+  </div>
+  <div class="pitfall-card">
+    <div class="pitfall-mistake"><strong>✗ Mistake</strong> Jumping straight to full RLHF (SFT→RM→PPO) without justifying the complexity</div>
+    <div class="pitfall-better"><strong>✓ Better</strong> Propose DPO as the default for a pair-based feedback loop (no separate reward model, simpler pipeline, same quality outcome for most use cases), and explain when PPO adds value (multi-objective reward, very large scale).</div>
+  </div>
+  <div class="pitfall-card">
+    <div class="pitfall-mistake"><strong>✗ Mistake</strong> Not mentioning the selection-bias risk from the implicit signal distribution</div>
+    <div class="pitfall-better"><strong>✓ Better</strong> Acknowledge that accepting users ≠ random sample of users, and describe cohort stratification or expert-user weighting to correct the bias.
+
+---</div>
+  </div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="section-label">Related Questions</div>
+  <div class="related-pills">
+    <div class="related-pill" data-slug="04-004">
+      <span class="related-pill-icon">→</span>
+      <div class="related-pill-text">
+        <div class="related-pill-q">Q4: What is RLHF and why important?</div>
+        <div class="related-pill-rel">Upstream concept — RLHF is the pipeline that consumes the preference pairs this question produces</div>
+      </div>
+    </div>
+    <div class="related-pill" data-slug="04-008">
+      <span class="related-pill-icon">→</span>
+      <div class="related-pill-text">
+        <div class="related-pill-q">Q8: RLHF pipeline: SFT, reward model, PPO. How does DPO simplify?</div>
+        <div class="related-pill-rel">DPO is the recommended training integration for implicit-signal preference pairs</div>
+      </div>
+    </div>
+    <div class="related-pill" data-slug="05-009">
+      <span class="related-pill-icon">→</span>
+      <div class="related-pill-text">
+        <div class="related-pill-q">Q5: Evaluation — golden dataset for evaluation and regression testing</div>
+        <div class="related-pill-rel">The shadow-eval / A/B gate step requires a golden holdout; links the feedback loop to eval discipline</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="section-label">One-liner recall</div>
+  <div class="oneliner-box">
+    <div class="oneliner-label">▸ Reconstruct from memory</div>
+    <div class="oneliner-text" data-text="Convert implicit signals (accept=chosen, dismiss/heavy-edit=rejected) into DPO preference pairs via edit-distance filtering and cohort-stratified noise removal, then run weekly LoRA DPO fine-tuning gated by A/B win rate — closing the product flywheel without human annotators.">Convert implicit signals (accept=chosen, dismiss/heavy-edit=rejected) into DPO preference pairs via edit-distance filtering and cohort-stratified noise removal, then run weekly LoRA DPO fine-tuning gated by A/B win rate — closing the product flywheel without human annotators.</div>
+  </div>
+</div>

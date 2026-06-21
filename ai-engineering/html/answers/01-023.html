@@ -1,0 +1,141 @@
+<div class="answer-header reveal">
+  <div class="answer-meta">
+    <span class="meta-badge meta-category">01-llm-fundamentals</span>
+    <span class="meta-badge meta-num">Q023</span>
+    <span class="meta-badge meta-status-review">review</span>
+  </div>
+  <h1 class="answer-title">What is grouped query attention (GQA)? How does it differ from standard multi-head attention?</h1>
+</div>
+
+<div class="answer-section reveal">
+  <div class="accordion">
+    <div class="accordion-header">
+      <span class="accordion-title">⟁ Framing — Why this is asked</span>
+      <span class="accordion-chevron">▾</span>
+    </div>
+    <div class="accordion-body">
+      <div class="framing-grid">
+        <div><div class="framing-card">
+          <div class="framing-card-title">Why asked</div>
+          <p style="font-size:13.5px;line-height:1.7;color:var(--text-dim)">This question probes whether you understand the memory bottleneck in LLM inference and know the architectural innovations used to address it in production models. Interviewers at companies running inference at scale (Anthropic, OpenAI, Google, any team deploying Llama/Mistral) want to see that you can reason about GPU memory bandwidth, KV cache footprint, and throughput — not just explain attention conceptually.</p>
+        </div></div>
+        <div><div class="framing-card">
+          <div class="framing-card-title">Trigger phrases</div>
+          <div class="trigger-list">
+              <div class="trigger-phrase">How does Llama 3 / Mistral / Gemma differ from GPT architectures?</div>
+              <div class="trigger-phrase">What is GQA and why do modern models use it?</div>
+              <div class="trigger-phrase">How do you reduce KV cache memory without sacrificing quality?</div>
+              <div class="trigger-phrase">Walk me through multi-head vs multi-query vs grouped-query attention.</div>
+          </div>
+        </div></div>
+      </div>
+      <div class="tests-block">
+        <span style="font-family:var(--mono);font-size:10px;letter-spacing:0.1em;text-transform:uppercase;color:var(--purple);margin-right:8px">Tests:</span>Understanding of the memory-bandwidth bottleneck in autoregressive inference and the engineering tradeoffs between KV cache size, model quality, and throughput.
+
+---
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="section-label">Concept</div>
+  <div class="concept-block"><p>Grouped Query Attention (GQA) is an attention variant that shares Key and Value projection weights across groups of Query heads, reducing KV cache memory and memory-bandwidth pressure during inference without meaningfully degrading model quality compared to full Multi-Head Attention (MHA).</p>
+<p>It sits on a spectrum:</p>
+<ul class="styled-list"><li><strong>MHA (Multi-Head Attention):</strong> H query heads, H key heads, H value heads — each head has its own K/V projections. KV cache scales as <code>2 × H × d_head × seq_len × batch</code>.</li><li><strong>MQA (Multi-Query Attention):</strong> H query heads share a single K head and single V head. Maximum memory savings but quality loss on complex tasks.</li><li><strong>GQA (Grouped-Query Attention):</strong> H query heads divided into G groups (G < H); each group shares one K head and one V head. G=1 collapses to MQA; G=H collapses to MHA. GQA with G≈4–8 matches MHA quality while approaching MQA memory efficiency.</li></ul></div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="section-label">Mechanism</div>
+  <div class="card"><p><strong>Standard MHA:</strong></p>
+<div class="code-block-wrap"><pre class="code-block"><code>Q = X·Wq  shape: [B, seq, H, d_head]
+K = X·Wk  shape: [B, seq, H, d_head]
+V = X·Wv  shape: [B, seq, H, d_head]
+Attn(Q,K,V) per head → concat → project</code></pre><button class="copy-btn">copy</button></div>
+<p>Each of H heads maintains its own K/V in the KV cache. For Llama-2-70B with H=64 heads, d_head=128, batch=32, seq=4096: KV cache ≈ 2 × 64 × 128 × 4096 × 32 × 2 bytes ≈ <strong>68 GB</strong>.</p>
+<p><strong>GQA with G groups:</strong></p>
+<div class="code-block-wrap"><pre class="code-block"><code>Q heads: H (e.g. 32)
+K/V heads: G (e.g. 8)  — each K/V head serves H/G = 4 query heads
+KV cache: 2 × G × d_head × seq_len × batch</code></pre><button class="copy-btn">copy</button></div>
+<p>For Llama-2-70B with GQA (G=8): KV cache shrinks 8× to ~<strong>8.5 GB</strong> — the difference between fitting in GPU VRAM or not.</p>
+<p><strong>How queries access grouped K/V at inference:</strong> Each query head selects its group's K and V tensors. The attention computation is otherwise identical — just fewer unique K/V projections to store and load from memory.</p>
+<p><strong>Why it matters for throughput:</strong> LLM decoding is memory-bandwidth-bound (not compute-bound). Each decode step loads all KV tensors from HBM. Fewer K/V heads = fewer bytes read = faster decode = higher tokens/sec.</p></div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="section-label">Example / Tradeoff</div>
+  <div class="card card-accent"><div class="rich-text"><ul class="styled-list"><li><strong>Llama 3 (8B, 70B):</strong> GQA with 8 KV heads (vs 32 or 64 query heads).</li><li><strong>Mistral 7B:</strong> GQA with 8 KV heads — fits on a single 24 GB GPU for long contexts.</li><li><strong>Gemma 2:</strong> Uses GQA across all sizes.</li><li><strong>GPT-4 / earlier GPT-3:</strong> MHA (pre-GQA era).</li></ul>
+<p><strong>Quality tradeoff:</strong> Ainslie et al. (2023, Google Research) showed GQA with G=H/4 to H/8 matches MHA perplexity within ~0.1–0.3 PPL on language modeling tasks, while MQA (G=1) degrades 0.5–2 PPL depending on task. GQA is the dominant choice in models released 2023–2026.</p>
+<p><strong>Conversion from MHA checkpoint:</strong> Models pre-trained with MHA can be converted to GQA by mean-pooling K/V heads within each group and fine-tuning briefly (~5% of original training compute) to recover quality — used in the Llama-2 → 3 transition.</p>
+<div class="table-wrap"><table class="data-table"><tr><th>Variant</th><th>KV heads</th><th>KV cache size</th><th>Quality</th><th>Throughput</th></tr><tr><td>MHA</td><td>H (32)</td><td>100%</td><td>Best</td><td>Baseline</td></tr><tr><td>GQA (G=8)</td><td>8</td><td>25%</td><td>≈MHA</td><td>~2–3× MHA</td></tr></table></div>| MQA (G=1) | 1 | 3% | -0.5–2 PPL | ~4× MHA |</div></div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="accordion">
+    <div class="accordion-header">
+      <span class="accordion-title">🎙 Verbal Script (3–5 min)</span>
+      <span class="accordion-chevron">▾</span>
+    </div>
+    <div class="accordion-body">
+      <div class="script-block"><div class="script-label">Opening (30s)</div><p>"GQA is one of my favorite architecture questions because it's directly tied to a real production constraint. The core problem is: standard multi-head attention stores one Key and Value tensor per head in the KV cache, and that cache grows linearly with heads, batch size, and sequence length. At 70B scale with 64 heads and a 4K context, that's tens of gigabytes just for the KV cache. GQA solves this by sharing K/V projections across groups of query heads."</p></div>
+      <div class="script-block"><div class="script-label">Core explanation (2–3 min)</div><p>"Let me put it on a spectrum. In full MHA, every query head has its own K and V — so if you have 32 query heads, you have 32 K heads and 32 V heads in the cache. In Multi-Query Attention, the extreme version, all 32 query heads share a single K and single V. That's memory-efficient but hurts quality on complex tasks. GQA splits the difference: 32 query heads are organized into, say, 8 groups, and each group shares one K and one V. So the KV cache is 8× smaller than MHA while quality stays within ~0.1–0.3 perplexity points.</p>
+<p>The reason this matters at inference time is that LLM decoding is memory-bandwidth-bound, not compute-bound. Each decode step doesn't do matrix multiplications — it loads K and V from HBM for each token generated. Fewer K/V heads means fewer bytes transferred per decode step, which translates directly to higher tokens-per-second. In practice, Mistral 7B with GQA on a 24 GB GPU can serve much longer contexts at higher throughput than an equivalent MHA model.</p>
+<p>A concrete example: Llama 3 uses GQA across all sizes — 8B has 8 KV heads vs 32 query heads, and 70B has 8 KV heads vs 64 query heads. The KV cache savings are what allow Llama 3 70B to be deployed on 2–4 A100s rather than requiring 8."</p></div>
+      <div class="script-block"><div class="script-label">Tradeoff / production angle (1 min)</div><p>"The main tradeoff is quality vs memory. GQA is essentially a free lunch at G=H/4 to H/8 — quality loss is negligible. The only case where MHA still dominates is very small models with few heads to begin with, where the grouping doesn't make architectural sense. In production with vLLM, GQA is handled natively — PagedAttention is aware of head grouping, so you get both memory efficiency and good batch scheduling out of the box."</p></div>
+      <div class="script-block"><div class="script-label">Wrap-up (30s)</div><p>"So in summary: GQA reduces KV cache footprint by sharing K/V projections across groups of query heads. It's the reason modern frontier models — Llama 3, Mistral, Gemma — can run longer contexts at higher throughput without quality loss. It's become the default architectural choice for any model you'd deploy in production today."</p></div>
+    </div>
+  </div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="section-label">Pitfalls</div>
+  <div class="pitfall-card">
+    <div class="pitfall-mistake"><strong>✗ Mistake</strong> Confusing GQA with MQA — saying &quot;GQA means all heads share one K/V&quot;</div>
+    <div class="pitfall-better"><strong>✓ Better</strong> Clarify the spectrum: MHA (each head independent) → GQA (grouped sharing) → MQA (single shared K/V). GQA is the middle ground with G groups.</div>
+  </div>
+  <div class="pitfall-card">
+    <div class="pitfall-mistake"><strong>✗ Mistake</strong> Describing GQA as a pure training optimization rather than an inference optimization</div>
+    <div class="pitfall-better"><strong>✓ Better</strong> Emphasize that KV cache is the key bottleneck at inference time; GQA reduces bytes loaded from HBM per decode step, which is why it improves throughput and enables longer contexts on fixed VRAM.</div>
+  </div>
+  <div class="pitfall-card">
+    <div class="pitfall-mistake"><strong>✗ Mistake</strong> Not knowing which production models use GQA</div>
+    <div class="pitfall-better"><strong>✓ Better</strong> Cite Llama 3, Mistral 7B, Gemma 2, and mention that vLLM and TGI both support GQA natively; this shows production familiarity beyond textbook knowledge.
+
+---</div>
+  </div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="section-label">Related Questions</div>
+  <div class="related-pills">
+    <div class="related-pill" data-slug="01-022">
+      <span class="related-pill-icon">→</span>
+      <div class="related-pill-text">
+        <div class="related-pill-q">Q22: What is self-attention? How does it differ from multi-head attention?</div>
+        <div class="related-pill-rel">Prerequisite — GQA is a variant of MHA; need MHA mechanics first</div>
+      </div>
+    </div>
+    <div class="related-pill" data-slug="01-009">
+      <span class="related-pill-icon">→</span>
+      <div class="related-pill-text">
+        <div class="related-pill-q">Q9: What is KV cache? How does it help in LLM inference?</div>
+        <div class="related-pill-rel">Core dependency — GQA&#x27;s primary benefit is reducing KV cache footprint</div>
+      </div>
+    </div>
+    <div class="related-pill" data-slug="01-033">
+      <span class="related-pill-icon">→</span>
+      <div class="related-pill-text">
+        <div class="related-pill-q">Q33: What is FlashAttention and how does it work?</div>
+        <div class="related-pill-rel">Complementary optimization — FlashAttention addresses compute/memory IO; GQA addresses cache size; both deployed together in modern serving stacks</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="section-label">One-liner recall</div>
+  <div class="oneliner-box">
+    <div class="oneliner-label">▸ Reconstruct from memory</div>
+    <div class="oneliner-text" data-text="GQA groups the H query heads into G clusters (G &lt; H) that share a single K/V projection each, shrinking the KV cache by H/G× and boosting decode throughput without meaningfully degrading quality — the default attention variant in Llama 3, Mistral, and Gemma.">GQA groups the H query heads into G clusters (G &lt; H) that share a single K/V projection each, shrinking the KV cache by H/G× and boosting decode throughput without meaningfully degrading quality — the default attention variant in Llama 3, Mistral, and Gemma.</div>
+  </div>
+</div>

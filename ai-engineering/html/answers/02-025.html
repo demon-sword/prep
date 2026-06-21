@@ -1,0 +1,137 @@
+<div class="answer-header reveal">
+  <div class="answer-meta">
+    <span class="meta-badge meta-category">02-rag-systems</span>
+    <span class="meta-badge meta-num">Q025</span>
+    <span class="meta-badge meta-status-review">review</span>
+  </div>
+  <h1 class="answer-title">Semantic caching — reduce cost and latency?</h1>
+</div>
+
+<div class="answer-section reveal">
+  <div class="accordion">
+    <div class="accordion-header">
+      <span class="accordion-title">⟁ Framing — Why this is asked</span>
+      <span class="accordion-chevron">▾</span>
+    </div>
+    <div class="accordion-body">
+      <div class="framing-grid">
+        <div><div class="framing-card">
+          <div class="framing-card-title">Why asked</div>
+          <p style="font-size:13.5px;line-height:1.7;color:var(--text-dim)">The interviewer is probing whether you think beyond naive LLM call-per-request patterns and understand the full cost/latency optimization toolkit. Semantic caching is a high-signal topic because it reduces both cost (fewer LLM tokens billed) and latency (sub-millisecond cache hits vs 2–10s LLM round-trips) simultaneously — a rare double win. At 1M queries/day, even a 20% cache hit rate can save thousands of dollars daily.</p>
+        </div></div>
+        <div><div class="framing-card">
+          <div class="framing-card-title">Trigger phrases</div>
+          <div class="trigger-list">
+              <div class="trigger-phrase">How do you optimize cost at 1M queries/day?</div>
+              <div class="trigger-phrase">How do you reduce latency in GenAI applications?</div>
+              <div class="trigger-phrase">What caching strategies have you used in RAG or LLM systems?</div>
+              <div class="trigger-phrase">How do you handle repeated or similar user queries at scale?</div>
+          </div>
+        </div></div>
+      </div>
+      <div class="tests-block">
+        <span style="font-family:var(--mono);font-size:10px;letter-spacing:0.1em;text-transform:uppercase;color:var(--purple);margin-right:8px">Tests:</span>Ability to design multi-layer caching architectures for LLM applications, including the fuzzy-match insight that distinguishes semantic caching from traditional exact-match caching.
+
+---
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="section-label">Concept</div>
+  <div class="concept-block"><p>Semantic caching stores LLM responses keyed by the <em>meaning</em> of a query rather than its exact text. When a new query arrives, its embedding is compared against cached query embeddings; if the cosine similarity exceeds a threshold (typically 0.92–0.97), the cached response is returned without calling the LLM. This captures paraphrases, minor rewording, and near-duplicate intents that exact-match caching would miss entirely.</p></div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="section-label">Mechanism</div>
+  <div class="card"><p><strong>Three-layer caching stack (innermost to outermost):</strong></p>
+<ol class="mechanism-steps"><li><strong>Response cache (semantic)</strong> — embed the incoming user query → compare against a vector index of previously-answered queries (Redis + FAISS, or GPTCache/Zep) → if similarity ≥ threshold, return cached answer directly. Cache hit path: ~5–20ms vs 2–10s LLM call.</li></ol>
+<ol class="mechanism-steps"><li><strong>Embedding cache</strong> — store <code>(text → embedding vector)</code> in Redis with a TTL of hours/days. Avoids re-calling the embedding model for repeated or near-identical document chunks during ingestion or repeated query terms. Saves ~$0.02/1M tokens (OpenAI text-embedding-3-small) at scale.</li></ol>
+<ol class="mechanism-steps"><li><strong>Retrieval cache (retrieved chunks)</strong> — for queries that pass the semantic cache miss but hit the same top-K documents repeatedly, cache the <code>(query_hash → [chunk_ids])</code> mapping with a short TTL (5–15 min). Avoids redundant vector DB round-trips for hot queries.</li></ol>
+<p><strong>Key implementation decisions:</strong></p>
+<ul class="styled-list"><li><strong>Similarity threshold</strong>: 0.92–0.97 cosine similarity. Too low (0.85) → wrong answers served for different-intent queries. Too high (0.99) → effectively exact-match, low hit rate.</li><li><strong>TTL management</strong>: Cache entries must expire when underlying documents change (event-driven invalidation via webhook/CDC) or on a fixed TTL (1–24 hours depending on content freshness requirements).</li><li><strong>Cache scope</strong>: User-level vs global. For personalized responses, scope the cache per user. For factual Q&A (support docs, HR policies), a global shared cache gives the highest hit rate.</li><li><strong>Cache backend</strong>: GPTCache (open-source, pluggable backends), Redis + FAISS for custom implementations, or Zep for agent memory + caching combined.</li></ul>
+<p><strong>Math at scale:</strong> At 1M queries/day with a 30% semantic cache hit rate and avg LLM cost of $0.01/query:</p>
+<ul class="styled-list"><li>Without cache: $10,000/day</li><li>With 30% hit rate: $7,000/day → <strong>$3,000/day saved</strong></li><li>Latency: 30% of requests return in ~10ms vs 3–5s → meaningful p95 improvement</li></ul></div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="section-label">Example / Tradeoff</div>
+  <div class="card card-accent"><div class="rich-text"><p><strong>GPTCache</strong> (open-source, used at production scale) sits as middleware between the application and the LLM API. It embeds the query, checks a FAISS index, and returns a cached response on hit. Cache misses proceed normally, and the new (query_embedding, response) pair is stored.</p>
+<p><strong>Tradeoff table:</strong></p>
+<div class="table-wrap"><table class="data-table"><tr><th>Dimension</th><th>Benefit</th><th>Risk</th></tr><tr><td>Cost</td><td>20–40% reduction at scale</td><td>Stale responses if TTL too long</td></tr><tr><td>Latency</td><td>~10ms hit vs 3–5s LLM call</td><td>Embedding cost on every query (mitigate: embed cache)</td></tr><tr><td>Accuracy</td><td>Identical for true semantic duplicates</td><td>Wrong answer if threshold too low (paraphrase ≠ same intent)</td></tr><tr><td>Personalization</td><td>High hit rate for shared factual content</td><td>Must scope per-user for personalized responses</td></tr></table></div>
+<p><strong>Where it breaks down:</strong></p>
+<ul class="styled-list"><li><strong>Dynamic content</strong> (stock prices, real-time alerts) — any caching with TTL > seconds is wrong; disable semantic cache for these query types.</li><li><strong>Long-tail queries</strong> — if users ask highly diverse, specific questions, hit rate may be <5% and the overhead (embedding + similarity check) adds latency with no benefit. Profile hit rates and gate the cache selectively.</li><li><strong>Threshold calibration</strong> — requires empirical tuning per domain. A 0.95 threshold for a legal Q&A system may still conflate "can I terminate a contract?" with "can a contract be void?" — always validate with a golden set of known-different queries.</li></ul></div></div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="accordion">
+    <div class="accordion-header">
+      <span class="accordion-title">🎙 Verbal Script (3–5 min)</span>
+      <span class="accordion-chevron">▾</span>
+    </div>
+    <div class="accordion-body">
+      <div class="script-block"><div class="script-label">Opening (30s)</div><p>"Semantic caching is one of the highest-leverage optimizations for LLM applications because it simultaneously reduces cost and latency. The key insight is that traditional exact-match caching captures almost nothing for LLM workloads — users rephrase the same question constantly. Semantic caching uses embedding similarity to recognize paraphrases and serve cached responses. Let me walk through how I'd implement a three-layer caching stack."</p></div>
+      <div class="script-block"><div class="script-label">Core explanation (2–3 min)</div><p>"I'd build three layers. The outermost is the response cache — when a query arrives, I embed it and do a cosine similarity search against a FAISS index of previously answered query embeddings. If similarity exceeds ~0.95, I return the cached answer directly — that's a ~10ms response vs a 3–5 second LLM call.</p>
+<p>The middle layer is an embedding cache in Redis. Re-embedding the same query text costs money and time. Storing <code>text → vector</code> with a day-long TTL means we call the embedding API once per unique string.</p>
+<p>The innermost layer is a retrieval cache — for the same query shape that maps to the same top-K chunks, I cache the <code>(query_hash → chunk_ids)</code> mapping for 5–15 minutes. This saves vector DB round-trips for hot queries.</p>
+<p>For the implementation I've used GPTCache, which plugs in as middleware between your app and the LLM API. You configure the similarity threshold, backend (FAISS, Redis, or in-memory), and TTL. At 1M queries/day with a 30% hit rate and $0.01/query average, that's $3,000/day in savings."</p></div>
+      <div class="script-block"><div class="script-label">Tradeoff / production angle (1 min)</div><p>"The main risks are threshold calibration and TTL management. Set the threshold too low — say 0.85 — and you serve wrong answers for queries with similar surface form but different intent. I'd validate any threshold against a golden set of known-different query pairs from your domain.</p>
+<p>TTL is the other failure mode. For dynamic content — real-time prices, live inventory — caching is wrong entirely; I'd disable the semantic cache for those query types via a routing layer. For static content like policy docs, a 24-hour TTL is usually safe if you add webhook-triggered invalidation on document updates."</p></div>
+      <div class="script-block"><div class="script-label">Wrap-up (30s)</div><p>"To summarize: semantic caching uses embedding similarity rather than exact-match, capturing paraphrase hits that exact caching misses entirely. A three-layer stack — response cache, embedding cache, retrieval cache — covers all the cost and latency surfaces. The key production risk is threshold calibration and TTL-driven staleness, both of which require domain-specific tuning. Happy to go deeper on GPTCache internals or threshold selection."</p></div>
+    </div>
+  </div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="section-label">Pitfalls</div>
+  <div class="pitfall-card">
+    <div class="pitfall-mistake"><strong>✗ Mistake</strong> Describing caching as &quot;just using Redis to store LLM responses keyed by query string&quot;</div>
+    <div class="pitfall-better"><strong>✓ Better</strong> Explain that exact-match string caching has near-zero hit rate for LLM workloads because users rephrase constantly; semantic caching uses embedding cosine similarity to capture paraphrases, which is the key architectural insight.</div>
+  </div>
+  <div class="pitfall-card">
+    <div class="pitfall-mistake"><strong>✗ Mistake</strong> Ignoring threshold calibration risk — saying &quot;set similarity to 0.9 and you&#x27;re done&quot;</div>
+    <div class="pitfall-better"><strong>✓ Better</strong> Explain that the threshold must be tuned per domain, validated against a golden set of known-different queries, and that too-low thresholds serve confidently wrong answers (which is worse than a cache miss).</div>
+  </div>
+  <div class="pitfall-card">
+    <div class="pitfall-mistake"><strong>✗ Mistake</strong> Not mentioning TTL and invalidation strategy — treating the cache as permanent</div>
+    <div class="pitfall-better"><strong>✓ Better</strong> Discuss TTL policy (content-type dependent: hours for static docs, disabled for real-time data) and event-driven invalidation via webhooks/CDC when source documents change.
+
+---</div>
+  </div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="section-label">Related Questions</div>
+  <div class="related-pills">
+    <div class="related-pill" data-slug="02-028">
+      <span class="related-pill-icon">→</span>
+      <div class="related-pill-text">
+        <div class="related-pill-q">Q28: Optimize RAG latency in production</div>
+        <div class="related-pill-rel">Semantic caching is the #1 latency lever — follow-up detail</div>
+      </div>
+    </div>
+    <div class="related-pill" data-slug="02-007">
+      <span class="related-pill-icon">→</span>
+      <div class="related-pill-text">
+        <div class="related-pill-q">Q7: How efficiently generate and store embeddings</div>
+        <div class="related-pill-rel">Embedding cache is a sub-component of semantic caching</div>
+      </div>
+    </div>
+    <div class="related-pill" data-slug="02-019">
+      <span class="related-pill-icon">→</span>
+      <div class="related-pill-text">
+        <div class="related-pill-q">Q19: Scale RAG to 10M+ articles</div>
+        <div class="related-pill-rel">Scale context where multi-layer caching architecture matters most</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="section-label">One-liner recall</div>
+  <div class="oneliner-box">
+    <div class="oneliner-label">▸ Reconstruct from memory</div>
+    <div class="oneliner-text" data-text="Semantic caching embeds incoming queries and returns cached LLM responses on cosine similarity hits (≥0.95), cutting 20–40% of LLM calls at scale — calibrate the threshold per domain and pair with TTL + invalidation for correctness.">Semantic caching embeds incoming queries and returns cached LLM responses on cosine similarity hits (≥0.95), cutting 20–40% of LLM calls at scale — calibrate the threshold per domain and pair with TTL + invalidation for correctness.</div>
+  </div>
+</div>

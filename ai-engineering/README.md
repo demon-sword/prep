@@ -53,3 +53,4 @@ Questions compiled from 100+ real interview reports (2024–2026):
 - [IGotAnOffer / Glassdoor reports](https://igotanoffer.com/en/advice/ai-engineer-interview)
 - [gitGood — RAG interview guide](https://gitgood.dev/blog/complete-guide-rag-interview-questions-2026)
 - [Careery — 2026 AI interview trends](https://careery.pro/blog/ai-careers/ai-engineer-interview-questions)
+- [llmgenai — LLM Interview Questions](https://github.com/llmgenai/LLMInterviewQuestions)

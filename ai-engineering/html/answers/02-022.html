@@ -1,0 +1,136 @@
+<div class="answer-header reveal">
+  <div class="answer-meta">
+    <span class="meta-badge meta-category">02-rag-systems</span>
+    <span class="meta-badge meta-num">Q022</span>
+    <span class="meta-badge meta-status-review">review</span>
+  </div>
+  <h1 class="answer-title">Citations and source attribution in RAG?</h1>
+</div>
+
+<div class="answer-section reveal">
+  <div class="accordion">
+    <div class="accordion-header">
+      <span class="accordion-title">⟁ Framing — Why this is asked</span>
+      <span class="accordion-chevron">▾</span>
+    </div>
+    <div class="accordion-body">
+      <div class="framing-grid">
+        <div><div class="framing-card">
+          <div class="framing-card-title">Why asked</div>
+          <p style="font-size:13.5px;line-height:1.7;color:var(--text-dim)">Interviewers want to see whether you treat citations as a first-class engineering concern, not an afterthought. In production RAG systems — legal, medical, customer support, enterprise search — users need to verify answers, and hallucinations become expensive without an audit trail. This question probes whether you understand the full citation pipeline: tracking chunk provenance through retrieval, threading metadata into the generation prompt, and validating that generated citations actually match source content.</p>
+        </div></div>
+        <div><div class="framing-card">
+          <div class="framing-card-title">Trigger phrases</div>
+          <div class="trigger-list">
+              <div class="trigger-phrase">How do you show users where the answer came from?</div>
+              <div class="trigger-phrase">How do you implement source attribution in your RAG system?</div>
+              <div class="trigger-phrase">What happens when the model cites a document it didn&#x27;t actually retrieve?</div>
+              <div class="trigger-phrase">How do you ensure citation accuracy in a legal/compliance chatbot?</div>
+          </div>
+        </div></div>
+      </div>
+      <div class="tests-block">
+        <span style="font-family:var(--mono);font-size:10px;letter-spacing:0.1em;text-transform:uppercase;color:var(--purple);margin-right:8px">Tests:</span>Whether you can design a provenance-preserving data pipeline and enforce citation fidelity at generation time.
+
+---
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="section-label">Concept</div>
+  <div class="concept-block"><p>Source attribution in RAG means every claim in the generated answer is traceable to a specific retrieved chunk, with the document title, URL, page number, or section heading surfaced to the user. This is a data-pipeline problem as much as a prompting problem: citations can only be accurate if chunk metadata is captured at ingestion, preserved through retrieval, and explicitly included in the generation context.</p></div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="section-label">Mechanism</div>
+  <div class="card"><p><strong>1. Metadata ingestion (the foundation)</strong> At index time, attach rich metadata to every chunk:</p>
+<div class="code-block-wrap"><pre class="code-block"><code>chunk = {
+    &quot;text&quot;: &quot;...&quot;,
+    &quot;doc_id&quot;: &quot;policy-v3.pdf&quot;,
+    &quot;page&quot;: 7,
+    &quot;section&quot;: &quot;Section 4.2 — Refund Policy&quot;,
+    &quot;url&quot;: &quot;https://internal.docs/policy-v3&quot;,
+    &quot;chunk_index&quot;: 42
+}</code></pre><button class="copy-btn">copy</button></div>
+<p>Pinecone, Qdrant, and Weaviate all support arbitrary metadata fields alongside the vector.</p>
+<p><strong>2. Retrieval with provenance</strong> Return the full metadata dict alongside the text in every retrieved chunk. Never strip metadata between retrieval and the generation call.</p>
+<p><strong>3. Prompt engineering for citations</strong> Inject numbered source blocks, then instruct the model to cite by index:</p>
+<div class="code-block-wrap"><pre class="code-block"><code>Context:
+[1] (policy-v3.pdf, p.7, §4.2): &quot;Refunds are processed within 5–7 business days...&quot;
+[2] (faq.pdf, p.2): &quot;International orders may take 10–14 days...&quot;
+
+Answer the question using only the context above. After each factual claim, cite the source number in brackets, e.g. [1]. If you cannot answer from the context, say so.</code></pre><button class="copy-btn">copy</button></div>
+<p><strong>4. Post-generation citation validation</strong> After generation, verify each <code>[N]</code> citation actually references content that supports the claim:</p>
+<ul class="styled-list"><li><strong>String overlap check</strong> (fast): assert that key noun phrases from the cited chunk appear in the surrounding sentence.</li><li><strong>NLI entailment check</strong> (higher accuracy): run a cross-encoder (e.g. <code>cross-encoder/nli-deberta-v3-large</code>) to verify the cited chunk entails the claim. Flag citations below a confidence threshold (e.g. 0.7) for human review.</li></ul>
+<p><strong>5. UI rendering</strong> Return the citation metadata alongside the answer as structured JSON so the frontend can render inline links:</p>
+<div class="code-block-wrap"><pre class="code-block"><code>{
+  &quot;answer&quot;: &quot;Refunds take 5–7 business days [1].&quot;,
+  &quot;citations&quot;: [
+    {&quot;index&quot;: 1, &quot;title&quot;: &quot;Refund Policy §4.2&quot;, &quot;url&quot;: &quot;...&quot;, &quot;page&quot;: 7}
+  ]
+}</code></pre><button class="copy-btn">copy</button></div></div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="section-label">Example / Tradeoff</div>
+  <div class="card card-accent"><div class="rich-text"><p>At a legal document Q&A system processing 50K contracts, we used <code>[1]…[N]</code> indexed prompts and a DeBERTa NLI entailment gate. Citations that scored < 0.75 entailment were replaced with "Source reference could not be verified — please check the document directly." This caught ~4% hallucinated citations (model cited a chunk that was topically related but didn't actually contain the claimed fact). The NLI gate added ~120ms per answer; we ran it async and rendered the answer first, then updated citation confidence badges in a second pass.</p>
+<p><strong>Key tradeoff:</strong> Full NLI validation catches subtle hallucinations but adds latency (~80–200ms per check) and cost. For low-stakes domains, string-overlap is fast and catches 80%+ of outright hallucinations. For legal/medical/compliance, NLI entailment is worth it.</p></div></div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="accordion">
+    <div class="accordion-header">
+      <span class="accordion-title">🎙 Verbal Script (3–5 min)</span>
+      <span class="accordion-chevron">▾</span>
+    </div>
+    <div class="accordion-body">
+      <div class="script-block"><div class="script-label">Opening (30s)</div><p>"Citations in RAG are a first-class engineering concern, not just a UI nicety. My approach treats attribution as a data-pipeline problem: you need to capture provenance at ingestion, preserve it through retrieval, and enforce it at generation. Let me walk through the full stack."</p></div>
+      <div class="script-block"><div class="script-label">Core explanation (2–3 min)</div><p>"First, at indexing time, every chunk gets rich metadata — doc ID, page number, section heading, URL. I store this alongside the vector in Pinecone or Qdrant. The key rule is: never strip metadata between retrieval and generation.</p>
+<p>At generation time, I inject numbered source blocks — <code>[1] (policy-v3.pdf, p.7): 'Refunds are processed in 5–7 days…'</code> — and instruct the model to cite by index after every factual claim. This is prompt engineering, not magic: the model follows the citation format if the instruction is explicit.</p>
+<p>The gap most candidates miss is <em>citation validation</em>. A model can hallucinate by citing <code>[2]</code> for a claim that's actually in <code>[1]</code>, or cite a chunk that's topically related but doesn't actually support the claim. I address this in two ways: a fast string-overlap check for key noun phrases, and for higher-stakes scenarios, an NLI entailment model like DeBERTa to verify the cited chunk actually entails the generated sentence. Citations below a 0.75 confidence threshold get flagged or replaced with a 'could not verify' message."</p></div>
+      <div class="script-block"><div class="script-label">Tradeoff / production angle (1 min)</div><p>"The tradeoff is latency and cost. String overlap is cheap — microseconds — but misses paraphrased hallucinations. NLI entailment catches those but adds 80–200ms. In a legal chatbot, that's worth it. For a customer support bot where deflection rate matters more than legal precision, I'd skip the NLI gate and rely on the retrieval threshold (cosine ≥ 0.70) and prompt discipline. I also return citations as structured JSON so the frontend can render inline links and users can click through to the source document — that's the UX payoff."</p></div>
+      <div class="script-block"><div class="script-label">Wrap-up (30s)</div><p>"So: metadata at ingestion, numbered source prompts at generation, entailment validation post-generation, structured JSON to the frontend. Happy to go deeper on the NLI entailment approach or how to handle multi-doc citations where multiple chunks support the same claim."</p></div>
+    </div>
+  </div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="section-label">Pitfalls</div>
+<p class="text-muted" style="font-size:13px">See source for pitfalls.</p></div>
+
+<div class="answer-section reveal">
+  <div class="section-label">Related Questions</div>
+  <div class="related-pills">
+    <div class="related-pill" data-slug="02-008">
+      <span class="related-pill-icon">→</span>
+      <div class="related-pill-text">
+        <div class="related-pill-q">Q8: How handle hallucination when no information is found in context?</div>
+        <div class="related-pill-rel">Citation validation is a layer of hallucination defense</div>
+      </div>
+    </div>
+    <div class="related-pill" data-slug="02-021">
+      <span class="related-pill-icon">→</span>
+      <div class="related-pill-text">
+        <div class="related-pill-q">Q21: How evaluate a RAG pipeline?</div>
+        <div class="related-pill-rel">RAGAS faithfulness measures whether claims are grounded in retrieved context</div>
+      </div>
+    </div>
+    <div class="related-pill" data-slug="02-013">
+      <span class="related-pill-icon">→</span>
+      <div class="related-pill-text">
+        <div class="related-pill-q">Q13: Common RAG failure points — how debug them?</div>
+        <div class="related-pill-rel">Hallucinated citations are a specific failure mode in the taxonomy</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="section-label">One-liner recall</div>
+  <div class="oneliner-box">
+    <div class="oneliner-label">▸ Reconstruct from memory</div>
+    <div class="oneliner-text" data-text="Capture metadata at ingestion, inject numbered source blocks into the prompt, validate citations post-generation with NLI entailment, and return structured JSON so the frontend renders inline links — citations require the full pipeline, not just prompt instructions.">Capture metadata at ingestion, inject numbered source blocks into the prompt, validate citations post-generation with NLI entailment, and return structured JSON so the frontend renders inline links — citations require the full pipeline, not just prompt instructions.</div>
+  </div>
+</div>

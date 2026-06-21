@@ -1,0 +1,132 @@
+<div class="answer-header reveal">
+  <div class="answer-meta">
+    <span class="meta-badge meta-category">01-llm-fundamentals</span>
+    <span class="meta-badge meta-num">Q026</span>
+    <span class="meta-badge meta-status-review">review</span>
+  </div>
+  <h1 class="answer-title">Why are decoder-only models dominant even for non-generation tasks?</h1>
+</div>
+
+<div class="answer-section reveal">
+  <div class="accordion">
+    <div class="accordion-header">
+      <span class="accordion-title">⟁ Framing — Why this is asked</span>
+      <span class="accordion-chevron">▾</span>
+    </div>
+    <div class="accordion-body">
+      <div class="framing-grid">
+        <div><div class="framing-card">
+          <div class="framing-card-title">Why asked</div>
+          <p style="font-size:13.5px;line-height:1.7;color:var(--text-dim)">The interviewer is probing architectural intuition — whether you understand the practical and empirical reasons the field converged on decoder-only Transformers (GPT-style) even for tasks like classification, summarization, and embedding that were historically encoder or encoder-decoder territory. It tests depth beyond &quot;GPT generates, BERT classifies.&quot;</p>
+        </div></div>
+        <div><div class="framing-card">
+          <div class="framing-card-title">Trigger phrases</div>
+          <div class="trigger-list">
+              <div class="trigger-phrase">Why do we use GPT-4 for classification instead of BERT?</div>
+              <div class="trigger-phrase">Why are decoder-only models dominant even for non-generation tasks?</div>
+              <div class="trigger-phrase">What&#x27;s the architectural advantage of causal models over bidirectional models at scale?</div>
+          </div>
+        </div></div>
+      </div>
+      <div class="tests-block">
+        <span style="font-family:var(--mono);font-size:10px;letter-spacing:0.1em;text-transform:uppercase;color:var(--purple);margin-right:8px">Tests:</span>Understanding of the scaling, training-efficiency, and emergent-capability arguments that made the decoder-only paradigm the production default by 2024–2026.
+
+---
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="section-label">Concept</div>
+  <div class="concept-block"><p>Decoder-only models (GPT-series, Llama, Mistral, Claude) use causal (left-to-right) self-attention and are trained with a next-token prediction objective. Despite lacking bidirectional context, they outperform encoder and encoder-decoder architectures on almost every benchmark at large scale — including tasks where bidirectional context would seem to help.</p></div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="section-label">Mechanism</div>
+  <div class="card"><p>Four compounding reasons explain the dominance:</p>
+<ol class="mechanism-steps"><li><strong>Unified pretraining objective</strong> — Next-token prediction is a single, scalable loss that consumes all the text in the internet corpus without any labeling. Encoder-only models need masked-LM plus auxiliary tasks; encoder-decoder models need paired sequences. The simpler objective scales cleaner with compute.</li></ol>
+<ol class="mechanism-steps"><li><strong>One architecture, every task</strong> — A decoder can classify (generate a label token), summarize (generate a shorter sequence), embed (pool the last or a special token), translate, do QA, and reason — all in one model. Encoder-only (BERT) needs a task-specific head; encoder-decoder (T5) works well for seq2seq but is awkward for open-ended generation. A single large decoder avoids maintaining a zoo of specialized models.</li></ol>
+<ol class="mechanism-steps"><li><strong>In-context learning unlocks zero/few-shot</strong> — The causal LM objective teaches the model to continue any prefix, which naturally enables prompting and few-shot examples in the input. BERT cannot do this natively. At inference, you can adapt a decoder-only model to any new task with a few examples in the prompt — no retraining required.</li></ol>
+<ol class="mechanism-steps"><li><strong>Scaling laws favor next-token prediction</strong> — Kaplan et al. (2020) and Chinchilla (2022) both characterize decoder-only architectures. Empirically, performance on downstream tasks improves smoothly with model size and data for next-token prediction. Encoder architectures hit diminishing returns earlier; encoder-decoder models have double the parameter count for the same effective depth, making large-scale training more expensive.</li></ol>
+<p><strong>For classification specifically:</strong> A decoder-only model simply generates the class label as the first token after a prompt like <code>"Classify: [text]\nLabel:"</code>. With temperature=0, this is deterministic and achieves competitive or SOTA accuracy — eliminating the need for encoder fine-tuning entirely.</p>
+<p><strong>For embeddings:</strong> Decoder-only models produce strong embeddings by mean-pooling the last hidden states or using a <code><EOS></code> token representation. Models like <code>text-embedding-3-large</code> (OpenAI) and <code>Mistral-Embed</code> are decoder-only and top MTEB leaderboards, disproving the assumption that bidirectional attention is required for embedding quality.</p></div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="section-label">Example / Tradeoff</div>
+  <div class="card card-accent"><div class="rich-text"><p><strong>Llama 3 70B for classification vs fine-tuned BERT-large:</strong></p>
+<ul class="styled-list"><li>Llama 3 zero-shot via prompt: ~85% accuracy on SST-2</li><li>BERT-large fine-tuned: ~93% accuracy, but requires labeled data and a classification head</li><li>Llama 3 fine-tuned with LoRA: ≥95%, same task, and the same model handles generation tasks without duplication</li></ul>
+<p><strong>The remaining case for encoder-only:</strong> Cross-encoder reranking in RAG pipelines still uses BERT-style models (e.g., <code>ms-marco-MiniLM</code>) because they process query+document jointly and are 10–50× cheaper to run than a 70B decoder at inference. For reranking on top-100 candidates this specialized use case still wins on latency and cost.</p></div></div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="accordion">
+    <div class="accordion-header">
+      <span class="accordion-title">🎙 Verbal Script (3–5 min)</span>
+      <span class="accordion-chevron">▾</span>
+    </div>
+    <div class="accordion-body">
+      <div class="script-block"><div class="script-label">Opening (30s)</div><p>"The short answer is: scaling works better on a single architecture with a single objective. But let me walk through the four compounding reasons, because the answer is more interesting than just 'GPT is bigger.'"</p></div>
+      <div class="script-block"><div class="script-label">Core explanation (2–3 min)</div><p>"First, training efficiency. Next-token prediction uses every token in every document as a training signal — no masking overhead, no paired examples, no auxiliary tasks. That single loss scales smoothly with compute and data according to Chinchilla's laws.</p>
+<p>Second, one model, every task. A decoder can classify by generating a label token, summarize by generating fewer tokens, translate, embed via token pooling — anything. That means in production you maintain one large model instead of a BERT for classification, a T5 for summarization, and a GPT for generation. The operational simplicity is massive.</p>
+<p>Third, in-context learning. Because the model is trained to continue any prefix, you can give it a few examples in the prompt and it adapts without retraining. BERT fundamentally cannot do that — it needs gradient updates for each new task.</p>
+<p>Fourth, empirics. Every scaling study from 2020 onward characterizes decoder-only models. We don't have good scaling laws for masked-LM at the 70B+ scale because nobody trains BERT-70B — there's no evidence it would work as well."</p></div>
+      <div class="script-block"><div class="script-label">Tradeoff / production angle (1 min)</div><p>"The one place encoder-only still wins is cross-encoder reranking. In RAG, I still use a small BERT-style cross-encoder to rerank the top 50–100 candidates because it's 10–50× cheaper per call and query+document bidirectional context genuinely helps. But that's a narrow, latency-critical use case, not a general argument for BERT."</p></div>
+      <div class="script-block"><div class="script-label">Wrap-up (30s)</div><p>"So: decoder-only dominates because training is simpler, one model covers all tasks, prompting replaces fine-tuning for adaptation, and empirical scaling evidence supports it. Happy to go deeper on any of these — KV caching advantages, or why embeddings from decoder models are competitive."</p></div>
+    </div>
+  </div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="section-label">Pitfalls</div>
+  <div class="pitfall-card">
+    <div class="pitfall-mistake"><strong>✗ Mistake</strong> Saying &quot;encoder models are better for classification because they see both directions&quot;</div>
+    <div class="pitfall-better"><strong>✓ Better</strong> Acknowledge the theoretical bidirectional advantage but explain why it doesn&#x27;t matter at scale: large decoder-only models achieve equal or better accuracy via zero-shot prompting or LoRA fine-tuning, with no labeled data requirement for the former.</div>
+  </div>
+  <div class="pitfall-card">
+    <div class="pitfall-mistake"><strong>✗ Mistake</strong> Treating this as purely a &quot;GPT is just bigger&quot; argument without addressing the architectural reasons</div>
+    <div class="pitfall-better"><strong>✓ Better</strong> Walk through the four factors (unified objective, multi-task capability, in-context learning, scaling laws) to show architectural and training-regime insight, not just benchmark citation.</div>
+  </div>
+  <div class="pitfall-card">
+    <div class="pitfall-mistake"><strong>✗ Mistake</strong> Forgetting that encoder-only still has a valid production niche</div>
+    <div class="pitfall-better"><strong>✓ Better</strong> Call out cross-encoder reranking (ms-marco-MiniLM in RAG pipelines) as the concrete carve-out where BERT-style wins on cost and latency.
+
+---</div>
+  </div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="section-label">Related Questions</div>
+  <div class="related-pills">
+    <div class="related-pill" data-slug="01-025">
+      <span class="related-pill-icon">→</span>
+      <div class="related-pill-text">
+        <div class="related-pill-q">Q25: Encoder-only vs decoder-only vs encoder-decoder — when use each?</div>
+        <div class="related-pill-rel">Direct prerequisite — architectural taxonomy</div>
+      </div>
+    </div>
+    <div class="related-pill" data-slug="01-002">
+      <span class="related-pill-icon">→</span>
+      <div class="related-pill-text">
+        <div class="related-pill-q">Q2: How do transformers work?</div>
+        <div class="related-pill-rel">Foundation — attention mechanism and causal masking</div>
+      </div>
+    </div>
+    <div class="related-pill" data-slug="02-014">
+      <span class="related-pill-icon">→</span>
+      <div class="related-pill-text">
+        <div class="related-pill-q">Q14: What is re-ranking? Cross-encoder vs bi-encoder?</div>
+        <div class="related-pill-rel">Counter-example where encoder-only retains a production role</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="section-label">One-liner recall</div>
+  <div class="oneliner-box">
+    <div class="oneliner-label">▸ Reconstruct from memory</div>
+    <div class="oneliner-text" data-text="Decoder-only models dominate because next-token prediction is a single scalable objective that trains on all text, one model handles every task via prompting, in-context learning replaces per-task fine-tuning, and empirical scaling laws only exist for this architecture — making the encoder-only advantage of bidirectional context irrelevant at scale.">Decoder-only models dominate because next-token prediction is a single scalable objective that trains on all text, one model handles every task via prompting, in-context learning replaces per-task fine-tuning, and empirical scaling laws only exist for this architecture — making the encoder-only advantage of bidirectional context irrelevant at scale.</div>
+  </div>
+</div>

@@ -1,0 +1,141 @@
+<div class="answer-header reveal">
+  <div class="answer-meta">
+    <span class="meta-badge meta-category">01-llm-fundamentals</span>
+    <span class="meta-badge meta-num">Q024</span>
+    <span class="meta-badge meta-status-review">review</span>
+  </div>
+  <h1 class="answer-title">BPE vs WordPiece vs character-level tokenization — tradeoffs?</h1>
+</div>
+
+<div class="answer-section reveal">
+  <div class="accordion">
+    <div class="accordion-header">
+      <span class="accordion-title">⟁ Framing — Why this is asked</span>
+      <span class="accordion-chevron">▾</span>
+    </div>
+    <div class="accordion-body">
+      <div class="framing-grid">
+        <div><div class="framing-card">
+          <div class="framing-card-title">Why asked</div>
+          <p style="font-size:13.5px;line-height:1.7;color:var(--text-dim)">Tokenization sits at the foundation of every LLM — it determines vocabulary size, context window efficiency, cost per call, and whether domain-specific terms get split into nonsense. Interviewers probe this to see whether candidates understand the latent assumptions baked into pre-trained models <em>before</em> they are applied to specialized domains (legal, medical, code), and whether they can reason about cost/context tradeoffs in production.</p>
+        </div></div>
+        <div><div class="framing-card">
+          <div class="framing-card-title">Trigger phrases</div>
+          <div class="trigger-list">
+              <div class="trigger-phrase">Why does GPT-4 struggle with arithmetic / rare words / legal terms?</div>
+              <div class="trigger-phrase">How does tokenization affect cost and context window usage?</div>
+              <div class="trigger-phrase">What tokenizer does BERT use vs GPT? Why does it matter?</div>
+              <div class="trigger-phrase">Our domain has lots of abbreviations — should we retrain the tokenizer?</div>
+          </div>
+        </div></div>
+      </div>
+      <div class="tests-block">
+        <span style="font-family:var(--mono);font-size:10px;letter-spacing:0.1em;text-transform:uppercase;color:var(--purple);margin-right:8px">Tests:</span>Understanding of subword tokenization algorithms and their downstream consequences for model behavior, cost efficiency, and domain adaptation.
+
+---
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="section-label">Concept</div>
+  <div class="concept-block"><p>Tokenization is the process of converting raw text into discrete integer IDs that a model can process. The core tension in tokenizer design is <strong>vocabulary coverage vs sequence length</strong>: a large vocabulary covers more words as single tokens (shorter sequences, lower cost) but requires more embedding parameters and risks data sparsity; a small vocabulary keeps embeddings compact but splits every rare word into many fragments (longer sequences, higher cost, potential semantic degradation). All three major approaches — BPE, WordPiece, and character-level — make different bets on this tradeoff.</p></div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="section-label">Mechanism</div>
+  <div class="card"><p><strong>Byte-Pair Encoding (BPE)</strong> — used by GPT-2/3/4, LLaMA, Mistral, Falcon:</p>
+<ol class="mechanism-steps"><li>Start with a character-level vocabulary plus a special end-of-word marker.</li><li>Iteratively count the most frequent adjacent byte/character pair in the training corpus.</li><li>Merge that pair into a new token and repeat until vocabulary reaches the target size (typically 32K–128K).</li><li>At inference, greedily apply learned merge rules left-to-right.</li></ol>
+<ul class="styled-list"><li><strong>Strength:</strong> Frequency-driven merges naturally capture common morphemes and subwords. No OOV tokens — unknown characters fall back to byte-level.</li><li><strong>Weakness:</strong> Merge order is greedy; slightly different byte sequences can produce very different tokenizations (e.g., " cat" vs "cat" are different tokens in GPT models). Arithmetic digits are often single characters, so "1234" = 4 tokens.</li></ul>
+<p><strong>WordPiece</strong> — used by BERT, DistilBERT, ALBERT, Electra:</p>
+<ol class="mechanism-steps"><li>Start from full words, then segment by maximizing the likelihood of the training data under a language-model objective (maximize P(word) = product of P(subword pieces)).</li><li>Unknown subwords are broken down greedily, with a <code>##</code> prefix marking continuation pieces (e.g., "tokenization" → "token", "##ization").</li><li>Vocabulary typically 30K tokens.</li></ol>
+<ul class="styled-list"><li><strong>Strength:</strong> Likelihood-maximizing objective tends to produce linguistically meaningful splits. The <code>##</code> convention makes it clear a piece is a suffix.</li><li><strong>Weakness:</strong> Requires full vocabulary pre-selection; rare byte sequences may produce <code>[UNK]</code> unlike BPE which can always fall back to bytes.</li></ul>
+<p><strong>Character-level tokenization</strong> — used in some early models, character-level LMs:</p>
+<ol class="mechanism-steps"><li>Every character is a token; vocabulary ~256 (ASCII) to a few thousand (Unicode).</li><li>Sequence length grows proportionally — an average English sentence of 20 words ≈ 100 characters = 100 tokens (vs ~25 with BPE).</li></ol>
+<ul class="styled-list"><li><strong>Strength:</strong> No OOV problem, perfect for highly agglutinative languages (Finnish, Turkish), robustness to typos and code.</li><li><strong>Weakness:</strong> Context window fills up much faster; model must learn to compose meaning from characters, requiring much more capacity and data.</li></ul>
+<p><strong>SentencePiece (BPE or Unigram variant)</strong> — used by T5, LLaMA 2/3, Mistral:</p>
+<ul class="styled-list"><li>Language-agnostic; treats input as a raw byte stream, enabling multilingual tokenization without pre-tokenization rules. Unigram variant selects subword pieces by probabilistic language model (vs greedy BPE frequency).</li></ul></div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="section-label">Example / Tradeoff</div>
+  <div class="card card-accent"><div class="rich-text"><div class="table-wrap"><table class="data-table"><tr><th>Algorithm</th><th>Vocab size</th><th>OOV handling</th><th>Sequence length (English)</th><th>Domain gap risk</th></tr><tr><td>BPE (GPT-4, tiktoken)</td><td>100K</td><td>Byte fallback — no UNK</td><td>~1 token / 4 chars</td><td>Medium — arithmetic, medical codes</td></tr><tr><td>WordPiece (BERT)</td><td>30K</td><td><code>[UNK]</code> for truly unseen bytes</td><td>~1 token / 4 chars</td><td>Higher — fixed vocab, no byte fallback</td></tr><tr><td>Character-level</td><td>256–5K</td><td>None</td><td>~1 token / 1 char</td><td>None — but 4–5× longer sequences</td></tr><tr><td>SentencePiece Unigram (T5, LLaMA)</td><td>32K–64K</td><td>Byte fallback</td><td>~1 token / 4 chars</td><td>Low — language-agnostic</td></tr></table></div>
+<p><strong>Concrete production impact — medical domain:</strong> GPT-4's tiktoken (BPE, 100K vocab) splits "hepatosplenomegaly" into 6–7 tokens. A clinical NLP team found their average note consumed <strong>28% more tokens</strong> than expected, inflating API costs and sometimes truncating context. Options: (1) use a domain-retrained tokenizer (requires fine-tuning from scratch), (2) add a pre-processing step to expand abbreviations, (3) switch to a model whose tokenizer was trained on biomedical text (e.g., BioGPT, ClinicalBERT).</p>
+<p><strong>Arithmetic failure root cause:</strong> GPT tokenizers split digits individually only for multi-digit numbers in certain contexts. "8 + 7 = 15" might tokenize "15" as one token but "153" as two — the model has never seen "153" as a unit; it must learn carry rules from character patterns, which it struggles with compared to a calculator.</p></div></div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="accordion">
+    <div class="accordion-header">
+      <span class="accordion-title">🎙 Verbal Script (3–5 min)</span>
+      <span class="accordion-chevron">▾</span>
+    </div>
+    <div class="accordion-body">
+      <div class="script-block"><div class="script-label">Opening (30s)</div><p>"Tokenization is one of those things that feels like plumbing until it causes a production incident. The high-level tension is vocabulary size versus sequence length — more tokens in your vocabulary means shorter sequences and lower cost, but you pay with larger embeddings and risk data sparsity. I'll walk through BPE, WordPiece, and character-level, then hit the production implications."</p></div>
+      <div class="script-block"><div class="script-label">Core explanation (2–3 min)</div><p>"BPE — used by GPT and LLaMA — starts with characters and iteratively merges the most frequent adjacent pair until you hit a target vocab size, usually 32K to 100K. The result is a greedy frequency-driven vocabulary that captures common morphemes well. Modern BPE implementations like tiktoken operate at the byte level, so there are no true unknowns — any input can be expressed as bytes.</p>
+<p>WordPiece, used by BERT, is similar but instead of raw frequency it maximizes the language-model likelihood of the training corpus. The practical difference is small, but you get linguistically cleaner splits and the <code>##</code> convention makes continuation pieces explicit. The downside is that BERT's 30K vocabulary is fixed — rare byte sequences produce <code>[UNK]</code>.</p>
+<p>Character-level goes all the way down to individual characters — vocabulary is maybe 256 to a few thousand. Zero OOV risk and great for typo robustness, but a 20-word sentence becomes 100 tokens instead of 25, which is a 4× context window hit. For most production use cases that's prohibitive.</p>
+<p>SentencePiece wraps BPE or a probabilistic Unigram algorithm in a language-agnostic byte-stream interface — that's what T5 and LLaMA 2 use, which is why they handle multilingual inputs well without language-specific pre-tokenization."</p></div>
+      <div class="script-block"><div class="script-label">Tradeoff / production angle (1 min)</div><p>"The place this bites hardest in production is domain-specific vocabulary. Medical terms, legal clause identifiers, or financial tickers can fragment into many tokens, which means: higher API cost, shorter effective context, and sometimes the model has never seen that exact token sequence during training so it hallucinates. The fix isn't always 'retrain the tokenizer' — that means retraining the whole model. Usually you pre-process: expand abbreviations, normalize IDs, or add a glossary to the system prompt. If the domain gap is severe enough, switching to a domain-adapted model (BioGPT, LegalBERT) is the right call. Arithmetic is another classic failure — BPE splits large numbers into per-digit tokens, so the model has to learn carry rules from character fragments, which it does poorly compared to a tool call to a calculator."</p></div>
+      <div class="script-block"><div class="script-label">Wrap-up (30s)</div><p>"Bottom line: BPE is the industry default for good reason — byte-level fallback, no UNK, good compression. WordPiece is BERT's slightly different bet on the same idea. Character-level is the nuclear option for OOV robustness at a steep sequence-length cost. In production, the real question is 'does this tokenizer handle our domain vocabulary efficiently?' and the answer determines your cost, context, and model quality story. Happy to go deeper on any of these."</p></div>
+    </div>
+  </div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="section-label">Pitfalls</div>
+  <div class="pitfall-card">
+    <div class="pitfall-mistake"><strong>✗ Mistake</strong> Describing tokenization as just &quot;splitting text into words&quot; without mentioning subword algorithms</div>
+    <div class="pitfall-better"><strong>✓ Better</strong> Explain that subword tokenization (BPE/WordPiece) is the industry standard precisely to handle rare words and morphological variants without exploding vocabulary size or producing unknowns.</div>
+  </div>
+  <div class="pitfall-card">
+    <div class="pitfall-mistake"><strong>✗ Mistake</strong> Saying &quot;GPT and BERT use the same tokenizer&quot;</div>
+    <div class="pitfall-better"><strong>✓ Better</strong> GPT uses BPE (tiktoken, 100K vocab, byte-level); BERT uses WordPiece (30K vocab, fixed, <code>[UNK]</code> for unseen bytes) — the difference matters when BERT encounters out-of-vocabulary bytes.</div>
+  </div>
+  <div class="pitfall-card">
+    <div class="pitfall-mistake"><strong>✗ Mistake</strong> Ignoring the cost/context implication — &quot;tokenization doesn&#x27;t affect cost much&quot;</div>
+    <div class="pitfall-better"><strong>✓ Better</strong> Name the concrete impact: more tokens → higher API cost + shorter effective context window. E.g., a medical corpus can run 20–30% longer than general English due to fragmented terminology.</div>
+  </div>
+  <div class="pitfall-card">
+    <div class="pitfall-mistake"><strong>✗ Mistake</strong> Saying character-level is always worse</div>
+    <div class="pitfall-better"><strong>✓ Better</strong> Character-level has real advantages for highly agglutinative languages, code (where identifier fragments matter), and typo robustness; the tradeoff is sequence length, not correctness.
+
+---</div>
+  </div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="section-label">Related Questions</div>
+  <div class="related-pills">
+    <div class="related-pill" data-slug="01-003">
+      <span class="related-pill-icon">→</span>
+      <div class="related-pill-text">
+        <div class="related-pill-q">Q3: What is tokenization and how does it affect LLM performance?</div>
+        <div class="related-pill-rel">Foundation — this Q24 goes deeper on algorithm comparison</div>
+      </div>
+    </div>
+    <div class="related-pill" data-slug="01-037">
+      <span class="related-pill-icon">→</span>
+      <div class="related-pill-text">
+        <div class="related-pill-q">Q37: Risks of general-purpose tokenizers on legal/medical domains</div>
+        <div class="related-pill-rel">Direct application of tokenizer tradeoffs to domain-specific costs</div>
+      </div>
+    </div>
+    <div class="related-pill" data-slug="01-039">
+      <span class="related-pill-icon">→</span>
+      <div class="related-pill-text">
+        <div class="related-pill-q">Q39: What is tokenization, and why does it matter for cost and context windows?</div>
+        <div class="related-pill-rel">Production cost angle — same concept, applied to billing and context budget</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="section-label">One-liner recall</div>
+  <div class="oneliner-box">
+    <div class="oneliner-label">▸ Reconstruct from memory</div>
+    <div class="oneliner-text" data-text="BPE (GPT) merges frequent byte pairs to build a vocabulary greedily with byte-level fallback; WordPiece (BERT) uses a likelihood objective with `[UNK]` risk; character-level has zero OOV but 4–5× longer sequences — choose by domain OOV rate and context/cost budget.">BPE (GPT) merges frequent byte pairs to build a vocabulary greedily with byte-level fallback; WordPiece (BERT) uses a likelihood objective with `[UNK]` risk; character-level has zero OOV but 4–5× longer sequences — choose by domain OOV rate and context/cost budget.</div>
+  </div>
+</div>

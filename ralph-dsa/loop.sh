@@ -1,19 +1,21 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# Usage: ./ralph-dsa/loop.sh <category-slug> [max_iterations] [--model <slug>]
-# Example: ./ralph-dsa/loop.sh 01-arrays-hashing 15
+# Usage: ./ralph-dsa/loop.sh <category-slug> [max_iterations] [--agent cursor|claude] [--model <slug>]
+# Example: ./ralph-dsa/loop.sh 01-arrays-hashing 15 --agent claude
 #
 # Runs once.sh until COMPLETE promise or max iterations.
 
-CATEGORY="${1:?Usage: $0 <category-slug> [max_iterations] [--model <slug>]}"
+CATEGORY="${1:?Usage: $0 <category-slug> [max_iterations] [--agent cursor|claude] [--model <slug>]}"
 shift
 
 MAX=15
 MODEL=""
+AGENT_BACKEND="${RALPH_AGENT:-claude}"
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
+    --agent|-a) AGENT_BACKEND="$2"; shift 2 ;;
     --model|-m) MODEL="$2"; shift 2 ;;
     *)
       if [[ "$1" =~ ^[0-9]+$ ]]; then MAX="$1"; shift
@@ -36,17 +38,16 @@ if [[ "$MAX" -lt "$TASK_COUNT" ]]; then
   echo "Note: category has ~$TASK_COUNT tasks; max iterations ($MAX) may be too low." >&2
 fi
 
-echo "Starting Ralph DSA loop for $CATEGORY (max $MAX iterations)"
+echo "Starting Ralph DSA loop for $CATEGORY (max $MAX iterations, agent: $AGENT_BACKEND)"
 
 for ((i = 1; i <= MAX; i++)); do
   echo ""
   echo "========== Loop $i / $MAX =========="
   set +e
-  if [[ -n "$MODEL" ]]; then
-    bash "$SCRIPT_DIR/once.sh" "$CATEGORY" --model "$MODEL" 1
-  else
-    bash "$SCRIPT_DIR/once.sh" "$CATEGORY" 1
-  fi
+  ONCE_ARGS=("$CATEGORY" --agent "$AGENT_BACKEND")
+  [[ -n "$MODEL" ]] && ONCE_ARGS+=(--model "$MODEL")
+  ONCE_ARGS+=(1)
+  bash "$SCRIPT_DIR/once.sh" "${ONCE_ARGS[@]}"
   rc=$?
   set -e
 

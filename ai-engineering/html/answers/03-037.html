@@ -1,0 +1,179 @@
+<div class="answer-header reveal">
+  <div class="answer-meta">
+    <span class="meta-badge meta-category">03-agents-tool-use</span>
+    <span class="meta-badge meta-num">Q037</span>
+    <span class="meta-badge meta-status-review">review</span>
+  </div>
+  <h1 class="answer-title">Agents collaborating on research reports with citations</h1>
+</div>
+
+<div class="answer-section reveal">
+  <div class="accordion">
+    <div class="accordion-header">
+      <span class="accordion-title">⟁ Framing — Why this is asked</span>
+      <span class="accordion-chevron">▾</span>
+    </div>
+    <div class="accordion-body">
+      <div class="framing-grid">
+        <div><div class="framing-card">
+          <div class="framing-card-title">Why asked</div>
+          <p style="font-size:13.5px;line-height:1.7;color:var(--text-dim)">This is a multi-agent system design question. The interviewer wants to see whether you can decompose a compound research task into parallel agent roles, coordinate their outputs with attribution integrity, and handle the production challenges: source deduplication, citation validation, conflicting claims, cost/latency, and coherent final synthesis. It tests architectural thinking beyond single-agent RAG.</p>
+        </div></div>
+        <div><div class="framing-card">
+          <div class="framing-card-title">Trigger phrases</div>
+          <div class="trigger-list">
+              <div class="trigger-phrase">Design a system where multiple agents collaborate to produce a research report.</div>
+              <div class="trigger-phrase">How would you build an AI research assistant that generates cited reports?</div>
+              <div class="trigger-phrase">Walk me through a multi-agent pipeline for research synthesis with source attribution.</div>
+          </div>
+        </div></div>
+      </div>
+      <div class="tests-block">
+        <span style="font-family:var(--mono);font-size:10px;letter-spacing:0.1em;text-transform:uppercase;color:var(--purple);margin-right:8px">Tests:</span>Ability to decompose a complex document-generation workflow into coordinated multi-agent roles with reliable citation provenance, deduplication, conflict resolution, and quality gates.
+
+---
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="section-label">Concept</div>
+  <div class="concept-block"><p>A multi-agent research pipeline assigns specialized roles — Planner, parallel Researcher agents, a Synthesizer, and a Citation Validator — where each Researcher searches a distinct source domain and returns structured findings with source metadata, then the Synthesizer merges and narrativizes them, and an independent Citation Validator verifies every claim traces back to a retrieved chunk before the report is finalized.</p></div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="section-label">Mechanism</div>
+  <div class="card"><p><strong>Agent roles and responsibilities:</strong></p>
+<div class="code-block-wrap"><pre class="code-block"><code>[Planner agent]
+  Input: user research question
+  Output: structured outline {sections[], search_queries_per_section[], source_domains[]}
+  Model: GPT-4o, T=0.3 (some creativity in decomposition)
+
+[Researcher agents — run in parallel, one per section or domain]
+  Input: sub-query + assigned source domain (web, internal docs, arXiv, SEC filings)
+  Tools: web_search, doc_retrieval (Pinecone/hybrid BM25+dense), pdf_extract
+  Output: [{claim, supporting_chunk, source_url, source_title, confidence}]
+  Model: GPT-4o-mini, T=0 (factual extraction)
+
+[Dedup + Merge step — orchestrator code, not an agent]
+  Cosine-dedup retrieved chunks (threshold &gt; 0.92 → keep highest-confidence version)
+  Group claims by section from the outline
+
+[Synthesizer agent]
+  Input: outline + deduplicated claim-evidence pairs per section
+  Output: prose report draft with inline [n] citation markers, structured bibliography
+  Model: GPT-4o, T=0.3
+
+[Citation Validator agent]
+  Input: report draft + source chunks
+  Per [n] citation: NLI entailment check — does the source chunk entail the cited claim?
+  Output: {citation_id, valid: bool, entailment_score, suggested_fix}
+  Model: DeBERTa-v3-large fine-tuned for NLI, or GPT-4o-mini as LLM judge
+  Threshold: entailment_score &lt; 0.75 → flag for revision or removal
+
+[Revision loop — max 2 iterations]
+  Flagged claims → route back to Synthesizer with validator feedback
+  OR remove claim if no supporting evidence exists in retrieved set
+
+[Final report] → rendered with citation footnotes, bibliography, confidence annotations</code></pre><button class="copy-btn">copy</button></div>
+<p><strong>Orchestration pattern:</strong> Supervisor (LangGraph) dispatches Researcher agents in parallel fan-out, awaits all completions, runs the orchestrator-code dedup step, then sequences Synthesizer → Validator in serial. No choreography here — visibility into all partial results is needed before synthesis.</p>
+<p><strong>Memory and state:</strong></p>
+<ul class="styled-list"><li><strong>Working memory:</strong> each Researcher holds its retrieved chunks in context only</li><li><strong>Shared state (Postgres/Redis):</strong> section → claim list, persisted after each Researcher completes (checkpoint for resumability on partial failure)</li><li><strong>Citation index:</strong> source_url → {title, retrieved_at, chunk_text} — built incrementally, deduplicated by URL+content hash</li></ul>
+<p><strong>Tool schemas (Researcher tools, abbreviated):</strong></p>
+<div class="code-block-wrap"><pre class="code-block"><code>web_search(query, max_results=10) → [{title, url, snippet, full_text}]
+doc_retrieval(query, collection, top_k=5) → [{chunk, source_id, score}]
+extract_claim(text, query) → [{claim, supporting_text, confidence}]</code></pre><button class="copy-btn">copy</button></div>
+<p><strong>Citation format in output:</strong></p>
+<div class="code-block-wrap"><pre class="code-block"><code>&quot;Transformer models scale predictably with data and parameters [1], though
+recent evidence suggests a data-compute optimum [2].&quot;
+
+[1] Kaplan et al. 2020, &quot;Scaling Laws for Neural Language Models&quot;, arXiv:2001.08361
+[2] Hoffmann et al. 2022, &quot;Training Compute-Optimal LLMs (Chinchilla)&quot;, arXiv:2203.15556</code></pre><button class="copy-btn">copy</button></div></div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="section-label">Example / Tradeoff</div>
+  <div class="card card-accent"><div class="rich-text"><p><strong>Concrete stack:</strong> LangGraph for supervisor/parallel dispatch, GPT-4o for Planner + Synthesizer, GPT-4o-mini for Researcher extraction, DeBERTa-v3-large NLI model for Citation Validator (faster + cheaper than GPT-4o at high citation volume), Pinecone hybrid BM25+dense for internal doc retrieval, Tavily or Bing API for web search, Postgres for shared claim state.</p>
+<p><strong>Cost math (one 10-section report, 3 Researcher agents per section):</strong></p>
+<ul class="styled-list"><li>30 Researcher calls × ~2K tokens avg = 60K tokens at GPT-4o-mini → ~$0.024</li><li>1 Synthesizer call × ~8K tokens = $0.04 at GPT-4o</li><li>1 Validator pass × 50 citations × ~300 tokens NLI = 15K tokens → DeBERTa inference ~$0.002</li><li>Total: ~$0.07/report at this scope; scales to ~$70/1K reports</li></ul>
+<p><strong>Key tradeoffs:</strong></p>
+<div class="table-wrap"><table class="data-table"><tr><th>Dimension</th><th>Choice</th><th>Tradeoff</th></tr><tr><td>Orchestration</td><td>Supervisor (LangGraph)</td><td>Full visibility for dedup; SPOF vs choreography resilience</td></tr><tr><td>Citation validation</td><td>NLI model (DeBERTa) vs LLM judge</td><td>DeBERTa: 5× cheaper, 10× faster, but binary; LLM judge: nuanced but costly</td></tr><tr><td>Parallel Researchers</td><td>Fan-out per section</td><td>Wall-clock = slowest researcher; requires shared state for merge</td></tr></table></div>| Revision loops | Max 2 iterations | Prevents runaway cost; 2 passes resolves >90% of NLI-flagged claims in practice |</div></div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="accordion">
+    <div class="accordion-header">
+      <span class="accordion-title">🎙 Verbal Script (3–5 min)</span>
+      <span class="accordion-chevron">▾</span>
+    </div>
+    <div class="accordion-body">
+      <div class="script-block"><div class="script-label">Opening (30s)</div><p>"I'd design this as a supervisor-worker multi-agent system: a Planner decomposes the research question into sections and sub-queries, parallel Researcher agents retrieve and extract claims with source metadata, a Synthesizer produces the narrative draft with inline citation markers, and a Citation Validator does an NLI entailment pass to confirm every claim is actually supported by the retrieved source. Let me walk through each layer."</p></div>
+      <div class="script-block"><div class="script-label">Core explanation (2–3 min)</div><p>"The Planner uses GPT-4o to produce a structured JSON outline — sections, search sub-queries per section, and which source domains to search. That decomposition is the most important step: a badly scoped sub-query means Researchers bring back irrelevant evidence, and the Synthesizer hallucinates to fill the gap.</p>
+<p>Researcher agents run in parallel — one per section or one per source domain depending on the task. Each one searches its domain (web via Tavily, internal docs via Pinecone hybrid BM25+dense, PDFs via a parser), extracts structured claim-evidence pairs, and returns them with source metadata: URL, title, the exact supporting chunk. This structured output is critical — if you let Researchers return free-form prose, you lose provenance and the Citation Validator can't verify anything.</p>
+<p>Before synthesis, I run an orchestrator-code dedup step: cosine similarity on retrieved chunks above 0.92 → keep the highest-confidence version. This prevents the Synthesizer from citing the same underlying fact with two different sources, which makes reports look sloppy.</p>
+<p>The Synthesizer then gets the deduplicated claim-evidence pairs grouped by section. It writes prose and places inline [n] markers referencing the citation index. Temperature 0.3 here — factual accuracy matters more than creativity, but some fluency is needed.</p>
+<p>Then the Citation Validator — I'd use DeBERTa-v3-large fine-tuned for NLI rather than GPT-4o-mini because it's 5× faster and 10× cheaper at scale, and citation validation is a binary entailment task, not a generation task. Any citation with entailment score below 0.75 gets flagged: the Synthesizer revises the claim or removes it if no supporting evidence exists. I cap this at 2 revision loops to control cost."</p></div>
+      <div class="script-block"><div class="script-label">Tradeoff / production angle (1 min)</div><p>"The hardest production problem is conflicting claims across Researchers — two agents find sources that say opposite things. I handle this by surfacing the conflict explicitly in the Synthesizer's prompt: 'Source A says X, Source B says Y — acknowledge the disagreement and cite both.' Suppressing conflicts produces a confident-but-wrong report, which is worse than an uncertain one.</p>
+<p>The other issue is cost creep: parallel Researchers each making multiple web search + retrieval calls can hit $0.50–1.00/report if not bounded. I limit each Researcher to max_results=10 web hits and top_k=5 RAG chunks, and gate Researcher calls through a budget tracker in the orchestrator."</p></div>
+      <div class="script-block"><div class="script-label">Wrap-up (30s)</div><p>"So the key architectural decisions are: structured claim-evidence output from Researchers (not prose), orchestrator-code dedup before synthesis, NLI-based Citation Validation as a separate agent rather than trusting the Synthesizer's self-assessment, and max 2 revision loops. Happy to go deeper on the NLI validation layer or the conflict-resolution strategy."</p></div>
+    </div>
+  </div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="section-label">Pitfalls</div>
+  <div class="pitfall-card">
+    <div class="pitfall-mistake"><strong>✗ Mistake</strong> Having Researchers return free-form summaries instead of structured claim-evidence pairs with source metadata</div>
+    <div class="pitfall-better"><strong>✓ Better</strong> Require structured JSON output <code>{claim, supporting_chunk, source_url, confidence}</code> from every Researcher; without this the Citation Validator has nothing to check against and the Synthesizer fabricates citations from memory.</div>
+  </div>
+  <div class="pitfall-card">
+    <div class="pitfall-mistake"><strong>✗ Mistake</strong> Trusting the Synthesizer to self-verify citations (&quot;just prompt it to be accurate&quot;)</div>
+    <div class="pitfall-better"><strong>✓ Better</strong> Run an independent Citation Validator agent (NLI model or LLM judge) after synthesis; the Synthesizer&#x27;s job is fluent narrative, not entailment verification — conflating the two roles degrades both.</div>
+  </div>
+  <div class="pitfall-card">
+    <div class="pitfall-mistake"><strong>✗ Mistake</strong> Not handling conflicting claims across Researchers — acknowledging only one source when sources disagree</div>
+    <div class="pitfall-better"><strong>✓ Better</strong> Surface conflicts explicitly in the Synthesizer prompt and instruct it to cite both and note the disagreement; confident synthesis of conflicting evidence is the #1 hallucination mode in multi-agent research pipelines.</div>
+  </div>
+  <div class="pitfall-card">
+    <div class="pitfall-mistake"><strong>✗ Mistake</strong> Skipping the orchestrator-code dedup step and letting the Synthesizer see the same fact from two slightly different chunks</div>
+    <div class="pitfall-better"><strong>✓ Better</strong> Cosine dedup (threshold ~0.92) before synthesis prevents redundant citations and duplicate-source bibliography entries that undermine report credibility.
+
+---</div>
+  </div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="section-label">Related Questions</div>
+  <div class="related-pills">
+    <div class="related-pill" data-slug="03-032">
+      <span class="related-pill-icon">→</span>
+      <div class="related-pill-text">
+        <div class="related-pill-q">Q32: Orchestration vs choreography for multi-agent systems</div>
+        <div class="related-pill-rel">Supervisor pattern used here — why orchestration over choreography for this workflow</div>
+      </div>
+    </div>
+    <div class="related-pill" data-slug="03-022">
+      <span class="related-pill-icon">→</span>
+      <div class="related-pill-text">
+        <div class="related-pill-q">Q22: Tool schemas that reduce hallucinated actions</div>
+        <div class="related-pill-rel">Structured Researcher output schemas prevent citation fabrication</div>
+      </div>
+    </div>
+    <div class="related-pill" data-slug="02-022">
+      <span class="related-pill-icon">→</span>
+      <div class="related-pill-text">
+        <div class="related-pill-q">Q22: Citations and source attribution in RAG</div>
+        <div class="related-pill-rel">Single-agent citation mechanics — same NLI validation pattern applied here</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="section-label">One-liner recall</div>
+  <div class="oneliner-box">
+    <div class="oneliner-label">▸ Reconstruct from memory</div>
+    <div class="oneliner-text" data-text="A multi-agent research pipeline uses a Planner to decompose the question, parallel Researcher agents to retrieve structured claim-evidence pairs with source metadata, an orchestrator dedup step, a Synthesizer for narrative with inline citation markers, and an NLI Citation Validator to verify every claim before finalizing — with at most 2 revision loops to bound cost.">A multi-agent research pipeline uses a Planner to decompose the question, parallel Researcher agents to retrieve structured claim-evidence pairs with source metadata, an orchestrator dedup step, a Synthesizer for narrative with inline citation markers, and an NLI Citation Validator to verify every claim before finalizing — with at most 2 revision loops to bound cost.</div>
+  </div>
+</div>

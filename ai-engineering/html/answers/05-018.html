@@ -1,0 +1,146 @@
+<div class="answer-header reveal">
+  <div class="answer-meta">
+    <span class="meta-badge meta-category">05-evaluation-metrics</span>
+    <span class="meta-badge meta-num">Q018</span>
+    <span class="meta-badge meta-status-review">review</span>
+  </div>
+  <h1 class="answer-title">Feedback and reinforcement loops — system gets better over time?</h1>
+</div>
+
+<div class="answer-section reveal">
+  <div class="accordion">
+    <div class="accordion-header">
+      <span class="accordion-title">⟁ Framing — Why this is asked</span>
+      <span class="accordion-chevron">▾</span>
+    </div>
+    <div class="accordion-body">
+      <div class="framing-grid">
+        <div><div class="framing-card">
+          <div class="framing-card-title">Why asked</div>
+          <p style="font-size:13.5px;line-height:1.7;color:var(--text-dim)">Interviewers want to know whether you think beyond static deployment. A system that doesn&#x27;t improve degrades over time (model drift, knowledge staleness, shifting user needs). This probes whether you have production experience building feedback loops that turn user signal into improved model behavior — closing the train→deploy→observe→improve cycle.</p>
+        </div></div>
+        <div><div class="framing-card">
+          <div class="framing-card-title">Trigger phrases</div>
+          <div class="trigger-list">
+              <div class="trigger-phrase">How do you make sure your AI system improves over time?</div>
+              <div class="trigger-phrase">How would you build a feedback loop for a chatbot?</div>
+              <div class="trigger-phrase">How do you use user feedback to retrain or improve the model?</div>
+              <div class="trigger-phrase">Describe the continuous improvement loop for your AI product.</div>
+          </div>
+        </div></div>
+      </div>
+      <div class="tests-block">
+        <span style="font-family:var(--mono);font-size:10px;letter-spacing:0.1em;text-transform:uppercase;color:var(--purple);margin-right:8px">Tests:</span>Ability to design a closed-loop ML system that captures implicit and explicit user signals, validates them, and feeds them back into model improvement — without introducing selection bias or reward hacking.
+
+---
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="section-label">Concept</div>
+  <div class="concept-block"><p>A feedback loop is a production pipeline that captures user signals (explicit: thumbs up/down; implicit: edits, abandonment, session length), validates them as training signal, and periodically uses them to update the model (via LoRA fine-tuning, DPO preference pairs, or prompt revision) — so the system improves continuously rather than decaying after deployment.</p></div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="section-label">Mechanism</div>
+  <div class="card"><p><strong>1. Signal capture (instrumentation layer)</strong></p>
+<div class="table-wrap"><table class="data-table"><tr><th>Signal type</th><th>Examples</th><th>Quality</th></tr><tr><td>Explicit positive</td><td>Thumbs-up, copy button click, "save response"</td><td>High confidence</td></tr><tr><td>Explicit negative</td><td>Thumbs-down, regenerate, flag</td><td>High confidence</td></tr><tr><td>Implicit acceptance</td><td>No edit, session continues, task completed</td><td>Medium confidence</td></tr><tr><td>Implicit rejection</td><td>User edits heavily, abandons, escalates</td><td>Medium confidence</td></tr><tr><td>Gold corrections</td><td>Human annotator rewrites</td><td>Highest confidence</td></tr></table></div>
+<p>Log every signal to a structured event stream (Kafka/Kinesis) with: <code>session_id</code>, <code>query</code>, <code>response</code>, <code>signal_type</code>, <code>timestamp</code>, <code>user_cohort</code>.</p>
+<p><strong>2. Signal validation (quality gate)</strong></p>
+<p>Not all negative signals are model failures — some are user frustration with product UX. Before using signals as training data:</p>
+<ul class="styled-list"><li>Filter by edit distance: heavy edits (>30% token diff) = strong negative signal; minor grammar tweaks = discard</li><li>Stratify by cohort: power users vs new users behave differently — avoid selection bias</li><li>Dedup: near-identical queries via MinHash — don't overweight one viral question</li><li>Human review: sample 2–5% of negative signals for annotation quality check</li></ul>
+<p><strong>3. Preference pair construction (DPO)</strong></p>
+<p>For thumbs-up/thumbs-down pairs on the same query:</p>
+<div class="code-block-wrap"><pre class="code-block"><code>chosen  = thumbs-up response
+rejected = thumbs-down response (or heavy-edit original vs cleaned version)</code></pre><button class="copy-btn">copy</button></div>
+<p>Run weekly DPO fine-tuning job (LoRA rank 16, ~4h on 4×A100) on the cleaned preference dataset. Gate deployment on golden-dataset regression: Faithfulness ≥0.85 and task-specific metric must not regress >2%.</p>
+<p><strong>4. RAG knowledge refresh (retrieval loop)</strong></p>
+<p>For knowledge staleness (vs behavior improvement):</p>
+<ul class="styled-list"><li>CDC pipeline (Debezium/Kafka) → incremental embedding re-index of changed documents</li><li>Semantic caching TTL-aware invalidation on source updates</li><li>Monitor <code>index_lag_seconds</code> SLO (<300s for high-velocity sources)</li></ul>
+<p><strong>5. Prompt refinement loop</strong></p>
+<ul class="styled-list"><li>A/B test prompt variations on 5% traffic slices</li><li>Measure deflection rate, CSAT, and RAGAS Faithfulness per variant</li><li>Promote winner after statistical significance (p<0.05, ≥2 weeks)</li></ul>
+<p><strong>6. Monitoring for loop health</strong></p>
+<ul class="styled-list"><li>Track <code>feedback_volume</code> (signal rate must be high enough for weekly training)</li><li>Alert on <code>reward_hacking_proxy</code>: if model learns to maximize thumbs-up by adding filler praise, RAGAS Faithfulness drops → revert</li><li>Monitor training cohort drift: if only power users give feedback, the loop skews toward advanced queries</li></ul></div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="section-label">Example / Tradeoff</div>
+  <div class="card card-accent"><div class="rich-text"><p><strong>Customer support chatbot improvement loop (concrete):</strong></p>
+<ul class="styled-list"><li>Week 1: 40K interactions, 1,200 thumbs-down events, 800 heavy edits filtered to 600 valid preference pairs</li><li>Weekly DPO LoRA fine-tune on Llama 3 8B (rank 16, 4h on 4×A100, ~$50 compute)</li><li>Golden dataset regression gate: Faithfulness must stay ≥0.85 on 200-question golden set</li><li>After 8 weeks: CSAT 74% → 82%, deflection rate 61% → 71%</li></ul>
+<p><strong>Key tradeoff — latency of the loop:</strong></p>
+<ul class="styled-list"><li>Faster loops (daily) require smaller batches → noisier signal → risk of reward hacking</li><li>Slower loops (monthly) are safer but miss fast-changing topics (product launches, policy changes)</li><li>Sweet spot: weekly DPO for behavior, hourly RAG index refresh for knowledge</li></ul></div></div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="accordion">
+    <div class="accordion-header">
+      <span class="accordion-title">🎙 Verbal Script (3–5 min)</span>
+      <span class="accordion-chevron">▾</span>
+    </div>
+    <div class="accordion-body">
+      <div class="script-block"><div class="script-label">Opening (30s)</div><p>"A system that doesn't improve is actively degrading — user needs shift, knowledge goes stale, and the model drifts from real-world queries. I'd think about this as a closed feedback loop: instrument → capture → validate → train → monitor. Let me walk through each layer."</p></div>
+      <div class="script-block"><div class="script-label">Core explanation (2–3 min)</div><p>"The first thing is instrumentation. I want both explicit signals — thumbs-up/down, regenerate clicks — and implicit ones like heavy edits or session abandonment. All of these go into a structured event stream, something like Kafka, tagged with session ID, query, response, and user cohort.</p>
+<p>The key trap is treating all negative signals as model failures. If someone edits a response for tone, that's different from editing for factual correctness. I'd filter by edit distance — only edits that change more than 30% of the tokens count as strong negative signal — and I'd stratify by user cohort to avoid selection bias from power users.</p>
+<p>For behavior improvement, I'd construct DPO preference pairs: the thumbs-up response is the chosen, the thumbs-down is the rejected. Run weekly LoRA fine-tuning on those pairs — rank 16, about 4 hours on 4 A100s, costs maybe $50 — and gate every deployment on a golden dataset regression. Faithfulness can't drop more than 2% from baseline.</p>
+<p>For knowledge improvement, that's a separate RAG index refresh loop — CDC events from the source-of-truth databases trigger incremental re-embedding and re-indexing, with an index_lag_seconds SLO under 5 minutes for high-velocity sources.</p>
+<p>For prompt quality, I'd run A/B tests on prompt variants — 5% of traffic per variant, measure deflection rate and RAGAS Faithfulness, promote the winner after statistical significance."</p></div>
+      <div class="script-block"><div class="script-label">Tradeoff / production angle (1 min)</div><p>"The biggest risk in a feedback loop is reward hacking — the model learns to optimize the proxy signal (thumbs-up) rather than actual quality. I've seen models learn to add gratuitous affirmations that users like but that increase hallucination rate. The mitigation is to monitor RAGAS Faithfulness independently of the feedback signal — if Faithfulness drops while thumbs-up rate rises, that's a reward hacking flag and you revert. Also, feedback volume matters: you need enough signal for weekly training to be statistically meaningful — if volume is low, extend the window to bi-weekly rather than adding noise."</p></div>
+      <div class="script-block"><div class="script-label">Wrap-up (30s)</div><p>"So the feedback loop has three parts running at different cadences: weekly DPO fine-tuning for behavior, hourly RAG refresh for knowledge, and continuous A/B testing for prompts. Each has its own quality gate so one loop can't silently degrade the others."</p></div>
+    </div>
+  </div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="section-label">Pitfalls</div>
+  <div class="pitfall-card">
+    <div class="pitfall-mistake"><strong>✗ Mistake</strong> Saying &quot;we collect thumbs-down and retrain&quot; without addressing signal validation</div>
+    <div class="pitfall-better"><strong>✓ Better</strong> Explain edit-distance filtering, cohort stratification, and the reward hacking proxy monitor; raw thumbs-downs include UX frustration and are too noisy for direct training</div>
+  </div>
+  <div class="pitfall-card">
+    <div class="pitfall-mistake"><strong>✗ Mistake</strong> Treating behavior improvement and knowledge freshness as the same loop</div>
+    <div class="pitfall-better"><strong>✓ Better</strong> Distinguish DPO/LoRA fine-tuning (weekly, for behavior/style) from RAG index CDC refresh (hourly/near-real-time, for knowledge staleness); conflating them leads to wrong cadence and architecture choices</div>
+  </div>
+  <div class="pitfall-card">
+    <div class="pitfall-mistake"><strong>✗ Mistake</strong> Skipping the golden dataset regression gate before deploying fine-tuned model</div>
+    <div class="pitfall-better"><strong>✓ Better</strong> Every weekly DPO update must pass a fixed golden-dataset checkpoint (Faithfulness ≥0.85, task-specific metric ≤2% regression) before promotion; without this, reward hacking can silently degrade quality while thumbs-up rate rises
+
+---</div>
+  </div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="section-label">Related Questions</div>
+  <div class="related-pills">
+    <div class="related-pill" data-slug="05-016">
+      <span class="related-pill-icon">→</span>
+      <div class="related-pill-text">
+        <div class="related-pill-q">Q16: &quot;Vibes-based&quot; eval vs formal eval framework</div>
+        <div class="related-pill-rel">The formal eval framework is the quality gate that makes the feedback loop safe</div>
+      </div>
+    </div>
+    <div class="related-pill" data-slug="05-013">
+      <span class="related-pill-icon">→</span>
+      <div class="related-pill-text">
+        <div class="related-pill-q">Q13: Evaluate and monitor model in production, not just offline</div>
+        <div class="related-pill-rel">Production monitoring generates the signals the feedback loop consumes</div>
+      </div>
+    </div>
+    <div class="related-pill" data-slug="04-005">
+      <span class="related-pill-icon">→</span>
+      <div class="related-pill-text">
+        <div class="related-pill-q">Q4: Fine-tune or prompt-engineered RAG — DPO preference pairs</div>
+        <div class="related-pill-rel">DPO is the fine-tuning technique used to close the behavior improvement loop</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="section-label">One-liner recall</div>
+  <div class="oneliner-box">
+    <div class="oneliner-label">▸ Reconstruct from memory</div>
+    <div class="oneliner-text" data-text="Close the loop at three cadences: hourly RAG re-index for knowledge freshness, weekly DPO LoRA fine-tune on validated preference pairs for behavior, continuous A/B testing for prompts — with a golden-dataset regression gate guarding every model update against reward hacking.">Close the loop at three cadences: hourly RAG re-index for knowledge freshness, weekly DPO LoRA fine-tune on validated preference pairs for behavior, continuous A/B testing for prompts — with a golden-dataset regression gate guarding every model update against reward hacking.</div>
+  </div>
+</div>

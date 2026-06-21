@@ -1,0 +1,138 @@
+<div class="answer-header reveal">
+  <div class="answer-meta">
+    <span class="meta-badge meta-category">01-llm-fundamentals</span>
+    <span class="meta-badge meta-num">Q020</span>
+    <span class="meta-badge meta-status-review">review</span>
+  </div>
+  <h1 class="answer-title">Describe text summarization techniques and when you&#x27;d use each.</h1>
+</div>
+
+<div class="answer-section reveal">
+  <div class="accordion">
+    <div class="accordion-header">
+      <span class="accordion-title">⟁ Framing — Why this is asked</span>
+      <span class="accordion-chevron">▾</span>
+    </div>
+    <div class="accordion-body">
+      <div class="framing-grid">
+        <div><div class="framing-card">
+          <div class="framing-card-title">Why asked</div>
+          <p style="font-size:13.5px;line-height:1.7;color:var(--text-dim)">The interviewer is probing practical breadth: can you distinguish extractive from abstractive approaches, choose the right tool for the document type and latency budget, and reason about hallucination risk in safety-sensitive settings? It surfaces whether you&#x27;ve shipped summarization in production versus only read about it.</p>
+        </div></div>
+        <div><div class="framing-card">
+          <div class="framing-card-title">Trigger phrases</div>
+          <div class="trigger-list">
+              <div class="trigger-phrase">How would you summarize customer support tickets at scale?</div>
+              <div class="trigger-phrase">Describe the summarization approaches you&#x27;ve used.</div>
+              <div class="trigger-phrase">What&#x27;s the difference between extractive and abstractive summarization?</div>
+              <div class="trigger-phrase">How do you summarize a 200-page PDF without losing key details?</div>
+          </div>
+        </div></div>
+      </div>
+      <div class="tests-block">
+        <span style="font-family:var(--mono);font-size:10px;letter-spacing:0.1em;text-transform:uppercase;color:var(--purple);margin-right:8px">Tests:</span>Ability to select among extractive, abstractive, and hybrid summarization strategies based on document type, latency, accuracy, and hallucination risk constraints.
+
+---
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="section-label">Concept</div>
+  <div class="concept-block"><p>Text summarization condenses source text into a shorter form while preserving the most important information. There are three broad approaches: <strong>extractive</strong> (copy verbatim spans from the source), <strong>abstractive</strong> (generate novel fluent text using an LLM), and <strong>hybrid</strong> (extract then rephrase). The right choice depends on length, fidelity requirements, and whether hallucinations are acceptable.</p></div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="section-label">Mechanism</div>
+  <div class="card"><p><strong>1. Extractive summarization</strong></p>
+<ul class="styled-list"><li>Sentences are scored by importance (TF-IDF, TextRank graph centrality, or BERT-based sentence embeddings) and the top-k are returned verbatim.</li><li>Tools: <code>sumy</code>, <code>spaCy + TextRank</code>, <code>BERT-Extractive-Summarizer</code>.</li><li>Zero hallucination risk — every sentence came from the source.</li><li>Best for: legal contracts, compliance docs, medical notes where verbatim accuracy is critical.</li><li>Weakness: can be choppy, misses cross-sentence synthesis, fails on structured tables.</li></ul>
+<p><strong>2. Abstractive summarization</strong></p>
+<ul class="styled-list"><li>An LLM (GPT-4o, Claude 3.5 Sonnet, Mistral) reads the source and generates a coherent summary in its own words.</li><li>For short docs (< ~10k tokens): single-call prompting — stuff the full document into context with a system prompt specifying format, length, and tone.</li><li>For long docs: <strong>Map-Reduce</strong> pattern (LangChain <code>MapReduceDocumentsChain</code>):</li></ul>
+<ol class="mechanism-steps"><li>Split into chunks (e.g., 2,000-token windows with 200-token overlap).</li><li>Summarize each chunk independently in parallel (Map).</li><li>Combine chunk summaries → final synthesis (Reduce).</li></ol>
+<ul class="styled-list"><li>Alternatively, <strong>Refine</strong> pattern: summarize chunk 1, then pass that running summary + chunk 2 to the LLM, iterating until the document is exhausted — better coherence, but sequential (higher latency).</li><li>Best for: executive briefs, customer-facing outputs, meeting notes, any case where fluency matters.</li><li>Risk: hallucinations — especially numbers, dates, proper nouns. Requires faithfulness checking.</li></ul>
+<p><strong>3. Hierarchical / parent-child summarization</strong></p>
+<ul class="styled-list"><li>First summarize each section or chapter, then summarize the summaries into a top-level abstract. Used for book-length or multi-document corpora.</li><li>Common in enterprise RAG pipelines (e.g., LlamaIndex's <code>DocumentSummaryIndex</code>) — section summaries stored alongside chunk embeddings improve retrieval relevance.</li></ul>
+<p><strong>4. Query-focused summarization</strong></p>
+<ul class="styled-list"><li>Only summarize information relevant to a specific user question. Implemented as: retrieve relevant chunks (RAG), then ask the LLM to summarize <em>with respect to the query</em>.</li><li>Used in customer support knowledge bases, chatbots — avoids surfacing irrelevant contract clauses.</li></ul>
+<p><strong>Evaluation:</strong></p>
+<ul class="styled-list"><li>ROUGE-1/2/L: n-gram overlap with reference (low ceiling for abstractive; use as a floor, not a ceiling).</li><li>BERTScore: semantic similarity via BERT embeddings.</li><li>Faithfulness (RAGAS, TruLens): does every claim in the summary appear in the source? Critical for production.</li><li>Human eval: factual accuracy rate on a sampled golden set.</li></ul></div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="section-label">Example / Tradeoff</div>
+  <div class="card card-accent"><div class="rich-text"><p>At a legal-tech company processing 10k contracts/day:</p>
+<ul class="styled-list"><li><strong>Extraction</strong> for key-clause identification (no hallucination tolerated for dates, obligations).</li><li><strong>Abstractive Map-Reduce</strong> (GPT-4o-mini for map, GPT-4o for reduce) for executive summaries shown to clients — Map parallelizes across 4 chunks simultaneously, keeping p95 latency ≈ 8s for a 40-page contract.</li><li><strong>Faithfulness score</strong> via RAGAS thresholded at 0.85 before returning summary to user; below threshold, fall back to extractive.</li></ul>
+<p>Cost tradeoff: GPT-4o-mini for map steps at $0.15/1M input tokens vs GPT-4o at $2.50/1M — 90%+ token volume handled cheaply; only the final reduce step uses the expensive model.</p></div></div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="accordion">
+    <div class="accordion-header">
+      <span class="accordion-title">🎙 Verbal Script (3–5 min)</span>
+      <span class="accordion-chevron">▾</span>
+    </div>
+    <div class="accordion-body">
+      <div class="script-block"><div class="script-label">Opening (30s)</div><p>"There are three families of summarization techniques, and the right choice depends on your fidelity requirements and document length. I'd start by separating extractive approaches — which copy verbatim sentences — from abstractive approaches — which generate new text — and then talk about when I'd reach for each."</p></div>
+      <div class="script-block"><div class="script-label">Core explanation (2–3 min)</div><p>"Extractive summarization uses something like TextRank — treating sentences as nodes in a graph, with edges weighted by cosine similarity of their embeddings, and then picking the highest-PageRank sentences. Zero hallucination risk because every word came from the source. I'd use this for legal contracts or medical notes where exact phrasing matters.</p>
+<p>Abstractive summarization uses an LLM directly. For short docs under about 10k tokens I just prompt the model inline. For longer docs I'd use the Map-Reduce pattern: split into 2k-token chunks, summarize each in parallel, then synthesize the summaries in a final reduce call. LangChain has this built in. The Refine pattern is an alternative — you pass the running summary forward chunk by chunk — better coherence but sequential, so higher latency.</p>
+<p>For RAG pipelines, I layer in query-focused summarization: retrieve the relevant chunks, then ask the model to summarize <em>only with respect to the user's question</em>. This avoids surfacing irrelevant boilerplate.</p>
+<p>On evaluation: ROUGE is a floor, not a ceiling, especially for abstractive output. The metric I care most about in production is faithfulness — does every claim in the summary appear in the source document? I'd run RAGAS faithfulness checks and threshold at something like 0.85."</p></div>
+      <div class="script-block"><div class="script-label">Tradeoff / production angle (1 min)</div><p>"The big production risk with abstractive summarization is hallucinated numbers and proper nouns. A model might confidently write '$2.4M' when the contract says '$2.4B'. My mitigation stack: faithfulness scoring, entity extraction + cross-check against source, and falling back to extractive output when the faithfulness score is too low. Cost-wise, I'll use a cheap model for map steps and reserve the expensive model only for the final reduce or synthesis."</p></div>
+      <div class="script-block"><div class="script-label">Wrap-up (30s)</div><p>"So the decision tree is: no hallucination tolerance → extractive; short doc, fluency needed → single-call abstractive; long doc → Map-Reduce or Refine with faithfulness gating. Happy to go deeper on any of the patterns."</p></div>
+    </div>
+  </div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="section-label">Pitfalls</div>
+  <div class="pitfall-card">
+    <div class="pitfall-mistake"><strong>✗ Mistake</strong> Describing only abstractive summarization (just &quot;use GPT-4 to summarize&quot;) without mentioning extractive or hybrid approaches</div>
+    <div class="pitfall-better"><strong>✓ Better</strong> Explain the tradeoff triangle: extractive = zero hallucination / choppy; abstractive = fluent / hallucination risk; then choose based on the doc type and safety requirement.</div>
+  </div>
+  <div class="pitfall-card">
+    <div class="pitfall-mistake"><strong>✗ Mistake</strong> Not addressing long-document handling — saying &quot;just put it in context&quot; without a strategy</div>
+    <div class="pitfall-better"><strong>✓ Better</strong> Name Map-Reduce vs Refine patterns explicitly, explain the latency vs coherence tradeoff between them, and give a concrete chunk size (e.g., 2k tokens with 200-token overlap).</div>
+  </div>
+  <div class="pitfall-card">
+    <div class="pitfall-mistake"><strong>✗ Mistake</strong> Citing only ROUGE as the evaluation metric</div>
+    <div class="pitfall-better"><strong>✓ Better</strong> Note that ROUGE measures n-gram overlap, which rewards verbatim copies and penalizes legitimate paraphrases; production systems should also track faithfulness (RAGAS) and entity-level accuracy on a golden set.
+
+---</div>
+  </div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="section-label">Related Questions</div>
+  <div class="related-pills">
+    <div class="related-pill" data-slug="01-005">
+      <span class="related-pill-icon">→</span>
+      <div class="related-pill-text">
+        <div class="related-pill-q">Q5: Explain context windows and their limitations</div>
+        <div class="related-pill-rel">Long-document summarization strategies depend on context window limits</div>
+      </div>
+    </div>
+    <div class="related-pill" data-slug="01-014">
+      <span class="related-pill-icon">→</span>
+      <div class="related-pill-text">
+        <div class="related-pill-q">Q14: How does chunking happen?</div>
+        <div class="related-pill-rel">Map-Reduce summarization requires the same chunking decisions as RAG indexing</div>
+      </div>
+    </div>
+    <div class="related-pill" data-slug="01-012">
+      <span class="related-pill-icon">→</span>
+      <div class="related-pill-text">
+        <div class="related-pill-q">Q12: What&#x27;s an RAG model? Explain the complete process</div>
+        <div class="related-pill-rel">Query-focused summarization is a core component of RAG answer generation</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="section-label">One-liner recall</div>
+  <div class="oneliner-box">
+    <div class="oneliner-label">▸ Reconstruct from memory</div>
+    <div class="oneliner-text" data-text="Extractive copies verbatim sentences (zero hallucination, choppy); abstractive uses LLM generation with Map-Reduce for long docs; always gate production abstractive output with a faithfulness score and fall back to extractive when it fails.">Extractive copies verbatim sentences (zero hallucination, choppy); abstractive uses LLM generation with Map-Reduce for long docs; always gate production abstractive output with a faithfulness score and fall back to extractive when it fails.</div>
+  </div>
+</div>

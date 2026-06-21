@@ -1,0 +1,138 @@
+<div class="answer-header reveal">
+  <div class="answer-meta">
+    <span class="meta-badge meta-category">05-evaluation-metrics</span>
+    <span class="meta-badge meta-num">Q016</span>
+    <span class="meta-badge meta-status-review">review</span>
+  </div>
+  <h1 class="answer-title">&quot;Vibes-based&quot; eval vs formal eval framework?</h1>
+</div>
+
+<div class="answer-section reveal">
+  <div class="accordion">
+    <div class="accordion-header">
+      <span class="accordion-title">⟁ Framing — Why this is asked</span>
+      <span class="accordion-chevron">▾</span>
+    </div>
+    <div class="accordion-body">
+      <div class="framing-grid">
+        <div><div class="framing-card">
+          <div class="framing-card-title">Why asked</div>
+          <p style="font-size:13.5px;line-height:1.7;color:var(--text-dim)">This question is a litmus test for production maturity. Interviewers — especially at OpenAI, Anthropic, and companies with production LLM products — use it to separate candidates who have shipped real systems from those who have only prototyped. Vibes-based eval (manual eyeballing, ad-hoc spot-checking) is the default for every prototype; formal eval frameworks are what distinguish teams that can ship safely and iterate with confidence. The question probes whether the candidate has felt the pain of not having one.</p>
+        </div></div>
+        <div><div class="framing-card">
+          <div class="framing-card-title">Trigger phrases</div>
+          <div class="trigger-list">
+              <div class="trigger-phrase">Is there an actual eval framework, or vibes-based?</div>
+              <div class="trigger-phrase">How do you know when your model is getting worse?</div>
+              <div class="trigger-phrase">How do you validate a prompt change before shipping?</div>
+              <div class="trigger-phrase">How do you prevent regressions when you swap models or update prompts?</div>
+          </div>
+        </div></div>
+      </div>
+      <div class="tests-block">
+        <span style="font-family:var(--mono);font-size:10px;letter-spacing:0.1em;text-transform:uppercase;color:var(--purple);margin-right:8px">Tests:</span>Whether the candidate can design and justify a systematic, reproducible evaluation pipeline for non-deterministic LLM outputs — not just &quot;run it and see.&quot;
+
+---
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="section-label">Concept</div>
+  <div class="concept-block"><p><strong>Vibes-based eval</strong> is ad-hoc quality assessment: a developer reads a handful of outputs, judges them subjectively, and ships if they "feel right." It is fast to start but fails at scale — it has no statistical power, no regression protection, and no shared standard across the team.</p>
+<p>A <strong>formal eval framework</strong> replaces intuition with a reproducible, multi-layer measurement system: a curated golden dataset, automated metrics (RAGAS, BERTScore, LLM-as-judge), deployment gates with explicit thresholds, and production telemetry to catch regressions after release.</p></div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="section-label">Mechanism</div>
+  <div class="card"><p>A formal framework has four layers:</p>
+<div class="table-wrap"><table class="data-table"><tr><th>Layer</th><th>What</th><th>Tool</th><th>When</th></tr><tr><td><strong>1. Golden dataset</strong></td><td>100–500 (query, expected output) pairs covering core use-cases, edge cases, and known failure modes</td><td>Hand-curated + LLM-assisted augmentation</td><td>Offline, every deploy</td></tr><tr><td><strong>2. Automated metrics</strong></td><td>RAGAS Faithfulness + Answer Relevancy + Context Recall; BERTScore F1 for semantic similarity; pass-rate@k for non-deterministic tasks</td><td>RAGAS, deepeval, promptfoo</td><td>CI gate pre-deploy</td></tr><tr><td><strong>3. LLM-as-judge</strong></td><td>GPT-4o (or Claude) scores a random 5–10% sample on dimensions like helpfulness, groundedness, and tone; cheaper than hand labelling</td><td>GPT-4o judge with structured rubric</td><td>Nightly batch</td></tr><tr><td><strong>4. Production telemetry</strong></td><td>Thumbs-up/down, CSAT, deflection rate, p95 latency; async RAGAS faithfulness on 100% of traffic via Kafka sidecar</td><td>Grafana + PagerDuty, async Kafka pipeline</td><td>Real-time, 24/7</td></tr></table></div>
+<p><strong>Deployment gate pattern:</strong></p>
+<div class="code-block-wrap"><pre class="code-block"><code>PR opened
+  → CI runs RAGAS on golden dataset
+  → If Faithfulness &lt; 0.85 or Answer Relevancy &lt; 0.80 → block merge
+  → If pass → shadow deploy (new model, no real traffic)
+  → Shadow A/B: 1% canary traffic
+  → Monitor 24h: deflection rate ± 2%, p95 latency ± 20%
+  → If pass → full rollout; if fail → auto-revert in &lt; 5 min</code></pre><button class="copy-btn">copy</button></div>
+<p><strong>Golden dataset construction:</strong></p>
+<ul class="styled-list"><li>Mine production logs for high-volume, high-value queries</li><li>Sample failure cases (thumbs-down, escalations)</li><li>Add adversarial and edge-case prompts</li><li>Label with expected outputs (or acceptable ranges for open-ended)</li><li>Version-control it: golden dataset drift is as dangerous as model drift</li></ul></div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="section-label">Example / Tradeoff</div>
+  <div class="card card-accent"><div class="rich-text"><p>At one company building a customer-support RAG chatbot, the team iterated for six weeks on vibes — reading random outputs daily. Accuracy looked fine. When they introduced a formal golden dataset (300 labelled tickets) and RAGAS CI gate, they discovered context_recall had been 0.61 for weeks while faithfulness was 0.78 — well below their SLO. The root cause was a chunking change from two sprints earlier. Without the formal framework, the regression was invisible.</p>
+<p><strong>Tradeoff:</strong> Golden datasets require ongoing curation investment (~1 engineer-day/month to refresh). LLM-as-judge adds ~$20–$50/night at scale but is far cheaper than a production incident. The threshold between formal and vibes-based is roughly "can you ship confidently without reviewing every output yourself?" — if no, you need the framework.</p></div></div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="accordion">
+    <div class="accordion-header">
+      <span class="accordion-title">🎙 Verbal Script (3–5 min)</span>
+      <span class="accordion-chevron">▾</span>
+    </div>
+    <div class="accordion-body">
+      <div class="script-block"><div class="script-label">Opening (30s)</div><p>"This is one of my favourite interview topics because the gap between vibes-based and formal eval is where most production LLM projects actually live or die. I'd define the distinction clearly and then walk through what a formal framework looks like in practice."</p></div>
+      <div class="script-block"><div class="script-label">Core explanation (2–3 min)</div><p>"Vibes-based eval is what every team starts with — you read some outputs, they seem fine, you ship. The problem is it has zero statistical power: you can't detect a 3-point drop in faithfulness, and you have no regression protection when you change a prompt or swap models.</p>
+<p>A formal eval framework has four layers. First, a golden dataset — I'd curate 200–500 labelled (query, expected output) pairs from production logs, known failures, and adversarial edge cases, and version-control it in git. Second, automated metrics running in CI: RAGAS Faithfulness and Context Recall for RAG systems, or BERTScore F1 for semantic similarity tasks, with explicit pass/fail thresholds — say, Faithfulness ≥ 0.85 blocks the merge if it drops. Third, an LLM-as-judge on a random 5–10% sample nightly, using GPT-4o with a structured rubric for dimensions like groundedness and helpfulness. And fourth, production telemetry: thumbs-down rate, CSAT, deflection rate, all streaming into Grafana with PagerDuty alerts.</p>
+<p>The deployment gate then looks like: CI passes → shadow deploy → 1% canary → 24-hour hold → full rollout, with auto-revert if deflection rate shifts by more than 2 percentage points."</p></div>
+      <div class="script-block"><div class="script-label">Tradeoff / production angle (1 min)</div><p>"The real cost is golden dataset maintenance — you need to refresh it as the product evolves, maybe one engineer-day per month. The risk of skipping that is your eval diverges from reality and you're back to vibes. The LLM-as-judge layer is the other cost lever: at $0.01/1K tokens for GPT-4o-mini, judging 5% of 1M queries/day is about $500/month — easily justified by one avoided production incident.</p>
+<p>One failure mode I'd flag: having thresholds that are too lenient initially because the golden dataset is small. I'd rather start strict and relax than let regressions through."</p></div>
+      <div class="script-block"><div class="script-label">Wrap-up (30s)</div><p>"So the formal framework is: golden dataset in version control, automated RAGAS/BERTScore gate in CI, LLM-as-judge nightly, and production telemetry 24/7. Happy to go deeper on any of the layers — golden dataset construction or the LLM-as-judge prompt design are usually where the interesting tradeoffs live."</p></div>
+    </div>
+  </div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="section-label">Pitfalls</div>
+  <div class="pitfall-card">
+    <div class="pitfall-mistake"><strong>✗ Mistake</strong> Saying &quot;we use RAGAS&quot; without explaining what metric thresholds trigger a block and how the golden dataset was built</div>
+    <div class="pitfall-better"><strong>✓ Better</strong> Name the specific metrics (Faithfulness ≥ 0.85, Context Recall ≥ 0.78), describe how the golden dataset was sourced (production logs + known failures + adversarial cases), and explain what happens when the gate fails (PR blocked, PagerDuty alert).</div>
+  </div>
+  <div class="pitfall-card">
+    <div class="pitfall-mistake"><strong>✗ Mistake</strong> Treating the golden dataset as static — setting it up once and never updating it as the product evolves</div>
+    <div class="pitfall-better"><strong>✓ Better</strong> Describe a refresh cadence (monthly mining of new high-volume queries, adding edge cases from thumbs-down tickets), and version-controlling the dataset alongside the model/prompt configs so you can bisect regressions.</div>
+  </div>
+  <div class="pitfall-card">
+    <div class="pitfall-mistake"><strong>✗ Mistake</strong> Relying solely on LLM-as-judge without a golden dataset</div>
+    <div class="pitfall-better"><strong>✓ Better</strong> LLM-as-judge is expensive and probabilistic; it catches directional signals but can&#x27;t detect subtle metric drops reliably. The golden dataset with deterministic metric thresholds is the regression guard; LLM-as-judge is the qualitative signal layer on top.
+
+---</div>
+  </div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="section-label">Related Questions</div>
+  <div class="related-pills">
+    <div class="related-pill" data-slug="05-017">
+      <span class="related-pill-icon">→</span>
+      <div class="related-pill-text">
+        <div class="related-pill-q">Q17: Golden dataset for evaluation and regression testing</div>
+        <div class="related-pill-rel">Direct follow-up — deep dive on the golden dataset layer</div>
+      </div>
+    </div>
+    <div class="related-pill" data-slug="05-013">
+      <span class="related-pill-icon">→</span>
+      <div class="related-pill-text">
+        <div class="related-pill-q">Q13: Evaluate and monitor model in production, not just offline</div>
+        <div class="related-pill-rel">Same concept — production monitoring is the runtime complement to offline formal eval</div>
+      </div>
+    </div>
+    <div class="related-pill" data-slug="05-001">
+      <span class="related-pill-icon">→</span>
+      <div class="related-pill-text">
+        <div class="related-pill-q">Q1: What metrics for benchmarking LLM performance</div>
+        <div class="related-pill-rel">Prerequisite — establishes which metrics populate the formal framework</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="section-label">One-liner recall</div>
+  <div class="oneliner-box">
+    <div class="oneliner-label">▸ Reconstruct from memory</div>
+    <div class="oneliner-text" data-text="Replace ad-hoc eyeballing with four layers — curated golden dataset in CI (RAGAS Faithfulness ≥ 0.85 gate), LLM-as-judge nightly on a 5% sample, and production telemetry (deflection rate, CSAT) with auto-revert on canary — so regressions are caught before they reach users.">Replace ad-hoc eyeballing with four layers — curated golden dataset in CI (RAGAS Faithfulness ≥ 0.85 gate), LLM-as-judge nightly on a 5% sample, and production telemetry (deflection rate, CSAT) with auto-revert on canary — so regressions are caught before they reach users.</div>
+  </div>
+</div>

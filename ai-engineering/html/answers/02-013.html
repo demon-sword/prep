@@ -1,0 +1,157 @@
+<div class="answer-header reveal">
+  <div class="answer-meta">
+    <span class="meta-badge meta-category">02-rag-systems</span>
+    <span class="meta-badge meta-num">Q013</span>
+    <span class="meta-badge meta-status-review">review</span>
+  </div>
+  <h1 class="answer-title">Common RAG failure points — how debug them?</h1>
+</div>
+
+<div class="answer-section reveal">
+  <div class="accordion">
+    <div class="accordion-header">
+      <span class="accordion-title">⟁ Framing — Why this is asked</span>
+      <span class="accordion-chevron">▾</span>
+    </div>
+    <div class="accordion-body">
+      <div class="framing-grid">
+        <div><div class="framing-card">
+          <div class="framing-card-title">Why asked</div>
+          <p style="font-size:13.5px;line-height:1.7;color:var(--text-dim)">This is a senior-signal question that probes whether a candidate has actually debugged RAG in production. Interviewers want to know if you can isolate failures across the pipeline stages (retrieval vs. generation vs. data quality) rather than applying blanket fixes like &quot;add more context&quot; or &quot;use a bigger model.&quot; The ability to decompose a failure systematically — without rebooting the whole pipeline — signals production maturity.</p>
+        </div></div>
+        <div><div class="framing-card">
+          <div class="framing-card-title">Trigger phrases</div>
+          <div class="trigger-list">
+              <div class="trigger-phrase">Your RAG chatbot is giving wrong answers — how do you debug it?</div>
+              <div class="trigger-phrase">What are the most common ways RAG systems fail in production?</div>
+              <div class="trigger-phrase">Walk me through how you&#x27;d diagnose a RAG pipeline that&#x27;s underperforming.</div>
+              <div class="trigger-phrase">Our RAGAS faithfulness score dropped — where do you start?</div>
+          </div>
+        </div></div>
+      </div>
+      <div class="tests-block">
+        <span style="font-family:var(--mono);font-size:10px;letter-spacing:0.1em;text-transform:uppercase;color:var(--purple);margin-right:8px">Tests:</span>Systematic debugging instinct across a multi-stage pipeline — isolating retrieval failures from generation failures, and data-quality failures from architectural ones.
+
+---
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="section-label">Concept</div>
+  <div class="concept-block"><p>RAG failures fall into six canonical categories that map to specific pipeline stages. The key insight is that <strong>retrieval failures and generation failures look identical to the end user</strong> (wrong answer) but have completely different root causes and fixes. Conflating them leads to wasted effort — tuning prompts when the retrieval is broken, or re-chunking when the real issue is a stale index.</p></div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="section-label">Mechanism</div>
+  <div class="card"><p><strong>The six failure modes and their diagnostic signals:</strong></p>
+<div class="table-wrap"><table class="data-table"><tr><th>#</th><th>Failure</th><th>Where in pipeline</th><th>Diagnostic signal</th></tr><tr><td>1</td><td><strong>Bad chunking</strong></td><td>Ingest/chunk stage</td><td>Low RAGAS <code>context_recall</code>; retrieved docs have the right section but split mid-table or mid-argument</td></tr><tr><td>2</td><td><strong>Vocabulary mismatch</strong> (dense-only missing keywords)</td><td>Retrieval stage</td><td>Dense retrieval returns semantically-similar but lexically-wrong docs; exact entity names (product SKUs, person names) are not found</td></tr><tr><td>3</td><td><strong>Lost in the middle</strong></td><td>Generation stage</td><td>Retrieved docs are correct but answer is wrong; gold document is in position 2–4 of a 5-doc context window</td></tr><tr><td>4</td><td><strong>Hallucination on absent context</strong></td><td>Generation stage</td><td>RAGAS <code>faithfulness</code> < 0.7; model answers confidently when retrieved context has no relevant passage</td></tr><tr><td>5</td><td><strong>Stale index / embedding drift</strong></td><td>Index freshness</td><td>Correct answer exists in source docs but not returned; answers match old versions of content</td></tr><tr><td>6</td><td><strong>Weak evaluation hiding failures</strong></td><td>Eval stage</td><td>Vibes-based "it looks good" eval; no golden dataset; retrieval failures invisible until users complain in production</td></tr></table></div>
+<p><strong>Systematic debugging protocol:</strong></p>
+<div class="code-block-wrap"><pre class="code-block"><code>Step 1 — Isolate retrieval from generation:
+  Run RAGAS:
+    context_recall  &lt; 0.7?  → retrieval problem (steps 2–5 apply)
+    faithfulness    &lt; 0.7?  → generation problem (step 4 or prompt fix)
+    Both low?               → start with retrieval; it&#x27;s the load-bearing stage
+
+Step 2 — Inspect retrieved chunks manually:
+  Log (query, top-5 chunks, answer) for 20–50 failing queries.
+  Chunks are wrong/missing → vocab mismatch or bad chunking.
+  Chunks are right but answer is wrong → generation or lost-in-middle.
+
+Step 3 — Diagnose retrieval failure subtype:
+  Missing exact entities/codes → add BM25 hybrid (vocab mismatch)
+  Chunks contain the answer but split mid-sentence → fix chunking strategy
+  Chunks are outdated → check index freshness / CDC pipeline
+
+Step 4 — Diagnose generation failure subtype:
+  Gold chunk in middle of context → reorder (place most-relevant first/last)
+  LLM answers despite empty/irrelevant context → add cosine threshold gate + abstention prompt
+  LLM contradicts cited chunk → faithfulness NLI check post-processing
+
+Step 5 — Validate fix with golden dataset:
+  Measure recall@5 and RAGAS before/after; require +5% lift to ship</code></pre><button class="copy-btn">copy</button></div></div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="section-label">Example / Tradeoff</div>
+  <div class="card card-accent"><div class="rich-text"><p><strong>Real incident pattern:</strong> A customer support RAG was returning 78% user satisfaction initially. After six weeks it dropped to 61%. Investigation:</p>
+<ol class="mechanism-steps"><li><code>context_recall</code> had dropped from 0.82 → 0.64 — retrieval was broken.</li><li>Manual inspection: product SKU queries (e.g. "error with SKU-4872") were returning semantically-related but wrong products.</li><li>Root cause: dense-only index; no BM25 hybrid; SKUs are lexically opaque to embedding models.</li><li>Fix: added Elasticsearch BM25 layer + RRF fusion. <code>context_recall</code> recovered to 0.79. Faithfulness unchanged (0.88 → 0.87), confirming generation was never the issue.</li></ol>
+<p><strong>Tool stack for debugging:</strong> RAGAS (offline eval), LangSmith / Arize Phoenix (trace logging), Elasticsearch for BM25 hybrid, ms-marco-MiniLM cross-encoder for reranker, GPTCache for semantic cache monitoring.</p></div></div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="accordion">
+    <div class="accordion-header">
+      <span class="accordion-title">🎙 Verbal Script (3–5 min)</span>
+      <span class="accordion-chevron">▾</span>
+    </div>
+    <div class="accordion-body">
+      <div class="script-block"><div class="script-label">Opening (30s)</div><p>"I'd approach this by treating RAG as a pipeline of independent failure modes — six canonical ones — because the fix for a retrieval failure is completely different from the fix for a generation failure. The biggest mistake is trying to tune prompts when retrieval is actually broken. So my first move is always to split the eval."</p></div>
+      <div class="script-block"><div class="script-label">Core explanation (2–3 min)</div><p>"The six failure modes I look for are: bad chunking, vocabulary mismatch, lost in the middle, hallucination on absent context, stale indexes, and weak evaluation that's hiding everything else.</p>
+<p>To triage, I run RAGAS metrics. If <code>context_recall</code> is low — say below 0.7 — that's a retrieval problem. If <code>faithfulness</code> is low but <code>context_recall</code> is fine, that's a generation problem. If both are low, I fix retrieval first because it's the load-bearing stage.</p>
+<p>For retrieval failures, I'll log 20 or 30 failing queries and manually inspect the top-5 retrieved chunks. If the chunks are missing entirely or wrong, I look for two subtypes: vocab mismatch — where dense embeddings fail on exact-match entities like product codes or names — which I fix by adding BM25 hybrid with RRF fusion. Or bad chunking — where the right section is retrieved but split mid-table or mid-argument — which I fix by switching to semantic or parent-child chunking.</p>
+<p>For generation failures, I look at whether the gold chunk is in the middle of the context window — which Liu et al. 2023 showed degrades accuracy from 70% to 45% — so I reorder context to place the most relevant chunks first and last. If the model is hallucinating on absent context, I add a cosine-similarity gate before the LLM call: if no retrieved chunk clears a threshold like 0.70, return a canned 'I don't have that information' response rather than calling the LLM at all.</p>
+<p>The stale index is sneaky — content updates without re-embedding mean the source has the right answer but the vector store doesn't. I fix that with a CDC pipeline via Debezium or a scheduled delta re-embed job."</p></div>
+      <div class="script-block"><div class="script-label">Tradeoff / production angle (1 min)</div><p>"The hardest failure to catch is weak evaluation — if the team is doing vibes-based review rather than a golden dataset with ground-truth docs, retrieval failures are invisible until users start complaining. I've seen pipelines with 65% <code>context_recall</code> that the team thought were 'working fine' because the generated answers sounded fluent. Fluent hallucinations are the worst outcome. The fix is a golden set of 50–200 Q&A pairs with tagged ground-truth chunks, evaluated with RAGAS on every deployment."</p></div>
+      <div class="script-block"><div class="script-label">Wrap-up (30s)</div><p>"In summary: isolate retrieval from generation using RAGAS, inspect failing queries manually, fix the root cause — hybrid retrieval for vocab mismatch, chunking strategy for structural failures, context reordering for lost-in-middle, a cosine gate for absent-context hallucination. And never ship without a golden dataset eval. Happy to go deeper on any of the six failure modes."</p></div>
+    </div>
+  </div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="section-label">Pitfalls</div>
+  <div class="pitfall-card">
+    <div class="pitfall-mistake"><strong>✗ Mistake</strong> Jumping to &quot;tune the prompt&quot; or &quot;use a bigger model&quot; as the first debug step when the answer is wrong</div>
+    <div class="pitfall-better"><strong>✓ Better</strong> Always split eval first: run RAGAS <code>context_recall</code> vs <code>faithfulness</code>; if recall is low the retrieval is broken and no prompt change will fix it.</div>
+  </div>
+  <div class="pitfall-card">
+    <div class="pitfall-mistake"><strong>✗ Mistake</strong> Treating all RAG failures as a single category (&quot;the RAG is bad&quot;) without decomposing by stage</div>
+    <div class="pitfall-better"><strong>✓ Better</strong> Name the six failure modes by stage: chunking → retrieval → generation → eval; each has a distinct diagnosis and fix.</div>
+  </div>
+  <div class="pitfall-card">
+    <div class="pitfall-mistake"><strong>✗ Mistake</strong> Using only dense retrieval and then increasing top-k when queries with exact entity names fail</div>
+    <div class="pitfall-better"><strong>✓ Better</strong> &quot;Dense embeddings treat &#x27;SKU-4872&#x27; as semantically similar to other product numbers; the fix is BM25 hybrid retrieval, not a larger top-k which just adds noise.&quot;</div>
+  </div>
+  <div class="pitfall-card">
+    <div class="pitfall-mistake"><strong>✗ Mistake</strong> Not mentioning the stale index problem</div>
+    <div class="pitfall-better"><strong>✓ Better</strong> &quot;After a content update without re-embedding, the vector store diverges from source truth; I&#x27;d add a CDC pipeline or scheduled delta-embed job with index-age monitoring.&quot;
+
+---</div>
+  </div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="section-label">Related Questions</div>
+  <div class="related-pills">
+    <div class="related-pill" data-slug="02-012">
+      <span class="related-pill-icon">→</span>
+      <div class="related-pill-text">
+        <div class="related-pill-q">Q12: Compare sparse vs dense retrieval. When use each?</div>
+        <div class="related-pill-rel">Vocabulary mismatch failure → fix with BM25 hybrid</div>
+      </div>
+    </div>
+    <div class="related-pill" data-slug="02-021">
+      <span class="related-pill-icon">→</span>
+      <div class="related-pill-text">
+        <div class="related-pill-q">Q21: How evaluate a RAG pipeline? NDCG, MRR, precision@k, recall?</div>
+        <div class="related-pill-rel">Metrics used in the debugging protocol</div>
+      </div>
+    </div>
+    <div class="related-pill" data-slug="02-034">
+      <span class="related-pill-icon">→</span>
+      <div class="related-pill-text">
+        <div class="related-pill-q">Q34: Weak evaluation hiding retrieval failures</div>
+        <div class="related-pill-rel">Failure mode #6 — vibes-based eval masks broken retrieval</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="section-label">One-liner recall</div>
+  <div class="oneliner-box">
+    <div class="oneliner-label">▸ Reconstruct from memory</div>
+    <div class="oneliner-text" data-text="Debug RAG by splitting RAGAS `context_recall` (retrieval) from `faithfulness` (generation), then trace the root cause through the six canonical failure modes: bad chunking, vocab mismatch, lost-in-middle, hallucination-on-absent-context, stale index, or weak eval — fixing retrieval before touching generation.">Debug RAG by splitting RAGAS `context_recall` (retrieval) from `faithfulness` (generation), then trace the root cause through the six canonical failure modes: bad chunking, vocab mismatch, lost-in-middle, hallucination-on-absent-context, stale index, or weak eval — fixing retrieval before touching generation.</div>
+  </div>
+</div>

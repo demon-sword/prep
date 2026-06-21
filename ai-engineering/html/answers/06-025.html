@@ -1,0 +1,140 @@
+<div class="answer-header reveal">
+  <div class="answer-meta">
+    <span class="meta-badge meta-category">06-ml-fundamentals</span>
+    <span class="meta-badge meta-num">Q025</span>
+    <span class="meta-badge meta-status-review">review</span>
+  </div>
+  <h1 class="answer-title">CNN architecture?</h1>
+</div>
+
+<div class="answer-section reveal">
+  <div class="accordion">
+    <div class="accordion-header">
+      <span class="accordion-title">⟁ Framing — Why this is asked</span>
+      <span class="accordion-chevron">▾</span>
+    </div>
+    <div class="accordion-body">
+      <div class="framing-grid">
+        <div><div class="framing-card">
+          <div class="framing-card-title">Why asked</div>
+          <p style="font-size:13.5px;line-height:1.7;color:var(--text-dim)">Interviewers use this to verify foundational computer-vision literacy and to probe whether the candidate understands the inductive biases that make CNNs still relevant today — even in an LLM world where ViTs dominate. It also tests whether the candidate can connect architectural decisions (filter size, pooling, depth) to real-world tradeoffs like parameter count, receptive field, and GPU efficiency.</p>
+        </div></div>
+        <div><div class="framing-card">
+          <div class="framing-card-title">Trigger phrases</div>
+          <div class="trigger-list">
+              <div class="trigger-phrase">Walk me through CNN architecture.</div>
+              <div class="trigger-phrase">What is a convolutional layer and how does it differ from a fully-connected layer?</div>
+              <div class="trigger-phrase">Why use CNNs for images instead of MLPs?</div>
+              <div class="trigger-phrase">Explain convolution, pooling, and the receptive field.</div>
+          </div>
+        </div></div>
+      </div>
+      <div class="tests-block">
+        <span style="font-family:var(--mono);font-size:10px;letter-spacing:0.1em;text-transform:uppercase;color:var(--purple);margin-right:8px">Tests:</span>Understanding of spatial inductive bias (translation invariance, local connectivity, weight sharing), key building blocks (conv → BN → ReLU → pool), and where CNNs sit in the 2026 deep-learning landscape relative to Vision Transformers.
+
+---
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="section-label">Concept</div>
+  <div class="concept-block"><p>A Convolutional Neural Network (CNN) is a deep learning architecture designed for grid-structured data (images, time-series spectrograms) that exploits <strong>spatial locality</strong> and <strong>translation invariance</strong> through three core inductive biases: local receptive fields, shared weights (filters), and pooling-based downsampling. These biases dramatically reduce parameters vs an equivalent MLP and encode strong priors that nearby pixels are more correlated than distant ones.</p></div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="section-label">Mechanism</div>
+  <div class="card"><p><strong>Core building blocks (in canonical order):</strong></p>
+<div class="code-block-wrap"><pre class="code-block"><code>Input → [Conv → BN → ReLU]× N → Pooling → ... → GAP → FC → Softmax</code></pre><button class="copy-btn">copy</button></div>
+<ol class="mechanism-steps"><li><strong>Convolutional layer</strong> — A bank of K learnable filters of shape <code>(C_in, h, w)</code> (e.g. 64 filters of 3×3) slides over the input with stride s and padding p. Each filter computes a dot product at every spatial position → output feature map shape <code>(K, H_out, W_out)</code>. Weight sharing: the same filter parameters are reused at every position → translationequivariance and massive parameter savings (3×3 conv: 9×C_in×C_out params vs MLP 9×H×W×C_in×C_out).</li></ol>
+<ol class="mechanism-steps"><li><strong>Batch Normalization</strong> — Normalizes activations per feature map across the batch (mean 0, var 1) and learns affine γ, β. Speeds training (2–4× fewer epochs), reduces internal covariate shift, provides mild regularization.</li></ol>
+<ol class="mechanism-steps"><li><strong>Activation (ReLU / GELU)</strong> — Introduces non-linearity. ReLU = max(0, x): simple, fast, sparse activations; dead-ReLU risk for negative-biased inputs. GELU used in newer architectures (ConvNeXt).</li></ol>
+<ol class="mechanism-steps"><li><strong>Pooling</strong> — Max pooling (dominant) takes the maximum in each k×k window, stride k → downsamples by k×, achieves translation invariance, and grows the effective receptive field. Global Average Pooling (GAP) collapses the entire feature map to a single vector — used before the classification head in ResNet+.</li></ol>
+<ol class="mechanism-steps"><li><strong>Receptive field</strong> — The region of the input each neuron "sees." Grows with depth: stacking three 3×3 convolutions gives a 7×7 effective receptive field with fewer params than one 7×7. Dilated convolutions expand it without adding parameters (used in segmentation: DeepLab).</li></ol>
+<p><strong>Classic architectures (evolutionary line):</strong></p>
+<div class="table-wrap"><table class="data-table"><tr><th>Architecture</th><th>Year</th><th>Key innovation</th></tr><tr><td>LeNet-5</td><td>1998</td><td>Proved conv networks on MNIST</td></tr><tr><td>AlexNet</td><td>2012</td><td>Deep ReLU + Dropout + GPU training on ImageNet</td></tr><tr><td>VGG-16/19</td><td>2014</td><td>Uniform 3×3 conv stacking (depth > filter size)</td></tr><tr><td>GoogLeNet</td><td>2014</td><td>Inception modules (parallel multi-scale convolutions)</td></tr><tr><td>ResNet-50/101</td><td>2015</td><td>Skip connections solve vanishing gradient → depth to 152+ layers</td></tr><tr><td>EfficientNet</td><td>2019</td><td>Compound scaling (depth/width/resolution) via NAS</td></tr><tr><td>ConvNeXt</td><td>2022</td><td>Modernised CNN (GELU, LN, depthwise sep-conv) matches ViT on ImageNet</td></tr></table></div>
+<p><strong>ResNet skip connection</strong> — the key insight: <code>H(x) = F(x) + x</code>. If F(x) = 0, the identity is preserved. This makes it easy to train very deep networks (gradients flow through the skip path, bypassing vanishing-gradient bottleneck).</p></div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="section-label">Example / Tradeoff</div>
+  <div class="card card-accent"><div class="rich-text"><p><strong>Production example — image classification pipeline:</strong></p>
+<ul class="styled-list"><li>ResNet-50 fine-tuned on proprietary product images: ~25M params, 4ms inference on T4 GPU, 92% top-1 on internal benchmark.</li><li>Replacing with ViT-B/16: +1% top-1 but 3× latency and requires 10× more data to match ResNet on small datasets.</li><li>For mobile/edge: EfficientNet-Lite (4.7M params, quantized INT8) or MobileNetV3 (depthwise separable convolutions → 10× fewer params).</li></ul>
+<p><strong>CNN vs ViT tradeoffs:</strong></p>
+<div class="table-wrap"><table class="data-table"><tr><th>Dimension</th><th>CNN (ResNet/EfficientNet)</th><th>Vision Transformer (ViT)</th></tr><tr><td>Data efficiency</td><td>High (strong spatial prior)</td><td>Low (needs 100M+ pretraining)</td></tr><tr><td>Scalability</td><td>Good (depth/width scaling)</td><td>Excellent (Chinchilla-like scaling)</td></tr><tr><td>Inference latency</td><td>Fast (optimised CUDA kernels)</td><td>Slower at same accuracy</td></tr><tr><td>Inductive bias</td><td>Translation invariance, locality</td><td>None (learns all structure)</td></tr><tr><td>Best use case</td><td><1M samples, edge/mobile</td><td>Large-scale, pretraining+fine-tuning</td></tr></table></div>
+<p><strong>Key hyperparameters:</strong></p>
+<ul class="styled-list"><li>Filter size: 3×3 (standard), 1×1 (channel mixing, bottleneck), 5×5 (wider RF at cost)</li><li>Stride: 1 (preserve resolution), 2 (downsample by 2×)</li><li>Padding: "same" (preserve H, W), "valid" (shrink)</li><li>Depth vs width: depth wins (residual networks), width used in compound scaling</li></ul></div></div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="accordion">
+    <div class="accordion-header">
+      <span class="accordion-title">🎙 Verbal Script (3–5 min)</span>
+      <span class="accordion-chevron">▾</span>
+    </div>
+    <div class="accordion-body">
+      <div class="script-block"><div class="script-label">Opening (30s)</div><p>"I'd frame this in terms of the inductive biases that make CNNs efficient for image data. A CNN exploits the fact that nearby pixels are correlated and that a useful feature — like an edge or a corner — looks the same regardless of where it appears in the image. Those two properties — local connectivity and translation invariance — are baked into the architecture through shared convolutional filters and pooling."</p></div>
+      <div class="script-block"><div class="script-label">Core explanation (2–3 min)</div><p>"The canonical building block is: convolutional layer → batch normalization → ReLU → pooling, repeated N times, then a global average pool and a classification head.</p>
+<p>In a convolutional layer, a bank of small filters — say 64 filters of shape 3×3 — slides across the input feature map. Each filter computes a dot product at every spatial position. Because the same filter weights are reused everywhere, we get translation equivariance and we avoid the parameter explosion of a fully-connected approach. A 3×3 conv with 64 output channels on a 224×224 image has only 9 × C_in × 64 parameters regardless of image resolution.</p>
+<p>Batch normalization normalises activations per channel across the batch, which stabilises training and lets us use higher learning rates — roughly 2–4× faster convergence. ReLU adds non-linearity cheaply.</p>
+<p>Max pooling downsamples the feature map by a factor of k and builds in translation invariance: small shifts in the input don't change the pooled output. It also grows the effective receptive field — stacking three 3×3 convolutions gives a 7×7 receptive field with fewer parameters than one 7×7 filter.</p>
+<p>The breakthrough that made very deep CNNs trainable was ResNet's skip connection: output = F(x) + x. If the layer learns nothing, the identity is preserved. Gradients can flow directly through the skip path, bypassing the vanishing gradient problem, and you can train networks hundreds of layers deep."</p></div>
+      <div class="script-block"><div class="script-label">Tradeoff / production angle (1 min)</div><p>"The key tradeoff I think about is CNN vs Vision Transformer. On small to mid-size datasets — say, under a million images — a ResNet-50 or EfficientNet will outperform a ViT because the spatial inductive biases are free priors. ViT has to learn locality from scratch and needs massive pretraining data to do so. But at the scale of ImageNet-21k or JFT-3B, ViT dominates. In 2026 practice, most production image classifiers on constrained data still use ResNet or EfficientNet; ViT is the right choice when you're fine-tuning a foundation model. For mobile/edge, I'd reach for MobileNetV3 or EfficientNet-Lite with INT8 quantization to hit sub-10ms on-device."</p></div>
+      <div class="script-block"><div class="script-label">Wrap-up (30s)</div><p>"So the key insight is: CNNs encode spatial priors directly in their architecture — local filters, weight sharing, pooling — which makes them data-efficient and fast. ResNet skip connections solved depth. ViTs have overtaken CNNs at scale, but CNNs remain the default for edge inference and smaller datasets. Happy to go deeper on any layer — depthwise separable convolutions, dilated convolutions for segmentation, or the ConvNeXt modernisation."</p></div>
+    </div>
+  </div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="section-label">Pitfalls</div>
+  <div class="pitfall-card">
+    <div class="pitfall-mistake"><strong>✗ Mistake</strong> Describing only the &quot;conv + pooling&quot; basics without mentioning skip connections (ResNet) or batch normalization</div>
+    <div class="pitfall-better"><strong>✓ Better</strong> Explain that vanilla deep CNNs didn&#x27;t scale due to vanishing gradients; ResNet&#x27;s skip connections solved this and are the reason modern CNNs work at 50–200 layers.</div>
+  </div>
+  <div class="pitfall-card">
+    <div class="pitfall-mistake"><strong>✗ Mistake</strong> Saying CNNs are &quot;outdated&quot; or &quot;replaced by Transformers&quot; without nuance</div>
+    <div class="pitfall-better"><strong>✓ Better</strong> Distinguish the use case: CNNs are still dominant for data-constrained / edge / mobile scenarios; ViT excels at scale with large pretraining data. ConvNeXt (2022) shows CNNs can match ViTs when modernised.</div>
+  </div>
+  <div class="pitfall-card">
+    <div class="pitfall-mistake"><strong>✗ Mistake</strong> Confusing translation invariance (pooling) with translation equivariance (convolution)</div>
+    <div class="pitfall-better"><strong>✓ Better</strong> Convolution is equivariant (the feature map shifts with the input), pooling induces invariance (small shifts don&#x27;t change pooled output); being precise here signals depth.
+
+---</div>
+  </div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="section-label">Related Questions</div>
+  <div class="related-pills">
+    <div class="related-pill" data-slug="06-026">
+      <span class="related-pill-icon">→</span>
+      <div class="related-pill-text">
+        <div class="related-pill-q">Q26: BERT architecture?</div>
+        <div class="related-pill-rel">Contrast: CNN spatial-locality inductive bias vs Transformer global self-attention</div>
+      </div>
+    </div>
+    <div class="related-pill" data-slug="06-006">
+      <span class="related-pill-icon">→</span>
+      <div class="related-pill-text">
+        <div class="related-pill-q">Q6: Transformers — why foundational?</div>
+        <div class="related-pill-rel">Follow-up: how ViTs replaced CNNs at scale using Transformer self-attention on image patches</div>
+      </div>
+    </div>
+    <div class="related-pill" data-slug="06-012">
+      <span class="related-pill-icon">→</span>
+      <div class="related-pill-text">
+        <div class="related-pill-q">Q12: RNN vs LSTM?</div>
+        <div class="related-pill-rel">Parallel: inductive-bias comparison across sequence (RNN/LSTM), spatial (CNN), and global (Transformer) architectures</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="section-label">One-liner recall</div>
+  <div class="oneliner-box">
+    <div class="oneliner-label">▸ Reconstruct from memory</div>
+    <div class="oneliner-text" data-text="CNNs exploit spatial locality and translation invariance via shared convolutional filters + pooling; ResNet skip connections solved depth; today CNNs beat ViTs on small/edge datasets but ViTs win at scale.">CNNs exploit spatial locality and translation invariance via shared convolutional filters + pooling; ResNet skip connections solved depth; today CNNs beat ViTs on small/edge datasets but ViTs win at scale.</div>
+  </div>
+</div>

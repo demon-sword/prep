@@ -1,0 +1,126 @@
+<div class="answer-header reveal">
+  <div class="answer-meta">
+    <span class="meta-badge meta-category">03-agents-tool-use</span>
+    <span class="meta-badge meta-num">Q016</span>
+    <span class="meta-badge meta-status-review">review</span>
+  </div>
+  <h1 class="answer-title">How agents decide a task is &quot;done&quot;?</h1>
+</div>
+
+<div class="answer-section reveal">
+  <div class="accordion">
+    <div class="accordion-header">
+      <span class="accordion-title">⟁ Framing — Why this is asked</span>
+      <span class="accordion-chevron">▾</span>
+    </div>
+    <div class="accordion-body">
+      <div class="framing-grid">
+        <div><div class="framing-card">
+          <div class="framing-card-title">Why asked</div>
+          <p style="font-size:13.5px;line-height:1.7;color:var(--text-dim)">Termination is one of the hardest production problems in agentic systems. Interviewers probe whether you understand that &quot;done&quot; is not just the LLM saying &quot;I&#x27;m finished&quot; — it requires explicit, verifiable criteria enforced at the orchestrator level. Weak candidates leave termination entirely to the model; strong candidates design multi-signal stopping logic that is robust to goal drift, infinite loops, and malformed success signals.</p>
+        </div></div>
+        <div><div class="framing-card">
+          <div class="framing-card-title">Trigger phrases</div>
+          <div class="trigger-list">
+              <div class="trigger-phrase">How does the agent know when to stop?</div>
+              <div class="trigger-phrase">What prevents your agent from running forever?</div>
+              <div class="trigger-phrase">How do you define completion criteria for a long-running agent?</div>
+              <div class="trigger-phrase">How do you handle agents that think they&#x27;re done but aren&#x27;t?</div>
+          </div>
+        </div></div>
+      </div>
+      <div class="tests-block">
+        <span style="font-family:var(--mono);font-size:10px;letter-spacing:0.1em;text-transform:uppercase;color:var(--purple);margin-right:8px">Tests:</span>Whether the candidate understands that termination must be orchestrator-enforced (not model-declared), structured (not free-text &quot;I&#x27;m done&quot;), and multi-signaled — combining goal detection, budget limits, and HITL escalation.
+
+---
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="section-label">Concept</div>
+  <div class="concept-block"><p>An agent is "done" when one of three signals fires: (1) the LLM emits a structured <strong>success signal</strong> that satisfies verifiable goal criteria, (2) a <strong>budget limit</strong> (step count, token count, or wall-clock time) is exhausted, or (3) an <strong>error / stuck condition</strong> triggers HITL escalation or graceful abort. Relying solely on the LLM's free-text "I have completed the task" is insufficient — models hallucinate completion, especially in long chains.</p></div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="section-label">Mechanism</div>
+  <div class="card"><p><strong>Layer 1 — Structured success signal (primary)</strong> Design the agent's ReAct/function-calling output to include a dedicated <code>FINAL_ANSWER</code> tool or a structured JSON field (<code>{"status": "complete", "result": ...}</code>). The orchestrator detects this schema match and exits the loop. LangGraph models this as a <code>conditional_edge</code> — if the output node is <code>FINAL_ANSWER</code>, route to <code>END</code>; otherwise continue.</p>
+<p>```python</p></div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="section-label">Example / Tradeoff</div>
+  <div class="card card-accent"><div class="rich-text"></div></div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="accordion">
+    <div class="accordion-header">
+      <span class="accordion-title">🎙 Verbal Script (3–5 min)</span>
+      <span class="accordion-chevron">▾</span>
+    </div>
+    <div class="accordion-body">
+      <div class="script-block"><div class="script-label">Opening (30s)</div><p>"This is one of the most important production design decisions for any agent. The short answer is: you can never rely solely on the LLM declaring itself done — models hallucinate completion, especially after long reasoning chains. Instead, I design termination as a multi-layer system enforced by the orchestrator, not the model."</p></div>
+      <div class="script-block"><div class="script-label">Core explanation (2–3 min)</div><p>"I'd start by designing a structured success signal — typically a <code>FINAL_ANSWER</code> tool or a JSON field with <code>status: complete</code>. The orchestrator checks for this schema in every step output. In LangGraph, that's a <code>conditional_edge</code> that routes to <code>END</code> when the success schema is detected.</p>
+<p>But structured signals alone aren't enough — a model can emit a premature <code>FINAL_ANSWER</code>. For high-stakes tasks, I add an independent goal verification step: for a code-writing agent, that means running the test suite and checking all tests pass before accepting the completion. For a data agent, that means executing the generated SQL and validating the result schema. The orchestrator owns this check, not the LLM.</p>
+<p>On top of that, I always set hard budget limits in orchestrator code — <code>max_iterations</code>, a token budget, and a wall-clock timeout. When any of these fire, the agent doesn't just die — it emits an escalation event so the work isn't lost.</p>
+<p>Finally, stuck detection: I fingerprint the last N action hashes. If the agent repeats the same tool call three times or produces thought-only steps without acting, that's a planning loop — I break it and escalate to HITL with the current state preserved for a human to resume."</p></div>
+      <div class="script-block"><div class="script-label">Tradeoff / production angle (1 min)</div><p>"The core tradeoff is strict vs. loose termination. Strict — external verification via test suite or DB query — is most reliable but adds latency. Loose — structured schema from the LLM — is fast but trusts the model. In practice I combine them: structured signal is required for the loop to exit, and then for high-stakes paths, I run a fast automated acceptance test asynchronously. If it fails, I re-open the task rather than shipping a hallucinated completion."</p></div>
+      <div class="script-block"><div class="script-label">Wrap-up (30s)</div><p>"So: structured success tool, independent goal verification where stakes are high, hard budget limits as a safety net, and stuck detection for infinite planning loops. Happy to go deeper on any of those layers."</p></div>
+    </div>
+  </div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="section-label">Pitfalls</div>
+  <div class="pitfall-card">
+    <div class="pitfall-mistake"><strong>✗ Mistake</strong> &quot;The agent just outputs &#x27;I&#x27;m done&#x27; in its final message and we check for that string&quot;</div>
+    <div class="pitfall-better"><strong>✓ Better</strong> Use a typed <code>FINAL_ANSWER</code> tool with a required structured schema; string matching on free text fails on paraphrase variants and is trivially fooled by hallucination mid-task.</div>
+  </div>
+  <div class="pitfall-card">
+    <div class="pitfall-mistake"><strong>✗ Mistake</strong> &quot;We set <code>max_iterations=100</code> to give it plenty of room&quot;</div>
+    <div class="pitfall-better"><strong>✓ Better</strong> Over-generous budgets hide infinite-loop bugs and explode cost; start at 10–15 and tighten based on p95 observed step counts from LangSmith traces. Every budget limit should also trigger an escalation event, not a silent abort.</div>
+  </div>
+  <div class="pitfall-card">
+    <div class="pitfall-mistake"><strong>✗ Mistake</strong> Treating &quot;no tool call in the final message&quot; as the only termination signal without independent goal verification</div>
+    <div class="pitfall-better"><strong>✓ Better</strong> For any agent that writes to an external system or produces code, always verify the goal externally before marking complete; the LLM&#x27;s self-assessment is untrustworthy without ground-truth feedback.
+
+---</div>
+  </div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="section-label">Related Questions</div>
+  <div class="related-pills">
+    <div class="related-pill" data-slug="03-011">
+      <span class="related-pill-icon">→</span>
+      <div class="related-pill-text">
+        <div class="related-pill-q">Q11: Termination conditions in long-running agents?</div>
+        <div class="related-pill-rel">Companion question — broad termination framework; this Q focuses on goal-completion detection specifically</div>
+      </div>
+    </div>
+    <div class="related-pill" data-slug="03-014">
+      <span class="related-pill-icon">→</span>
+      <div class="related-pill-text">
+        <div class="related-pill-q">Q14: Detect and stop infinite planning loops?</div>
+        <div class="related-pill-rel">Stuck detection layer — the &quot;no-progress fingerprint&quot; pattern applied here</div>
+      </div>
+    </div>
+    <div class="related-pill" data-slug="03-010">
+      <span class="related-pill-icon">→</span>
+      <div class="related-pill-text">
+        <div class="related-pill-q">Q10: Design a safe and debuggable agent loop?</div>
+        <div class="related-pill-rel">Loop architecture context — where termination logic lives in the orchestrator</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="section-label">One-liner recall</div>
+  <div class="oneliner-box">
+    <div class="oneliner-label">▸ Reconstruct from memory</div>
+    <div class="oneliner-text" data-text="Agents stop via a four-layer termination stack: structured FINAL_ANSWER tool (not free text), independent goal verification (test suite / DB check), hard orchestrator budget limits (iterations + tokens + wall-clock), and stuck detection (repeated action fingerprint) — all enforced in orchestrator code, never left to the LLM&#x27;s self-report.">Agents stop via a four-layer termination stack: structured FINAL_ANSWER tool (not free text), independent goal verification (test suite / DB check), hard orchestrator budget limits (iterations + tokens + wall-clock), and stuck detection (repeated action fingerprint) — all enforced in orchestrator code, never left to the LLM&#x27;s self-report.</div>
+  </div>
+</div>

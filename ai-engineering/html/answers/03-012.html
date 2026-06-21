@@ -1,0 +1,135 @@
+<div class="answer-header reveal">
+  <div class="answer-meta">
+    <span class="meta-badge meta-category">03-agents-tool-use</span>
+    <span class="meta-badge meta-num">Q012</span>
+    <span class="meta-badge meta-status-review">review</span>
+  </div>
+  <h1 class="answer-title">How decompose high-level goals into executable steps?</h1>
+</div>
+
+<div class="answer-section reveal">
+  <div class="accordion">
+    <div class="accordion-header">
+      <span class="accordion-title">⟁ Framing — Why this is asked</span>
+      <span class="accordion-chevron">▾</span>
+    </div>
+    <div class="accordion-body">
+      <div class="framing-grid">
+        <div><div class="framing-card">
+          <div class="framing-card-title">Why asked</div>
+          <p style="font-size:13.5px;line-height:1.7;color:var(--text-dim)">The interviewer is probing whether you understand task planning as an engineering discipline, not just a prompt trick. Strong candidates know the failure modes of naive &quot;ask the LLM to plan everything&quot; approaches and can articulate when to use hierarchical decomposition, when to involve human checkpoints, and how to keep plans verifiable and executable.</p>
+        </div></div>
+        <div><div class="framing-card">
+          <div class="framing-card-title">Trigger phrases</div>
+          <div class="trigger-list">
+              <div class="trigger-phrase">How would your agent break down a complex task?</div>
+              <div class="trigger-phrase">Walk me through how an agent plans before acting.</div>
+              <div class="trigger-phrase">How do you prevent an agent from going off-track on a long task?</div>
+          </div>
+        </div></div>
+      </div>
+      <div class="tests-block">
+        <span style="font-family:var(--mono);font-size:10px;letter-spacing:0.1em;text-transform:uppercase;color:var(--purple);margin-right:8px">Tests:</span>Ability to design a structured, observable planning layer that translates vague user intent into verifiable, bounded sub-tasks.
+
+---
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="section-label">Concept</div>
+  <div class="concept-block"><p>Goal decomposition is the process of converting a high-level objective (e.g., "generate a quarterly business review") into a directed acyclic graph (DAG) of atomic, verifiable sub-tasks that each map to one or a small number of tool calls. The core insight is that decomposition is an <strong>orchestration responsibility</strong> — not something left entirely to the LLM at runtime — because unbounded LLM planning is hard to debug, cost-control, or audit.</p></div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="section-label">Mechanism</div>
+  <div class="card"><p><strong>Step 1 — Plan-and-Execute separation.</strong> A planner LLM call (ideally o1/Claude-thinking or GPT-4o with extended reasoning) receives the goal and produces a structured plan: an ordered or partially-ordered list of named steps, each with inputs, expected outputs, and a success criterion. The executor loop processes one step at a time, treating the plan as a queue.</p>
+<p><strong>Step 2 — Hierarchical task decomposition.</strong> Complex goals are broken into levels:</p>
+<ul class="styled-list"><li><strong>Level 1 (Goal):</strong> "Produce Q3 business review report"</li><li><strong>Level 2 (Sub-goals):</strong> Gather metrics / Analyze trends / Draft sections / Compile PDF</li><li><strong>Level 3 (Actions):</strong> <code>query_analytics_db(date_range=Q3)</code>, <code>call_llm(summarize_metrics)</code>, <code>write_file(section_draft)</code>, <code>pdf_tool(compile)</code></li></ul>
+<p>Each Level 3 action corresponds to exactly one tool call with typed inputs and outputs.</p>
+<p><strong>Step 3 — Success criteria per step.</strong> Each step carries a verifiable exit condition (e.g., "metrics_df has >0 rows", "draft_word_count > 300"). The orchestrator evaluates these before advancing; if a step fails its condition, it retries or triggers HITL.</p>
+<p><strong>Step 4 — Re-planning on failure.</strong> If a step fails after retries, the planner is re-invoked with the failure context to produce a revised plan — a controlled reflection loop rather than unconstrained agent wandering.</p>
+<p><strong>Common patterns:</strong></p>
+<ul class="styled-list"><li><strong>ReAct (Reason + Act):</strong> interleaved thought/action/observation — good for exploratory tasks, but no upfront plan, so hard to bound.</li><li><strong>Plan-and-Execute (LangGraph):</strong> explicit plan graph, executor processes one node at a time — better debuggability and cost control.</li><li><strong>Tree of Thoughts (ToT):</strong> branching plan candidates, scored and pruned — used when the right decomposition itself is uncertain (e.g., math olympiad problems, research planning).</li></ul></div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="section-label">Example / Tradeoff</div>
+  <div class="card card-accent"><div class="rich-text"><p>A <strong>code-review agent</strong> at a fintech company used Plan-and-Execute with LangGraph:</p>
+<ol class="mechanism-steps"><li>Planner call (GPT-4o, ~2K tokens): produces 6-step plan as JSON with success criteria.</li><li>Executor loop: each step calls one tool (GitHub API read, linter, security scanner, GPT-4o-mini summarizer).</li><li>Each step logged with LangSmith; plan node marked <code>passed</code>/<code>failed</code> with structured output.</li><li>On failure (e.g., rate limit from GitHub API): orchestrator retries with exponential backoff up to 3×, then re-plans.</li></ol>
+<p><strong>Tradeoff table:</strong></p>
+<div class="table-wrap"><table class="data-table"><tr><th>Approach</th><th>Upfront plan?</th><th>Debuggability</th><th>Flexibility</th><th>Best for</th></tr><tr><td>ReAct</td><td>No</td><td>Low</td><td>High</td><td>Exploratory, open-ended</td></tr><tr><td>Plan-and-Execute</td><td>Yes</td><td>High</td><td>Medium</td><td>Structured, auditable tasks</td></tr><tr><td>Tree of Thoughts</td><td>Branching</td><td>Medium</td><td>Very High</td><td>Uncertain decomposition space</td></tr><tr><td>Hardcoded DAG</td><td>Full</td><td>Very High</td><td>Low</td><td>Regulated / deterministic workflows</td></tr></table></div>
+<p><strong>Failure mode:</strong> Planner LLM produces steps that are too coarse (a single step = "research the topic") causing the executor to recurse infinitely or call tools hundreds of times. Fix: add a step-granularity constraint to the planner prompt ("each step must map to ≤2 tool calls and complete in <30s") and a max_depth guard in the orchestrator.</p></div></div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="accordion">
+    <div class="accordion-header">
+      <span class="accordion-title">🎙 Verbal Script (3–5 min)</span>
+      <span class="accordion-chevron">▾</span>
+    </div>
+    <div class="accordion-body">
+      <div class="script-block"><div class="script-label">Opening (30s)</div><p>"Decomposing high-level goals is one of the trickiest parts of agent design, because naïve approaches — just ask the LLM to plan everything dynamically — tend to produce unbounded, unauditable behavior. I'd use a Plan-and-Execute pattern with explicit success criteria per step, which gives you debuggability and cost control."</p></div>
+      <div class="script-block"><div class="script-label">Core explanation (2–3 min)</div><p>"I'd start with a dedicated planner call — typically a more capable model like GPT-4o or an o-series model with extended reasoning — that takes the goal and produces a structured JSON plan: an ordered list of named sub-tasks, each with typed inputs, expected outputs, and a verifiable success criterion. Think of it as converting a vague intent into a DAG of atomic actions.</p>
+<p>The executor loop then processes steps one at a time. Each step maps to one or two tool calls. Before advancing, the orchestrator validates the step's success criterion — for example, 'did the DB query return >0 rows?' If it fails, the orchestrator retries up to three times with exponential backoff, then triggers HITL or re-invokes the planner with the failure context for a revised plan.</p>
+<p>Hierarchically, you decompose: the top level is the goal, the second level is sub-goals (gather data, analyze, draft, compile), and the third level is individual tool calls with typed parameters. This prevents the classic failure mode where a step is too coarse — 'research the topic' — and the executor recurses or calls tools hundreds of times.</p>
+<p>A concrete example: a code-review agent I'd build would have GPT-4o produce a 6-step plan as JSON — fetch PR diff, run linter, run security scanner, summarize findings, draft review comment, post via GitHub API. Each step is logged in LangSmith with its inputs, outputs, and pass/fail status against the success criterion."</p></div>
+      <div class="script-block"><div class="script-label">Tradeoff / production angle (1 min)</div><p>"The main tradeoff is flexibility vs. debuggability. ReAct is more flexible — there's no upfront plan, the agent reasons step by step — but it's hard to bound cost or audit after the fact. Plan-and-Execute is more auditable but requires a good planner prompt. For regulated domains or expensive workflows, I'd lean toward hardcoded DAGs with LLM steps only at reasoning nodes, not for control flow. Tree of Thoughts is useful when the decomposition itself is uncertain, but it's expensive — three branches × three depths = nine planner calls before you start executing."</p></div>
+      <div class="script-block"><div class="script-label">Wrap-up (30s)</div><p>"So the key principle is: keep decomposition explicit and in the orchestrator layer, not hidden inside a ReAct loop. Structured plans with success criteria per step give you cost bounds, debuggability, and a re-planning hook when things go wrong. Happy to go deeper on re-planning strategies or how to prompt the planner for step granularity."</p></div>
+    </div>
+  </div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="section-label">Pitfalls</div>
+  <div class="pitfall-card">
+    <div class="pitfall-mistake"><strong>✗ Mistake</strong> Treating goal decomposition as just &quot;asking the LLM to plan inside the ReAct loop&quot; and never producing an explicit upfront plan</div>
+    <div class="pitfall-better"><strong>✓ Better</strong> Use Plan-and-Execute: generate a structured JSON plan with named steps and success criteria before execution begins, so you can validate, bound, and debug each step independently.</div>
+  </div>
+  <div class="pitfall-card">
+    <div class="pitfall-mistake"><strong>✗ Mistake</strong> Not constraining step granularity in the planner prompt, leading to steps like &quot;analyze all the data&quot; that map to dozens of tool calls</div>
+    <div class="pitfall-better"><strong>✓ Better</strong> Add explicit constraints to the planner prompt: &quot;each step must map to ≤2 tool calls, have a verifiable binary success criterion, and complete in under 60 seconds&quot;; enforce max_depth in the orchestrator.</div>
+  </div>
+  <div class="pitfall-card">
+    <div class="pitfall-mistake"><strong>✗ Mistake</strong> Re-planning blindly on every failure without passing failure context</div>
+    <div class="pitfall-better"><strong>✓ Better</strong> Pass the failed step&#x27;s error, retry log, and current state back to the planner so the revised plan avoids the same decomposition mistake; cap re-plan attempts at 2–3 to prevent infinite loops.
+
+---</div>
+  </div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="section-label">Related Questions</div>
+  <div class="related-pills">
+    <div class="related-pill" data-slug="03-013">
+      <span class="related-pill-icon">→</span>
+      <div class="related-pill-text">
+        <div class="related-pill-q">Q13: Chain-of-thought vs tree-of-thought vs graph planning</div>
+        <div class="related-pill-rel">Planning strategies compared — direct follow-up</div>
+      </div>
+    </div>
+    <div class="related-pill" data-slug="03-008">
+      <span class="related-pill-icon">→</span>
+      <div class="related-pill-text">
+        <div class="related-pill-q">Q8: Walk through a production-ready agent architecture</div>
+        <div class="related-pill-rel">Decomposition fits inside the loop controller layer</div>
+      </div>
+    </div>
+    <div class="related-pill" data-slug="03-011">
+      <span class="related-pill-icon">→</span>
+      <div class="related-pill-text">
+        <div class="related-pill-q">Q11: Termination conditions in long-running agents</div>
+        <div class="related-pill-rel">Success criteria per step feed directly into termination logic</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="section-label">One-liner recall</div>
+  <div class="oneliner-box">
+    <div class="oneliner-label">▸ Reconstruct from memory</div>
+    <div class="oneliner-text" data-text="Use Plan-and-Execute: a dedicated planner LLM call produces a structured JSON DAG of atomic steps with typed inputs and verifiable success criteria; the orchestrator executor processes one step at a time, retrying failures and re-invoking the planner with failure context — never delegating control-flow decisions to the ReAct loop.">Use Plan-and-Execute: a dedicated planner LLM call produces a structured JSON DAG of atomic steps with typed inputs and verifiable success criteria; the orchestrator executor processes one step at a time, retrying failures and re-invoking the planner with failure context — never delegating control-flow decisions to the ReAct loop.</div>
+  </div>
+</div>

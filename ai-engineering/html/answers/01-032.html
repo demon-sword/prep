@@ -1,0 +1,135 @@
+<div class="answer-header reveal">
+  <div class="answer-meta">
+    <span class="meta-badge meta-category">01-llm-fundamentals</span>
+    <span class="meta-badge meta-num">Q032</span>
+    <span class="meta-badge meta-status-review">review</span>
+  </div>
+  <h1 class="answer-title">Beam search, top-k, top-p — when use each?</h1>
+</div>
+
+<div class="answer-section reveal">
+  <div class="accordion">
+    <div class="accordion-header">
+      <span class="accordion-title">⟁ Framing — Why this is asked</span>
+      <span class="accordion-chevron">▾</span>
+    </div>
+    <div class="accordion-body">
+      <div class="framing-grid">
+        <div><div class="framing-card">
+          <div class="framing-card-title">Why asked</div>
+          <p style="font-size:13.5px;line-height:1.7;color:var(--text-dim)">This probes whether you understand decoding as a separate, tunable system — not just &quot;the model outputs text.&quot; Interviewers expect you to reason about quality/diversity/cost tradeoffs and give concrete production configurations for specific use-cases (code generation, chatbots, creative writing).</p>
+        </div></div>
+        <div><div class="framing-card">
+          <div class="framing-card-title">Trigger phrases</div>
+          <div class="trigger-list">
+              <div class="trigger-phrase">Walk me through the decoding strategies for LLMs.</div>
+              <div class="trigger-phrase">Why would you pick top-p over top-k in production?</div>
+              <div class="trigger-phrase">When would you use beam search vs sampling?</div>
+              <div class="trigger-phrase">What are the different ways to generate text from an LLM?</div>
+          </div>
+        </div></div>
+      </div>
+      <div class="tests-block">
+        <span style="font-family:var(--mono);font-size:10px;letter-spacing:0.1em;text-transform:uppercase;color:var(--purple);margin-right:8px">Tests:</span>Whether you understand the quality-diversity-latency tradeoff space of autoregressive decoding and can prescribe the right strategy per use-case.
+
+---
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="section-label">Concept</div>
+  <div class="concept-block"><p>After each forward pass, an LLM produces a logit distribution over its vocabulary; the <strong>decoding strategy</strong> decides which token to select next. The three main families are: <strong>beam search</strong> (deterministic, multi-hypothesis), <strong>top-k sampling</strong> (sample from the k most probable tokens), and <strong>top-p / nucleus sampling</strong> (sample from the smallest set of tokens whose cumulative probability ≥ p). They span a spectrum from fully deterministic (beam) to highly stochastic (high top-p + temperature).</p></div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="section-label">Mechanism</div>
+  <div class="card"><p><strong>Beam search:</strong></p>
+<ul class="styled-list"><li>Maintains B parallel "beams" (hypotheses) at every timestep.</li><li>Each beam extends by the top-B tokens from the current distribution; prunes all but the top-B sequences by cumulative log-probability.</li><li>Final output = highest-scoring complete sequence.</li><li>Cost: B× the memory and compute of greedy decoding; unsuitable for long sequences or large B.</li><li>Classic use: machine translation (seq2seq with encoder-decoder like T5, MarianMT). Rarely used for open-ended generation because it produces repetitive, overconfident text ("degeneration problem").</li></ul>
+<p><strong>Top-k sampling:</strong></p>
+<ul class="styled-list"><li>Zeroes out all but the top-k tokens by probability, renormalizes, then samples.</li><li>Fixed k = fixed vocabulary size at each step regardless of the shape of the distribution — if the model is very confident (peaked distribution), k=50 still allows noisy low-prob tokens; if uncertain (flat distribution), k=50 still only covers a fraction of plausible tokens.</li><li>Decent for chatbots and summarization; less principled than top-p.</li></ul>
+<p><strong>Top-p (nucleus) sampling:</strong></p>
+<ul class="styled-list"><li>Sort tokens by descending probability; accumulate until cumulative prob ≥ p; sample from that dynamic set.</li><li>The nucleus adapts to the model's confidence: peaked distribution → small nucleus (near-deterministic); flat distribution → large nucleus (more creative).</li><li>Introduced by Holtzman et al. 2020 ("The Curious Case of Neural Text Degeneration").</li><li>Most commonly used in production chat/creative systems. Typical value: p=0.9–0.95.</li></ul>
+<p><strong>Temperature (orthogonal modifier):</strong></p>
+<ul class="styled-list"><li>Scales all logits by 1/T before softmax. T<1 sharpens (more deterministic), T>1 flattens (more random). Combined with top-p/top-k.</li><li>T=0 → argmax (greedy) regardless of top-k/top-p.</li></ul>
+<p><strong>Production configurations (2025–2026 norms):</strong></p>
+<div class="table-wrap"><table class="data-table"><tr><th>Use-case</th><th>Strategy</th><th>Why</th></tr><tr><td>Code generation (Copilot, Codex)</td><td>T=0.1–0.2, top-p=0.95</td><td>Correctness > diversity; low noise</td></tr><tr><td>Customer support chatbot</td><td>T=0.7, top-p=0.95</td><td>Coherent but not robotic</td></tr><tr><td>Creative writing</td><td>T=1.0–1.2, top-p=0.95</td><td>Diversity desirable</td></tr><tr><td>Summarization</td><td>T=0.3, top-p=0.9</td><td>Faithful, low hallucination</td></tr><tr><td>Machine translation</td><td>Beam B=4–5</td><td>BLEU-optimal; seq2seq</td></tr><tr><td>Reasoning / chain-of-thought</td><td>T=0 or beam</td><td>Determinism for reproducibility</td></tr></table></div>
+<p><strong>Speculative decoding (bonus angle):</strong> uses a small draft model to propose k tokens greedily, then the large model verifies them in parallel — effectively beam-like quality at near-sampling speed. Used in vLLM and TensorRT-LLM for latency reduction.</p></div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="section-label">Example / Tradeoff</div>
+  <div class="card card-accent"><div class="rich-text"><p>In vLLM, sampling parameters are set per-request via <code>SamplingParams(temperature=0.7, top_p=0.95, top_k=-1)</code> — top_k=-1 disables top-k filtering, leaving only nucleus sampling. OpenAI's Chat API exposes the same knobs (<code>temperature</code>, <code>top_p</code>; note they recommend not setting both simultaneously). For production RAG answer generation, most teams use T=0, top_p=1.0 (greedy) because faithfulness to retrieved context matters more than creative variation — setting T=0 eliminates sampling noise and makes answers reproducible for golden-set evaluation.</p></div></div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="accordion">
+    <div class="accordion-header">
+      <span class="accordion-title">🎙 Verbal Script (3–5 min)</span>
+      <span class="accordion-chevron">▾</span>
+    </div>
+    <div class="accordion-body">
+      <div class="script-block"><div class="script-label">Opening (30s)</div><p>"There are three main decoding strategies — beam search, top-k, and top-p — and the right choice depends entirely on whether you're optimizing for quality, diversity, or speed. Let me walk through each and then give you the production configs I'd actually use."</p></div>
+      <div class="script-block"><div class="script-label">Core explanation (2–3 min)</div><p>"I'd start with beam search. It keeps B parallel hypotheses alive at each step, always choosing the highest cumulative log-probability path. It's great for translation or structured generation where there's a clear best answer — models like MarianMT use beam width of 4–5. But for open-ended generation it causes degeneration: repetitive, overconfident text, because it over-exploits the probability distribution. Also, B× compute makes it expensive at scale.</p>
+<p>"Top-k sampling is simpler — you zero out everything outside the top k tokens and sample. The problem is k is fixed, which is unprincipled: when the model is very confident, even k=50 lets in noisy tokens; when the model is uncertain, k=50 misses plausible options.</p>
+<p>"Top-p, or nucleus sampling, solves that by adapting dynamically. You accumulate tokens in descending probability order until you hit cumulative prob ≥ p — that's the nucleus — then sample from it. When the model is confident the nucleus is tiny; when uncertain it's large. This is the default for most production chat systems. OpenAI recommends top-p=0.95 for chatbot use-cases, and vLLM exposes it as a first-class parameter.</p>
+<p>"Temperature is orthogonal: it scales logits before softmax. T=0 is greedy; T=0.2 is near-greedy for code; T=1.0+ for creative writing. I'd never set temperature and top-p both to non-default simultaneously — they interact in unintuitive ways and OpenAI explicitly warns against it."</p></div>
+      <div class="script-block"><div class="script-label">Tradeoff / production angle (1 min)</div><p>"The key insight is that for RAG answer generation, I default to T=0 (greedy / top-p=1.0) because faithfulness to retrieved context is the goal — sampling variance just introduces hallucination risk. For conversational chat I use T=0.7, top-p=0.95. For creative tasks I push to T=1.0–1.2. And if latency is critical, speculative decoding with a draft model is effectively beam-like quality at sampling speed — vLLM supports it natively."</p></div>
+      <div class="script-block"><div class="script-label">Wrap-up (30s)</div><p>"The decision tree is: beam search for structured seq2seq tasks with clear ground truth; top-p (nucleus) for chat and creative open-ended generation; greedy/T=0 for factual RAG pipelines where reproducibility and faithfulness matter. Happy to go deeper on speculative decoding or the interaction with temperature if useful."</p></div>
+    </div>
+  </div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="section-label">Pitfalls</div>
+  <div class="pitfall-card">
+    <div class="pitfall-mistake"><strong>✗ Mistake</strong> Treating &quot;top-p&quot; and &quot;temperature&quot; as interchangeable or saying &quot;just set temperature high for variety&quot;</div>
+    <div class="pitfall-better"><strong>✓ Better</strong> Explain that temperature reshapes the full distribution while top-p truncates the tail; they&#x27;re orthogonal controls, and high temperature without top-p truncation can produce incoherent text.</div>
+  </div>
+  <div class="pitfall-card">
+    <div class="pitfall-mistake"><strong>✗ Mistake</strong> Recommending beam search for all LLM generation tasks because it &quot;finds the best answer&quot;</div>
+    <div class="pitfall-better"><strong>✓ Better</strong> Explain that beam search causes degeneration on open-ended generation (Holtzman et al. 2020) and is only appropriate for constrained seq2seq tasks like translation; for chat or RAG, greedy or nucleus sampling is superior.</div>
+  </div>
+  <div class="pitfall-card">
+    <div class="pitfall-mistake"><strong>✗ Mistake</strong> Not knowing any concrete production values (just saying &quot;adjust as needed&quot;)</div>
+    <div class="pitfall-better"><strong>✓ Better</strong> Cite real configs: T=0.1 for code, T=0.7 + top-p=0.95 for chat, T=0 for factual RAG; shows production experience rather than textbook knowledge.
+
+---</div>
+  </div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="section-label">Related Questions</div>
+  <div class="related-pills">
+    <div class="related-pill" data-slug="01-007">
+      <span class="related-pill-icon">→</span>
+      <div class="related-pill-text">
+        <div class="related-pill-q">Q7: What is temperature and top-p sampling? How do they affect outputs?</div>
+        <div class="related-pill-rel">Direct prerequisite — temperature mechanics</div>
+      </div>
+    </div>
+    <div class="related-pill" data-slug="01-031">
+      <span class="related-pill-icon">→</span>
+      <div class="related-pill-text">
+        <div class="related-pill-q">Q31: How do LLMs generate text? Autoregressive decoding process.</div>
+        <div class="related-pill-rel">Parent concept — the loop within which decoding strategies operate</div>
+      </div>
+    </div>
+    <div class="related-pill" data-slug="01-009">
+      <span class="related-pill-icon">→</span>
+      <div class="related-pill-text">
+        <div class="related-pill-q">Q9: What is KV cache? How does it help in LLM inference?</div>
+        <div class="related-pill-rel">Related production angle — KV cache enables efficient multi-step decoding</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="section-label">One-liner recall</div>
+  <div class="oneliner-box">
+    <div class="oneliner-label">▸ Reconstruct from memory</div>
+    <div class="oneliner-text" data-text="Use beam search for seq2seq (translation), top-p (nucleus, p=0.95) for chat/creative, and greedy (T=0) for factual RAG — because each optimizes a different point in the quality/diversity/faithfulness tradeoff space.">Use beam search for seq2seq (translation), top-p (nucleus, p=0.95) for chat/creative, and greedy (T=0) for factual RAG — because each optimizes a different point in the quality/diversity/faithfulness tradeoff space.</div>
+  </div>
+</div>

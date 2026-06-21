@@ -1,0 +1,127 @@
+<div class="answer-header reveal">
+  <div class="answer-meta">
+    <span class="meta-badge meta-category">01-llm-fundamentals</span>
+    <span class="meta-badge meta-num">Q035</span>
+    <span class="meta-badge meta-status-review">review</span>
+  </div>
+  <h1 class="answer-title">How do stop sequences work?</h1>
+</div>
+
+<div class="answer-section reveal">
+  <div class="accordion">
+    <div class="accordion-header">
+      <span class="accordion-title">⟁ Framing — Why this is asked</span>
+      <span class="accordion-chevron">▾</span>
+    </div>
+    <div class="accordion-body">
+      <div class="framing-grid">
+        <div><div class="framing-card">
+          <div class="framing-card-title">Why asked</div>
+          <p style="font-size:13.5px;line-height:1.7;color:var(--text-dim)">Interviewers probe whether you understand the token-generation loop at a mechanical level — not just API surface knowledge. Stop sequences are a small but operationally critical control knob: getting them wrong causes truncated responses, runaway generation, or wasted tokens. This question also surfaces practical API fluency (did you actually build with these models, or just read about them?).</p>
+        </div></div>
+        <div><div class="framing-card">
+          <div class="framing-card-title">Trigger phrases</div>
+          <div class="trigger-list">
+              <div class="trigger-phrase">How does the model know when to stop generating?</div>
+              <div class="trigger-phrase">How do you prevent a model from generating extra tokens after the answer?</div>
+              <div class="trigger-phrase">What&#x27;s the difference between a stop sequence and `max_tokens`?</div>
+          </div>
+        </div></div>
+      </div>
+      <div class="tests-block">
+        <span style="font-family:var(--mono);font-size:10px;letter-spacing:0.1em;text-transform:uppercase;color:var(--purple);margin-right:8px">Tests:</span>Mechanical understanding of the autoregressive decode loop and practical ability to control generation boundaries in production.
+
+---
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="section-label">Concept</div>
+  <div class="concept-block"><p>Stop sequences are one or more strings that, when produced by the model during decoding, cause generation to halt immediately — the matching tokens are typically excluded from the returned output. They give the caller explicit control over <em>when</em> the model stops, separate from the token-budget control of <code>max_tokens</code>.</p></div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="section-label">Mechanism</div>
+  <div class="card"><p>During autoregressive decoding, at each step the model samples or greedily selects the next token. After appending that token to the buffer, the inference engine checks whether the current output suffix matches any stop sequence string. If it matches, generation terminates. The engine does this check at the <strong>string level</strong> (after detokenizing), not at the token level — because a stop sequence like <code>"\n\n"</code> may span multiple tokens.</p>
+<p>Key behaviors:</p>
+<ul class="styled-list"><li><strong>Multiple stop sequences</strong> — you can pass a list; generation halts at the first match (OpenAI: up to 4; Anthropic: array).</li><li><strong>Stop tokens vs stop strings</strong> — some engines expose a lower-level <code>stop_token_ids</code> list; the string form is more portable across tokenizers.</li><li><strong>Inclusive vs exclusive</strong> — most APIs exclude the stop sequence from the returned text (OpenAI, Anthropic). The <code>finish_reason</code> field (<code>"stop"</code> vs <code>"length"</code>) tells you which termination path fired.</li><li><strong>EOS token</strong> — the model also has a built-in end-of-sequence token (e.g., <code><|endoftext|></code> for GPT, <code><|eot_id|></code> for Llama 3). Stop sequences are caller-defined overrides on top of this.</li><li><strong>Streaming</strong> — in streaming mode the engine buffers the last <code>max(len(stop_seq))</code> bytes before emitting, so it can withhold a match that's still arriving mid-token.</li></ul></div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="section-label">Example / Tradeoff</div>
+  <div class="card card-accent"><div class="rich-text"><p><strong>Function-call extraction:</strong> When prompting a model to produce JSON inside <code><tool_call>...</tool_call></code> XML tags, you'd set <code>stop=["</tool_call>"]</code>. This prevents the model from continuing to generate prose after the JSON ends, cuts token cost, and makes parsing deterministic.</p>
+<p><strong>Code generation (Copilot-style):</strong> GitHub Copilot uses stop sequences like <code>"\n\n\n"</code> or the next function definition marker to avoid generating multiple functions when only one completion is wanted.</p>
+<p><strong>Tradeoff:</strong> Stop sequences assume the model will <em>actually produce</em> the sentinel string. If the model is inconsistent (e.g., sometimes uses <code></tool></code> instead of <code></tool_call></code>), generation runs to <code>max_tokens</code>. Robust systems combine stop sequences with a <code>max_tokens</code> safety cap and parse-validate the output regardless.</p></div></div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="accordion">
+    <div class="accordion-header">
+      <span class="accordion-title">🎙 Verbal Script (3–5 min)</span>
+      <span class="accordion-chevron">▾</span>
+    </div>
+    <div class="accordion-body">
+      <div class="script-block"><div class="script-label">Opening (30s)</div><p>"Stop sequences are a generation control mechanism — they let you tell the model 'halt as soon as you produce this string.' I think of them as a complement to <code>max_tokens</code>: max_tokens is a hard token budget, while stop sequences are semantic termination conditions the caller defines. Let me walk through how they work mechanically."</p></div>
+      <div class="script-block"><div class="script-label">Core explanation (2–3 min)</div><p>"During autoregressive decoding, the model generates one token at a time. After each token, the inference engine detokenizes the current output buffer and checks whether the end of that buffer matches any stop sequence you specified. If yes, it stops — the stop sequence itself is usually excluded from the returned text.</p>
+<p>A few nuances matter in practice. First, the check happens at the string level, not the token level, because a sequence like double newline spans two tokens. Second, most APIs let you pass multiple stop sequences — the OpenAI API takes up to four. Third, the <code>finish_reason</code> field in the response tells you why generation stopped: <code>'stop'</code> means a stop sequence or EOS fired; <code>'length'</code> means <code>max_tokens</code> was hit. You should always inspect this in production, because a truncated response due to <code>'length'</code> often means your prompt is too long or your token cap is too tight.</p>
+<p>In streaming mode there's a subtle nuance: the engine has to buffer the last few bytes before emitting them, since a partial stop sequence may still be arriving. vLLM and TGI both implement this correctly, but it's something to be aware of when building low-latency streaming endpoints."</p></div>
+      <div class="script-block"><div class="script-label">Tradeoff / production angle (1 min)</div><p>"The main failure mode is relying solely on stop sequences when the model is inconsistent about producing the sentinel. If you're doing structured output extraction — say, JSON inside XML tags — and the model occasionally uses a slightly different closing tag, generation runs to <code>max_tokens</code> and your parser gets garbage. The robust pattern is: stop sequences for the happy path, <code>max_tokens</code> as a safety net, and defensive parsing that handles truncation. I also always log <code>finish_reason</code> as a production metric — a spike in <code>'length'</code> finishes is often the first signal that something upstream changed."</p></div>
+      <div class="script-block"><div class="script-label">Wrap-up (30s)</div><p>"So stop sequences are a simple but important primitive: they give you semantic control over where generation ends, reduce wasted tokens, and make output parsing more predictable. The key is pairing them with <code>max_tokens</code> and always checking <code>finish_reason</code> in production. Happy to go deeper on structured output patterns or streaming behavior."</p></div>
+    </div>
+  </div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="section-label">Pitfalls</div>
+  <div class="pitfall-card">
+    <div class="pitfall-mistake"><strong>✗ Mistake</strong> Treating stop sequences and <code>max_tokens</code> as equivalent controls</div>
+    <div class="pitfall-better"><strong>✓ Better</strong> Explain they serve different purposes: <code>max_tokens</code> is a hard budget cap; stop sequences are semantic terminators. A model that never produces the stop string will run to <code>max_tokens</code>, so both must be set.</div>
+  </div>
+  <div class="pitfall-card">
+    <div class="pitfall-mistake"><strong>✗ Mistake</strong> Assuming the stop sequence is included in the returned output</div>
+    <div class="pitfall-better"><strong>✓ Better</strong> State clearly that most APIs (OpenAI, Anthropic) exclude the matched stop sequence from the response, and always parse accordingly; explain the <code>finish_reason</code> field to distinguish stop vs length termination.</div>
+  </div>
+  <div class="pitfall-card">
+    <div class="pitfall-mistake"><strong>✗ Mistake</strong> Not checking <code>finish_reason</code> in production and silently accepting truncated outputs</div>
+    <div class="pitfall-better"><strong>✓ Better</strong> Log <code>finish_reason</code> as a metric; a <code>&#x27;length&#x27;</code> result means downstream parsing received an incomplete response and the token budget or prompt needs adjustment.
+
+---</div>
+  </div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="section-label">Related Questions</div>
+  <div class="related-pills">
+    <div class="related-pill" data-slug="01-031">
+      <span class="related-pill-icon">→</span>
+      <div class="related-pill-text">
+        <div class="related-pill-q">Q31: How do LLMs generate text? Autoregressive decoding process.</div>
+        <div class="related-pill-rel">Prerequisite — stop sequences are a control layer on top of the decode loop</div>
+      </div>
+    </div>
+    <div class="related-pill" data-slug="01-032">
+      <span class="related-pill-icon">→</span>
+      <div class="related-pill-text">
+        <div class="related-pill-q">Q32: Beam search, top-k, top-p — when use each?</div>
+        <div class="related-pill-rel">Same layer — decoding strategies that interact with stop sequences</div>
+      </div>
+    </div>
+    <div class="related-pill" data-slug="01-007">
+      <span class="related-pill-icon">→</span>
+      <div class="related-pill-text">
+        <div class="related-pill-q">Q7: What is temperature and top-p sampling?</div>
+        <div class="related-pill-rel">Related sampling controls at the same API surface</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="section-label">One-liner recall</div>
+  <div class="oneliner-box">
+    <div class="oneliner-label">▸ Reconstruct from memory</div>
+    <div class="oneliner-text" data-text="Stop sequences are caller-defined strings that halt autoregressive generation the moment they appear in the output buffer (string-level check, exclusive of the match); pair with `max_tokens` as a safety net and always inspect `finish_reason` in production.">Stop sequences are caller-defined strings that halt autoregressive generation the moment they appear in the output buffer (string-level check, exclusive of the match); pair with `max_tokens` as a safety net and always inspect `finish_reason` in production.</div>
+  </div>
+</div>

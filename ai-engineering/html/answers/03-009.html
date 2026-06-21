@@ -1,0 +1,142 @@
+<div class="answer-header reveal">
+  <div class="answer-meta">
+    <span class="meta-badge meta-category">03-agents-tool-use</span>
+    <span class="meta-badge meta-num">Q009</span>
+    <span class="meta-badge meta-status-review">review</span>
+  </div>
+  <h1 class="answer-title">What logic belongs in orchestrator vs LLM?</h1>
+</div>
+
+<div class="answer-section reveal">
+  <div class="accordion">
+    <div class="accordion-header">
+      <span class="accordion-title">⟁ Framing — Why this is asked</span>
+      <span class="accordion-chevron">▾</span>
+    </div>
+    <div class="accordion-body">
+      <div class="framing-grid">
+        <div><div class="framing-card">
+          <div class="framing-card-title">Why asked</div>
+          <p style="font-size:13.5px;line-height:1.7;color:var(--text-dim)">This question probes whether the candidate understands the <strong>architectural boundary</strong> inside an agent system — a critical design decision that determines reliability, debuggability, and cost. Strong candidates know that dumping control logic into the LLM prompt makes the system fragile and expensive; they push deterministic concerns to the orchestrator and reserve the LLM for genuine reasoning.</p>
+        </div></div>
+        <div><div class="framing-card">
+          <div class="framing-card-title">Trigger phrases</div>
+          <div class="trigger-list">
+              <div class="trigger-phrase">What should the orchestrator handle vs the LLM?</div>
+              <div class="trigger-phrase">Walk me through how you&#x27;d split responsibility in an agent loop.</div>
+              <div class="trigger-phrase">How do you decide what goes in the prompt vs in your application code?</div>
+          </div>
+        </div></div>
+      </div>
+      <div class="tests-block">
+        <span style="font-family:var(--mono);font-size:10px;letter-spacing:0.1em;text-transform:uppercase;color:var(--purple);margin-right:8px">Tests:</span>Whether the candidate can draw a principled, production-validated boundary between deterministic orchestration code and stochastic LLM reasoning.
+
+---
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="section-label">Concept</div>
+  <div class="concept-block"><p>In an agent system the <strong>orchestrator</strong> is the deterministic host process (Python/Go/Node) that manages the agent loop, enforces policies, and calls tools. The <strong>LLM</strong> is the stochastic reasoning engine that interprets context and decides what to do next. The key principle: <strong>anything that can be expressed as deterministic code should be</strong>; the LLM should only handle tasks that genuinely require natural language understanding or open-ended reasoning.</p></div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="section-label">Mechanism</div>
+  <div class="card"><p><strong>Orchestrator owns (deterministic / policy):</strong></p>
+<div class="table-wrap"><table class="data-table"><tr><th>Responsibility</th><th>Why it belongs here</th></tr><tr><td>Loop control — <code>max_iterations</code>, wall-clock timeout, step counter</td><td>Prevents infinite loops; LLM can't reliably self-count</td></tr><tr><td>Tool dispatch — parse LLM's tool-call JSON, validate schema, route to handler</td><td>Deterministic JSON parse + routing is cheap and reliable</td></tr><tr><td>Retry / error handling — catch tool failures, apply backoff, decide whether to surface to LLM</td><td>Error recovery logic needs to be predictable and auditable</td></tr><tr><td>Budget enforcement — token budget, cost ceiling, turn limit</td><td>Hard limits that the LLM should never be allowed to override</td></tr><tr><td>HITL triggers — flag irreversible actions (delete, send email, charge card) for human approval</td><td>Compliance requirement; can't rely on LLM to self-regulate</td></tr><tr><td>State persistence — write checkpoints to Redis/DB between turns</td><td>LLM is stateless; session context must be managed externally</td></tr><tr><td>Security / allowlist — validate tool names against allowlist before calling</td><td>Prevent prompt-injection driven tool abuse</td></tr></table></div>
+<p><strong>LLM owns (stochastic / reasoning):</strong></p>
+<div class="table-wrap"><table class="data-table"><tr><th>Responsibility</th><th>Why it belongs here</th></tr><tr><td>Goal decomposition — break a user intent into steps</td><td>Requires language understanding of ambiguous goals</td></tr><tr><td>Tool selection — given context, choose which tool and with what args</td><td>Semantic matching between tool schemas and current state</td></tr><tr><td>Intermediate reasoning (ReAct Thought step) — interpret tool output, decide next action</td><td>Dynamic multi-hop reasoning the orchestrator can't express as rules</td></tr><tr><td>Answer synthesis — combine tool outputs into a coherent response</td><td>Natural language generation</td></tr></table></div>| Ambiguity resolution — ask the user a clarifying question | Semantic judgment about what information is missing |</div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="section-label">Example / Tradeoff</div>
+  <div class="card card-accent"><div class="rich-text"><p><strong>Support-ticket agent (LangGraph implementation):</strong></p>
+<div class="code-block-wrap"><pre class="code-block"><code>Orchestrator (LangGraph graph):
+  - max_iterations = 10, wall_clock = 30s
+  - Tool allowlist: [&quot;search_kb&quot;, &quot;get_order&quot;, &quot;escalate&quot;]
+  - interrupt_before(&quot;escalate&quot;)  ← HITL gate
+  - Checkpoints to Redis
+
+LLM (GPT-4o-mini, T=0):
+  - ReAct format: Thought → Action → Observation
+  - Decides which tool to call and with what args
+  - Synthesises final response</code></pre><button class="copy-btn">copy</button></div>
+<p><strong>Anti-pattern (logic in the prompt):</strong></p>
+<div class="code-block-wrap"><pre class="code-block"><code>❌ &quot;If the issue is billing-related use get_order, 
+     if escalation is needed use escalate, 
+     but only escalate if severity &gt; 3...&quot;</code></pre><button class="copy-btn">copy</button></div>
+<p>This puts conditional routing logic in the prompt — the LLM may follow it inconsistently, it's hard to test, and it leaks policy into every API call. Instead, have the orchestrator inspect the tool call result and enforce the routing rule in code.</p>
+<p><strong>Tradeoff:</strong> Moving more logic to the orchestrator increases reliability and reduces tokens-per-turn, but makes the orchestrator more complex and harder to change without code deploys. Teams at scale (e.g., Anthropic's Claude.ai, LangChain's production templates) use a hybrid: a thin ReAct-style prompt for LLM reasoning + a rich orchestrator graph (LangGraph/Temporal) for all control flow.</p></div></div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="accordion">
+    <div class="accordion-header">
+      <span class="accordion-title">🎙 Verbal Script (3–5 min)</span>
+      <span class="accordion-chevron">▾</span>
+    </div>
+    <div class="accordion-body">
+      <div class="script-block"><div class="script-label">Opening (30s)</div><p>"The core design question for any agent is: what does the orchestrator own vs what does the LLM own? My rule of thumb is — if it can be expressed as deterministic code, it should be. The LLM is for reasoning; the orchestrator is for control. Let me walk through the split."</p></div>
+      <div class="script-block"><div class="script-label">Core explanation (2–3 min)</div><p>"On the orchestrator side I put everything that needs to be reliable and auditable: the loop controller with a hard <code>max_iterations</code> limit and wall-clock timeout, tool dispatch parsing the LLM's JSON output and routing to the right handler, retry and backoff logic when a tool fails, budget enforcement so the LLM can never spend more tokens than we allow, HITL gates before irreversible actions like sending emails or charging cards, and state persistence to Redis between turns so the session survives a process restart.</p>
+<p>The LLM gets the reasoning tasks: decomposing a vague user goal into concrete steps, selecting which tool to call and with what arguments, interpreting tool outputs to decide the next action, synthesizing a final answer, and asking the user for clarification when something is ambiguous.</p>
+<p>In a LangGraph implementation for a support-ticket agent this looks like: the graph itself handles max_iterations, an allowlist of valid tool names, and an <code>interrupt_before('escalate')</code> node that pages a human. The LLM prompt is a clean ReAct format — Thought, Action, Observation — and it just reasons about the current context."</p></div>
+      <div class="script-block"><div class="script-label">Tradeoff / production angle (1 min)</div><p>"The failure mode I see most often is teams putting conditional routing logic into the prompt — 'if the issue is billing, use get_order; if severity is above 3, escalate.' That logic belongs in the orchestrator as code. It's cheaper to execute, deterministic to test, and won't hallucinate. The tradeoff is that a richer orchestrator requires code deploys to change behavior, while prompt-based logic can be updated without a deploy. For high-velocity iteration early on, some logic in the prompt is pragmatic — but production systems should migrate it to code."</p></div>
+      <div class="script-block"><div class="script-label">Wrap-up (30s)</div><p>"So the guiding principle is: orchestrator for determinism and policy, LLM for language and reasoning. In practice I use LangGraph for the orchestrator graph and a minimal ReAct prompt for the LLM — happy to go deeper on the LangGraph node structure or the HITL pattern if that's useful."</p></div>
+    </div>
+  </div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="section-label">Pitfalls</div>
+  <div class="pitfall-card">
+    <div class="pitfall-mistake"><strong>✗ Mistake</strong> Putting routing conditionals and budget enforcement in the prompt (&quot;Only call escalate if severity &gt; 3&quot;)</div>
+    <div class="pitfall-better"><strong>✓ Better</strong> Express all deterministic policies in orchestrator code; the LLM should never be the gatekeeper for irreversible actions because it can be inconsistent or jailbroken.</div>
+  </div>
+  <div class="pitfall-card">
+    <div class="pitfall-mistake"><strong>✗ Mistake</strong> Giving the LLM control over loop termination (&quot;decide when you&#x27;re done&quot;) without a hard orchestrator limit</div>
+    <div class="pitfall-better"><strong>✓ Better</strong> Always set <code>max_iterations</code> and a wall-clock timeout in the orchestrator; the LLM&#x27;s self-assessment of &quot;done&quot; is unreliable and can lead to runaway cost or infinite loops.</div>
+  </div>
+  <div class="pitfall-card">
+    <div class="pitfall-mistake"><strong>✗ Mistake</strong> Parsing tool-call JSON inside the prompt template or expecting the LLM to validate its own arguments</div>
+    <div class="pitfall-better"><strong>✓ Better</strong> Tool schema validation happens in the orchestrator; reject malformed calls with a structured error message that the LLM can correct in the next turn.
+
+---</div>
+  </div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="section-label">Related Questions</div>
+  <div class="related-pills">
+    <div class="related-pill" data-slug="03-008">
+      <span class="related-pill-icon">→</span>
+      <div class="related-pill-text">
+        <div class="related-pill-q">Q8: Walk through a production-ready agent architecture</div>
+        <div class="related-pill-rel">Prerequisite — full architecture context</div>
+      </div>
+    </div>
+    <div class="related-pill" data-slug="03-010">
+      <span class="related-pill-icon">→</span>
+      <div class="related-pill-text">
+        <div class="related-pill-q">Q10: Design a safe and debuggable agent loop</div>
+        <div class="related-pill-rel">Follow-up — how to build the orchestrator loop safely</div>
+      </div>
+    </div>
+    <div class="related-pill" data-slug="03-014">
+      <span class="related-pill-icon">→</span>
+      <div class="related-pill-text">
+        <div class="related-pill-q">Q14: Detect and stop infinite planning loops</div>
+        <div class="related-pill-rel">Same concept — orchestrator&#x27;s role in loop safety</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="section-label">One-liner recall</div>
+  <div class="oneliner-box">
+    <div class="oneliner-label">▸ Reconstruct from memory</div>
+    <div class="oneliner-text" data-text="Orchestrator owns all deterministic policy (loop limits, tool dispatch, retries, HITL gates, budget); LLM owns only genuine reasoning (goal decomposition, tool selection, answer synthesis) — never put routing conditionals or safety policies in the prompt.">Orchestrator owns all deterministic policy (loop limits, tool dispatch, retries, HITL gates, budget); LLM owns only genuine reasoning (goal decomposition, tool selection, answer synthesis) — never put routing conditionals or safety policies in the prompt.</div>
+  </div>
+</div>

@@ -1,0 +1,134 @@
+<div class="answer-header reveal">
+  <div class="answer-meta">
+    <span class="meta-badge meta-category">04-fine-tuning-training</span>
+    <span class="meta-badge meta-num">Q007</span>
+    <span class="meta-badge meta-status-review">review</span>
+  </div>
+  <h1 class="answer-title">Scalable efficient LLM training system — compute and data constraints</h1>
+</div>
+
+<div class="answer-section reveal">
+  <div class="accordion">
+    <div class="accordion-header">
+      <span class="accordion-title">⟁ Framing — Why this is asked</span>
+      <span class="accordion-chevron">▾</span>
+    </div>
+    <div class="accordion-body">
+      <div class="framing-grid">
+        <div><div class="framing-card">
+          <div class="framing-card-title">Why asked</div>
+          <p style="font-size:13.5px;line-height:1.7;color:var(--text-dim)">The interviewer is probing senior-level systems thinking: can you architect the full training stack from data pipeline to GPU cluster orchestration under real-world constraints? This is a design question, not a theory question — strong candidates name specific techniques (tensor parallelism, gradient checkpointing, BF16 mixed precision), quantify their impact, and explain what breaks at scale.</p>
+        </div></div>
+        <div><div class="framing-card">
+          <div class="framing-card-title">Trigger phrases</div>
+          <div class="trigger-list">
+              <div class="trigger-phrase">Design a scalable LLM training system.</div>
+              <div class="trigger-phrase">How would you train a large model under compute and data constraints?</div>
+              <div class="trigger-phrase">Walk me through how you&#x27;d set up distributed training for a fine-tuning run.</div>
+          </div>
+        </div></div>
+      </div>
+      <div class="tests-block">
+        <span style="font-family:var(--mono);font-size:10px;letter-spacing:0.1em;text-transform:uppercase;color:var(--purple);margin-right:8px">Tests:</span>Ability to reason across the full training stack — parallelism strategies, memory optimization, data pipeline throughput, and fault tolerance — under realistic budget and hardware constraints.
+
+---
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="section-label">Concept</div>
+  <div class="concept-block"><p>Scalable LLM training requires co-designing three systems: a <strong>parallelism strategy</strong> that splits model + data across GPUs, a <strong>memory optimization stack</strong> that reduces per-GPU footprint, and a <strong>data pipeline</strong> that keeps GPUs fed without becoming the bottleneck. The core tension is GPU utilization vs memory pressure vs communication overhead — every technique involves a tradeoff between these three.</p></div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="section-label">Mechanism</div>
+  <div class="card"><p><strong>1. Parallelism strategies (choose by model size and cluster topology)</strong></p>
+<div class="table-wrap"><table class="data-table"><tr><th>Strategy</th><th>What it splits</th><th>When to use</th><th>Overhead</th></tr><tr><td><strong>Data parallelism (DDP)</strong></td><td>Batch across GPUs; each GPU holds full model</td><td>Model fits in 1 GPU's VRAM</td><td>AllReduce gradient sync (NVLink: low, cross-node: high)</td></tr><tr><td><strong>Tensor parallelism (TP)</strong></td><td>Individual weight matrices split column/row across GPUs</td><td>Large weight matrices; same node (NVLink)</td><td>All-reduce per layer forward/backward</td></tr><tr><td><strong>Pipeline parallelism (PP)</strong></td><td>Layers split across GPUs/nodes</td><td>Model too large for tensor parallelism alone; multi-node</td><td>Bubble time (idle GPU cycles between micro-batches)</td></tr><tr><td><strong>ZeRO (DeepSpeed)</strong></td><td>Optimizer state / gradients / parameters sharded across GPUs</td><td>Single-machine or small cluster; maximizes utilization</td><td>Gather/scatter communication on backward pass</td></tr></table></div>
+<p>Production default for SFT fine-tuning at 7B–70B scale: <strong>DDP + ZeRO Stage 2</strong> (optimizer state + gradient sharding) via DeepSpeed or FSDP (PyTorch native). For pre-training at 100B+: <strong>3D parallelism</strong> (TP + PP + DP), as used in Megatron-LM (GPT-3, Llama).</p>
+<p><strong>2. Memory optimization stack</strong></p>
+<ul class="styled-list"><li><strong>Mixed precision (BF16):</strong> Store weights in BF16 (half the memory of FP32), keep a FP32 master copy for optimizer updates. BF16 preferred over FP16 for training stability (larger dynamic range). On H100s, FP8 is available via Transformer Engine.</li><li><strong>Gradient checkpointing:</strong> Recompute activations on the backward pass instead of storing them. Saves ~60–70% activation memory at the cost of ~33% extra compute (one additional forward pass). Essential for long-sequence or large-batch runs.</li><li><strong>ZeRO-Offload:</strong> Offload optimizer state to CPU RAM (Stage 3 + offload). Enables 30B+ training on a single 8×A100 node at the cost of CPU↔GPU PCIe bandwidth becoming a bottleneck.</li><li><strong>Flash Attention 2:</strong> Tiling reduces attention activation memory from O(n²) to O(n), enabling long-context training without OOM.</li></ul>
+<p><strong>3. Data pipeline (don't let the GPU starve)</strong></p>
+<ul class="styled-list"><li>Pre-tokenize and shard the dataset offline into <code>n_shards</code> HuggingFace Arrow datasets or WebDataset <code>.tar</code> shards. Streaming from object storage (S3/GCS) during training avoids local disk limits.</li><li>Multi-worker <code>DataLoader</code> with <code>prefetch_factor=4</code> to overlap CPU tokenization with GPU forward pass.</li><li><strong>Data quality at scale:</strong> Deduplication (MinHash LSH, MassiveText approach), quality classifiers (fastText trained on curated vs. web text), and domain weighting (upweight code, math, scientific papers). Chinchilla scaling laws (20 tokens/param optimal) dictate the data budget: a 7B model needs ~140B high-quality tokens.</li><li><strong>Curriculum learning:</strong> Start with easier / shorter sequences, introduce harder data later. Reduces instability in early training and improves final loss at the same compute budget.</li></ul>
+<p><strong>4. Fault tolerance</strong></p>
+<ul class="styled-list"><li>Checkpoint every N steps (N = 100–500 depending on cluster reliability). Use async checkpointing (Torch Distributed Checkpoint) to avoid blocking the training process.</li><li>Detect GPU failures via heartbeat and auto-restart from latest checkpoint (SLURM <code>--requeue</code> or Kubernetes with <code>restartPolicy: OnFailure</code>).</li><li>Track training metrics (grad norm, loss, learning rate) in real time (W&B or TensorBoard) with alerts on loss spikes or NaN gradients.</li></ul></div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="section-label">Example / Tradeoff</div>
+  <div class="card card-accent"><div class="rich-text"><p><strong>Llama 3 70B SFT on 32× H100s:</strong></p>
+<ul class="styled-list"><li>Parallelism: DDP + ZeRO Stage 2 (DeepSpeed) per node; 4-node cluster; NVLink within node.</li><li>Precision: BF16 forward/backward, FP32 optimizer (AdamW), gradient clipping at 1.0.</li><li>Gradient checkpointing: enabled; ~33% compute overhead recovered by 2× batch size increase.</li><li>Batch: global batch size 512 (8 GPUs/node × 4 nodes × per-GPU batch 16).</li><li>Data: 1B token SFT dataset streamed from S3; 16 DataLoader workers per node.</li><li>Result: ~2.1 tokens/second/GPU; full run ≈ 48 hours.</li></ul>
+<p><strong>Key tradeoff — ZeRO Stage 2 vs 3:</strong></p>
+<ul class="styled-list"><li>Stage 2 (optimizer + gradient sharding): low communication overhead, model weights still replicated. Good for models that fit per-GPU in BF16.</li><li>Stage 3 (parameter sharding too): enables training models that don't fit per GPU, but adds gather/scatter on every layer during the forward pass — can drop GPU utilization from 55 to 38% MFU if communication bandwidth is the bottleneck.</li></ul></div></div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="accordion">
+    <div class="accordion-header">
+      <span class="accordion-title">🎙 Verbal Script (3–5 min)</span>
+      <span class="accordion-chevron">▾</span>
+    </div>
+    <div class="accordion-body">
+      <div class="script-block"><div class="script-label">Opening (30s)</div><p>"I'd approach this as three co-designed subsystems: the parallelism strategy that maps model and data to GPUs, the memory optimization stack that determines what fits, and the data pipeline that keeps GPUs fed. The core constraint is always the same — you're trying to maximize GPU utilization while staying within VRAM budget and communication bandwidth limits."</p></div>
+      <div class="script-block"><div class="script-label">Core explanation (2–3 min)</div><p>"Starting with parallelism: for a 7B–70B fine-tuning run, I'd default to DDP with ZeRO Stage 2 via DeepSpeed or FSDP. That shards optimizer state and gradients across GPUs — typically 4–8× memory reduction vs vanilla DDP — without the communication overhead of full parameter sharding. For pre-training at 100B+ you need 3D parallelism: tensor parallelism within a node over NVLink, pipeline parallelism across nodes, data parallelism across pipeline replicas. That's what Megatron-LM uses.</p>
+<p>On memory: I always enable BF16 mixed precision — it halves weight memory vs FP32 and is more numerically stable than FP16. Gradient checkpointing is almost always worth it — costs about 33% extra compute but saves 60–70% of activation memory, which lets you double your batch size or train on longer sequences. For long-context work, FlashAttention 2 is mandatory — it keeps attention memory linear instead of quadratic.</p>
+<p>Data pipeline is often the silent bottleneck. I pre-tokenize and shard the dataset offline into Arrow shards or WebDataset tars, stream from object storage, and use 16 DataLoader workers per node with prefetch. For data quality at this scale, you need deduplication with MinHash LSH and quality classifiers — raw web data is too noisy to train on directly. Chinchilla tells us we need roughly 20 tokens per parameter of high-quality data, so a 7B model needs ~140B tokens."</p></div>
+      <div class="script-block"><div class="script-label">Tradeoff / production angle (1 min)</div><p>"The main failure modes I watch for are: NaN gradients from FP16 overflow — BF16 largely solves this but I still clip gradients at 1.0; GPU starvation from a slow data pipeline — profiler shows it as GPU utilization dropping below 80%; and ZeRO Stage 3 communication overhead if inter-node bandwidth is the bottleneck — sometimes Stage 2 with more nodes is faster than Stage 3 with fewer. I checkpoint every 200 steps with async checkpointing so a node failure costs at most 10 minutes, not hours."</p></div>
+      <div class="script-block"><div class="script-label">Wrap-up (30s)</div><p>"So the summary is: DDP + ZeRO Stage 2 as the default for SFT, 3D parallelism for pre-training at scale, BF16 + gradient checkpointing + FlashAttention for memory, and a pre-tokenized streaming data pipeline with quality filtering. Happy to go deeper on any layer — parallelism, data, or fault tolerance."</p></div>
+    </div>
+  </div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="section-label">Pitfalls</div>
+  <div class="pitfall-card">
+    <div class="pitfall-mistake"><strong>✗ Mistake</strong> Saying &quot;just use multi-GPU training&quot; without specifying the parallelism strategy (DDP vs tensor vs pipeline vs ZeRO) or explaining why one is chosen over another</div>
+    <div class="pitfall-better"><strong>✓ Better</strong> Name ZeRO Stage 2/FSDP as the production default for fine-tuning, explain that tensor parallelism requires NVLink bandwidth and is mainly for pre-training at 100B+ scale, and note that ZeRO Stage 3 can hurt utilization if cross-node bandwidth is a bottleneck.</div>
+  </div>
+  <div class="pitfall-card">
+    <div class="pitfall-mistake"><strong>✗ Mistake</strong> Ignoring the data pipeline (&quot;just feed the data in&quot;) without mentioning pre-tokenization, streaming from object storage, DataLoader workers, or data quality (deduplication, quality classifiers)</div>
+    <div class="pitfall-better"><strong>✓ Better</strong> Explain that at 140B token scale, the data pipeline must be pre-tokenized offline, streamed from S3/GCS shards, and quality-filtered; otherwise the CPU becomes the bottleneck and GPU utilization drops below 50%.</div>
+  </div>
+  <div class="pitfall-card">
+    <div class="pitfall-mistake"><strong>✗ Mistake</strong> Treating gradient checkpointing as &quot;free&quot;</div>
+    <div class="pitfall-better"><strong>✓ Better</strong> State the tradeoff explicitly: ~33% extra compute (one recomputed forward pass per layer) in exchange for 60–70% activation memory savings, and explain that this usually enables a 1.5–2× batch size increase that more than offsets the compute cost.
+
+---</div>
+  </div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="section-label">Related Questions</div>
+  <div class="related-pills">
+    <div class="related-pill" data-slug="04-006">
+      <span class="related-pill-icon">→</span>
+      <div class="related-pill-text">
+        <div class="related-pill-q">Q6: Design a model for math problems — data, SFT, post-training, eval</div>
+        <div class="related-pill-rel">Concrete end-to-end training design example using this infrastructure</div>
+      </div>
+    </div>
+    <div class="related-pill" data-slug="04-002">
+      <span class="related-pill-icon">→</span>
+      <div class="related-pill-text">
+        <div class="related-pill-q">Q2: What is PEFT/LoRA and when use it?</div>
+        <div class="related-pill-rel">LoRA dramatically reduces compute and memory requirements for fine-tuning — the complement to full training system design</div>
+      </div>
+    </div>
+    <div class="related-pill" data-slug="04-010">
+      <span class="related-pill-icon">→</span>
+      <div class="related-pill-text">
+        <div class="related-pill-q">Q10: Speculative decoding — speed up inference?</div>
+        <div class="related-pill-rel">Inference-side efficiency; same GPU/memory reasoning applied to serving instead of training</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="section-label">One-liner recall</div>
+  <div class="oneliner-box">
+    <div class="oneliner-label">▸ Reconstruct from memory</div>
+    <div class="oneliner-text" data-text="Scale LLM training with ZeRO Stage 2 / FSDP for parallelism, BF16 + gradient checkpointing + FlashAttention for memory, and a pre-tokenized streaming data pipeline with MinHash dedup and Chinchilla-calibrated data volume.">Scale LLM training with ZeRO Stage 2 / FSDP for parallelism, BF16 + gradient checkpointing + FlashAttention for memory, and a pre-tokenized streaming data pipeline with MinHash dedup and Chinchilla-calibrated data volume.</div>
+  </div>
+</div>

@@ -1,0 +1,142 @@
+<div class="answer-header reveal">
+  <div class="answer-meta">
+    <span class="meta-badge meta-category">01-llm-fundamentals</span>
+    <span class="meta-badge meta-num">Q048</span>
+    <span class="meta-badge meta-status-review">review</span>
+  </div>
+  <h1 class="answer-title">Imbalanced datasets — how handle?</h1>
+</div>
+
+<div class="answer-section reveal">
+  <div class="accordion">
+    <div class="accordion-header">
+      <span class="accordion-title">⟁ Framing — Why this is asked</span>
+      <span class="accordion-chevron">▾</span>
+    </div>
+    <div class="accordion-body">
+      <div class="framing-grid">
+        <div><div class="framing-card">
+          <div class="framing-card-title">Why asked</div>
+          <p style="font-size:13.5px;line-height:1.7;color:var(--text-dim)">Interviewers probe whether the candidate knows what breaks when class distributions are skewed (accuracy becomes meaningless), and whether they can select the right mitigation layer — data-level vs algorithm-level vs threshold-level — matching the business cost of each error type. In AI/LLM contexts, the question surfaces during content-moderation classifiers, fraud detection, anomaly detection in embedding spaces, and fine-tuning on scarce rare-class examples.</p>
+        </div></div>
+        <div><div class="framing-card">
+          <div class="framing-card-title">Trigger phrases</div>
+          <div class="trigger-list">
+              <div class="trigger-phrase">Our fraud dataset is 99% legitimate — how do you train on that?</div>
+              <div class="trigger-phrase">How would you handle class imbalance in a medical classifier?</div>
+              <div class="trigger-phrase">The minority class only has 200 examples — what do you do?</div>
+              <div class="trigger-phrase">Accuracy is 99% but the model never flags a positive — what&#x27;s wrong?</div>
+          </div>
+        </div></div>
+      </div>
+      <div class="tests-block">
+        <span style="font-family:var(--mono);font-size:10px;letter-spacing:0.1em;text-transform:uppercase;color:var(--purple);margin-right:8px">Tests:</span>Whether the candidate can diagnose why accuracy fails on imbalanced data and select from a toolkit of data-level (oversample/undersample/SMOTE), algorithm-level (class weights, focal loss), and threshold-level (precision-recall operating point) mitigations matched to business cost.
+
+---
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="section-label">Concept</div>
+  <div class="concept-block"><p>Imbalanced datasets occur when one class vastly outnumbers another (e.g., 99:1 fraud ratio). Standard accuracy becomes a misleading metric — a model predicting "not fraud" every time achieves 99% accuracy while being useless. The fix requires matching the mitigation to where the imbalance manifests: data distribution, loss function, or decision threshold.</p></div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="section-label">Mechanism</div>
+  <div class="card"><p>Three layers of mitigation, applied in order of cost:</p>
+<p><strong>1. Metric fix (always first)</strong></p>
+<ul class="styled-list"><li>Replace accuracy with <strong>precision, recall, F1, ROC-AUC, or PR-AUC</strong>.</li><li>For high-cost false negatives (fraud, cancer) → optimize recall; for high-cost false positives (spam) → optimize precision.</li><li><strong>PR-AUC</strong> is more informative than ROC-AUC when positive class is rare (ROC-AUC can be optimistically inflated by the large negative class).</li></ul>
+<p><strong>2. Algorithm-level (low cost, try first)</strong></p>
+<ul class="styled-list"><li><strong>Class weights</strong>: <code>class_weight='balanced'</code> in sklearn, or manually set <code>weight_pos = N_neg / N_pos</code> in PyTorch <code>BCEWithLogitsLoss(pos_weight=...)</code>. The loss for minority-class errors is scaled up, nudging the model without touching the data.</li><li><strong>Focal loss</strong> (Lin et al., RetinaNet 2017): <code>FL(p) = -(1-p)^γ · log(p)</code> — down-weights easy negatives dynamically, useful when the majority class is also easy to classify.</li></ul>
+<p><strong>3. Data-level (more expensive, try if above insufficient)</strong></p>
+<ul class="styled-list"><li><strong>Random oversampling</strong> (minority): replicate existing samples — fast but risks overfitting on duplicates.</li><li><strong>Random undersampling</strong> (majority): discard majority samples — fast but discards information.</li><li><strong>SMOTE</strong> (Synthetic Minority Oversampling Technique): interpolate between k-nearest minority neighbors in feature space, generating synthetic samples. Works well for tabular; harder to apply to text embeddings without careful validation.</li><li><strong>ADASYN</strong>: SMOTE variant that generates more synthetic samples in difficult-to-learn regions.</li></ul>
+<p><strong>4. Threshold tuning (decision calibration)</strong></p>
+<ul class="styled-list"><li>Default classifier threshold is 0.5, but optimal threshold depends on business cost ratio.</li><li>Plot the <strong>precision-recall curve</strong>, pick the operating point that satisfies the business SLO (e.g., recall ≥ 0.95 for fraud).</li><li>Use <strong>Platt scaling</strong> or <strong>temperature scaling</strong> to calibrate raw logits into calibrated probabilities first, then tune threshold on a held-out validation set.</li></ul>
+<p><strong>In LLM fine-tuning contexts</strong></p>
+<ul class="styled-list"><li>For rare-class instruction following (e.g., only 50 examples of a specific refusal pattern), use <strong>LoRA with higher rank</strong> on those layers + <strong>data augmentation</strong> (paraphrase with GPT-4, back-translation).</li><li><strong>Few-shot prompting</strong> or <strong>retrieval-augmented classification</strong> can outperform fine-tuning entirely when minority class examples number fewer than ~100.</li></ul></div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="section-label">Example / Tradeoff</div>
+  <div class="card card-accent"><div class="rich-text"><p><strong>Fraud detection at Stripe/PayPal scale</strong>: ~0.1% positive rate. Workflow:</p>
+<ol class="mechanism-steps"><li>Replace accuracy with PR-AUC as primary metric.</li><li>Set <code>pos_weight=999</code> in PyTorch BCEWithLogitsLoss (ratio of negatives to positives).</li><li>If PR-AUC still unsatisfactory, apply SMOTE on transaction feature vectors to 10:1 ratio.</li><li>Tune threshold on validation set: find the recall=0.95 operating point on the PR curve.</li><li>Monitor in production: track precision/recall separately on a rolling 7-day window — imbalance ratio shifts with fraud patterns.</li></ol>
+<p><strong>Tradeoff</strong>: SMOTE can introduce artifacts in high-dimensional spaces; interpolating between two minority embeddings doesn't necessarily produce a realistic data point. For text classifiers (e.g., toxic content), paraphrase augmentation via an LLM is more semantically faithful than SMOTE on embedding vectors.</p></div></div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="accordion">
+    <div class="accordion-header">
+      <span class="accordion-title">🎙 Verbal Script (3–5 min)</span>
+      <span class="accordion-chevron">▾</span>
+    </div>
+    <div class="accordion-body">
+      <div class="script-block"><div class="script-label">Opening (30s)</div><p>"Great question — this comes up constantly in production AI. The root issue is that standard accuracy becomes meaningless when one class dominates: a model predicting 'not fraud' 100% of the time achieves 99.9% accuracy on a 0.1% fraud dataset. So I think about this in three layers: fix the metric first, then try algorithm-level adjustments, then data-level resampling."</p></div>
+      <div class="script-block"><div class="script-label">Core explanation (2–3 min)</div><p>"The first thing I always do is swap accuracy for precision, recall, and PR-AUC — not ROC-AUC, because ROC-AUC can look great even when you have no real signal on the minority class. PR-AUC is much more sensitive to minority-class performance.</p>
+<p>Next layer is algorithm-level. If I'm using PyTorch, I'll set <code>pos_weight</code> in <code>BCEWithLogitsLoss</code> to the ratio of negatives to positives — that's essentially free and often gets you 70% of the way there. In sklearn classifiers, <code>class_weight='balanced'</code> does the same thing. If the minority class is not just rare but also intrinsically hard (lots of overlap with the majority), focal loss can help by down-weighting easy negative examples dynamically.</p>
+<p>If algorithm-level isn't enough, I'll go to data-level. Random oversampling is fastest but risks overfitting. SMOTE synthesizes new minority-class points by interpolating between k-nearest neighbors in feature space — it's the standard for tabular data. For text, I'd rather use LLM-based paraphrase augmentation than SMOTE on embeddings, because interpolating embeddings doesn't always yield a coherent sentence.</p>
+<p>Finally, threshold tuning. The default 0.5 cutoff is rarely optimal. I'll calibrate probabilities first — Platt scaling or temperature scaling — then sweep the threshold on a validation set to find the operating point that hits the business constraint, say recall ≥ 0.95 for fraud detection."</p></div>
+      <div class="script-block"><div class="script-label">Tradeoff / production angle (1 min)</div><p>"The key production gotcha is that imbalance ratios shift over time. A fraud model trained at 0.1% positive rate might face 0.5% during a fraud spike, which moves your optimal threshold. So I monitor precision and recall separately on a rolling window in production — not just overall accuracy — and retrigger threshold recalibration automatically when the ratio drifts more than 2× from baseline.</p>
+<p>In LLM fine-tuning, if I have fewer than ~100 examples of a rare behavior, fine-tuning is often not the right tool — I'd use few-shot prompting or RAG-based classification instead."</p></div>
+      <div class="script-block"><div class="script-label">Wrap-up (30s)</div><p>"So the playbook is: metric → algorithm-level (class weights, focal loss) → data-level (SMOTE, augmentation) → threshold tuning. And in production, treat imbalance ratio as a live metric, not a fixed property of your training set. Happy to dig into any of those layers."</p></div>
+    </div>
+  </div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="section-label">Pitfalls</div>
+  <div class="pitfall-card">
+    <div class="pitfall-mistake"><strong>✗ Mistake</strong> Saying &quot;I&#x27;d use SMOTE&quot; as the first and only answer</div>
+    <div class="pitfall-better"><strong>✓ Better</strong> Start with metric fix (PR-AUC over accuracy) and class weights, since those are free; only reach for SMOTE when algorithm-level adjustments are insufficient, and caveat that SMOTE on embeddings can produce incoherent points for text tasks.</div>
+  </div>
+  <div class="pitfall-card">
+    <div class="pitfall-mistake"><strong>✗ Mistake</strong> Reporting accuracy as the primary metric on an imbalanced test set</div>
+    <div class="pitfall-better"><strong>✓ Better</strong> Report precision, recall, F1, and PR-AUC; explain why PR-AUC is preferred over ROC-AUC when the positive class is rare (the ROC curve&#x27;s true-negative-rate axis is dominated by the majority class).</div>
+  </div>
+  <div class="pitfall-card">
+    <div class="pitfall-mistake"><strong>✗ Mistake</strong> Setting a fixed 0.5 threshold after training without tuning</div>
+    <div class="pitfall-better"><strong>✓ Better</strong> Plot the precision-recall curve and choose the threshold that satisfies the business cost constraint (e.g., recall ≥ 0.95 for fraud), and recalibrate probabilities first so the threshold is meaningful.</div>
+  </div>
+  <div class="pitfall-card">
+    <div class="pitfall-mistake"><strong>✗ Mistake</strong> Applying SMOTE to raw text embeddings without validation</div>
+    <div class="pitfall-better"><strong>✓ Better</strong> For NLP tasks, use LLM-based paraphrase augmentation or back-translation to generate minority-class examples that are semantically coherent; evaluate augmented data quality with human review before training.
+
+---</div>
+  </div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="section-label">Related Questions</div>
+  <div class="related-pills">
+    <div class="related-pill" data-slug="01-046">
+      <span class="related-pill-icon">→</span>
+      <div class="related-pill-text">
+        <div class="related-pill-q">Q46: Bias-variance tradeoff</div>
+        <div class="related-pill-rel">Foundational ML concept: imbalance causes high bias toward majority class</div>
+      </div>
+    </div>
+    <div class="related-pill" data-slug="01-047">
+      <span class="related-pill-icon">→</span>
+      <div class="related-pill-text">
+        <div class="related-pill-q">Q47: Overfitting — how prevent it?</div>
+        <div class="related-pill-rel">Oversampling and SMOTE can introduce overfitting on duplicated minority examples</div>
+      </div>
+    </div>
+    <div class="related-pill" data-slug="05-011">
+      <span class="related-pill-icon">→</span>
+      <div class="related-pill-text">
+        <div class="related-pill-q">Q5: Evaluate and monitor model in production</div>
+        <div class="related-pill-rel">Production monitoring: tracking precision/recall drift when imbalance ratio shifts</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="section-label">One-liner recall</div>
+  <div class="oneliner-box">
+    <div class="oneliner-label">▸ Reconstruct from memory</div>
+    <div class="oneliner-text" data-text="Handle imbalanced datasets in order: fix metrics first (PR-AUC over accuracy), then class weights / focal loss, then SMOTE or augmentation, then threshold tuning on a held-out validation set — and monitor precision/recall separately in production because imbalance ratios drift.">Handle imbalanced datasets in order: fix metrics first (PR-AUC over accuracy), then class weights / focal loss, then SMOTE or augmentation, then threshold tuning on a held-out validation set — and monitor precision/recall separately in production because imbalance ratios drift.</div>
+  </div>
+</div>

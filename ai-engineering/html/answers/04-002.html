@@ -1,0 +1,146 @@
+<div class="answer-header reveal">
+  <div class="answer-meta">
+    <span class="meta-badge meta-category">04-fine-tuning-training</span>
+    <span class="meta-badge meta-num">Q002</span>
+    <span class="meta-badge meta-status-review">review</span>
+  </div>
+  <h1 class="answer-title">What is PEFT/LoRA and when use it?</h1>
+</div>
+
+<div class="answer-section reveal">
+  <div class="accordion">
+    <div class="accordion-header">
+      <span class="accordion-title">⟁ Framing — Why this is asked</span>
+      <span class="accordion-chevron">▾</span>
+    </div>
+    <div class="accordion-body">
+      <div class="framing-grid">
+        <div><div class="framing-card">
+          <div class="framing-card-title">Why asked</div>
+          <p style="font-size:13.5px;line-height:1.7;color:var(--text-dim)">This question probes whether a candidate understands the practical mechanics of modern fine-tuning — not just &quot;you can fine-tune,&quot; but <em>how</em> it&#x27;s done efficiently at production scale. Full fine-tuning of a 7B+ parameter model requires tens of thousands of dollars of compute; PEFT/LoRA is the technique that makes fine-tuning feasible on a single A100 or even consumer GPUs. Interviewers want to hear you explain the key innovation (low-rank weight updates), the implementation parameters (rank, alpha, target modules), and the concrete tradeoff (slight quality ceiling vs massive compute/memory savings).</p>
+        </div></div>
+        <div><div class="framing-card">
+          <div class="framing-card-title">Trigger phrases</div>
+          <div class="trigger-list">
+              <div class="trigger-phrase">How would you actually fine-tune a large model in practice?</div>
+              <div class="trigger-phrase">What is LoRA and how does it work?</div>
+              <div class="trigger-phrase">Walk me through PEFT — what adapters are you familiar with?</div>
+              <div class="trigger-phrase">How do you fine-tune on a budget or with limited GPU memory?</div>
+          </div>
+        </div></div>
+      </div>
+      <div class="tests-block">
+        <span style="font-family:var(--mono);font-size:10px;letter-spacing:0.1em;text-transform:uppercase;color:var(--purple);margin-right:8px">Tests:</span>Understanding of parameter-efficient fine-tuning mechanics, ability to select LoRA hyperparameters for a real task, and awareness of when PEFT is preferable to full fine-tuning.
+
+---
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="section-label">Concept</div>
+  <div class="concept-block"><p><strong>PEFT (Parameter-Efficient Fine-Tuning)</strong> is a family of techniques that adapt a pre-trained LLM to a new task by training only a small subset of new parameters — typically 0.1%–2% of total model parameters — while keeping the original weights frozen. The most widely used PEFT method is <strong>LoRA (Low-Rank Adaptation)</strong>, which injects trainable low-rank matrix pairs into the model's linear layers, allowing the adapter to learn a task-specific weight delta without modifying the base model.</p></div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="section-label">Mechanism</div>
+  <div class="card"><p><strong>How LoRA works:</strong></p>
+<p>For each target linear layer (typically <code>q_proj</code> and <code>v_proj</code> in the attention block), LoRA adds two small matrices <strong>A</strong> (d × r) and <strong>B</strong> (r × d) initialized so that <code>B·A = 0</code> at training start. During the forward pass, the effective weight is:</p>
+<div class="code-block-wrap"><pre class="code-block"><code>W_effective = W_frozen + (α/r) · B·A</code></pre><button class="copy-btn">copy</button></div>
+<ul class="styled-list"><li><strong>W_frozen</strong>: original pre-trained weight, never updated, gradient-free</li><li><strong>B·A</strong>: low-rank delta trained via gradient descent</li><li><strong>r (rank)</strong>: bottleneck dimension, typically 4–64; higher r = more capacity but more parameters</li><li><strong>α (scaling)</strong>: typically set to <code>2×r</code>; controls how much the LoRA delta contributes relative to the frozen weight</li></ul>
+<p><strong>Why this is efficient:</strong></p>
+<ul class="styled-list"><li>A frozen 7B model in BF16 requires ~14 GB VRAM. Full fine-tuning adds optimizer states (Adam: 3× model size = another ~42 GB). LoRA adapters for rank=16 add ~20M trainable parameters (~160 MB), keeping total VRAM under 24 GB for a 7B model — feasible on a single A100 40GB.</li><li>Because W_frozen is never updated, the base model's general capabilities are preserved, dramatically reducing catastrophic forgetting risk.</li></ul>
+<p><strong>PEFT adapter taxonomy:</strong></p>
+<div class="table-wrap"><table class="data-table"><tr><th>Method</th><th>Mechanism</th><th>Memory overhead</th><th>Best for</th></tr><tr><td><strong>LoRA</strong></td><td>Low-rank A×B weight delta injected into linear layers</td><td>Very low (~0.1–2% of params)</td><td>Most fine-tuning tasks</td></tr><tr><td><strong>QLoRA</strong></td><td>LoRA on a 4-bit NF4 quantized base model</td><td>Minimal (4-bit base + adapters)</td><td>Consumer GPU fine-tuning (RTX 3090/4090)</td></tr><tr><td><strong>Prefix Tuning</strong></td><td>Prepend trainable token embeddings to key/value</td><td>Low</td><td>Instruction following, generation style</td></tr><tr><td><strong>Prompt Tuning</strong></td><td>Trainable soft-prompt prefix in embedding space</td><td>Minimal</td><td>Few-shot style tasks</td></tr><tr><td><strong>IA³</strong></td><td>Rescale hidden states with learned vectors</td><td>Minimal</td><td>Ultra-low-resource fine-tuning</td></tr><tr><td><strong>Adapters (Houlsby)</strong></td><td>Bottleneck FFN modules inserted after each layer</td><td>Moderate</td><td>Multi-task adapter stacking</td></tr></table></div>
+<p><strong>When to use LoRA (vs alternatives):</strong></p>
+<div class="code-block-wrap"><pre class="code-block"><code>Task requires behavior change (style, format, instruction-following)?
+  ├── Memory budget &gt; 40GB per node and labeled data &gt; 100K?
+  │     → Consider full fine-tuning (max quality ceiling)
+  ├── GPU memory 16–40GB and data 1K–100K?
+  │     → LoRA (rank 8–64, target q_proj + v_proj)
+  └── GPU memory &lt; 16GB or must fine-tune on consumer hardware?
+        → QLoRA (4-bit NF4 quantized base + LoRA adapters)</code></pre><button class="copy-btn">copy</button></div>
+<p><strong>Practical LoRA hyperparameters:</strong></p>
+<div class="table-wrap"><table class="data-table"><tr><th>Parameter</th><th>Typical range</th><th>Rule of thumb</th></tr><tr><td><code>r</code> (rank)</td><td>4–64</td><td>Start at 16; increase if loss plateaus, decrease if overfitting</td></tr><tr><td><code>α</code> (scaling)</td><td>8–128</td><td>Set to <code>2×r</code> as default; increase for more aggressive adaptation</td></tr><tr><td><code>lora_dropout</code></td><td>0.0–0.1</td><td>0.05 is safe default; 0 for very small datasets</td></tr><tr><td>Target modules</td><td><code>q_proj</code>, <code>v_proj</code></td><td>Add <code>k_proj</code>, <code>o_proj</code>, FFN layers for harder tasks</td></tr><tr><td>Learning rate</td><td>1e-4 – 2e-4</td><td>Lower than full fine-tune; use cosine decay</td></tr></table></div>| Epochs | 1–5 | Monitor val loss; early stop if overfitting |</div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="section-label">Example / Tradeoff</div>
+  <div class="card card-accent"><div class="rich-text"><p><strong>Concrete example — Llama 3 8B code review assistant (HuggingFace PEFT + TRL):</strong></p>
+<p>```python from peft import LoraConfig, get_peft_model from trl import SFTTrainer</p>
+<p>lora_config = LoraConfig(     r=32,     lora_alpha=64,     target_modules=["q_proj", "v_proj", "k_proj", "o_proj"],     lora_dropout=0.05,     bias="none",     task_type="CAUSAL_LM", )</p>
+<p>model = get_peft_model(base_model, lora_config)</p></div></div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="accordion">
+    <div class="accordion-header">
+      <span class="accordion-title">🎙 Verbal Script (3–5 min)</span>
+      <span class="accordion-chevron">▾</span>
+    </div>
+    <div class="accordion-body">
+      <div class="script-block"><div class="script-label">Opening (30s)</div><p>"PEFT and LoRA are the reason fine-tuning is practical in 2026. The core insight is that you don't need to update all of a model's billions of parameters to change its behavior — you just need a low-rank approximation of the weight change. I'll explain how it works mechanically, then walk through when I'd actually reach for it."</p></div>
+      <div class="script-block"><div class="script-label">Core explanation (2–3 min)</div><p>"LoRA works by injecting two small matrices — A and B — into each target linear layer of the model. A is d×r and B is r×d, where r is the rank, typically 8 to 32. The base model weights stay completely frozen; only A and B are trained. The effective weight during the forward pass is the original weight plus the scaled product B×A, weighted by α/r.</p>
+<p>The reason this is so efficient: for a 7B model in BF16, full fine-tuning would require storing optimizer states for 7 billion parameters — something like 40+ GB of VRAM on top of the model itself. LoRA with rank 16 adds maybe 20 million trainable parameters — under 200 MB — so you can fine-tune a 7B model on a single A100 40GB.</p>
+<p>In practice, I'd target q_proj and v_proj at minimum — those are the query and value projection matrices in the attention blocks, where behavioral changes matter most. For harder tasks, I'd also add k_proj, o_proj, and the FFN layers.</p>
+<p>For hyperparameters: r=16 is a solid starting point; I'd set α=32 (2×r), lora_dropout=0.05, learning rate 1e-4 to 2e-4 with cosine decay. I'd train for 1–3 epochs and watch the validation loss curve for overfitting.</p>
+<p>If I'm memory-constrained further — say a consumer GPU with 24 GB — I'd use QLoRA, which quantizes the base model to 4-bit NF4 format and applies LoRA adapters on top. This gets a 7B model fine-tune under 16 GB with minimal quality loss."</p></div>
+      <div class="script-block"><div class="script-label">Tradeoff / production angle (1 min)</div><p>"The main limitation of LoRA is the quality ceiling from the rank constraint. If a task requires very large behavioral changes — like adapting a general model to a highly specialized legal or medical subdomain — you might need higher rank or even full fine-tuning. The other risk is adapter versioning: if you're serving multiple task-specific adapters on the same base model, you need infrastructure to hot-swap them at inference time. Tools like vLLM support dynamic LoRA adapter loading, which helps. And always run a regression eval on a general benchmark like MMLU after fine-tuning — LoRA is safer than full fine-tuning, but you can still see quality drops if you overtrain."</p></div>
+      <div class="script-block"><div class="script-label">Wrap-up (30s)</div><p>"So LoRA is the default approach for fine-tuning in 2026: it reduces trainable parameters to under 1% of total model size, preserves base weights, and dramatically reduces compute cost — making it feasible on a single A100. I'd use QLoRA when memory is the binding constraint. Happy to go deeper on QLoRA quantization mechanics or the DPO training loop on top of LoRA adapters."</p></div>
+    </div>
+  </div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="section-label">Pitfalls</div>
+  <div class="pitfall-card">
+    <div class="pitfall-mistake"><strong>✗ Mistake</strong> Describing LoRA as &quot;just adding layers&quot; without explaining the frozen base weights and the low-rank math</div>
+    <div class="pitfall-better"><strong>✓ Better</strong> Explain that LoRA keeps W_frozen unchanged and trains only B×A (d×r×r×d matrices), which is why gradient memory is negligible and catastrophic forgetting is reduced; the constraint is rank r, not architectural depth</div>
+  </div>
+  <div class="pitfall-card">
+    <div class="pitfall-mistake"><strong>✗ Mistake</strong> Saying &quot;LoRA trains 1% of the model&quot; without knowing which layers or what rank means in practice</div>
+    <div class="pitfall-better"><strong>✓ Better</strong> Be specific: &quot;For a 7B model with rank=16 targeting q_proj and v_proj, trainable params are roughly 20–30M out of 7B — about 0.3–0.4%; I&#x27;d increase rank to 32–64 if the task needs more capacity&quot;</div>
+  </div>
+  <div class="pitfall-card">
+    <div class="pitfall-mistake"><strong>✗ Mistake</strong> Not distinguishing LoRA from QLoRA</div>
+    <div class="pitfall-better"><strong>✓ Better</strong> Clarify that QLoRA = 4-bit NF4 quantized base model + LoRA adapters, enabling fine-tuning on consumer GPUs (RTX 3090/4090, ~24 GB VRAM); the quantization is on the frozen base weights only, not the trained adapters
+
+---</div>
+  </div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="section-label">Related Questions</div>
+  <div class="related-pills">
+    <div class="related-pill" data-slug="04-001">
+      <span class="related-pill-icon">→</span>
+      <div class="related-pill-text">
+        <div class="related-pill-q">Q1: When fine-tune vs prompt engineering?</div>
+        <div class="related-pill-rel">Prerequisite: the decision to fine-tune is what triggers LoRA selection</div>
+      </div>
+    </div>
+    <div class="related-pill" data-slug="04-003">
+      <span class="related-pill-icon">→</span>
+      <div class="related-pill-text">
+        <div class="related-pill-q">Q3: QLoRA vs LoRA — when choose one?</div>
+        <div class="related-pill-rel">Follow-up: QLoRA is LoRA + 4-bit quantized base for memory-constrained training</div>
+      </div>
+    </div>
+    <div class="related-pill" data-slug="04-008">
+      <span class="related-pill-icon">→</span>
+      <div class="related-pill-text">
+        <div class="related-pill-q">Q8: RLHF pipeline: SFT, reward model, PPO. How does DPO simplify?</div>
+        <div class="related-pill-rel">Same category: DPO fine-tuning commonly applied on top of a LoRA SFT checkpoint</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="section-label">One-liner recall</div>
+  <div class="oneliner-box">
+    <div class="oneliner-label">▸ Reconstruct from memory</div>
+    <div class="oneliner-text" data-text="LoRA freezes the base model and trains only two small low-rank matrices (B×A, rank 4–64) injected into attention layers, reducing trainable parameters to ~0.1–2% of total model size — enabling fine-tuning on a single A100 40GB with minimal catastrophic forgetting risk.">LoRA freezes the base model and trains only two small low-rank matrices (B×A, rank 4–64) injected into attention layers, reducing trainable parameters to ~0.1–2% of total model size — enabling fine-tuning on a single A100 40GB with minimal catastrophic forgetting risk.</div>
+  </div>
+</div>

@@ -1,0 +1,133 @@
+<div class="answer-header reveal">
+  <div class="answer-meta">
+    <span class="meta-badge meta-category">05-evaluation-metrics</span>
+    <span class="meta-badge meta-num">Q012</span>
+    <span class="meta-badge meta-status-review">review</span>
+  </div>
+  <h1 class="answer-title">Operational/business metrics: win rate, deflection rate, p95 latency?</h1>
+</div>
+
+<div class="answer-section reveal">
+  <div class="accordion">
+    <div class="accordion-header">
+      <span class="accordion-title">⟁ Framing — Why this is asked</span>
+      <span class="accordion-chevron">▾</span>
+    </div>
+    <div class="accordion-body">
+      <div class="framing-grid">
+        <div><div class="framing-card">
+          <div class="framing-card-title">Why asked</div>
+          <p style="font-size:13.5px;line-height:1.7;color:var(--text-dim)">Interviewers want to know if you can bridge the gap between ML metrics (RAGAS faithfulness, BLEU) and business outcomes (cost savings, user satisfaction, SLA compliance). Strong candidates own the full measurement stack — offline eval <em>and</em> production KPIs that executives and PMs care about.</p>
+        </div></div>
+        <div><div class="framing-card">
+          <div class="framing-card-title">Trigger phrases</div>
+          <div class="trigger-list">
+              <div class="trigger-phrase">How do you know your AI feature is actually working in production?</div>
+              <div class="trigger-phrase">What metrics do you track for your chatbot beyond accuracy?</div>
+              <div class="trigger-phrase">How do you report AI system health to stakeholders?</div>
+              <div class="trigger-phrase">Walk me through the business metrics you used for your AI project.</div>
+          </div>
+        </div></div>
+      </div>
+      <div class="tests-block">
+        <span style="font-family:var(--mono);font-size:10px;letter-spacing:0.1em;text-transform:uppercase;color:var(--purple);margin-right:8px">Tests:</span>Ability to translate ML system performance into business-observable outcomes and production SLOs that drive go/no-go decisions.
+
+---
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="section-label">Concept</div>
+  <div class="concept-block"><p>Operational and business metrics measure the <em>impact</em> of an AI system on users and cost — they complement offline eval metrics (RAGAS, golden-dataset accuracy) by capturing what actually happens in production. The key triad is: <strong>quality</strong> (are answers good?), <strong>efficiency</strong> (are we fast and cheap?), and <strong>business value</strong> (does it move the needle?).</p></div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="section-label">Mechanism</div>
+  <div class="card"><p><strong>Quality metrics:</strong></p>
+<div class="table-wrap"><table class="data-table"><tr><th>Metric</th><th>Definition</th><th>Target</th></tr><tr><td><strong>Win rate</strong></td><td>% of responses rated better than baseline (A/B: new vs. control)</td><td>>50% vs prior version</td></tr><tr><td><strong>Deflection rate</strong></td><td>% of queries resolved by AI without human escalation</td><td>≥70–80% for support bots</td></tr><tr><td><strong>CSAT / thumbs-up rate</strong></td><td>User satisfaction signal from explicit feedback</td><td>≥4.2/5 or ≥80% positive</td></tr><tr><td><strong>Hallucination rate</strong></td><td>% responses flagged by NLI/RAGAS faithfulness gate</td><td><3% SLO</td></tr></table></div>
+<p><strong>Latency metrics:</strong></p>
+<div class="table-wrap"><table class="data-table"><tr><th>Metric</th><th>Definition</th><th>Target</th></tr><tr><td><strong>TTFT</strong></td><td>Time to first token (streaming UX)</td><td><800ms for chat</td></tr><tr><td><strong>p95 latency</strong></td><td>95th-percentile end-to-end response time</td><td><3s for support; <10s for complex queries</td></tr><tr><td><strong>p99 latency</strong></td><td>Tail latency — catches cold starts, long queues</td><td><15s</td></tr></table></div>
+<p><strong>Cost metrics:</strong></p>
+<div class="table-wrap"><table class="data-table"><tr><th>Metric</th><th>Definition</th><th>Target</th></tr><tr><td><strong>Cost per query</strong></td><td>(LLM tokens × price + infra) / query count</td><td><$0.005 for commodity support</td></tr><tr><td><strong>Cost per deflection</strong></td><td>Total AI cost / # queries deflected from human agents</td><td>vs. human agent cost (~$5–12/ticket)</td></tr></table></div>
+<p><strong>Measurement pipeline:</strong></p>
+<ol class="mechanism-steps"><li><strong>Logging layer</strong> — every LLM call logs: query_id, model, input_tokens, output_tokens, latency_ms, retrieval_score, user_id, session_id</li><li><strong>Eval sidecar</strong> — async Kafka consumer runs RAGAS faithfulness on 100% of responses; routes <0.80 to hallucination counter</li><li><strong>Feedback capture</strong> — thumbs up/down events joined to query_id for CSAT/deflection</li><li><strong>Dashboards</strong> — Grafana/DataDog aggregates p95 latency, cost/query, deflection rate with hourly granularity</li><li><strong>Alerting</strong> — PagerDuty alert if p95 > 5s or hallucination rate > 5% over a 5-min window</li></ol></div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="section-label">Example / Tradeoff</div>
+  <div class="card card-accent"><div class="rich-text"><p>A customer support chatbot at a B2B SaaS company tracks:</p>
+<ul class="styled-list"><li><strong>Deflection rate</strong> = 74% (target: ≥70%) — meaning 74% of tickets never reach a human agent</li><li><strong>Cost per deflection</strong> = $0.08 AI cost vs. $8 human agent cost → 100× ROI</li><li><strong>p95 latency</strong> = 2.1s (target: <3s) — crossed 3s threshold during GPT-4o outage → auto-fallback to GPT-4o-mini</li><li><strong>Win rate</strong> = 61% on A/B test vs. previous prompt version → shipped</li></ul>
+<p><strong>Tradeoff:</strong> Deflection rate and CSAT can conflict — aggressive deflection (never escalate) boosts deflection rate but tanks CSAT when AI answers poorly. Production systems set a confidence threshold: escalate when cosine retrieval score < 0.70 or RAGAS faithfulness < 0.80, accepting lower deflection rate in exchange for higher CSAT.</p></div></div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="accordion">
+    <div class="accordion-header">
+      <span class="accordion-title">🎙 Verbal Script (3–5 min)</span>
+      <span class="accordion-chevron">▾</span>
+    </div>
+    <div class="accordion-body">
+      <div class="script-block"><div class="script-label">Opening (30s)</div><p>"I think of production metrics in three buckets: quality, efficiency, and business value. Offline metrics like RAGAS faithfulness tell you about answer quality in a controlled setting, but you need production KPIs to know if the system is actually working — and to have a conversation with product and finance."</p></div>
+      <div class="script-block"><div class="script-label">Core explanation (2–3 min)</div><p>"On the quality side, the two metrics I always track are deflection rate and CSAT. Deflection rate is the percentage of queries the AI resolves without human escalation — for a support bot, we'd target 70–80%. CSAT or thumbs-up rate tells us if users are actually satisfied. Win rate is what I use when comparing versions: in an A/B test, if the new prompt wins more than 50% of head-to-head comparisons judged by the LLM or users, that's your shipping signal.</p>
+<p>On the efficiency side, I care about p95 latency and cost per query. p95 is more useful than p50 — tail latency is what users complain about, and it catches cold starts or queue buildups. For a chat interface, I target under 3 seconds end-to-end, and under 800ms time-to-first-token for streaming. Cost per query feeds into cost per deflection, which is the business ROI metric — for a support bot deflecting a $8 human ticket at $0.08 AI cost, that's a 100× ROI argument for the CFO.</p>
+<p>I tie all of this together in a logging pipeline: every LLM call emits structured logs — tokens in/out, latency, retrieval score, session ID. An async Kafka consumer runs RAGAS faithfulness scoring in the background. Grafana dashboards aggregate hourly, and PagerDuty fires if p95 crosses 5 seconds or hallucination rate exceeds 5%."</p></div>
+      <div class="script-block"><div class="script-label">Tradeoff / production angle (1 min)</div><p>"The key tension is between deflection rate and quality. If you never escalate, deflection rate looks great but CSAT tanks when the AI gives bad answers. So I set escalation triggers — if retrieval cosine score is below 0.70 or RAGAS faithfulness is below 0.80, I route to human. You sacrifice some deflection rate in exchange for trust. The other gotcha is hallucination rate as a <em>separate</em> SLO from deflection rate — you can deflect a lot of queries with confident but wrong answers. Those need to be tracked independently."</p></div>
+      <div class="script-block"><div class="script-label">Wrap-up (30s)</div><p>"So the full stack is: RAGAS/golden-dataset offline, then deflection rate + CSAT + win rate for quality in production, and p95 latency + cost per query for efficiency. Happy to go deeper on any of the measurement infrastructure or how to set the thresholds."</p></div>
+    </div>
+  </div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="section-label">Pitfalls</div>
+  <div class="pitfall-card">
+    <div class="pitfall-mistake"><strong>✗ Mistake</strong> Reporting only RAGAS/accuracy from the eval set and calling the system &quot;working&quot;</div>
+    <div class="pitfall-better"><strong>✓ Better</strong> Always pair offline eval with production business metrics (deflection rate, CSAT, p95 latency); offline metrics don&#x27;t capture distribution shift or user behavior in the wild.</div>
+  </div>
+  <div class="pitfall-card">
+    <div class="pitfall-mistake"><strong>✗ Mistake</strong> Treating deflection rate as the single success metric without tracking CSAT or hallucination rate separately</div>
+    <div class="pitfall-better"><strong>✓ Better</strong> High deflection + low CSAT = AI is confident but wrong; track all three as an SLO triplet and set escalation thresholds that balance them.</div>
+  </div>
+  <div class="pitfall-card">
+    <div class="pitfall-mistake"><strong>✗ Mistake</strong> Using average latency instead of p95</div>
+    <div class="pitfall-better"><strong>✓ Better</strong> p95 captures tail latency from cold starts, oversized contexts, or queue backup; users filing support tickets about &quot;slow responses&quot; are the p99 cases, not the median.
+
+---</div>
+  </div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="section-label">Related Questions</div>
+  <div class="related-pills">
+    <div class="related-pill" data-slug="05-002">
+      <span class="related-pill-icon">→</span>
+      <div class="related-pill-text">
+        <div class="related-pill-q">Q2: How evaluate a chatbot?</div>
+        <div class="related-pill-rel">Offline eval counterpart — together they form the full eval stack</div>
+      </div>
+    </div>
+    <div class="related-pill" data-slug="05-013">
+      <span class="related-pill-icon">→</span>
+      <div class="related-pill-text">
+        <div class="related-pill-q">Q13: Evaluate and monitor model in production, not just offline?</div>
+        <div class="related-pill-rel">Deep-dive on production monitoring infrastructure</div>
+      </div>
+    </div>
+    <div class="related-pill" data-slug="07-003">
+      <span class="related-pill-icon">→</span>
+      <div class="related-pill-text">
+        <div class="related-pill-q">Q3: How optimize cost at 1M queries/day?</div>
+        <div class="related-pill-rel">Cost per query metric connects to cost optimization levers</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="section-label">One-liner recall</div>
+  <div class="oneliner-box">
+    <div class="oneliner-label">▸ Reconstruct from memory</div>
+    <div class="oneliner-text" data-text="Track the operational KPI triplet — deflection rate (AI resolves without human), p95 latency (tail SLA), and cost per deflection (ROI vs. human agent) — alongside CSAT and hallucination rate as separate SLOs, because high deflection with poor answers breaks user trust.">Track the operational KPI triplet — deflection rate (AI resolves without human), p95 latency (tail SLA), and cost per deflection (ROI vs. human agent) — alongside CSAT and hallucination rate as separate SLOs, because high deflection with poor answers breaks user trust.</div>
+  </div>
+</div>

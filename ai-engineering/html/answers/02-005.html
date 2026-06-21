@@ -1,0 +1,147 @@
+<div class="answer-header reveal">
+  <div class="answer-meta">
+    <span class="meta-badge meta-category">02-rag-systems</span>
+    <span class="meta-badge meta-num">Q005</span>
+    <span class="meta-badge meta-status-review">review</span>
+  </div>
+  <h1 class="answer-title">Design a generative QA assistant for your company&#x27;s knowledge base</h1>
+</div>
+
+<div class="answer-section reveal">
+  <div class="accordion">
+    <div class="accordion-header">
+      <span class="accordion-title">⟁ Framing — Why this is asked</span>
+      <span class="accordion-chevron">▾</span>
+    </div>
+    <div class="accordion-body">
+      <div class="framing-grid">
+        <div><div class="framing-card">
+          <div class="framing-card-title">Why asked</div>
+          <p style="font-size:13.5px;line-height:1.7;color:var(--text-dim)">The interviewer wants to see whether you can translate a common product requirement (&quot;make our docs searchable with AI&quot;) into a complete, production-grade architecture. It probes: do you think end-to-end (ingestion through evaluation), do you understand the failure modes specific to <em>internal</em> knowledge (stale docs, ACLs, messy formatting), and can you make concrete engineering tradeoffs rather than describing a toy demo?</p>
+        </div></div>
+        <div><div class="framing-card">
+          <div class="framing-card-title">Trigger phrases</div>
+          <div class="trigger-list">
+              <div class="trigger-phrase">Design a QA assistant over our internal knowledge base / Notion / Confluence</div>
+              <div class="trigger-phrase">We want employees to be able to ask questions and get answers from our docs</div>
+              <div class="trigger-phrase">Build a generative search experience on top of our internal documentation</div>
+              <div class="trigger-phrase">How would you make our runbooks / wikis / knowledge base queryable by an LLM?</div>
+          </div>
+        </div></div>
+      </div>
+      <div class="tests-block">
+        <span style="font-family:var(--mono);font-size:10px;letter-spacing:0.1em;text-transform:uppercase;color:var(--purple);margin-right:8px">Tests:</span>End-to-end RAG architecture fluency with internal-data constraints: access control, freshness, heterogeneous sources, and a rigorous eval loop.
+
+---
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="section-label">Concept</div>
+  <div class="concept-block"><p>A generative QA assistant over an internal knowledge base is a RAG pipeline that (1) indexes company documents with access-control metadata, (2) retrieves the most relevant chunks at query time using hybrid search, and (3) generates a grounded, citation-backed answer using an LLM—with an evaluation layer to catch hallucinations and measure quality over time.</p></div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="section-label">Mechanism</div>
+  <div class="card"><p><strong>Phase 1 — Ingestion & indexing</strong></p>
+<div class="table-wrap"><table class="data-table"><tr><th>Step</th><th>Detail</th></tr><tr><td><strong>Source connectors</strong></td><td>Pull from Confluence, Notion, Google Drive, Slack, GitHub via APIs; webhooks or scheduled polling for freshness (15-min lag typical)</td></tr><tr><td><strong>Document parsing</strong></td><td>PyMuPDF for PDFs, <code>confluence-python-api</code> for wiki pages, <code>markdownify</code> for HTML → Markdown; strip nav/footer boilerplate</td></tr><tr><td><strong>ACL extraction</strong></td><td>Capture space/page-level permissions at ingest time; store <code>allowed_groups: ["eng", "legal"]</code> as vector metadata</td></tr><tr><td><strong>Chunking</strong></td><td>Recursive character splitter: 512 tokens with 64-token overlap; parent-child for long docs (parent=2 048 tokens for context, child=256 for retrieval)</td></tr><tr><td><strong>Embedding</strong></td><td><code>text-embedding-3-large</code> (OpenAI) or <code>bge-large-en-v1.5</code> (self-hosted); batch via async jobs, store in Pinecone or Qdrant</td></tr><tr><td><strong>BM25 index</strong></td><td>Elasticsearch or OpenSearch alongside vector store; same doc IDs for RRF fusion</td></tr></table></div>
+<p><strong>Phase 2 — Retrieval at query time</strong></p>
+<div class="code-block-wrap"><pre class="code-block"><code>User query
+  → ACL filter (user&#x27;s groups → metadata filter on vector store)
+  → Query rewriting (LLM expands acronyms, disambiguates pronouns in multi-turn)
+  → Hybrid search: dense top-20 + BM25 top-20
+  → Reciprocal Rank Fusion → top-40 candidates
+  → Cross-encoder rerank (Cohere Rerank or ms-marco-MiniLM) → top-5 chunks
+  → Context assembly (place most relevant chunk first and last; middle for lower-scored)</code></pre><button class="copy-btn">copy</button></div>
+<p><strong>Phase 3 — Generation</strong></p>
+<ul class="styled-list"><li>System prompt: <em>"Answer using only the provided context. If the answer is not in the context, say 'I don't have that information.' Cite sources as [Doc Title, Section]."</em></li><li>Model: GPT-4o-mini for ≤3K context (fast, cheap); GPT-4o for complex multi-doc synthesis</li><li>Temperature: 0 (determinism matters for enterprise Q&A)</li><li>Output: answer + inline citations + confidence hint ("Based on 3 documents from…")</li></ul>
+<p><strong>Phase 4 — Evaluation</strong></p>
+<div class="table-wrap"><table class="data-table"><tr><th>Metric</th><th>Tool</th><th>Target</th></tr><tr><td>Faithfulness</td><td>RAGAS</td><td>≥ 0.85</td></tr><tr><td>Context recall</td><td>RAGAS</td><td>≥ 0.80</td></tr><tr><td>Answer relevance</td><td>RAGAS</td><td>≥ 0.80</td></tr><tr><td>Deflection rate</td><td>Production log</td><td>< 10% "I don't know" on known topics</td></tr><tr><td>p95 latency</td><td>Datadog</td><td>< 3 s end-to-end</td></tr></table></div>
+<p>Golden dataset: 100 curated Q&A pairs from SMEs, run on every model/prompt change; block deployment if faithfulness drops > 5%.</p></div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="section-label">Example / Tradeoff</div>
+  <div class="card card-accent"><div class="rich-text"><p><strong>Stack decision at 50K internal docs:</strong></p>
+<ul class="styled-list"><li>Pinecone Serverless: simple ops, $70/month at this scale — good start</li><li>Self-hosted Qdrant: $0 infra cost, full control for regulated data (HIPAA, SOC 2) — upgrade path when compliance requires it</li></ul>
+<p><strong>Key tradeoff — freshness vs cost:</strong> Polling Confluence every 15 min keeps docs fresh but creates embedding churn (~$0.002/1K tokens × N changed pages/day). Webhook-triggered incremental re-embedding (only changed pages) cuts cost 80% but requires reliable webhook infrastructure. Start with polling, migrate to webhooks at scale.</p>
+<p><strong>Key tradeoff — model size vs latency:</strong> GPT-4o at T=0 costs ~$0.005/query; GPT-4o-mini at ~$0.0005/query. For a 10K-employee company with 5K queries/day that's $25/day vs $2.50/day. Route simple factual questions (short context, high retrieval confidence) to mini; escalate to full GPT-4o when cross-encoder confidence < 0.6.</p></div></div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="accordion">
+    <div class="accordion-header">
+      <span class="accordion-title">🎙 Verbal Script (3–5 min)</span>
+      <span class="accordion-chevron">▾</span>
+    </div>
+    <div class="accordion-body">
+      <div class="script-block"><div class="script-label">Opening (30s)</div><p>"I'd approach this as a production RAG system with four concerns unique to internal knowledge bases: access control, freshness, heterogeneous source formats, and a rigorous eval loop — because you can't afford employees getting confidently wrong answers about company policy or legal requirements."</p></div>
+      <div class="script-block"><div class="script-label">Core explanation (2–3 min)</div><p>"Let me walk through the pipeline end to end.</p>
+<p><strong>Ingestion:</strong> I'd build connectors for the main sources — Confluence, Notion, Google Drive, Slack, GitHub — using their APIs with either webhooks for near-real-time freshness or 15-minute polling as a simpler start. During parsing, I'd use PyMuPDF for PDFs and markdownify for HTML, and critically I'd strip navigation chrome and footers that pollute chunks. Most importantly, I'd extract ACL metadata at ingest time — which groups or users can see each document — and store that as vector metadata.</p>
+<p><strong>Chunking and embedding:</strong> I'd use recursive character splitting at 512 tokens with 64-token overlap, plus a parent-child pattern for long docs so retrieval fetches the child chunk but the LLM gets the parent context. For embedding, <code>text-embedding-3-large</code> for cloud deployments or <code>bge-large-en-v1.5</code> self-hosted for regulated environments. I'd run parallel BM25 indexing in Elasticsearch for hybrid search.</p>
+<p><strong>Retrieval:</strong> Every query first enforces ACL — filter by the user's group membership before even hitting the vector store. Then I run hybrid search: dense top-20 plus BM25 top-20, fuse with Reciprocal Rank Fusion, and cross-encoder rerank down to 5 chunks using Cohere Rerank or an MS-MARCO model. The context assembly order matters — I place the highest-scored chunk first, because of the 'lost in the middle' problem.</p>
+<p><strong>Generation:</strong> System prompt explicitly says 'answer only from context, cite your sources, say you don't know if it's absent.' Temperature zero. GPT-4o-mini for simple queries, GPT-4o for complex synthesis — routing based on context length and reranker confidence score."</p></div>
+      <div class="script-block"><div class="script-label">Tradeoff / production angle (1 min)</div><p>"The two biggest production challenges are freshness and evaluation. For freshness, I'd start with polling and move to webhook-triggered incremental re-embedding once I've proven the system works — that cuts embedding cost by ~80%. For eval, I'd build a golden dataset of 100 curated Q&A pairs from domain experts and run RAGAS faithfulness and context recall on every deploy. If faithfulness drops more than 5 percentage points, the deploy is blocked. I'd also track deflection rate in production — if 'I don't have that information' responses exceed 10% on topics we <em>should</em> cover, that signals a retrieval problem, not a generation problem."</p></div>
+      <div class="script-block"><div class="script-label">Wrap-up (30s)</div><p>"So the architecture is: ACL-aware hybrid RAG with cross-encoder reranking, a grounding prompt with citations, model tiering for cost control, and a golden-dataset eval gate. Happy to go deeper on any layer — ACL enforcement, chunking strategies for complex formats, or the eval framework."</p></div>
+    </div>
+  </div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="section-label">Pitfalls</div>
+  <div class="pitfall-card">
+    <div class="pitfall-mistake"><strong>✗ Mistake</strong> Describing a simple vector search with no ACL enforcement</div>
+    <div class="pitfall-better"><strong>✓ Better</strong> Explicitly cover how user group membership filters vector store queries at retrieval time; a knowledge base assistant that leaks confidential docs to unauthorized users is a P0 incident.</div>
+  </div>
+  <div class="pitfall-card">
+    <div class="pitfall-mistake"><strong>✗ Mistake</strong> Saying &quot;I&#x27;d just use OpenAI embeddings and GPT-4&quot; without addressing freshness or stale indexes</div>
+    <div class="pitfall-better"><strong>✓ Better</strong> Explain the ingestion loop (webhook vs polling), incremental re-embedding on doc changes, and how you detect embedding drift over time.</div>
+  </div>
+  <div class="pitfall-card">
+    <div class="pitfall-mistake"><strong>✗ Mistake</strong> Skipping evaluation and saying &quot;users will give thumbs up/down&quot;</div>
+    <div class="pitfall-better"><strong>✓ Better</strong> Describe a structured RAGAS-based golden dataset eval (faithfulness ≥ 0.85, context recall ≥ 0.80) run on every prompt or model change, plus production metrics (deflection rate, p95 latency).</div>
+  </div>
+  <div class="pitfall-card">
+    <div class="pitfall-mistake"><strong>✗ Mistake</strong> Ignoring format heterogeneity</div>
+    <div class="pitfall-better"><strong>✓ Better</strong> Call out that internal docs include PDFs, Confluence pages, Slack threads, and code; each needs a different parser, and tables/code blocks need special chunking treatment to avoid splitting logical units.
+
+---</div>
+  </div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="section-label">Related Questions</div>
+  <div class="related-pills">
+    <div class="related-pill" data-slug="02-001">
+      <span class="related-pill-icon">→</span>
+      <div class="related-pill-text">
+        <div class="related-pill-q">Q1: Design a RAG system for a customer support chatbot</div>
+        <div class="related-pill-rel">Same RAG architecture; customer support adds deflection/CSAT metrics; knowledge base adds ACL and internal source heterogeneity</div>
+      </div>
+    </div>
+    <div class="related-pill" data-slug="02-010">
+      <span class="related-pill-icon">→</span>
+      <div class="related-pill-text">
+        <div class="related-pill-q">Q10: Design a Q&amp;A system over internal documentation</div>
+        <div class="related-pill-rel">Near-identical question — use same 4-phase framework; Q10 may push harder on search ranking metrics (NDCG, MRR)</div>
+      </div>
+    </div>
+    <div class="related-pill" data-slug="02-011">
+      <span class="related-pill-icon">→</span>
+      <div class="related-pill-text">
+        <div class="related-pill-q">Q11: How ensure quality of data the LLM interacts with?</div>
+        <div class="related-pill-rel">Direct follow-up: data quality pipeline (deduplication, freshness, formatting normalization) is a prerequisite for good QA assistant accuracy</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="section-label">One-liner recall</div>
+  <div class="oneliner-box">
+    <div class="oneliner-label">▸ Reconstruct from memory</div>
+    <div class="oneliner-text" data-text="A generative QA assistant over an internal knowledge base is ACL-aware hybrid RAG (dense + BM25 → RRF → cross-encoder rerank → grounding prompt at T=0 with citations) with a golden-dataset RAGAS eval gate and webhook-driven incremental re-embedding for freshness.">A generative QA assistant over an internal knowledge base is ACL-aware hybrid RAG (dense + BM25 → RRF → cross-encoder rerank → grounding prompt at T=0 with citations) with a golden-dataset RAGAS eval gate and webhook-driven incremental re-embedding for freshness.</div>
+  </div>
+</div>

@@ -1,0 +1,133 @@
+<div class="answer-header reveal">
+  <div class="answer-meta">
+    <span class="meta-badge meta-category">03-agents-tool-use</span>
+    <span class="meta-badge meta-num">Q007</span>
+    <span class="meta-badge meta-status-review">review</span>
+  </div>
+  <h1 class="answer-title">Prevent agents from over-reasoning or over-planning?</h1>
+</div>
+
+<div class="answer-section reveal">
+  <div class="accordion">
+    <div class="accordion-header">
+      <span class="accordion-title">⟁ Framing — Why this is asked</span>
+      <span class="accordion-chevron">▾</span>
+    </div>
+    <div class="accordion-body">
+      <div class="framing-grid">
+        <div><div class="framing-card">
+          <div class="framing-card-title">Why asked</div>
+          <p style="font-size:13.5px;line-height:1.7;color:var(--text-dim)">Over-reasoning is a real production failure mode: agents that spin indefinitely in a planning loop burn tokens, add latency, miss deadlines, and sometimes never emit a final answer. Interviewers want to see that you understand <em>why</em> this happens at a mechanistic level (autoregressive generation rewards verbose CoT, no native &quot;done&quot; signal) and have concrete mitigation patterns — not just &quot;add a max_iterations cap.&quot;</p>
+        </div></div>
+        <div><div class="framing-card">
+          <div class="framing-card-title">Trigger phrases</div>
+          <div class="trigger-list">
+              <div class="trigger-phrase">How do you prevent your agent from looping forever?</div>
+              <div class="trigger-phrase">What do you do when an agent keeps re-planning instead of acting?</div>
+              <div class="trigger-phrase">How do you stop over-reasoning or analysis paralysis in an agentic system?</div>
+              <div class="trigger-phrase">How do you enforce that an agent actually finishes a task?</div>
+          </div>
+        </div></div>
+      </div>
+      <div class="tests-block">
+        <span style="font-family:var(--mono);font-size:10px;letter-spacing:0.1em;text-transform:uppercase;color:var(--purple);margin-right:8px">Tests:</span>Whether the candidate can design reliable termination and scope-bounding mechanisms at both the prompt and infrastructure level, and knows the tradeoffs between letting the model &quot;think deeply&quot; versus imposing hard guardrails.
+
+---
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="section-label">Concept</div>
+  <div class="concept-block"><p>Over-reasoning occurs when an agent's LLM core produces increasingly elaborate plans, sub-plans, or self-critiques without converging on a tool call or final answer — often because (a) the model is rewarded during training for verbose CoT, (b) there is no native cost signal for "plan too long," and (c) the task prompt is under-specified so the model explores rather than executes. The fix is a layered set of controls: prompt-level scope bounding, runtime hard limits, and architectural patterns that force the agent toward action.</p></div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="section-label">Mechanism</div>
+  <div class="card"><p><strong>Layer 1 — Prompt-level scope bounding</strong></p>
+<ul class="styled-list"><li>Set an explicit <strong>step budget</strong> in the system prompt: <code>"You have at most 5 reasoning steps and 3 tool calls to complete this task. If you cannot complete it within these limits, output a partial result and explain what's missing."</code></li><li>Define a <strong>planning depth limit</strong>: <code>"Do not generate sub-plans for sub-plans. Identify the top 3 actions and execute them."</code></li><li>Use <strong>output format constraints</strong>: require the model to emit <code>{"thought": ..., "action": ..., "action_input": ...}</code> (ReAct format) per step — structured output prevents open-ended deliberation.</li></ul>
+<p><strong>Layer 2 — Runtime hard limits (loop controller)</strong></p>
+<ul class="styled-list"><li><code>max_iterations</code>: hard cap on the number of agent loop turns (typically 10–20 for production tasks). LangGraph, AutoGen, and CrewAI all expose this as a first-class parameter.</li><li><code>max_tokens_per_step</code>: cap the LLM response length per turn (e.g. <code>max_tokens=512</code>) so the model cannot dump a 2,000-token plan before acting.</li><li><code>wall_clock_timeout</code>: a deadline enforced outside the LLM (Python <code>asyncio.wait_for</code>, AWS Lambda timeout, or a separate watchdog thread). Fires regardless of iteration count.</li><li><strong>Token budget tracker</strong>: sum input+output tokens across all steps; if the running total exceeds a threshold (e.g. 50K tokens), trigger HITL or terminate gracefully with a partial answer.</li></ul>
+<p><strong>Layer 3 — Forced-action patterns</strong></p>
+<ul class="styled-list"><li><strong>Plan-and-Execute with a separate planner step</strong>: generate the full plan <em>once</em> upfront with a planner agent, then hand a linearized step list to an executor agent. The executor cannot re-plan — it only executes. This is the pattern used in BabyAGI and LangChain's plan-and-execute agent.</li><li><strong>Minimum action-to-thought ratio</strong>: in the loop controller, if 3 consecutive steps produced thoughts but no tool calls, force an action by injecting a system message: <code>"You must now call a tool or emit FINAL_ANSWER."</code></li><li><strong>Reflection gating</strong>: if using a reflection loop (Reflexion pattern), limit reflection to 1–2 passes per task, not unlimited retries.</li></ul>
+<p><strong>Layer 4 — Model selection and temperature</strong></p>
+<ul class="styled-list"><li>Use a reasoning-capable model (o1, o3, Claude 3.7 Sonnet) only when deep thinking is justified (complex multi-step math, code). For routing, tool selection, and simpler sub-tasks, use a smaller model (GPT-4o-mini, Claude 3.5 Haiku) with <code>temperature=0</code> — smaller models tend to be more action-oriented and less verbose.</li></ul></div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="section-label">Example / Tradeoff</div>
+  <div class="card card-accent"><div class="rich-text"><p><strong>Concrete example:</strong> A code-review agent built on GPT-4o repeatedly re-planned its analysis (generating 5 nested sub-task lists) without ever calling the <code>read_file</code> tool. Root cause: the system prompt said "carefully analyze the code" with no step limit. Fix: (1) added <code>max_iterations=8</code> in LangGraph, (2) changed system prompt to <code>"You have 3 analysis steps and 2 tool calls"</code>, (3) set <code>max_tokens=400</code> per step. Result: p95 task completion time dropped from 45s to 12s, and the agent completed tasks successfully on 94% of runs vs 71% before.</p>
+<p><strong>Tradeoff:</strong> Hard step limits can cause premature termination on genuinely complex tasks. Mitigate by making the cap adaptive: start at <code>max_iterations=8</code>, allow the agent to request an extension (emit <code>{"action": "request_extension", "reason": "..."}</code>) which triggers HITL — a human approves one additional budget block. This preserves flexibility without open-ended looping.</p></div></div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="accordion">
+    <div class="accordion-header">
+      <span class="accordion-title">🎙 Verbal Script (3–5 min)</span>
+      <span class="accordion-chevron">▾</span>
+    </div>
+    <div class="accordion-body">
+      <div class="script-block"><div class="script-label">Opening (30s)</div><p>"Over-reasoning is a failure mode I've hit in production — agents that keep generating elaborate plans without ever calling a tool. The fix isn't one thing; it's a layered set of controls at the prompt level, the loop controller level, and the architecture level. Let me walk through each."</p></div>
+      <div class="script-block"><div class="script-label">Core explanation (2–3 min)</div><p>"I'd start at the prompt. The simplest and most effective intervention is an explicit step budget: tell the model it has, say, 5 reasoning steps and 3 tool calls. This alone cuts over-planning dramatically because the model knows it's constrained. I also enforce output format using ReAct — each step must be <code>thought → action → action_input</code> — which prevents the model from emitting a sprawling plan instead of picking a tool.</p>
+<p>At the loop controller level — whether that's LangGraph, AutoGen, or a custom loop — I set three hard limits: <code>max_iterations</code> (typically 10–20), <code>max_tokens_per_step</code> (e.g. 512 tokens, so the model can't dump a 2K-token plan), and a wall-clock timeout enforced outside the LLM. I also track cumulative token spend across the whole task, and if it exceeds a budget, I either surface a partial answer or escalate to HITL.</p>
+<p>For architecturally complex tasks, I use Plan-and-Execute: a planner agent produces a step list once, and an executor agent works through that list without re-planning. This separates reasoning from execution and prevents the executor from falling back into deliberation mode.</p>
+<p>Finally, a concrete example — a code review agent I worked on kept re-planning instead of reading files. Adding <code>max_iterations=8</code> in LangGraph, capping tokens per step at 400, and updating the system prompt with an explicit step budget cut p95 latency from 45 to 12 seconds and raised task completion rate from 71% to 94%."</p></div>
+      <div class="script-block"><div class="script-label">Tradeoff / production angle (1 min)</div><p>"The tradeoff with hard caps is premature termination on genuinely complex tasks. My production pattern is to make the budget adaptive: the agent can emit a special <code>request_extension</code> action that triggers HITL. A human approves one additional budget block. This keeps the agent on a short leash by default but allows legitimate deep tasks to get more resources when a human signs off. The other thing I monitor is the thought-to-action ratio per step — if 3 consecutive steps are all thoughts with no tool calls, I inject a forcing message: 'You must now call a tool or emit FINAL_ANSWER.'"</p></div>
+      <div class="script-block"><div class="script-label">Wrap-up (30s)</div><p>"So the answer is four layers: prompt scope bounding (explicit step budget, ReAct format), loop controller limits (<code>max_iterations</code>, <code>max_tokens_per_step</code>, wall-clock timeout), architectural patterns (Plan-and-Execute to prevent re-planning), and model tiering (smaller models for simpler sub-tasks to naturally reduce verbosity). Happy to go deeper on any of those."</p></div>
+    </div>
+  </div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="section-label">Pitfalls</div>
+  <div class="pitfall-card">
+    <div class="pitfall-mistake"><strong>✗ Mistake</strong> &quot;Just add <code>max_iterations=10</code> and you&#x27;re done&quot; without explaining <em>why</em> over-reasoning happens or how to tune the cap</div>
+    <div class="pitfall-better"><strong>✓ Better</strong> Explain the root cause (model trained to reward verbose CoT, no native &quot;done&quot; signal), then cover all four layers; mention adaptive budgets so the cap doesn&#x27;t blindly kill legitimate complex tasks.</div>
+  </div>
+  <div class="pitfall-card">
+    <div class="pitfall-mistake"><strong>✗ Mistake</strong> Treating over-reasoning as purely a prompt problem (&quot;I&#x27;d tweak the prompt&quot;) without mentioning runtime enforcement</div>
+    <div class="pitfall-better"><strong>✓ Better</strong> Prompts help but can be ignored under distribution shift or with new models; the loop controller (<code>max_iterations</code>, token budget) is the enforcement mechanism that actually holds in production.</div>
+  </div>
+  <div class="pitfall-card">
+    <div class="pitfall-mistake"><strong>✗ Mistake</strong> Not distinguishing over-reasoning (excessive deliberation before acting) from infinite loops (repeating the same tool call in a cycle)</div>
+    <div class="pitfall-better"><strong>✓ Better</strong> Name both failure modes explicitly: over-reasoning is addressed with step budgets and forced-action triggers; infinite loops are detected with state hashing (if the agent has seen this exact state before, break) and covered in Q14.
+
+---</div>
+  </div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="section-label">Related Questions</div>
+  <div class="related-pills">
+    <div class="related-pill" data-slug="03-011">
+      <span class="related-pill-icon">→</span>
+      <div class="related-pill-text">
+        <div class="related-pill-q">Q11: Termination conditions in long-running agents?</div>
+        <div class="related-pill-rel">Directly related — termination conditions are the runtime complement to over-reasoning prevention</div>
+      </div>
+    </div>
+    <div class="related-pill" data-slug="03-014">
+      <span class="related-pill-icon">→</span>
+      <div class="related-pill-text">
+        <div class="related-pill-q">Q14: Detect and stop infinite planning loops?</div>
+        <div class="related-pill-rel">Infinite loops are a degenerate form of over-reasoning; different detection mechanism (state hashing vs step budget)</div>
+      </div>
+    </div>
+    <div class="related-pill" data-slug="03-002">
+      <span class="related-pill-icon">→</span>
+      <div class="related-pill-text">
+        <div class="related-pill-q">Q2: Agent vs simple LLM chain?</div>
+        <div class="related-pill-rel">Over-reasoning is a key argument for preferring a deterministic chain over an agent when the task graph is known</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="section-label">One-liner recall</div>
+  <div class="oneliner-box">
+    <div class="oneliner-label">▸ Reconstruct from memory</div>
+    <div class="oneliner-text" data-text="Prevent over-reasoning with four layers: explicit step budget in the system prompt, `max_iterations` + `max_tokens_per_step` + wall-clock timeout in the loop controller, Plan-and-Execute architecture to separate planning from execution, and a forcing rule that demands a tool call after 3 consecutive thought-only steps.">Prevent over-reasoning with four layers: explicit step budget in the system prompt, `max_iterations` + `max_tokens_per_step` + wall-clock timeout in the loop controller, Plan-and-Execute architecture to separate planning from execution, and a forcing rule that demands a tool call after 3 consecutive thought-only steps.</div>
+  </div>
+</div>

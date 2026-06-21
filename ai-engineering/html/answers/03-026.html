@@ -1,0 +1,151 @@
+<div class="answer-header reveal">
+  <div class="answer-meta">
+    <span class="meta-badge meta-category">03-agents-tool-use</span>
+    <span class="meta-badge meta-num">Q026</span>
+    <span class="meta-badge meta-status-review">review</span>
+  </div>
+  <h1 class="answer-title">Control cost explosions from tool calls?</h1>
+</div>
+
+<div class="answer-section reveal">
+  <div class="accordion">
+    <div class="accordion-header">
+      <span class="accordion-title">⟁ Framing — Why this is asked</span>
+      <span class="accordion-chevron">▾</span>
+    </div>
+    <div class="accordion-body">
+      <div class="framing-grid">
+        <div><div class="framing-card">
+          <div class="framing-card-title">Why asked</div>
+          <p style="font-size:13.5px;line-height:1.7;color:var(--text-dim)">Agents that call tools in a loop can spend 10–100× more than a single LLM call — each iteration incurs LLM tokens (system prompt re-sent, growing tool history), plus tool execution cost (API credits, database reads, external service fees). Interviewers use this question to find out whether you&#x27;ve actually run agents in production and had to contain runaway spend, or whether you&#x27;ve only built demos that never hit real budgets.</p>
+        </div></div>
+        <div><div class="framing-card">
+          <div class="framing-card-title">Trigger phrases</div>
+          <div class="trigger-list">
+              <div class="trigger-phrase">Your app gets 1M queries/day — how do you optimize cost?</div>
+              <div class="trigger-phrase">How do you prevent an agent from making 50 tool calls on a simple question?</div>
+              <div class="trigger-phrase">What guardrails do you put on agentic systems for cost?</div>
+              <div class="trigger-phrase">How do you control cost in a multi-step agent loop?</div>
+          </div>
+        </div></div>
+      </div>
+      <div class="tests-block">
+        <span style="font-family:var(--mono);font-size:10px;letter-spacing:0.1em;text-transform:uppercase;color:var(--purple);margin-right:8px">Tests:</span>Production cost-engineering discipline: ability to quantify the cost drivers, enumerate concrete control levers (turn budgets, model tiering, caching, tool batching, HITL gates), and articulate the cost/capability tradeoff without breaking agent functionality.
+
+---
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="section-label">Concept</div>
+  <div class="concept-block"><p>Cost explosions in tool-using agents come from three compounding factors: (1) <strong>token inflation</strong> — the system prompt and full tool-call history are re-sent on every LLM call, so a 10-turn agent loop passes ~10× the base context; (2) <strong>unbounded iteration</strong> — without hard turn limits an agent can loop indefinitely on ambiguous tasks; (3) <strong>redundant tool calls</strong> — the same tool is called multiple times with equivalent arguments. Controlling costs requires rate-limiting at three layers: the orchestrator (turn budgets, token caps), the tool layer (caching, batching, deduplication), and the model layer (tiering to cheaper models for routine steps).</p></div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="section-label">Mechanism</div>
+  <div class="card"><p><strong>Layer 1 — Orchestrator hard limits (always-on)</strong></p>
+<p>Set hard limits in the orchestrator code, not the prompt:</p>
+<div class="code-block-wrap"><pre class="code-block"><code>MAX_TURNS = 10           # per-task ceiling
+MAX_TOKENS_PER_TASK = 50_000   # input + output tokens combined
+WALL_CLOCK_TIMEOUT = 120       # seconds
+cost_budget_usd = 0.10         # per-task spend cap</code></pre><button class="copy-btn">copy</button></div>
+<p>If any limit is exceeded, the orchestrator stops the loop and returns whatever partial result exists (or escalates to HITL). These are non-negotiable guardrails — never rely on the LLM to self-limit.</p>
+<p><strong>Layer 2 — Prompt and context compression</strong></p>
+<p>The system prompt is re-sent every turn. Aggressively compress it:</p>
+<ul class="styled-list"><li>Keep system prompt under 500 tokens; move reference content to a retrieval tool</li><li>Prune tool-call history: keep only the last N turns in context (sliding window) or summarize prior turns with a cheap model (GPT-4o-mini at $0.15/M tokens) into a one-paragraph state summary</li><li>Use LangChain's <code>ConversationSummaryBufferMemory</code> or a custom summarization step at turn 5+</li></ul>
+<p>At 10 turns, a naive agent sending the full history on every call costs ~10× the single-call baseline. A sliding window of 3 turns reduces this to ~3×.</p>
+<p><strong>Layer 3 — Model tiering (use the cheapest model that works)</strong></p>
+<p>Not every step needs GPT-4o. Assign models by task complexity:</p>
+<div class="table-wrap"><table class="data-table"><tr><th>Step</th><th>Model</th><th>Approx cost</th></tr><tr><td>Tool-result summarization</td><td>GPT-4o-mini</td><td>$0.15/M input</td></tr><tr><td>Tool selection (simple)</td><td>GPT-4o-mini</td><td>$0.15/M input</td></tr><tr><td>Multi-step reasoning / synthesis</td><td>GPT-4o</td><td>$2.50/M input</td></tr><tr><td>Code generation / verification</td><td>Claude 3.5 Sonnet</td><td>$3.00/M input</td></tr></table></div>
+<p>A LangGraph conditional edge can route based on task type or turn count: use GPT-4o-mini for the first 3 turns; escalate to GPT-4o only when the agent hits a reasoning-heavy step.</p>
+<p><strong>Layer 4 — Tool-call caching and deduplication</strong></p>
+<p>Identical tool calls waste tokens and external API credits:</p>
+<ul class="styled-list"><li><strong>Semantic cache</strong> (GPTCache / Redis): hash <code>(tool_name, args)</code> → cache response with TTL keyed to data freshness (e.g., 60s for weather, 24h for product catalog)</li><li><strong>Exact deduplication</strong>: before dispatching a tool call, check whether the same <code>(tool, args)</code> was already called in this session and return the cached result</li><li><strong>Batch tool calls</strong>: some providers (OpenAI parallel tool calls, Anthropic tool_use blocks) support calling multiple tools in a single LLM turn; use this to collapse <code>get_order(123)</code> + <code>get_order(456)</code> into one LLM request instead of two</li></ul>
+<p><strong>Layer 5 — Tool design: narrow scope reduces tokens</strong></p>
+<p>Wide-scope tools (e.g., <code>query_database(sql: str)</code>) require the LLM to generate and validate long SQL strings, consuming more tokens per call. Narrow purpose-built tools (<code>get_order_status(order_id: str)</code>) reduce argument tokens, reduce hallucination retries, and make the response predictable (fewer tokens back).</p>
+<p><strong>Layer 6 — HITL gate on expensive multi-step branches</strong></p>
+<p>Before the agent enters a long tool chain (e.g., "research 10 competitors" → 10 web-fetch calls), gate with a HITL confirmation:</p>
+<div class="code-block-wrap"><pre class="code-block"><code>&quot;This task will require ~15 tool calls (estimated cost: $0.45). Proceed? [Yes/No]&quot;</code></pre><button class="copy-btn">copy</button></div>
+<p>LangGraph's <code>interrupt_before</code> node handles this without breaking the resumable state machine.</p></div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="section-label">Example / Tradeoff</div>
+  <div class="card card-accent"><div class="rich-text"><p><strong>Cost math at 1M queries/day:</strong></p>
+<div class="table-wrap"><table class="data-table"><tr><th>Config</th><th>Cost/query</th><th>Daily cost</th></tr><tr><td>Naive agent, GPT-4o, 10 turns, no caching</td><td>$0.25</td><td>$250K/day</td></tr><tr><td>Turn cap=5, model tiering (GPT-4o-mini for 4 turns), 30% cache hit</td><td>$0.04</td><td>$40K/day</td></tr><tr><td>Turn cap=3, full GPT-4o-mini, 50% cache hit</td><td>$0.008</td><td>$8K/day</td></tr></table></div>
+<p>The 30× cost reduction (naive → tiered+cached) comes almost entirely from model tiering and cache hits, not from sacrificing capability.</p>
+<p><strong>Real pattern:</strong> Support-ticket agents at scale typically cap at 5 turns, use GPT-4o-mini for tool selection and result summarization, escalate to GPT-4o only when the agent emits a <code>NEED_ESCALATION</code> structured output. This alone cuts per-query cost from ~$0.20 to ~$0.03.</p></div></div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="accordion">
+    <div class="accordion-header">
+      <span class="accordion-title">🎙 Verbal Script (3–5 min)</span>
+      <span class="accordion-chevron">▾</span>
+    </div>
+    <div class="accordion-body">
+      <div class="script-block"><div class="script-label">Opening (30s)</div><p>"Cost explosions in agents are a real production problem — I've seen naive agent loops burn 50× more than expected because the system prompt and full tool history were re-sent on every turn, and there was no turn limit. I'd organize the control levers into three layers: orchestrator hard limits, model tiering, and tool-layer caching and deduplication."</p></div>
+      <div class="script-block"><div class="script-label">Core explanation (2–3 min)</div><p>"The first and most important layer is hard limits in the orchestrator — not in the prompt. I set a <code>max_turns</code> ceiling (usually 5–10 depending on task complexity), a <code>max_tokens_per_task</code> cap, and a wall-clock timeout. If any of these are hit, the loop stops and returns a partial result or escalates to a human. This is the non-negotiable baseline.</p>
+<p>"The second big lever is context compression. In a naive agent, the full tool-call history is appended to the prompt on every turn. At turn 10, you're sending ~10× the baseline context. The fix is a sliding window — keep only the last 3 turns in context — or a summarization step that compresses prior turns into a one-paragraph state summary using a cheap model like GPT-4o-mini. This alone can cut token costs by 60–70%.</p>
+<p>"The third lever is model tiering. Not every step in the agent loop needs GPT-4o. I assign GPT-4o-mini for tool selection, result summarization, and routine data extraction — it's about 15× cheaper per token. I only escalate to GPT-4o or Claude Sonnet when the agent hits a reasoning-heavy synthesis step. In LangGraph, I implement this as a conditional edge that checks the step type before routing to the LLM call.</p>
+<p>"At the tool layer, I add semantic caching — hash the tool name plus arguments, cache the response in Redis with a TTL matched to data freshness. I also deduplicate: if the agent calls <code>get_order(123)</code> twice in the same session, the second call returns the cached result. And I use OpenAI's parallel tool calls feature to batch multiple tool requests into a single LLM turn when possible."</p></div>
+      <div class="script-block"><div class="script-label">Tradeoff / production angle (1 min)</div><p>"The main tradeoff is cost vs. task completion rate. Tighter turn budgets mean some genuinely complex tasks fail and escalate to humans — which is actually the right outcome, because agent-HITL handoff is cheaper than an agent burning $2 on a task it can't resolve. The real mistake is treating agents as an unlimited resource. Every agent task should have a documented cost SLO — for example, 'support-ticket deflection at $0.05/query or cheaper' — and the turn cap and model tier settings are calibrated to hit that SLO while maintaining quality."</p></div>
+      <div class="script-block"><div class="script-label">Wrap-up (30s)</div><p>"So: hard limits in the orchestrator as the always-on backstop, model tiering for the biggest cost reduction, context compression for the token overhead, and tool-layer caching to eliminate redundant calls. Happy to go deeper on any of these — model tiering logic or the caching architecture."</p></div>
+    </div>
+  </div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="section-label">Pitfalls</div>
+  <div class="pitfall-card">
+    <div class="pitfall-mistake"><strong>✗ Mistake</strong> Saying &quot;I&#x27;d add a max_iterations parameter to the prompt&quot;</div>
+    <div class="pitfall-better"><strong>✓ Better</strong> Hard limits must be enforced in orchestrator code, not prompts; the LLM will often ignore a prompt-level iteration instruction when it believes more turns are needed, so <code>max_turns</code> must be a Python/code-level guard that stops the loop unconditionally</div>
+  </div>
+  <div class="pitfall-card">
+    <div class="pitfall-mistake"><strong>✗ Mistake</strong> Focusing only on per-turn LLM cost without mentioning context token inflation across turns</div>
+    <div class="pitfall-better"><strong>✓ Better</strong> Explain that the system prompt and tool-call history are re-sent on every turn (doubling, tripling cost per turn), so context pruning and summarization are required to prevent quadratic cost growth in long sessions</div>
+  </div>
+  <div class="pitfall-card">
+    <div class="pitfall-mistake"><strong>✗ Mistake</strong> Not mentioning model tiering</div>
+    <div class="pitfall-better"><strong>✓ Better</strong> Articulate that not all steps need the frontier model; routing tool-selection and summarization turns to GPT-4o-mini (15× cheaper) while reserving GPT-4o for synthesis steps is the single highest-ROI cost lever in practice
+
+---</div>
+  </div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="section-label">Related Questions</div>
+  <div class="related-pills">
+    <div class="related-pill" data-slug="03-011">
+      <span class="related-pill-icon">→</span>
+      <div class="related-pill-text">
+        <div class="related-pill-q">Q11: Termination conditions in long-running agents</div>
+        <div class="related-pill-rel">Turn-budget termination is the primary cost control</div>
+      </div>
+    </div>
+    <div class="related-pill" data-slug="03-009">
+      <span class="related-pill-icon">→</span>
+      <div class="related-pill-text">
+        <div class="related-pill-q">Q9: What logic belongs in orchestrator vs LLM</div>
+        <div class="related-pill-rel">Hard cost limits belong in orchestrator code, never the prompt</div>
+      </div>
+    </div>
+    <div class="related-pill" data-slug="03-007">
+      <span class="related-pill-icon">→</span>
+      <div class="related-pill-text">
+        <div class="related-pill-q">Q7: Prevent agents from over-reasoning or over-planning</div>
+        <div class="related-pill-rel">Over-planning is the behavioral root cause of cost explosions</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="section-label">One-liner recall</div>
+  <div class="oneliner-box">
+    <div class="oneliner-label">▸ Reconstruct from memory</div>
+    <div class="oneliner-text" data-text="Control agent cost explosions with three compounding levers: orchestrator hard limits (max_turns=5–10, token cap, wall-clock timeout in code not prompts), model tiering (GPT-4o-mini for routine steps, GPT-4o only for synthesis), and context compression + tool-call caching to prevent the quadratic token growth that accumulates across turns.">Control agent cost explosions with three compounding levers: orchestrator hard limits (max_turns=5–10, token cap, wall-clock timeout in code not prompts), model tiering (GPT-4o-mini for routine steps, GPT-4o only for synthesis), and context compression + tool-call caching to prevent the quadratic token growth that accumulates across turns.</div>
+  </div>
+</div>

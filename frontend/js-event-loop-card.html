@@ -1,0 +1,285 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>JS Event Loop - Study Card</title>
+  <style>
+    :root {
+      --bg: #0f1117;
+      --card: #1a1d27;
+      --text: #e2e8f0;
+      --muted: #94a3b8;
+      --accent: #38bdf8;
+      --success: #4ade80;
+      --warning: #fbbf24;
+      --danger: #f87171;
+      --border: rgba(255,255,255,0.1);
+    }
+    * { box-sizing: border-box; }
+    body {
+      font-family: system-ui, -apple-system, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      margin: 0;
+      padding: 20px;
+      line-height: 1.6;
+    }
+    .container { max-width: 900px; margin: 0 auto; }
+    h1 { text-align: center; color: var(--accent); margin-bottom: 4px; }
+    .subtitle { text-align: center; color: var(--muted); font-size: 14px; margin-bottom: 24px; }
+    .card {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      margin-bottom: 16px;
+      overflow: hidden;
+    }
+    .card-header {
+      padding: 16px 20px;
+      cursor: pointer;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      user-select: none;
+    }
+    .card-header:hover { background: rgba(56,189,248,0.05); }
+    .card-title { font-weight: 600; font-size: 16px; }
+    .card-body { padding: 0 20px 20px; display: none; }
+    .card.open .card-body { display: block; }
+    .chevron { transition: transform 0.2s; color: var(--muted); }
+    .card.open .chevron { transform: rotate(180deg); }
+    .code-block {
+      background: #0d1117;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 16px;
+      margin: 12px 0;
+      overflow-x: auto;
+      font-family: 'SF Mono', Monaco, monospace;
+      font-size: 13px;
+      line-height: 1.5;
+    }
+    .kw { color: #ff7b72; }
+    .fn { color: #d2a8ff; }
+    .str { color: #a5d6ff; }
+    .num { color: #79c0ff; }
+    table { width: 100%; border-collapse: collapse; margin: 12px 0; font-size: 14px; }
+    th, td { padding: 10px; text-align: left; border-bottom: 1px solid var(--border); }
+    th { color: var(--accent); font-weight: 600; }
+    td code { background: #0d1117; padding: 2px 6px; border-radius: 4px; font-size: 12px; }
+    .qa-item { margin-bottom: 20px; }
+    .qa-q { font-weight: 600; color: var(--accent); margin-bottom: 8px; }
+    .step { 
+      display: none; 
+      padding: 12px 16px; 
+      border-radius: 8px; 
+      margin-bottom: 8px; 
+      font-size: 14px;
+      border-left: 3px solid var(--accent);
+      background: rgba(56,189,248,0.05);
+    }
+    .step.active { display: block; }
+    .step-controls { display: flex; gap: 8px; margin-top: 12px; }
+    .btn {
+      background: var(--accent);
+      color: #0f172a;
+      border: none;
+      padding: 8px 16px;
+      border-radius: 6px;
+      font-weight: 600;
+      cursor: pointer;
+      font-size: 13px;
+    }
+    .btn:hover { opacity: 0.9; }
+    .btn-outline {
+      background: transparent;
+      color: var(--accent);
+      border: 1px solid var(--accent);
+    }
+    .step-counter { color: var(--muted); font-size: 12px; margin-top: 8px; }
+    .tag {
+      display: inline-block;
+      padding: 2px 8px;
+      border-radius: 4px;
+      font-size: 11px;
+      font-weight: 600;
+      margin-right: 6px;
+    }
+    .tag-red { background: rgba(248,113,113,0.2); color: var(--danger); }
+    .tag-yellow { background: rgba(251,191,36,0.2); color: var(--warning); }
+    .tag-green { background: rgba(74,222,128,0.2); color: var(--success); }
+    .highlight-box {
+      background: rgba(56,189,248,0.05);
+      border-left: 4px solid var(--accent);
+      padding: 16px;
+      border-radius: 0 8px 8px 0;
+      margin: 16px 0;
+    }
+    .highlight-box h4 { color: var(--accent); margin: 0 0 8px 0; }
+    .answer-reveal {
+      background: #0d1117;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 16px;
+      margin-top: 8px;
+    }
+    .answer-reveal.hidden { display: none; }
+    .reveal-btn {
+      background: transparent;
+      color: var(--accent);
+      border: 1px solid var(--accent);
+      padding: 6px 12px;
+      border-radius: 6px;
+      font-size: 12px;
+      cursor: pointer;
+      margin-top: 8px;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>JS Event Loop</h1>
+    <p class="subtitle">Call Stack - Microtask Queue - Macrotask Queue - Execution Order</p>
+
+    <div class="card open">
+      <div class="card-header" onclick="toggle(this)">
+        <div>
+          <span class="tag tag-green">BASICS</span>
+          <span class="card-title">What Goes Into Each Queue?</span>
+        </div>
+        <span class="chevron">▼</span>
+      </div>
+      <div class="card-body">
+        <table>
+          <tr><th>Queue</th><th>Sources</th><th>Priority</th></tr>
+          <tr>
+            <td><strong style="color: var(--accent);">Call Stack</strong></td>
+            <td><code>console.log</code>, function calls, loops</td>
+            <td>Highest</td>
+          </tr>
+          <tr>
+            <td><strong style="color: var(--success);">Microtask</strong></td>
+            <td><code>.then()</code>, <code>.catch()</code>, <code>await</code></td>
+            <td>High (drain all)</td>
+          </tr>
+          <tr>
+            <td><strong style="color: var(--warning);">Macrotask</strong></td>
+            <td><code>setTimeout</code>, <code>setInterval</code>, I/O</td>
+            <td>Lower (one at a time)</td>
+          </tr>
+        </table>
+      </div>
+    </div>
+
+    <div class="card open">
+      <div class="card-header" onclick="toggle(this)">
+        <div>
+          <span class="tag tag-red">MUST KNOW</span>
+          <span class="card-title">Classic Interview Question</span>
+        </div>
+        <span class="chevron">▼</span>
+      </div>
+      <div class="card-body">
+        <div class="code-block"><span class="kw">console</span>.log(<span class="str">'1: start'</span>);
+
+<span class="fn">setTimeout</span>(() => <span class="kw">console</span>.log(<span class="str">'2: timeout'</span>), <span class="num">0</span>);
+
+Promise.<span class="fn">resolve</span>().<span class="fn">then</span>(() => <span class="kw">console</span>.log(<span class="str">'3: promise 1'</span>));
+Promise.<span class="fn">resolve</span>().<span class="fn">then</span>(() => <span class="kw">console</span>.log(<span class="str">'4: promise 2'</span>));
+
+<span class="kw">console</span>.log(<span class="str">'5: end'</span>);</div>
+
+        <div class="steps-container" id="classic-steps">
+          <div class="step active" data-step="0">Click Next Step to trace execution...</div>
+          <div class="step" data-step="1"><strong>Step 1:</strong> console.log('1: start') runs synchronously.</div>
+          <div class="step" data-step="2"><strong>Step 2:</strong> setTimeout callback queued to macrotask queue.</div>
+          <div class="step" data-step="3"><strong>Step 3:</strong> .then() callback queued to microtask queue.</div>
+          <div class="step" data-step="4"><strong>Step 4:</strong> Another .then() queued to microtask queue.</div>
+          <div class="step" data-step="5"><strong>Step 5:</strong> console.log('5: end') runs synchronously.</div>
+          <div class="step" data-step="6"><strong>Step 6:</strong> Call stack empty. Drain microtask queue: run promise 1.</div>
+          <div class="step" data-step="7"><strong>Step 7:</strong> Continue draining microtasks: run promise 2.</div>
+          <div class="step" data-step="8"><strong>Step 8:</strong> Microtasks empty. Run next macrotask: timeout.</div>
+        </div>
+        <div class="step-controls">
+          <button class="btn btn-outline" onclick="prevStep('classic')">Prev</button>
+          <button class="btn" onclick="nextStep('classic')">Next</button>
+          <button class="btn btn-outline" onclick="resetSteps('classic')">Reset</button>
+        </div>
+        <div class="step-counter" id="classic-counter">Step 0 of 8</div>
+
+        <div class="highlight-box" style="margin-top: 20px;">
+          <h4 style="color: var(--success);">Answer</h4>
+          <div class="code-block" style="margin: 0; font-size: 16px;">1: start
+5: end
+3: promise 1
+4: promise 2
+2: timeout</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-header" onclick="toggle(this)">
+        <div>
+          <span class="tag tag-yellow">PRACTICE</span>
+          <span class="card-title">Test Yourself</span>
+        </div>
+        <span class="chevron">▼</span>
+      </div>
+      <div class="card-body">
+        <div class="qa-item">
+          <div class="qa-q">Question 1: What is the output?</div>
+          <div class="code-block"><span class="kw">console</span>.log(<span class="str">'start'</span>);
+<span class="fn">setTimeout</span>(() => <span class="kw">console</span>.log(<span class="str">'timeout'</span>), <span class="num">0</span>);
+Promise.<span class="fn">resolve</span>().<span class="fn">then</span>(() => <span class="kw">console</span>.log(<span class="str">'promise'</span>));
+<span class="kw">console</span>.log(<span class="str">'end'</span>);</div>
+          <button class="reveal-btn" onclick="this.nextElementSibling.classList.toggle('hidden')">Reveal</button>
+          <div class="answer-reveal hidden">
+            <pre style="margin: 0; color: var(--success);">start
+end
+promise
+timeout</pre>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    function toggle(header) {
+      const card = header.parentElement;
+      card.classList.toggle('open');
+    }
+
+    const stepState = { classic: 0 };
+
+    function showStep(type, index) {
+      const container = document.getElementById(type + '-steps');
+      const steps = container.querySelectorAll('.step');
+      const max = steps.length - 1;
+      if (index < 0) index = 0;
+      if (index > max) index = max;
+      stepState[type] = index;
+      steps.forEach((step, i) => {
+        step.classList.toggle('active', i === index);
+      });
+      document.getElementById(type + '-counter').textContent = 'Step ' + index + ' of ' + max;
+    }
+
+    function nextStep(type) {
+      showStep(type, stepState[type] + 1);
+    }
+
+    function prevStep(type) {
+      showStep(type, stepState[type] - 1);
+    }
+
+    function resetSteps(type) {
+      showStep(type, 0);
+    }
+
+    showStep('classic', 0);
+  </script>
+</body>
+</html>

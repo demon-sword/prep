@@ -1,0 +1,146 @@
+<div class="answer-header reveal">
+  <div class="answer-meta">
+    <span class="meta-badge meta-category">03-agents-tool-use</span>
+    <span class="meta-badge meta-num">Q030</span>
+    <span class="meta-badge meta-status-review">review</span>
+  </div>
+  <h1 class="answer-title">Monitor autonomous agent behavior in production?</h1>
+</div>
+
+<div class="answer-section reveal">
+  <div class="accordion">
+    <div class="accordion-header">
+      <span class="accordion-title">⟁ Framing — Why this is asked</span>
+      <span class="accordion-chevron">▾</span>
+    </div>
+    <div class="accordion-body">
+      <div class="framing-grid">
+        <div><div class="framing-card">
+          <div class="framing-card-title">Why asked</div>
+          <p style="font-size:13.5px;line-height:1.7;color:var(--text-dim)">Agents operating autonomously can drift, loop, hallucinate, or cause irreversible side-effects — and unlike a simple API call, the failure is often silent or delayed. Interviewers ask this to probe whether you&#x27;ve shipped agents to real users and built the observability infrastructure required to detect and respond to misbehavior before it becomes an incident.</p>
+        </div></div>
+        <div><div class="framing-card">
+          <div class="framing-card-title">Trigger phrases</div>
+          <div class="trigger-list">
+              <div class="trigger-phrase">How do you monitor autonomous agents in production?</div>
+              <div class="trigger-phrase">What telemetry do you collect for an agent system?</div>
+              <div class="trigger-phrase">How would you know if an agent was stuck or misbehaving?</div>
+              <div class="trigger-phrase">Walk me through your agent observability stack.</div>
+          </div>
+        </div></div>
+      </div>
+      <div class="tests-block">
+        <span style="font-family:var(--mono);font-size:10px;letter-spacing:0.1em;text-transform:uppercase;color:var(--purple);margin-right:8px">Tests:</span>Production engineering depth: whether you can design structured, actionable observability for non-deterministic, multi-step agent loops — not just log &quot;agent ran.&quot;
+
+---
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="section-label">Concept</div>
+  <div class="concept-block"><p>Monitoring autonomous agents requires <strong>per-step structured telemetry</strong> — trace every thought, tool call, tool result, and token usage at the individual step level — because agent failures are often emergent patterns across multiple turns, invisible in aggregate logs. You need three layers: real-time traces for debugging, aggregate dashboards for health, and alerting for anomalies.</p></div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="section-label">Mechanism</div>
+  <div class="card"><p><strong>1. Step-level structured tracing (the foundation)</strong> Every agent turn emits a structured log event with:</p>
+<div class="code-block-wrap"><pre class="code-block"><code>{
+  &quot;run_id&quot;: &quot;uuid&quot;,
+  &quot;step&quot;: 4,
+  &quot;type&quot;: &quot;tool_call&quot;,
+  &quot;tool&quot;: &quot;search_kb&quot;,
+  &quot;input&quot;: {...},
+  &quot;output&quot;: {...},
+  &quot;latency_ms&quot;: 312,
+  &quot;tokens_in&quot;: 1840,
+  &quot;tokens_out&quot;: 112,
+  &quot;model&quot;: &quot;gpt-4o-mini&quot;,
+  &quot;timestamp&quot;: &quot;2026-06-16T10:22:31Z&quot;
+}</code></pre><button class="copy-btn">copy</button></div>
+<p>Use <strong>LangSmith</strong>, <strong>OpenTelemetry + Jaeger</strong>, or <strong>Langfuse</strong> as the trace store. Each run is a trace; each step is a span.</p>
+<p><strong>2. Aggregate metrics (dashboard)</strong> Derive these from step-level data:</p>
+<div class="table-wrap"><table class="data-table"><tr><th>Metric</th><th>Threshold</th><th>Why</th></tr><tr><td><code>avg_turns_per_run</code></td><td>< configured <code>max_iterations</code> × 0.8</td><td>Catches slow-burn loops</td></tr><tr><td><code>tool_error_rate</code></td><td>< 2%</td><td>Catches broken tool integrations</td></tr><tr><td><code>p95_run_latency_ms</code></td><td>SLO-defined (e.g., 10s)</td><td>User experience</td></tr><tr><td><code>cost_per_run_$</code></td><td>Alert if > 2× baseline</td><td>Token explosion detection</td></tr><tr><td><code>stuck_run_rate</code></td><td>< 0.5%</td><td>Runs hitting max_iterations</td></tr><tr><td><code>hitl_trigger_rate</code></td><td>Track trend</td><td>Confidence/autonomy calibration</td></tr></table></div>
+<p><strong>3. Anomaly detection and alerting</strong></p>
+<ul class="styled-list"><li><strong>Loop detection alert:</strong> if <code>action_fingerprint_hash</code> is repeated ≥ 3 times in one run → PagerDuty alert + auto-terminate</li><li><strong>Cost spike alert:</strong> if <code>cost_per_run</code> > 2× rolling 7-day p95 → Slack alert</li><li><strong>Error cascade alert:</strong> if <code>tool_error_rate</code> > 5% in a 5-minute window → circuit breaker opens</li><li><strong>Stuck run alert:</strong> if run age > <code>max_wall_clock</code> × 0.9 → async kill + HITL handoff</li></ul>
+<p><strong>4. Golden dataset regression testing</strong> Maintain a curated set of 50–100 canonical tasks with expected outcomes (tool calls used, answer quality score). Run nightly — catch prompt/model drift before it hits production users.</p>
+<p><strong>5. User-feedback loop</strong> Thumbs-up/thumbs-down at run completion → stored in Postgres → weekly RAGAS re-evaluation against golden dataset → flag regressions that drift more than 5 points.</p></div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="section-label">Example / Tradeoff</div>
+  <div class="card card-accent"><div class="rich-text"><p><strong>Concrete stack:</strong> LangSmith for per-step traces + Datadog for aggregate dashboards + PagerDuty for anomaly alerts. At one e-commerce support agent handling 50K runs/day, we surfaced a loop bug where the agent called <code>fetch_order_status</code> 8 times in a row (it hallucinated a new order ID each time) — only visible because step fingerprint hashing fired the loop-detection alert 12 minutes after deploy. Without that, the agent would have exhausted its 20-turn budget on every affected session.</p>
+<p><strong>Tradeoff:</strong> Full step-level telemetry adds 5–15ms overhead and ~$0.002/run in storage. For high-volume cheap pipelines (millions of simple queries), aggregate-only monitoring with sampled full traces (10% sampling rate) is the cost-effective middle ground.</p></div></div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="accordion">
+    <div class="accordion-header">
+      <span class="accordion-title">🎙 Verbal Script (3–5 min)</span>
+      <span class="accordion-chevron">▾</span>
+    </div>
+    <div class="accordion-body">
+      <div class="script-block"><div class="script-label">Opening (30s)</div><p>"I'd frame agent monitoring as three layers: per-step structured traces for debugging, aggregate metrics for health dashboards, and anomaly alerts for proactive incident response — because agent failures rarely show up in simple success/failure metrics."</p></div>
+      <div class="script-block"><div class="script-label">Core explanation (2–3 min)</div><p>"Starting with the foundation: every agent step — thought, tool call, result — emits a structured JSON span with run_id, step number, tool name, inputs, outputs, latency, and token counts. I use LangSmith or OpenTelemetry with Langfuse as the trace store. This gives me a full replay of any run when something goes wrong.</p>
+<p>On top of those spans I compute aggregate metrics: average turns per run, tool error rate, p95 run latency, cost per run, and stuck-run rate — runs that hit max_iterations. These go into a Datadog or Grafana dashboard with SLO-based alert thresholds.</p>
+<p>The most important alerts are: loop detection via action fingerprint hashing — if the agent takes the same action three times in a row, fire a PagerDuty alert and auto-terminate; and cost spike detection — if a run costs more than 2× the 7-day rolling p95, notify the on-call.</p>
+<p>I also run a golden dataset regression suite nightly: 50–100 canonical tasks with expected tool sequences and answer quality scores. Any nightly run that drops more than 5 points triggers a blocking alert before the next deploy."</p></div>
+      <div class="script-block"><div class="script-label">Tradeoff / production angle (1 min)</div><p>"The tradeoff is observability overhead: full step-level tracing adds 5–15ms and real storage cost. For high-volume, low-value pipelines I'd sample at 10% for full traces and keep only aggregates for the rest. For regulated domains — healthcare, finance — I'd keep 100% traces for audit trail requirements, even at higher cost."</p></div>
+      <div class="script-block"><div class="script-label">Wrap-up (30s)</div><p>"The bottom line is: agent monitoring requires step-level structured telemetry, not just run-level logs. Aggregate metrics catch systemic issues; per-step traces let you debug individual misbehavior. I'm happy to go deeper on the loop-detection heuristic or golden dataset design."</p></div>
+    </div>
+  </div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="section-label">Pitfalls</div>
+  <div class="pitfall-card">
+    <div class="pitfall-mistake"><strong>✗ Mistake</strong> Saying &quot;I&#x27;d add logging to the agent&quot; and describing run-level success/failure</div>
+    <div class="pitfall-better"><strong>✓ Better</strong> Describe per-step structured telemetry (run_id, step, tool, input, output, tokens, latency) stored in a trace system like LangSmith, from which dashboards and alerts are derived.</div>
+  </div>
+  <div class="pitfall-card">
+    <div class="pitfall-mistake"><strong>✗ Mistake</strong> Only mentioning reactive monitoring (look at logs when something breaks)</div>
+    <div class="pitfall-better"><strong>✓ Better</strong> Describe proactive anomaly detection: loop-detection via fingerprint hashing, cost-spike alerts, stuck-run circuit breakers, and nightly golden-dataset regression tests that catch drift before it reaches users.</div>
+  </div>
+  <div class="pitfall-card">
+    <div class="pitfall-mistake"><strong>✗ Mistake</strong> Treating token cost as an afterthought</div>
+    <div class="pitfall-better"><strong>✓ Better</strong> Explicitly include <code>cost_per_run</code> as a first-class metric with alert thresholds, since agent cost can spike 10–100× due to loops or runaway tool calls without any error being thrown.
+
+---</div>
+  </div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="section-label">Related Questions</div>
+  <div class="related-pills">
+    <div class="related-pill" data-slug="03-010">
+      <span class="related-pill-icon">→</span>
+      <div class="related-pill-text">
+        <div class="related-pill-q">Q10: Design a safe and debuggable agent loop</div>
+        <div class="related-pill-rel">Foundation: loop design is what monitoring observes</div>
+      </div>
+    </div>
+    <div class="related-pill" data-slug="03-026">
+      <span class="related-pill-icon">→</span>
+      <div class="related-pill-text">
+        <div class="related-pill-q">Q26: Control cost explosions from tool calls</div>
+        <div class="related-pill-rel">Cost monitoring is a core agent observability concern</div>
+      </div>
+    </div>
+    <div class="related-pill" data-slug="03-014">
+      <span class="related-pill-icon">→</span>
+      <div class="related-pill-text">
+        <div class="related-pill-q">Q14: Detect and stop infinite planning loops</div>
+        <div class="related-pill-rel">Loop detection is a key monitoring alert</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="section-label">One-liner recall</div>
+  <div class="oneliner-box">
+    <div class="oneliner-label">▸ Reconstruct from memory</div>
+    <div class="oneliner-text" data-text="Monitor agents with per-step structured traces (LangSmith/OTel), aggregate health dashboards (turns/run, cost/run, tool error rate, stuck-run rate), anomaly alerts (loop fingerprint hashing, cost spike, circuit breaker), and nightly golden-dataset regression tests — because agent failures emerge across steps, not in single-call logs.">Monitor agents with per-step structured traces (LangSmith/OTel), aggregate health dashboards (turns/run, cost/run, tool error rate, stuck-run rate), anomaly alerts (loop fingerprint hashing, cost spike, circuit breaker), and nightly golden-dataset regression tests — because agent failures emerge across steps, not in single-call logs.</div>
+  </div>
+</div>

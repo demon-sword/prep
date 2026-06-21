@@ -1,0 +1,138 @@
+<div class="answer-header reveal">
+  <div class="answer-meta">
+    <span class="meta-badge meta-category">06-ml-fundamentals</span>
+    <span class="meta-badge meta-num">Q001</span>
+    <span class="meta-badge meta-status-review">review</span>
+  </div>
+  <h1 class="answer-title">Data pre-processing and feature engineering?</h1>
+</div>
+
+<div class="answer-section reveal">
+  <div class="accordion">
+    <div class="accordion-header">
+      <span class="accordion-title">⟁ Framing — Why this is asked</span>
+      <span class="accordion-chevron">▾</span>
+    </div>
+    <div class="accordion-body">
+      <div class="framing-grid">
+        <div><div class="framing-card">
+          <div class="framing-card-title">Why asked</div>
+          <p style="font-size:13.5px;line-height:1.7;color:var(--text-dim)">Interviewers want to see that you treat data quality as a first-class engineering problem, not an afterthought. Most real-world ML failures trace back to dirty data or poorly engineered features, not model choice. This question probes your end-to-end pipeline thinking and your practical experience with the messy realities of raw data.</p>
+        </div></div>
+        <div><div class="framing-card">
+          <div class="framing-card-title">Trigger phrases</div>
+          <div class="trigger-list">
+              <div class="trigger-phrase">Walk me through how you&#x27;d prepare a dataset for training.</div>
+              <div class="trigger-phrase">What data pre-processing steps would you apply before feeding data to a model?</div>
+              <div class="trigger-phrase">How do you handle missing values / categorical variables / skewed distributions?</div>
+          </div>
+        </div></div>
+      </div>
+      <div class="tests-block">
+        <span style="font-family:var(--mono);font-size:10px;letter-spacing:0.1em;text-transform:uppercase;color:var(--purple);margin-right:8px">Tests:</span>Practical ML pipeline fluency — knowing the full spectrum from raw data ingestion to model-ready feature tensors, with awareness of data leakage pitfalls and the cost of getting this wrong.
+
+---
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="section-label">Concept</div>
+  <div class="concept-block"><p>Data pre-processing transforms raw, messy inputs into clean, model-ready tensors. Feature engineering extracts or constructs informative signals from those cleaned inputs. Together they are typically the highest-leverage lever in a traditional ML pipeline: better features routinely outperform fancier models on the same data.</p></div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="section-label">Mechanism</div>
+  <div class="card"><p><strong>Pre-processing pipeline (in order):</strong></p>
+<ol class="mechanism-steps"><li><strong>Ingest & audit</strong> — profile the dataset: row counts, null rates per column, cardinality of categoricals, distribution shape (skewness, outliers). Tools: <code>pandas-profiling</code> / <code>ydata-profiling</code>, Great Expectations for schema validation.</li></ol>
+<ol class="mechanism-steps"><li><strong>Handle missing values:</strong></li></ol>
+<ul class="styled-list"><li>Numerical: mean/median imputation for MCAR (missing completely at random); model-based imputation (KNN, IterativeImputer) for MAR.</li><li>Categorical: mode imputation or dedicated <code>"MISSING"</code> category; never silently drop rows without justification.</li><li>Time-series: forward-fill (LOCF) or interpolation respecting temporal order.</li></ul>
+<ol class="mechanism-steps"><li><strong>Outlier treatment:</strong> IQR clipping or Winsorisation for regression targets; log/Box-Cox transforms for heavy right skew (e.g. transaction amounts, ad spend). For anomaly-detection tasks, outliers are the signal — leave them.</li></ol>
+<ol class="mechanism-steps"><li><strong>Encode categoricals:</strong></li></ol>
+<ul class="styled-list"><li>Low cardinality (≤15 levels): one-hot encoding.</li><li>High cardinality (e.g. zip codes, product IDs): target encoding (with out-of-fold estimation to prevent leakage), frequency encoding, or entity embeddings.</li><li>Ordinal: integer mapping preserving order.</li></ul>
+<ol class="mechanism-steps"><li><strong>Scale numerical features:</strong></li></ol>
+<ul class="styled-list"><li>StandardScaler (zero mean, unit variance) — for models sensitive to feature magnitude: logistic regression, SVM, PCA, k-NN, neural nets.</li><li>MinMaxScaler — when bounded [0,1] range matters (e.g. image pixels, sigmoid output features).</li><li>Tree-based models (XGBoost, Random Forest) are scale-invariant — skip scaling.</li><li><strong>Critical:</strong> fit scalers on training data only, apply to val/test. Fitting on full dataset = data leakage.</li></ul>
+<ol class="mechanism-steps"><li><strong>Handle class imbalance</strong> (if applicable): oversample minority (SMOTE), undersample majority, or use <code>class_weight='balanced'</code> — but always evaluate on PR-AUC not accuracy.</li></ol>
+<p><strong>Feature engineering:</strong></p>
+<ul class="styled-list"><li><strong>Domain-derived features:</strong> for a transaction fraud model, derive <code>txn_velocity_24h</code>, <code>amount_deviation_from_user_median</code>, <code>merchant_category_risk_score</code>.</li><li><strong>Interaction terms:</strong> multiply or concatenate correlated features where domain knowledge suggests interaction (e.g. <code>price × discount_rate</code>).</li><li><strong>Temporal features:</strong> extract <code>hour_of_day</code>, <code>day_of_week</code>, <code>days_since_last_purchase</code> from timestamps.</li><li><strong>Text:</strong> TF-IDF or embeddings (all-MiniLM-L6-v2) for free-form strings; n-gram features for structured codes.</li><li><strong>Embeddings as features:</strong> for tabular + entity data, pre-trained embeddings (product or user IDs) fed as dense feature vectors to gradient boosting or a shallow MLP.</li><li><strong>Dimensionality reduction:</strong> PCA or UMAP when feature count >> sample count; interpret variance-explained threshold (≥95%).</li></ul>
+<p><strong>Leakage prevention checklist:</strong></p>
+<ul class="styled-list"><li>All transforms fitted within cross-validation folds, not on full data.</li><li>No future-facing features in time-series (e.g. using next-day sales to predict today).</li><li>No target-derived features computed before train-test split.</li><li>Use <code>Pipeline</code> + <code>ColumnTransformer</code> in scikit-learn to enforce this mechanically.</li></ul></div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="section-label">Example / Tradeoff</div>
+  <div class="card card-accent"><div class="rich-text"><p>In a fraud detection project (Stripe-style): raw transaction data had 40% null <code>merchant_zip</code>, skewed <code>amount</code> (log transform applied), 200+ raw merchant categories (target-encoded using 5-fold out-of-fold), and severe class imbalance (0.1% fraud). Pre-processing stack: Great Expectations for schema contracts → median imputation → log-amount → target encoding within <code>Pipeline</code> → <code>class_weight='balanced'</code> XGBoost. Result: PR-AUC improved from 0.54 (naive baseline) to 0.81.</p>
+<p><strong>Key tradeoff — automation vs interpretability:</strong> AutoML/FeatureTools can auto-generate hundreds of interaction features, but regulators (FCRA, GDPR Article 22) may require feature-level explanations via SHAP. A smaller, manually engineered feature set is often preferable in regulated domains.</p></div></div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="accordion">
+    <div class="accordion-header">
+      <span class="accordion-title">🎙 Verbal Script (3–5 min)</span>
+      <span class="accordion-chevron">▾</span>
+    </div>
+    <div class="accordion-body">
+      <div class="script-block"><div class="script-label">Opening (30s)</div><p>"I think of data pre-processing and feature engineering as a pipeline with a strict ordering — get the ordering wrong and you introduce leakage, which silently inflates your offline metrics while the model fails in production. Let me walk through the stages I'd apply in practice."</p></div>
+      <div class="script-block"><div class="script-label">Core explanation (2–3 min)</div><p>"I'd start with a data audit using ydata-profiling to understand null rates, cardinality, and distribution shape for every column. From there I handle missingness — mean or median imputation for numerical features that are missing completely at random, and a dedicated MISSING category for categoricals so the model can learn from the absence itself. For skewed numericals like transaction amounts I apply a log transform to compress the tail.</p>
+<p>For categoricals, I distinguish low-cardinality (one-hot) from high-cardinality like zip codes or product IDs, where I use target encoding with out-of-fold estimation to avoid leakage. Feature scaling — StandardScaler — goes in for linear models and neural nets but I skip it entirely for tree-based models like XGBoost since they're split-point-based and scale-invariant.</p>
+<p>Feature engineering is where domain knowledge earns its keep. For fraud detection I'd derive velocity features — transactions in the last 24 hours — and deviation from the user's historical median spend. These are far more informative than raw amount alone.</p>
+<p>The single most important mechanical discipline here is wrapping everything in a scikit-learn Pipeline with ColumnTransformer. This guarantees that scalers and encoders are fitted only on the training fold during cross-validation, never on the full dataset, which is the number one source of data leakage I see in real codebases."</p></div>
+      <div class="script-block"><div class="script-label">Tradeoff / production angle (1 min)</div><p>"At production scale the tradeoff shifts toward real-time feature serving. Features like 24-hour transaction velocity can't be computed at prediction time from scratch — you need a feature store (Feast, Tecton) that maintains pre-computed aggregates and serves them with sub-10ms latency. The training pipeline reads historical snapshots from the same store to maintain training-serving consistency, which is otherwise a silent source of model degradation."</p></div>
+      <div class="script-block"><div class="script-label">Wrap-up (30s)</div><p>"So the core discipline is: audit → clean → encode → scale → engineer domain features → enforce leakage prevention via Pipeline. In production, extend that to a feature store for low-latency serving. Happy to go deeper on any specific stage — leakage patterns, target encoding mechanics, or feature store design."</p></div>
+    </div>
+  </div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="section-label">Pitfalls</div>
+  <div class="pitfall-card">
+    <div class="pitfall-mistake"><strong>✗ Mistake</strong> Fitting scalers or encoders on the full dataset before splitting</div>
+    <div class="pitfall-better"><strong>✓ Better</strong> Always fit inside a <code>Pipeline</code> that runs within cross-validation folds; explain that fitting on the test set inflates metrics because the model has seen test-set statistics during &quot;training.&quot;</div>
+  </div>
+  <div class="pitfall-card">
+    <div class="pitfall-mistake"><strong>✗ Mistake</strong> Using accuracy as the evaluation metric after applying SMOTE for class imbalance</div>
+    <div class="pitfall-better"><strong>✓ Better</strong> Use PR-AUC or F1 with <code>average=&#x27;binary&#x27;</code>; SMOTE changes the class distribution in training but evaluation must reflect the true production distribution.</div>
+  </div>
+  <div class="pitfall-card">
+    <div class="pitfall-mistake"><strong>✗ Mistake</strong> Applying the same pre-processing logic to all model types (e.g. scaling for XGBoost)</div>
+    <div class="pitfall-better"><strong>✓ Better</strong> Tree-based models are scale-invariant; applying StandardScaler to XGBoost features wastes computation and signals surface-level familiarity.
+
+---</div>
+  </div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="section-label">Related Questions</div>
+  <div class="related-pills">
+    <div class="related-pill" data-slug="06-011">
+      <span class="related-pill-icon">→</span>
+      <div class="related-pill-text">
+        <div class="related-pill-q">Q11: Imbalanced datasets in real projects?</div>
+        <div class="related-pill-rel">Directly related — imbalance handling is a core pre-processing concern</div>
+      </div>
+    </div>
+    <div class="related-pill" data-slug="06-019">
+      <span class="related-pill-icon">→</span>
+      <div class="related-pill-text">
+        <div class="related-pill-q">Q19: Precision vs recall — fraud detection?</div>
+        <div class="related-pill-rel">Evaluation metrics flow directly from pre-processing choices for imbalanced data</div>
+      </div>
+    </div>
+    <div class="related-pill" data-slug="06-009">
+      <span class="related-pill-icon">→</span>
+      <div class="related-pill-text">
+        <div class="related-pill-q">Q9: Bias-variance tradeoff?</div>
+        <div class="related-pill-rel">Feature engineering richness directly controls variance; regularization interacts with feature count</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="section-label">One-liner recall</div>
+  <div class="oneliner-box">
+    <div class="oneliner-label">▸ Reconstruct from memory</div>
+    <div class="oneliner-text" data-text="Data pre-processing is audit → impute → encode → scale (inside a Pipeline to prevent leakage), followed by domain-derived feature engineering; the discipline is fitting all transforms on training data only and matching the same pipeline in a feature store for production serving.">Data pre-processing is audit → impute → encode → scale (inside a Pipeline to prevent leakage), followed by domain-derived feature engineering; the discipline is fitting all transforms on training data only and matching the same pipeline in a feature store for production serving.</div>
+  </div>
+</div>

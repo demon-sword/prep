@@ -1,0 +1,135 @@
+<div class="answer-header reveal">
+  <div class="answer-meta">
+    <span class="meta-badge meta-category">04-fine-tuning-training</span>
+    <span class="meta-badge meta-num">Q001</span>
+    <span class="meta-badge meta-status-review">review</span>
+  </div>
+  <h1 class="answer-title">When fine-tune vs prompt engineering?</h1>
+</div>
+
+<div class="answer-section reveal">
+  <div class="accordion">
+    <div class="accordion-header">
+      <span class="accordion-title">⟁ Framing — Why this is asked</span>
+      <span class="accordion-chevron">▾</span>
+    </div>
+    <div class="accordion-body">
+      <div class="framing-grid">
+        <div><div class="framing-card">
+          <div class="framing-card-title">Why asked</div>
+          <p style="font-size:13.5px;line-height:1.7;color:var(--text-dim)">This is the #1 fine-tuning question because it exposes whether a candidate understands the <em>cost-quality ladder</em> of LLM adaptation. Interviewers want to see that you won&#x27;t jump straight to fine-tuning (expensive, slow, risky catastrophic forgetting) when a well-crafted prompt or RAG pipeline would solve the problem. They&#x27;re probing production maturity: have you shipped both approaches and know when each one actually justified its cost?</p>
+        </div></div>
+        <div><div class="framing-card">
+          <div class="framing-card-title">Trigger phrases</div>
+          <div class="trigger-list">
+              <div class="trigger-phrase">When would you fine-tune instead of just prompting the model?</div>
+              <div class="trigger-phrase">You have a domain-specific task — what&#x27;s your approach?</div>
+              <div class="trigger-phrase">Prompt engineering vs RAG vs fine-tuning — when do you use each?</div>
+          </div>
+        </div></div>
+      </div>
+      <div class="tests-block">
+        <span style="font-family:var(--mono);font-size:10px;letter-spacing:0.1em;text-transform:uppercase;color:var(--purple);margin-right:8px">Tests:</span>Mastery of the cost-ordered LLM adaptation decision tree and the ability to articulate concrete thresholds (data size, latency, cost, behavior gap type) that trigger each approach.
+
+---
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="section-label">Concept</div>
+  <div class="concept-block"><p>Prompt engineering and fine-tuning sit on a cost-quality ladder: prompt engineering is free and instant but limited by what the base model already knows and how it behaves; fine-tuning changes model weights to produce a reliably different behavior or style, but requires labeled data, compute, and an evaluation framework to verify it helped. The decision is driven by three gap types: <strong>knowledge gap</strong> (new facts the model doesn't know), <strong>behavior gap</strong> (consistent style, format, instruction-following the model can't reliably achieve in-context), and <strong>efficiency gap</strong> (reducing token cost by baking instructions into weights).</p></div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="section-label">Mechanism</div>
+  <div class="card"><p>Work through the decision ladder in order — abort as soon as a cheaper option works:</p>
+<ol class="mechanism-steps"><li><strong>Prompt engineering first</strong> — zero-shot, then few-shot, then chain-of-thought. Costs nothing. Works when the base model already has the knowledge and just needs guidance. Fails when the task requires consistent specialized style, privacy (can't put all instructions in every prompt), or the context window is too expensive to fill with examples every call.</li></ol>
+<ol class="mechanism-steps"><li><strong>RAG when there's a knowledge gap</strong> — if the model gives wrong answers because it lacks domain facts (proprietary docs, recent events, product catalog), add retrieval instead of training. RAG is updateable, cheaper, and doesn't risk catastrophic forgetting.</li></ol>
+<ol class="mechanism-steps"><li><strong>SFT with LoRA when there's a behavior gap</strong> — if the model has the knowledge but can't reliably follow a specialized format, tone, safety policy, or instruction pattern, fine-tune with LoRA. Requires ~1K–10K labeled (prompt, completion) pairs. Use rank 8–64, α = 2×rank, target <code>q_proj</code>/<code>v_proj</code> layers, train in BF16 at LR 1e-4–2e-4.</li></ol>
+<ol class="mechanism-steps"><li><strong>DPO when you have preference pairs</strong> — if you have (prompt, chosen, rejected) triples from human or LLM-judge feedback, DPO directly optimizes behavior alignment without a separate reward model. More stable than RLHF, works with 10K–500K preference pairs.</li></ol>
+<ol class="mechanism-steps"><li><strong>Full fine-tuning / continued pre-training</strong> — only when you need to inject genuinely new vocabulary, a specialized subdomain (clinical notes, legal citations), and have millions of domain tokens. Requires H100-class GPU clusters and is almost never justified for a startup product.</li></ol>
+<p><strong>Key signals that fine-tuning is correct:</strong></p>
+<ul class="styled-list"><li>Prompt engineering produces inconsistent results despite many iterations</li><li>Task requires a stable style/format that varies dangerously in-context</li><li>Inference cost is prohibitive (baking behavior into weights reduces per-call token usage)</li><li>Latency requires a smaller specialized model to outperform a larger prompted one</li></ul></div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="section-label">Example / Tradeoff</div>
+  <div class="card card-accent"><div class="rich-text"><p><strong>Real example — code review assistant:</strong></p>
+<ul class="styled-list"><li>Prompt-only baseline: GPT-4o with a 2K-token system prompt describing the review rubric → inconsistent rating calibration across reviewers, ~$0.04/review, but the style varied enough to lose user trust.</li><li>SFT with LoRA on 5K human-reviewed diffs (Llama 3 8B, rank=32, α=64, 3 epochs on 4× A100 40GB): consistent rubric, $0.002/review, p95 latency < 800ms.</li><li>Outcome: 95% cost reduction, ROUGE-L alignment with senior reviewer 0.71→0.84, catastrophic forgetting confirmed by MMLU drop of 0.3 pts (acceptable).</li></ul>
+<p><strong>The trap:</strong> Jumping to fine-tuning when better few-shot examples or chain-of-thought would have achieved 90% of the benefit. The 2-week fine-tuning iteration cycle (data curation → training → eval → regression test) vs a 30-minute prompt iteration is a real organizational cost.</p>
+<div class="table-wrap"><table class="data-table"><tr><th>Approach</th><th>Data needed</th><th>Compute</th><th>Updateable</th><th>Latency</th><th>Best for</th></tr><tr><td>Prompt engineering</td><td>0–20 examples</td><td>None</td><td>Instant</td><td>Base model</td><td>Knowledge present, style guidance needed</td></tr><tr><td>RAG</td><td>No labeled data</td><td>Inference only</td><td>Yes (index update)</td><td>+50–200ms</td><td>Knowledge gap, fresh data</td></tr><tr><td>SFT + LoRA</td><td>1K–100K (prompt, completion)</td><td>4–8× A100 days</td><td>Redeploy required</td><td>Smaller model possible</td><td>Behavior gap, cost pressure</td></tr><tr><td>DPO</td><td>10K–500K preference pairs</td><td>Moderate</td><td>Redeploy required</td><td>Same as SFT</td><td>Alignment, safety, preference shaping</td></tr></table></div>| Full fine-tune | 1M+ samples | GPU cluster | Redeploy required | Smallest for task | Domain vocab, pre-training knowledge |</div></div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="accordion">
+    <div class="accordion-header">
+      <span class="accordion-title">🎙 Verbal Script (3–5 min)</span>
+      <span class="accordion-chevron">▾</span>
+    </div>
+    <div class="accordion-body">
+      <div class="script-block"><div class="script-label">Opening (30s)</div><p>"I think of this as a cost-quality ladder — you start at the cheapest rung and only climb when the cheaper option demonstrably fails. So I'd never jump to fine-tuning without first exhausting prompt engineering. The core question is: what <em>type</em> of gap am I closing — knowledge, behavior, or efficiency?"</p></div>
+      <div class="script-block"><div class="script-label">Core explanation (2–3 min)</div><p>"Step one is always prompt engineering: zero-shot, then few-shot, then chain-of-thought. This is free and instant. If the model already knows the domain and just needs guidance on format or reasoning style, this is often enough.</p>
+<p>If the model gives wrong answers because it lacks the facts — proprietary documents, recent product data — then I'd add RAG rather than fine-tune. RAG is updateable and doesn't risk catastrophic forgetting.</p>
+<p>Fine-tuning with LoRA becomes the right call when there's a <em>behavior</em> gap: the model has the knowledge but can't reliably produce a consistent style, safety-constrained format, or specialized instruction-following pattern, even with extensive prompting. I'd want at least 1K labeled examples, use rank 8–64 LoRA adapters targeting <code>q_proj</code> and <code>v_proj</code>, train in BF16, and evaluate against a golden dataset before and after — including a regression check on general benchmarks to catch forgetting.</p>
+<p>DPO is the right next step if I have preference pairs — chosen vs rejected completions — because it directly optimizes for human preference without needing a separate reward model or PPO's instability.</p>
+<p>Full fine-tuning or continued pre-training is almost never my first answer for a product; it's for domain-specific vocabulary injection at scale and requires GPU cluster access and millions of tokens."</p></div>
+      <div class="script-block"><div class="script-label">Tradeoff / production angle (1 min)</div><p>"The real cost of fine-tuning that people underestimate isn't compute — it's the data curation and iteration cycle. A prompt change ships in minutes; a LoRA fine-tune requires curating data, running training (hours to days), running evals, potentially finding regression bugs, and redeploying. The break-even is when you've spent more engineering time fighting prompt inconsistency than a fine-tune iteration would take. Concretely, I'd give prompt engineering at least 2–3 serious iteration cycles before declaring it insufficient."</p></div>
+      <div class="script-block"><div class="script-label">Wrap-up (30s)</div><p>"So the hierarchy is: prompt → RAG → SFT/LoRA → DPO → full fine-tune. Fine-tuning earns its place when there's a confirmed behavior gap, you have labeled data, and the business case justifies the iteration cost. Happy to go deeper on LoRA mechanics or the DPO vs RLHF tradeoff."</p></div>
+    </div>
+  </div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="section-label">Pitfalls</div>
+  <div class="pitfall-card">
+    <div class="pitfall-mistake"><strong>✗ Mistake</strong> Jumping straight to &quot;I&#x27;d fine-tune it&quot; without working through the ladder</div>
+    <div class="pitfall-better"><strong>✓ Better</strong> State the full decision tree (prompt → RAG → LoRA/SFT → DPO) and name the concrete signal that each step is insufficient before moving to the next (e.g., &quot;if few-shot produces inconsistent style after 3 iteration cycles, that&#x27;s the trigger for SFT&quot;)</div>
+  </div>
+  <div class="pitfall-card">
+    <div class="pitfall-mistake"><strong>✗ Mistake</strong> Saying fine-tuning &quot;teaches the model new facts&quot;</div>
+    <div class="pitfall-better"><strong>✓ Better</strong> Clarify that SFT primarily changes behavior and style; for new factual knowledge, RAG or continued pre-training is more reliable; SFT on Q&amp;A pairs can memorize facts but is brittle and causes catastrophic forgetting on general capabilities</div>
+  </div>
+  <div class="pitfall-card">
+    <div class="pitfall-mistake"><strong>✗ Mistake</strong> Not mentioning catastrophic forgetting</div>
+    <div class="pitfall-better"><strong>✓ Better</strong> Proactively note that LoRA mitigates forgetting by keeping base weights frozen, but you still run MMLU or a general benchmark regression check before deploying any fine-tuned model
+
+---</div>
+  </div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="section-label">Related Questions</div>
+  <div class="related-pills">
+    <div class="related-pill" data-slug="04-002">
+      <span class="related-pill-icon">→</span>
+      <div class="related-pill-text">
+        <div class="related-pill-q">Q2: What is PEFT/LoRA and when use it?</div>
+        <div class="related-pill-rel">Follow-up: once you decide to fine-tune, how does LoRA actually work?</div>
+      </div>
+    </div>
+    <div class="related-pill" data-slug="04-005">
+      <span class="related-pill-icon">→</span>
+      <div class="related-pill-text">
+        <div class="related-pill-q">Q5: Fine-tune or prompt-engineered RAG?</div>
+        <div class="related-pill-rel">Same decision but framed as fine-tune vs RAG specifically</div>
+      </div>
+    </div>
+    <div class="related-pill" data-slug="01-040">
+      <span class="related-pill-icon">→</span>
+      <div class="related-pill-text">
+        <div class="related-pill-q">Q3: What is the difference between prompt engineering, RAG, and fine-tuning?</div>
+        <div class="related-pill-rel">Cross-category: LLM fundamentals framing of the same decision ladder</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="section-label">One-liner recall</div>
+  <div class="oneliner-box">
+    <div class="oneliner-label">▸ Reconstruct from memory</div>
+    <div class="oneliner-text" data-text="Fine-tune only after exhausting prompt engineering and RAG — use LoRA/SFT when there&#x27;s a confirmed *behavior* gap and ≥1K labeled examples; use DPO for preference alignment; never use fine-tuning to inject new facts.">Fine-tune only after exhausting prompt engineering and RAG — use LoRA/SFT when there&#x27;s a confirmed *behavior* gap and ≥1K labeled examples; use DPO for preference alignment; never use fine-tuning to inject new facts.</div>
+  </div>
+</div>

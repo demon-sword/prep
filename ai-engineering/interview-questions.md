@@ -734,4 +734,145 @@ Companies like Amazon still run full SWE coding bars.
 
 ---
 
-*Last updated: May 2026. Sources linked in [README](./README.md).*
+---
+
+## 21. LLM fundamentals deep dive (llmgenai/LLMInterviewQuestions)
+
+Questions from the [LLMInterviewQuestions](https://github.com/llmgenai/LLMInterviewQuestions) repo, organized by their original categories. Duplicates with earlier sections omitted.
+
+### Prompt engineering & LLM basics
+
+- How to estimate the cost of running SaaS-based vs open-source LLM models?
+- What are different decoding strategies for picking output tokens?
+- What are different ways to define stopping criteria in an LLM?
+- Explain the basic structure of prompt engineering.
+- Explain in-context learning.
+- What are the types of prompt engineering?
+- What aspects should you keep in mind when using few-shot prompting?
+- What strategies help write good prompts?
+- How do you improve LLM reasoning if your CoT prompt fails?
+
+### Document digitization & chunking
+
+- What is chunking, and why do we chunk data?
+- What factors influence chunk size?
+- What are the different types of chunking methods?
+- How do you find the ideal chunk size?
+- What is the best method to digitize and chunk complex documents like annual reports?
+- How do you handle tables during chunking?
+- How do you handle very large tables for better retrieval?
+- How do you handle list items during chunking?
+- How do you build a production-grade document processing and indexing pipeline?
+- How do you handle graphs & charts in RAG?
+
+### Embedding models
+
+- What is the difference between embedding short vs long content?
+- How do you benchmark embedding models on your own data?
+- OpenAI embedding accuracy is low after benchmarking — how do you improve it further?
+- Walk through the steps of improving a sentence transformer model used for embedding.
+
+### Vector database internals
+
+- What is a vector database, and how does it differ from traditional databases?
+- Explain the difference between a vector index, vector DB, and vector plugins.
+- Given a small dataset where accuracy > speed, which search strategy do you choose and why?
+- Explain vector search strategies: clustering and locality-sensitive hashing (LSH).
+- How does clustering reduce search space? When does it fail and how can you mitigate failures?
+- Explain random projection indexing.
+- Explain locality-sensitive hashing (LSH) indexing.
+- Explain product quantization (PQ) indexing.
+- Compare different vector index types — given a scenario, which would you use?
+- How do you decide the ideal similarity metric for a use case?
+- Explain different types and challenges of filtering in vector DBs.
+- How do you decide the best vector database for your needs?
+
+### Advanced search & retrieval
+
+- What are architectural patterns for information retrieval and semantic search?
+- Why is having very good search so important?
+- A client's RAG system gives inaccurate results; investigation shows retrieval is poor — what steps do you take?
+- Explain keyword-based retrieval.
+- How do you fine-tune re-ranking models?
+- Explain the most common information retrieval metrics and when they fail.
+- Quora-style QA system: which evaluation metric ensures users find the most pertinent answers fastest?
+- You have a recommendation system — which metric do you use to evaluate it?
+- Compare information retrieval metrics and when to use each.
+- If you have search results from multiple methods, how do you merge and homogenize rankings into a single result set?
+- How do you handle multi-hop / multifaceted queries?
+
+### LLM architecture internals
+
+- Explain the disadvantages of the self-attention mechanism and how to overcome them.
+- What is the difference between local attention and global attention?
+- What makes transformers heavy on computation and memory, and how can you address this?
+- How can you increase the context length of an LLM?
+- With a vocabulary of 100K tokens, how do you optimize transformer architecture?
+- A large vocabulary causes computation issues; a small vocabulary causes OOV issues — how do you find the best balance?
+- Explain different types of LLM architectures and which is best for which task.
+
+### Supervised fine-tuning
+
+- Which scenarios require fine-tuning an LLM?
+- How do you make the decision to fine-tune?
+- How do you improve a model to answer only when it has sufficient context?
+- How do you create fine-tuning datasets for Q&A?
+- How do you set hyperparameters for fine-tuning?
+- How do you estimate infrastructure requirements for fine-tuning an LLM?
+- How do you fine-tune an LLM on consumer hardware?
+- What are the different categories of PEFT methods?
+- What is catastrophic forgetting in LLMs?
+- What are different re-parameterization methods for fine-tuning?
+
+### Preference alignment (RLHF / DPO)
+
+- At what stage do you choose preference alignment over SFT?
+- What is reward hacking in RLHF?
+- Explain different preference alignment methods.
+
+### Evaluation
+
+- How do you evaluate the best LLM model for your use case?
+- Explain the chain-of-verification technique.
+
+### Hallucination control
+
+- What are the different forms of hallucinations?
+- How do you control hallucinations at various levels?
+
+### LLM deployment & inference
+
+- Why does quantization not decrease LLM accuracy?
+- What techniques optimize LLM inference for higher throughput?
+- How do you accelerate model response time without attention approximation techniques like GQA?
+
+### Agents (llmgenai framing)
+
+- Explain basic agent concepts and the types of strategies available to implement agents.
+- Explain ReAct prompting with a code example and its advantages.
+- Explain the Plan-and-Execute prompting strategy.
+- Explain OpenAI functions strategy with code examples.
+- What is the difference between OpenAI functions and LangChain agents?
+
+### Prompt hacking
+
+- What is prompt hacking and why does it matter?
+- What are the different types of prompt hacking?
+- What are the different defense tactics against prompt hacking?
+
+### Miscellaneous / advanced
+
+- What is FP8 and what are its advantages?
+- How do you train an LLM with low-precision training without compromising accuracy?
+- How do you calculate the size of the KV cache?
+- Explain the dimensions of each layer in a multi-head attention block.
+- How do you make sure the attention layer focuses on the right part of the input?
+
+### Case studies
+
+- Case Study 1: LLM chat assistant with dynamic context based on query.
+- Case Study 2: Prompting techniques for production systems.
+
+---
+
+*Last updated: June 2026. Sources linked in [README](./README.md).*

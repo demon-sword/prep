@@ -1,0 +1,138 @@
+<div class="answer-header reveal">
+  <div class="answer-meta">
+    <span class="meta-badge meta-category">02-rag-systems</span>
+    <span class="meta-badge meta-num">Q012</span>
+    <span class="meta-badge meta-status-review">review</span>
+  </div>
+  <h1 class="answer-title">Compare sparse vs dense retrieval. When use each?</h1>
+</div>
+
+<div class="answer-section reveal">
+  <div class="accordion">
+    <div class="accordion-header">
+      <span class="accordion-title">⟁ Framing — Why this is asked</span>
+      <span class="accordion-chevron">▾</span>
+    </div>
+    <div class="accordion-body">
+      <div class="framing-grid">
+        <div><div class="framing-card">
+          <div class="framing-card-title">Why asked</div>
+          <p style="font-size:13.5px;line-height:1.7;color:var(--text-dim)">This question probes whether the candidate understands retrieval at an architectural level — not just &quot;use a vector DB&quot; but <em>why</em> different retrieval paradigms exist, what each fails at, and when to combine them. It&#x27;s a core RAG deep-dive question because retrieval quality is the #1 bottleneck in production RAG systems.</p>
+        </div></div>
+        <div><div class="framing-card">
+          <div class="framing-card-title">Trigger phrases</div>
+          <div class="trigger-list">
+              <div class="trigger-phrase">Compare sparse vs dense retrieval</div>
+              <div class="trigger-phrase">When would you use BM25 vs embeddings?</div>
+              <div class="trigger-phrase">What is hybrid search and why does it matter?</div>
+              <div class="trigger-phrase">Our dense retrieval is missing exact product codes — what do you do?</div>
+          </div>
+        </div></div>
+      </div>
+      <div class="tests-block">
+        <span style="font-family:var(--mono);font-size:10px;letter-spacing:0.1em;text-transform:uppercase;color:var(--purple);margin-right:8px">Tests:</span>The ability to reason about retrieval failure modes, make principled architecture decisions, and articulate the hybrid search pattern that dominates production RAG systems.
+
+---
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="section-label">Concept</div>
+  <div class="concept-block"><p><strong>Sparse retrieval</strong> (BM25, TF-IDF) uses exact term-frequency statistics — documents are indexed as high-dimensional sparse vectors where each dimension represents a vocabulary token. <strong>Dense retrieval</strong> uses neural encoders (bi-encoders) to project queries and documents into dense low-dimensional embedding spaces, capturing semantic similarity even when surface words don't match.</p></div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="section-label">Mechanism</div>
+  <div class="card"><p><strong>Sparse (BM25):</strong></p>
+<ul class="styled-list"><li>Index: inverted index mapping tokens → (doc_id, TF-IDF weight) postings</li><li>Query time: tokenize query, look up each token's postings list, score docs via BM25 formula: <code>score(q,d) = Σ IDF(t) <em> (tf </em> (k1+1)) / (tf + k1<em>(1 - b + b</em>dl/avgdl))</code></li><li>Result: exact token match required; no cross-lingual or paraphrase matching</li><li>Latency: sub-millisecond at scale (Elasticsearch/Lucene handles 1B+ docs)</li><li>Tools: Elasticsearch, OpenSearch, Lucene, Pyserini</li></ul>
+<p><strong>Dense (bi-encoder):</strong></p>
+<ul class="styled-list"><li>Offline: encode all documents with a neural encoder (e.g. <code>text-embedding-3-large</code>, <code>bge-large-en</code>, <code>E5-large</code>) → store in vector DB (Pinecone, Qdrant, FAISS)</li><li>Query time: encode query → nearest-neighbor search via HNSW (approximate, ~1–10ms)</li><li>Result: semantic matching — "automobile" matches "car"; paraphrases, synonyms, multilingual</li><li>Latency: 10–50ms (ANN search) + ~10ms for embedding API call</li><li>Tools: Pinecone, Qdrant, Weaviate, FAISS, pgvector</li></ul>
+<p><strong>Failure modes:</strong></p>
+<div class="table-wrap"><table class="data-table"><tr><th>Scenario</th><th>Sparse fails</th><th>Dense fails</th></tr><tr><td>"Order ID #ORD-2024-8831"</td><td>Never</td><td>Often (rare token, no training signal)</td></tr><tr><td>"car vs automobile"</td><td>Always</td><td>Handles well</td></tr><tr><td>"NOT recommended for diabetics"</td><td>Misses negation</td><td>Also often misses negation</td></tr><tr><td>Legal/medical abbreviations</td><td>Handles if in vocab</td><td>Depends on embedding training domain</td></tr></table></div>| Code identifiers (`getUserById`) | Handles (exact match) | Depends on model |</div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="section-label">Example / Tradeoff</div>
+  <div class="card card-accent"><div class="rich-text"><p><strong>Production hybrid pattern (Reciprocal Rank Fusion):</strong></p>
+<div class="code-block-wrap"><pre class="code-block"><code>query → [BM25 retrieval] → top-K sparse results
+      → [dense retrieval] → top-K dense results
+      → RRF merge: score(d) = Σ 1 / (rank_sparse(d) + 60) + 1 / (rank_dense(d) + 60)
+      → top-N candidates → cross-encoder reranker → top-k to LLM</code></pre><button class="copy-btn">copy</button></div>
+<p>RRF is used by Elasticsearch (since 8.9), Cohere, and most production RAG stacks. The constant 60 dampens rank sensitivity at the top.</p>
+<p><strong>Real-world evidence:</strong></p>
+<ul class="styled-list"><li>e-commerce product search: dense retrieval misses exact SKUs/GTINs; BM25 handles them; hybrid RRF gave +12% recall@10 vs dense-only in internal A/B test</li><li>Customer support RAG: dense-only missed queries containing ticket IDs and error codes; hybrid search recovered those retrieval failures without touching generation</li><li>BEIR benchmark: no single retrieval method dominates across domains; hybrid consistently outperforms either alone</li></ul>
+<p><strong>When to use which:</strong></p>
+<div class="table-wrap"><table class="data-table"><tr><th>Use dense alone</th><th>Use sparse alone</th><th>Use hybrid (most production)</th></tr><tr><td>Conversational QA with natural language queries</td><td>Log search, exact-match lookup systems</td><td>RAG with mixed query types</td></tr><tr><td>Multilingual retrieval</td><td>Compliance systems requiring exact term citation</td><td>E-commerce, enterprise search</td></tr></table></div>| Semantic similarity tasks | Legacy Elasticsearch infrastructure, no GPU | Any system with acronyms, IDs, codes |</div></div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="accordion">
+    <div class="accordion-header">
+      <span class="accordion-title">🎙 Verbal Script (3–5 min)</span>
+      <span class="accordion-chevron">▾</span>
+    </div>
+    <div class="accordion-body">
+      <div class="script-block"><div class="script-label">Opening (30s)</div><p>"Sparse and dense retrieval are complementary paradigms — each has a structural failure mode the other covers. Sparse uses exact term statistics like BM25, dense uses neural embeddings. In practice, most production RAG systems use both via hybrid search with Reciprocal Rank Fusion. Let me walk through how each works, when each fails, and why hybrid dominates."</p></div>
+      <div class="script-block"><div class="script-label">Core explanation (2–3 min)</div><p>"Sparse retrieval — BM25 is the canonical example — builds an inverted index: for every token, it maps to the documents containing it with term-frequency weights. At query time, you tokenize the query, intersect postings lists, and score with the BM25 formula. The result is exact-match retrieval. It handles order IDs, error codes, legal citations, and product SKUs perfectly because those are exact strings. It's also extremely fast — Elasticsearch handles billions of documents at sub-millisecond latency. The failure mode is vocabulary mismatch: if the user says 'automobile' and the docs say 'car,' BM25 returns zero results.</p>
+<p>Dense retrieval solves that. A bi-encoder like <code>bge-large-en</code> or OpenAI's <code>text-embedding-3-large</code> maps both queries and documents into dense vector spaces where semantic meaning determines proximity. Cosine similarity catches paraphrases, synonyms, multilingual queries. The retrieval is approximate nearest-neighbor via HNSW in a vector DB like Pinecone or Qdrant — 10–50ms at query time. The failure mode is rare tokens and exact-match requirements — embedding models have no strong signal for <code>ORD-2024-8831</code> or a 7-digit product code.</p>
+<p>So the production answer is hybrid: run both in parallel, merge via Reciprocal Rank Fusion — score each document as the sum of 1/(rank+60) from each retrieval leg — then send the merged top-N candidates to a cross-encoder reranker like Cohere Rerank or BGE-Reranker. Elasticsearch has natively supported RRF since version 8.9."</p></div>
+      <div class="script-block"><div class="script-label">Tradeoff / production angle (1 min)</div><p>"The key tradeoff is latency and infrastructure cost. Dense retrieval requires maintaining a vector index and embedding model inference; sparse retrieval is just Elasticsearch. If your queries are exclusively natural language and your corpus has no IDs or codes, dense-only is simpler and cheaper. But as soon as users start querying with product codes, ticket numbers, or technical strings, dense-only breaks and hybrid is mandatory. I default to hybrid in any system serving real users with mixed query patterns — the RRF overhead is negligible."</p></div>
+      <div class="script-block"><div class="script-label">Wrap-up (30s)</div><p>"In short: BM25 for exact-match reliability, dense for semantic coverage, hybrid RRF for production. The retrieval quality ceiling is determined by getting this right — retrieval is the primary RAG failure mode, not generation."</p></div>
+    </div>
+  </div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="section-label">Pitfalls</div>
+  <div class="pitfall-card">
+    <div class="pitfall-mistake"><strong>✗ Mistake</strong> Treating dense retrieval as strictly superior to BM25 and recommending to &quot;just use a vector DB&quot;</div>
+    <div class="pitfall-better"><strong>✓ Better</strong> Explain that dense retrieval fails on exact-match queries (product codes, ticket IDs, error messages) and that BM25 handles these perfectly; hybrid is the default for production systems</div>
+  </div>
+  <div class="pitfall-card">
+    <div class="pitfall-mistake"><strong>✗ Mistake</strong> Describing hybrid search as &quot;running both and taking the union&quot; without explaining the ranking fusion mechanism</div>
+    <div class="pitfall-better"><strong>✓ Better</strong> Name Reciprocal Rank Fusion specifically, explain the 1/(rank+60) formula, and mention that Elasticsearch 8.9+ supports it natively</div>
+  </div>
+  <div class="pitfall-card">
+    <div class="pitfall-mistake"><strong>✗ Mistake</strong> Omitting the reranking step after hybrid retrieval</div>
+    <div class="pitfall-better"><strong>✓ Better</strong> Explain that RRF merges candidate sets at the retrieval stage, but a cross-encoder reranker (Cohere Rerank, BGE-Reranker) is still needed to precision-rank the top-N before sending to the LLM
+
+---</div>
+  </div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="section-label">Related Questions</div>
+  <div class="related-pills">
+    <div class="related-pill" data-slug="02-017">
+      <span class="related-pill-icon">→</span>
+      <div class="related-pill-text">
+        <div class="related-pill-q">Q17: What is hybrid search? When combine vector + BM25?</div>
+        <div class="related-pill-rel">Direct follow-up — hybrid search is the production answer to this question</div>
+      </div>
+    </div>
+    <div class="related-pill" data-slug="02-018">
+      <span class="related-pill-icon">→</span>
+      <div class="related-pill-text">
+        <div class="related-pill-q">Q18: What is re-ranking? Cross-encoder vs bi-encoder?</div>
+        <div class="related-pill-rel">Follow-up — reranking is the next stage after hybrid retrieval merges candidates</div>
+      </div>
+    </div>
+    <div class="related-pill" data-slug="02-023">
+      <span class="related-pill-icon">→</span>
+      <div class="related-pill-text">
+        <div class="related-pill-q">Q23: How does ANN search work? HNSW indexing?</div>
+        <div class="related-pill-rel">Prerequisite — HNSW is the mechanism that makes dense retrieval fast enough for production</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="answer-section reveal">
+  <div class="section-label">One-liner recall</div>
+  <div class="oneliner-box">
+    <div class="oneliner-label">▸ Reconstruct from memory</div>
+    <div class="oneliner-text" data-text="BM25 wins on exact-match (IDs, codes, keywords) while dense embeddings win on semantic similarity (paraphrases, multilingual), so production RAG uses both via Reciprocal Rank Fusion then cross-encoder reranking.">BM25 wins on exact-match (IDs, codes, keywords) while dense embeddings win on semantic similarity (paraphrases, multilingual), so production RAG uses both via Reciprocal Rank Fusion then cross-encoder reranking.</div>
+  </div>
+</div>
