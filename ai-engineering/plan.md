@@ -1,11 +1,11 @@
 # Plan: AI Engineering Interview Prep
 
 ## Meta
-current_category: 07-cost-latency
-category_name: Cost & Latency Optimization
-category_num: 7
-question_range: 1–16
-task_count: 18
+current_category: 08-safety-guardrails
+category_name: Safety & Guardrails
+category_num: 8
+question_range: 1–10
+task_count: 12
 created: 2026-06-24
 
 ## Done
@@ -39,6 +39,17 @@ created: 2026-06-24
 - 06-ml-fundamentals (switched on 2026-06-24)
 
 - [x] validate — run: bash ralph-ai-engineering/validate.sh 07-cost-latency — PASSED (17 files OK)
+- [x] categories/08-safety-guardrails.md — category overview: Safety & Guardrails (10 questions)
 
 ## Next
-<!-- 07-cost-latency complete -->
+- [ ] answers/08-001-when-and-how-implement-llm-guardrails.md — Q1: When and how implement LLM guardrails?
+- [ ] answers/08-002-minimize-harmful-outputs-while-staying-useful.md — Q2: Minimize harmful outputs while staying useful?
+- [ ] answers/08-003-detect-policy-violations-offensive-content.md — Q3: Detect policy violations / offensive content?
+- [ ] answers/08-004-protect-against-prompt-injection-and-jailbreaking.md — Q4: Protect against prompt injection and jailbreaking?
+- [ ] answers/08-005-handle-exceptions-in-genai-applications.md — Q5: Handle exceptions in GenAI applications?
+- [ ] answers/08-006-constitutional-ai-and-alignment.md — Q6: Constitutional AI and alignment?
+- [ ] answers/08-007-data-privacy-and-pii-in-prompts-and-logs.md — Q7: Data privacy and PII in prompts and logs?
+- [ ] answers/08-008-bias-in-training-data-and-generated-content.md — Q8: Bias in training data and generated content?
+- [ ] answers/08-009-red-team-an-llm-system.md — Q9: Red-team an LLM system?
+- [ ] answers/08-010-generated-code-gets-executed-prevent-malicious-code.md — Q10: Generated code gets executed — prevent malicious code?
+- [ ] validate — run: bash ralph-ai-engineering/validate.sh 08-safety-guardrails
