@@ -22,6 +22,7 @@ created: 2026-06-24
 - [x] answers/07-009-multi-layer-caching-retrieval-prompt-response.md — Q9: Multi-layer caching: retrieval, prompt, response?
 - [x] answers/07-010-model-tiering-small-distilled-vs-large-llm.md — Q10: Model tiering — small distilled vs large LLM?
 - [x] answers/07-011-prompt-compression.md — Q11: Prompt compression?
+- [x] answers/07-012-budget-estimate-for-rag-at-enterprise-scale-eg-300k-legal-co.md — Q12: Budget estimate for RAG at enterprise scale (e.g. 300K legal contracts)?
 
 ## Categories completed
 - 08-safety-guardrails (switched on 2026-06-16)
@@ -34,7 +35,6 @@ created: 2026-06-24
 - 06-ml-fundamentals (switched on 2026-06-24)
 
 ## Next
-- [ ] answers/07-012-budget-estimate-for-rag-at-enterprise-scale-eg-300k-legal-co.md — Q12: Budget estimate for RAG at enterprise scale (e.g. 300K legal contracts)?
 - [ ] answers/07-013-latencycostrelevancy-tradeoff-triangle.md — Q13: Latency/cost/relevancy tradeoff triangle?
 - [ ] answers/07-014-latency-vs-throughput-for-llm-serving.md — Q14: Latency vs throughput for LLM serving?
 - [ ] answers/07-015-benchmark-each-llm-call-in-multi-step-pipeline.md — Q15: Benchmark each LLM call in multi-step pipeline?
