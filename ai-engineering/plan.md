@@ -40,9 +40,9 @@ created: 2026-06-24
 
 - [x] validate — run: bash ralph-ai-engineering/validate.sh 07-cost-latency — PASSED (17 files OK)
 - [x] categories/08-safety-guardrails.md — category overview: Safety & Guardrails (10 questions)
+- [x] answers/08-001-when-and-how-implement-llm-guardrails.md — Q1: When and how implement LLM guardrails?
 
 ## Next
-- [ ] answers/08-001-when-and-how-implement-llm-guardrails.md — Q1: When and how implement LLM guardrails?
 - [ ] answers/08-002-minimize-harmful-outputs-while-staying-useful.md — Q2: Minimize harmful outputs while staying useful?
 - [ ] answers/08-003-detect-policy-violations-offensive-content.md — Q3: Detect policy violations / offensive content?
 - [ ] answers/08-004-protect-against-prompt-injection-and-jailbreaking.md — Q4: Protect against prompt injection and jailbreaking?
