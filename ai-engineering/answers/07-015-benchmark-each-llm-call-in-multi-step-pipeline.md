@@ -11,168 +11,201 @@
 ## Framing
 
 ### Why this question is asked
-Multi-step pipelines (RAG chains, agents, summarization workflows) can have 5–10 LLM calls, and naive end-to-end timing tells you almost nothing actionable when performance degrades. The interviewer wants to know whether you instrument *per-call* latency, token counts, and cost — and whether you use that data to prioritize optimization. This probes production observability maturity: have you actually debugged a slow pipeline rather than just speculating about where time is spent?
+Multi-step LLM pipelines — RAG, agentic workflows, document processing chains — are notoriously hard to profile because the bottleneck shifts between steps as load changes. Interviewers ask this to probe whether you have hands-on experience diagnosing which step is slow, which is expensive, and how you surface that in production. It tests production observability maturity: can you attribute cost and latency to individual steps, not just end-to-end?
 
 ### Trigger phrases
 - "Benchmark each LLM call in multi-step pipeline?"
-- "How do you profile a slow RAG or agent pipeline?"
-- "Your pipeline's p95 jumped from 2s to 8s — how do you find the bottleneck?"
-- "How do you know which step in a chain is the most expensive?"
-- "How do you optimize a multi-step LLM workflow?"
+- "How do you find which step in your chain is the bottleneck?"
+- "How do you attribute cost to individual steps in a multi-step agent?"
+- "Your pipeline p95 latency spiked — how do you isolate which call is the problem?"
+- "How do you instrument a LangChain pipeline for observability?"
 
 ### What it tests
-Ability to instrument LLM pipelines with per-step observability (latency, tokens, cost) and use structured telemetry to isolate bottlenecks — moving beyond end-to-end guesswork to data-driven optimization.
+Ability to instrument multi-step LLM pipelines at per-step granularity — measuring latency, token counts, and cost per call — and to interpret the results to identify where to optimize rather than optimizing blindly at the pipeline level.
 
 ---
 
 ## Answer
 
 ### Concept
-Benchmarking a multi-step LLM pipeline means wrapping each call with a timing + token-count decorator that emits structured spans, then aggregating those spans into a per-step breakdown: TTFT, total latency, prompt tokens, completion tokens, and inferred cost. Without per-call instrumentation, a pipeline that takes 6 seconds looks like a black box — with it, you discover "3.2s is the cross-encoder reranker calling GPT-4o on 10 chunks, 1.8s is the final generation, and 0.4s is embedding."
+Benchmarking each LLM call in a multi-step pipeline means capturing, per step: **wall-clock latency** (TTFT and total), **token counts** (input and output separately), **cost** (derived from token counts and model pricing), and **error rate** — then aggregating these into per-step p50/p95 dashboards and surfacing them in distributed traces. The alternative — only measuring end-to-end latency — masks whether the bottleneck is a slow reranker call, a high-token-count summarization step, or network round-trips to the vector database.
 
 ### Mechanism
 
-**Step 1: Wrap every LLM call with a timing + token span**
+**Step 1: Per-call instrumentation decorator**
 
-The minimal instrumentation pattern in Python:
+Wrap each LLM call with a timing + token-capture decorator. For OpenAI-compatible APIs, the response object includes `usage.prompt_tokens`, `usage.completion_tokens`, and `usage.total_tokens`:
 
 ```python
-import time, logging
-from dataclasses import dataclass
+import time, functools, logging
+from openai import OpenAI
 
-@dataclass
-class LLMSpan:
-    step: str
-    model: str
-    prompt_tokens: int
-    completion_tokens: int
-    latency_ms: float
-    cost_usd: float
+client = OpenAI()
 
-PRICES = {
-    "gpt-4o": (2.50 / 1e6, 10.00 / 1e6),       # (input, output) per token
-    "gpt-4o-mini": (0.15 / 1e6, 0.60 / 1e6),
-    "text-embedding-3-small": (0.02 / 1e6, 0),
-}
+def llm_benchmark(step_name: str):
+    """Decorator: logs latency, token counts, and derived cost per LLM call."""
+    def decorator(fn):
+        @functools.wraps(fn)
+        def wrapper(*args, **kwargs):
+            t0 = time.perf_counter()
+            response = fn(*args, **kwargs)
+            latency_ms = (time.perf_counter() - t0) * 1000
 
-def timed_llm_call(step: str, fn, *args, **kwargs):
-    t0 = time.perf_counter()
-    response = fn(*args, **kwargs)
-    latency_ms = (time.perf_counter() - t0) * 1000
-    model = response.model
-    usage = response.usage
-    p_in, p_out = PRICES.get(model, (0, 0))
-    cost = usage.prompt_tokens * p_in + usage.completion_tokens * p_out
-    span = LLMSpan(step, model, usage.prompt_tokens,
-                   usage.completion_tokens, latency_ms, cost)
-    logging.info("LLM_SPAN %s", span)
-    return response, span
+            usage = response.usage
+            # GPT-4o-mini pricing (June 2026): $0.15/1M input, $0.60/1M output
+            cost_usd = (
+                usage.prompt_tokens * 0.15 / 1_000_000
+                + usage.completion_tokens * 0.60 / 1_000_000
+            )
+
+            logging.info({
+                "step": step_name,
+                "latency_ms": round(latency_ms, 1),
+                "input_tokens": usage.prompt_tokens,
+                "output_tokens": usage.completion_tokens,
+                "cost_usd": round(cost_usd, 6),
+                "model": response.model,
+            })
+            return response
+        return wrapper
+    return decorator
+
+@llm_benchmark("query_rewrite")
+def rewrite_query(user_query: str):
+    return client.chat.completions.create(
+        model="gpt-4o-mini",
+        messages=[{"role": "user", "content": f"Rewrite for retrieval: {user_query}"}],
+        max_tokens=100,
+    )
+
+@llm_benchmark("generate_answer")
+def generate_answer(context: str, query: str):
+    return client.chat.completions.create(
+        model="gpt-4o",
+        messages=[{"role": "user", "content": f"Context:\n{context}\n\nQuestion: {query}"}],
+        max_tokens=512,
+    )
 ```
 
-Every call in the pipeline is wrapped: embed query, retrieve-and-rerank, query-rewriting, final generation.
+**Step 2: OpenTelemetry / LangSmith spans for distributed traces**
 
-**Step 2: Collect spans and aggregate per step**
-
-At the end of each pipeline run, emit a structured summary:
-
-```
-Pipeline: customer-support-rag  total=5840ms  cost=$0.0087
-  embed_query:       42ms    512 tok in   / 0 out    $0.000010
-  rerank_gpt4o_mini: 1820ms  3840 tok in  / 120 out  $0.000648
-  query_rewrite:     310ms   210 tok in   / 45 out   $0.000059
-  final_generation:  3668ms  1100 tok in  / 380 out  $0.008020
-  [retrieval HNSW]:  88ms    (non-LLM — measured separately)
-```
-
-This immediately reveals that `rerank_gpt4o_mini` and `final_generation` dominate both latency and cost.
-
-**Step 3: Use a tracing framework for production-scale aggregation**
-
-At production scale, emit spans as OpenTelemetry (OTel) traces or to LangSmith/Langfuse:
-
-- **LangSmith** (LangChain): automatically captures per-step latency, token counts, and cost for every chain/agent run. Dashboard shows p50/p95 per step across thousands of runs.
-- **Langfuse** (open-source): OTel-compatible, vendor-agnostic, supports custom span attributes (step name, experiment tag, model version).
-- **OpenTelemetry + Grafana**: emit custom spans via `opentelemetry-sdk`, store in Tempo, visualize with Grafana — suitable when you already have an OTel stack.
+For production pipelines, emit structured spans so each step appears as a child span under the parent pipeline trace:
 
 ```python
 from opentelemetry import trace
-tracer = trace.get_tracer("llm-pipeline")
 
-with tracer.start_as_current_span("rerank") as span:
-    span.set_attribute("model", "gpt-4o-mini")
-    span.set_attribute("prompt_tokens", 3840)
-    response = client.chat.completions.create(...)
-    span.set_attribute("completion_tokens", response.usage.completion_tokens)
-    span.set_attribute("cost_usd", cost)
+tracer = trace.get_tracer("rag-pipeline")
+
+def run_rag_pipeline(query: str) -> str:
+    with tracer.start_as_current_span("rag-pipeline") as root_span:
+        with tracer.start_as_current_span("query-rewrite"):
+            rewritten = rewrite_query(query)
+
+        with tracer.start_as_current_span("vector-retrieve"):
+            docs = vector_store.search(rewritten, top_k=10)
+
+        with tracer.start_as_current_span("cross-encoder-rerank"):
+            top_docs = reranker.rerank(docs, query, top_n=3)
+
+        with tracer.start_as_current_span("generate-answer"):
+            answer = generate_answer("\n".join(top_docs), query)
+
+    return answer
 ```
 
-**Step 4: Identify the critical path and set per-step SLOs**
+LangSmith (`LANGCHAIN_TRACING_V2=true`) does this automatically for LangChain chains and agents — each chain step is a span with token counts, latency, and cost pre-computed.
 
-Once you have per-step p50/p95 data across production traffic, classify each step:
+**Step 3: Per-step dashboard metrics**
 
-| Step | p95 latency | Token cost | Action |
-|------|-------------|------------|--------|
-| embed_query | 50ms | Negligible | ✅ Fine |
-| HNSW retrieval | 90ms | — | ✅ Fine |
-| cross-encoder rerank (top-20→top-5) | 1.8s | High | 🔴 Bottleneck |
-| final generation | 3.7s | Dominant cost | 🟡 Optimize output tokens |
+Aggregate logs into a per-step metrics dashboard (Grafana + Prometheus or Datadog):
 
-**Step 5: Act on the bottleneck**
+| Step | p50 latency | p95 latency | Avg input tokens | Avg output tokens | Avg cost/call |
+|------|------------|------------|-----------------|------------------|--------------|
+| query_rewrite | 120 ms | 210 ms | 45 | 30 | $0.000027 |
+| vector_retrieve | 18 ms | 45 ms | — | — | — |
+| cross_encoder_rerank | 3,200 ms | 4,800 ms | — | — | $0.00 (self-hosted) |
+| generate_answer | 1,100 ms | 2,300 ms | 2,800 | 420 | $0.000672 |
+| **Total pipeline** | **4,450 ms** | **7,350 ms** | | | **$0.000699** |
 
-The most common fixes after benchmarking:
+From this table: the cross-encoder reranker is the latency bottleneck (72% of p95), not the LLM generation step. Fix: switch to Cohere Rerank API (80 ms p95) or self-hosted BGE-Reranker on GPU (< 200 ms).
 
-- **Reranker calling a large model on too many candidates** → reduce top-k from 20 to 10 before reranking, or switch from GPT-4o to GPT-4o-mini / a local BGE-Reranker
-- **Final generation prompt is too long** → apply LLMLingua compression or trim retrieved chunks; use `max_tokens` cap
-- **Sequential calls that could be parallel** → fan-out with `asyncio.gather()` for independent steps (e.g., simultaneous keyword + semantic retrieval)
-- **Repeated calls with identical inputs** → add a semantic cache (GPTCache) or memoize embedding calls with SHA-256 key on content hash
+**Step 4: Parallelise independent steps**
+
+Once per-step latencies are visible, independent steps can be parallelised with `asyncio.gather()`:
+
+```python
+import asyncio
+
+async def run_rag_async(query: str):
+    # Query rewrite and initial embedding can run in parallel
+    rewritten, embedding = await asyncio.gather(
+        async_rewrite_query(query),
+        async_embed_query(query),
+    )
+    docs = await async_vector_search(embedding, top_k=10)
+    top_docs = await async_rerank(docs, rewritten)
+    return await async_generate(top_docs, rewritten)
+```
 
 ### Example / Tradeoff
 
-**RAG pipeline benchmark, before/after optimization:**
+**Real incident — reranker bottleneck discovery:**
 
-After adding per-step spans to a 5-step customer support RAG pipeline:
+A 4-step RAG pipeline (rewrite → retrieve → rerank → generate) had a p95 latency of 7.3 seconds. End-to-end profiling suggested "LLM generation is slow." Per-step instrumentation revealed:
 
-| Step | Before | After | Change |
-|------|--------|-------|--------|
-| embed_query | 45ms | 45ms (cached hit 40%) | ~27ms avg |
-| HNSW retrieval | 85ms | 82ms | — |
-| cross-encoder rerank (top-20, GPT-4o) | 3,200ms | 850ms | Switch to Cohere Rerank API (top-10) |
-| query_rewrite | 280ms | — | Eliminated (moved to rerank prompt) |
-| final_generation (GPT-4o, 4K ctx) | 3,800ms | 2,100ms | Reranked to top-3 chunks → 1.8K ctx |
-| **Total p95** | **7.8s** | **3.1s** | **60% reduction** |
+| Step | p95 latency | % of total |
+|------|------------|-----------|
+| query_rewrite | 210 ms | 3% |
+| vector_retrieve (Pinecone) | 45 ms | 1% |
+| cross_encoder_rerank (CPU) | 4,800 ms | 65% |
+| generate_answer (GPT-4o) | 2,300 ms | 31% |
 
-The critical insight only became visible with per-step instrumentation: 3.2 seconds was consumed by calling GPT-4o on 20 rerank candidates — an invisible cost when only measuring end-to-end time.
+Fix: moved cross-encoder reranking to a GPU-backed Cohere Rerank API call (80 ms p95). New pipeline p95: **2,635 ms** — 64% reduction. Without per-step instrumentation, the team would have optimized the wrong step (e.g., switching from GPT-4o to GPT-4o-mini for generation, saving 600 ms while the 4.8s reranker remained).
 
-**Tradeoff:** Adding instrumentation overhead (OTel SDK, LangSmith callbacks) adds 2–10ms per span — negligible versus LLM call latency. The real cost is engineering time to set up the tracing pipeline, but the payoff (knowing exactly where to optimize) is consistently 2–5× faster than guessing.
+**Cost attribution example at 1M queries/day:**
+
+| Step | Cost/call | Daily cost |
+|------|-----------|-----------|
+| query_rewrite (GPT-4o-mini) | $0.000027 | $27 |
+| cross_encoder_rerank (Cohere) | $0.0002 | $200 |
+| generate_answer (GPT-4o) | $0.000672 | $672 |
+| **Total** | **$0.000899** | **$899/day** |
+
+Switching generate_answer to GPT-4o-mini for 80% of queries (those with RAGAS score > 0.85 on the mini model) saves ~$500/day with negligible quality drop — visible only because cost was attributed per step.
+
+**Tradeoff:** Per-step telemetry adds 1–5 ms overhead per call (logging, span creation) and increases log storage costs. For high-QPS pipelines (>500 RPS), sample 10–20% of traces rather than tracing 100%, using OpenTelemetry's probabilistic sampler — preserving statistical accuracy while cutting observability overhead.
 
 ---
 
 ## Verbal script
 
 **Opening (30s):**
-"This is a question I care a lot about because it's surprisingly common to optimize the wrong step. My answer is: you can't benchmark a multi-step pipeline by measuring end-to-end time — you need per-step spans with latency, token counts, and inferred cost on every LLM call. Once you have that, the bottleneck is usually obvious and the fix is targeted."
+"Benchmarking each step in a multi-step pipeline is one of those things that sounds obvious but is easy to skip — and when you skip it you end up optimizing the wrong thing. The core approach is: instrument every LLM call with a timing and token-count decorator, emit those as structured logs or OTel spans, and build per-step p50/p95 dashboards. Let me walk through the implementation and then a real example where this made a huge difference."
 
 **Core explanation (2–3 min):**
-"The pattern I use is wrapping each LLM call with a timing decorator that records step name, model, prompt tokens, completion tokens, latency, and calculated cost. I emit those as structured log lines or OTel spans. In practice, for LangChain pipelines I use LangSmith because it instruments automatically and gives me a p50/p95 dashboard per step across production traffic with no extra code. For custom pipelines I use the OpenTelemetry SDK with a Grafana Tempo backend, or Langfuse for open-source.
+"At the call level, the pattern is a simple wrapper around each API call — capture `time.perf_counter()` before and after, read `response.usage.prompt_tokens` and `completion_tokens` from the response object, and derive cost from the model's per-token pricing. Log that as a structured JSON event with the step name. That gives you per-step latency, input/output token counts, and cost for every call.
 
-Once I have per-step data, the breakdown usually looks something like: embed query 45ms, HNSW retrieval 85ms, cross-encoder rerank 3.2 seconds, final generation 3.8 seconds. That reranker step was invisible in end-to-end timing — it looked like 'the pipeline is slow' — but once I saw it, the fix was obvious: we were calling GPT-4o on 20 retrieved chunks for reranking. Switching to Cohere's Rerank API on the top 10 candidates dropped that step from 3.2s to 850ms.
+For production pipelines, you want this in distributed traces — OpenTelemetry spans or LangSmith, which does it automatically for LangChain. Each step becomes a child span under the root pipeline trace. In Grafana or Datadog you can then build per-step p95 latency charts, per-step average token counts, and per-step cost-per-query.
 
-Beyond latency, the token breakdown matters for cost. In the same pipeline, the final generation was consuming 4K context tokens because we were passing all 5 reranked chunks. After reducing to the top-3 chunks via the reranker, context dropped to 1.8K tokens and generation cost fell by 55%. You wouldn't know to do either of these without per-step instrumentation."
+The reason this matters more than end-to-end measurement: latency and cost are not evenly distributed across steps. In one pipeline I worked on, the p95 breakdown was 65% on a CPU-based cross-encoder reranker, 31% on GPT-4o generation, and only 4% on query rewriting and vector retrieval. The end-to-end number was 7.3 seconds — and you'd assume the LLM was slow. Switching the reranker to a GPU-backed Cohere Rerank API call cut p95 to 2.6 seconds without touching the model.
+
+Once you have per-step latency data, you can also identify steps that could be parallelised. If query rewriting and query embedding are independent, `asyncio.gather()` lets them run concurrently and eliminates their sequential sum from the critical path."
 
 **Tradeoff / production angle (1 min):**
-"The tradeoff is instrumentation overhead — OTel spans add 2–10ms per call, and LangSmith callbacks add a small async write. Neither matters versus LLM call latency. The bigger challenge is making sure you capture async parallel steps correctly — if you fan out embedding and retrieval in parallel with `asyncio.gather()`, the span timestamps need to reflect wall-clock parallelism, not sequential sum. For very high-traffic pipelines, you sample traces at 5–10% and use 100% coverage only for error traces, which keeps observability cost under control."
+"The tradeoffs are small but worth naming. Full per-call telemetry adds 1–5 ms overhead and increases log volume — at 500+ RPS, use probabilistic sampling at 10–20% rather than tracing every request. You lose exact per-request detail but retain statistically accurate per-step p95 estimates.
+
+Also, cost attribution per step requires knowing each step's model and current pricing. Pricing changes — parameterize the cost formula rather than hardcoding it. And for async pipelines, make sure your spans track the *wall-clock* start and end of each step, not just CPU time, since async steps can interleave."
 
 **Wrap-up (30s):**
-"The core discipline is: treat every LLM call as a measurable unit of work with latency + tokens + cost attached, aggregate those spans in production, and let the data tell you where to optimize. In my experience, the bottleneck is almost always the reranker or context-window size — both invisible without per-step measurement. Happy to go into the OTel span structure or the LangSmith dashboard setup."
+"The mental model is: treat each step as an independent service, measure it like one — latency, cost, error rate — and aggregate into per-step dashboards. LangSmith does this out of the box for LangChain. For custom pipelines, a timing decorator plus OTel spans gives you the same visibility in a day of work. The payoff is that you optimize the actual bottleneck, not the one you assumed was slow."
 
 ---
 
 ## Pitfalls
 
-- **Mistake:** Measuring only end-to-end pipeline latency and guessing which step is slow — **Better:** Instrument every individual LLM call with a timing wrapper that records step name, model, prompt tokens, completion tokens, and cost; the critical-path step (often reranker or generation) is rarely where intuition points.
-- **Mistake:** Tracking latency but ignoring token counts — **Better:** Token counts (especially completion tokens) are 3–10× more expensive per unit than prompt tokens on most APIs and directly drive cost; a call that takes 1s but produces 500 completion tokens costs more than a 3s call with 50 completion tokens.
-- **Mistake:** Optimizing based on a single benchmark run at low traffic — **Better:** Collect per-step p50/p95 across production traffic (e.g., via LangSmith or OTel Grafana dashboard) because bottlenecks shift under concurrency: the HNSW retrieval that looks fast at 1 QPS may become the bottleneck at 100 QPS due to lock contention or connection pool saturation.
-- **Mistake:** Not checking which sequential steps could be parallelized — **Better:** After identifying independent steps (e.g., keyword retrieval and dense retrieval, or multiple tool calls that don't depend on each other), run them concurrently with `asyncio.gather()`; this alone often cuts wall-clock time by 30–50% without any model change.
+- **Mistake:** Only measuring end-to-end pipeline latency and assuming the LLM generation step is the bottleneck — **Better:** Instrument per-step latency and token counts; in practice the bottleneck is often a CPU-based reranker, a slow vector DB round-trip, or a high-token-count intermediate step — not the final generation call.
+- **Mistake:** Logging total_tokens only, ignoring the input/output token split — **Better:** Track prompt_tokens and completion_tokens separately; output tokens cost 3–10× more than input tokens for most models (e.g., GPT-4o: $2.50/1M input vs $10/1M output), so a step generating 400 output tokens costs 4× as much as a step consuming 400 input tokens — they look identical in total_tokens but have very different cost profiles.
+- **Mistake:** Tracing 100% of requests in production at high QPS — **Better:** Use probabilistic sampling (10–20%) with OpenTelemetry's `TraceIdRatioBased` sampler; p95 estimates stay accurate with <1% statistical error at 10% sample rate, while log volume and overhead drop proportionally.
 
 ---
 
@@ -180,12 +213,12 @@ Beyond latency, the token breakdown matters for cost. In the same pipeline, the 
 
 | Question | Relationship |
 |----------|--------------|
-| [Q3: How reduce latency in GenAI applications?](07-003-how-reduce-latency-in-genai-applications.md) | Application-level latency levers (caching, tiering, compression) — what you apply after finding the bottleneck |
-| [Q14: Latency vs throughput for LLM serving?](07-014-latency-vs-throughput-for-llm-serving.md) | Serving-layer tuning knobs that complement pipeline-level per-step optimization |
-| [Q9: Multi-layer caching: retrieval, prompt, response?](07-009-multi-layer-caching-retrieval-prompt-response.md) | Semantic and prefix caching are two of the most impactful fixes once benchmarking reveals repeated identical calls |
+| [Q3: How reduce latency in GenAI applications?](07-003-how-reduce-latency-in-genai-applications.md) | Per-step benchmarking identifies *where* to apply the latency levers described in Q3 (caching, tiering, compression) |
+| [Q14: Latency vs throughput for LLM serving?](07-014-latency-vs-throughput-for-llm-serving.md) | Serving-layer knobs (batch size, continuous batching) complement application-layer per-step optimization |
+| [Q1: Your app gets 1M queries/day — how optimize cost?](07-001-your-app-gets-1m-queriesday-how-optimize-cost.md) | Per-step cost attribution (prompt_tokens × price_in + completion_tokens × price_out) is the prerequisite for the cost optimization hierarchy in Q1 |
 
 ---
 
 ## One-liner recall
 
-> Wrap every LLM call in a timing decorator emitting step + model + prompt_tokens + completion_tokens + latency + cost as OTel spans or LangSmith traces; aggregate per-step p95 across production traffic to find the critical path (almost always the reranker or context-window size), then apply targeted fixes (Cohere Rerank instead of GPT-4o, top-3 instead of top-10 chunks, asyncio.gather() for parallel steps).
+> Wrap every LLM call in a timing + token-count decorator (prompt_tokens × price_in + completion_tokens × price_out), emit as OTel spans or LangSmith traces to get per-step p95 dashboards, then fix the actual bottleneck — which is usually the reranker or a high-output-token step, not the generation model you assumed.

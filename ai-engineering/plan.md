@@ -38,5 +38,7 @@ created: 2026-06-24
 - 05-evaluation-metrics (switched on 2026-06-19)
 - 06-ml-fundamentals (switched on 2026-06-24)
 
+- [x] validate — run: bash ralph-ai-engineering/validate.sh 07-cost-latency — PASSED (17 files OK)
+
 ## Next
-- [ ] validate — run: bash ralph-ai-engineering/validate.sh 07-cost-latency
+<!-- 07-cost-latency complete -->
