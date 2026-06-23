@@ -26,6 +26,7 @@ created: 2026-06-24
 - [x] answers/07-013-latencycostrelevancy-tradeoff-triangle.md — Q13: Latency/cost/relevancy tradeoff triangle?
 - [x] answers/07-014-latency-vs-throughput-for-llm-serving.md — Q14: Latency vs throughput for LLM serving?
 - [x] answers/07-015-benchmark-each-llm-call-in-multi-step-pipeline.md — Q15: Benchmark each LLM call in multi-step pipeline?
+- [x] answers/07-016-real-bottleneck-in-llm-serving-throughput-pagedattention.md — Q16: Real bottleneck in LLM serving throughput? PagedAttention?
 
 ## Categories completed
 - 08-safety-guardrails (switched on 2026-06-16)
@@ -38,5 +39,4 @@ created: 2026-06-24
 - 06-ml-fundamentals (switched on 2026-06-24)
 
 ## Next
-- [ ] answers/07-016-real-bottleneck-in-llm-serving-throughput-pagedattention.md — Q16: Real bottleneck in LLM serving throughput? PagedAttention?
 - [ ] validate — run: bash ralph-ai-engineering/validate.sh 07-cost-latency
