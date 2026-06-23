@@ -11,6 +11,7 @@ created: 2026-06-24
 ## Done
 - [x] 0 scaffold — category queue created
 - [x] categories/07-cost-latency.md — category overview: Cost & Latency Optimization (16 questions)
+- [x] answers/07-001-your-app-gets-1m-queriesday-how-optimize-cost.md — Q1: Your app gets 1M queries/day — how optimize cost? ⭐
 
 ## Categories completed
 - 08-safety-guardrails (switched on 2026-06-16)
@@ -23,7 +24,6 @@ created: 2026-06-24
 - 06-ml-fundamentals (switched on 2026-06-24)
 
 ## Next
-- [ ] answers/07-001-your-app-gets-1m-queriesday-how-optimize-cost.md — Q1: Your app gets 1M queries/day — how optimize cost? ⭐
 - [ ] answers/07-002-how-reduce-token-costs-at-scale.md — Q2: How reduce token costs at scale? ⭐
 - [ ] answers/07-003-how-reduce-latency-in-genai-applications.md — Q3: How reduce latency in GenAI applications? ⭐
 - [ ] answers/07-004-cost-and-capacity-planning-for-llm-app-at-scale.md — Q4: Cost and capacity planning for LLM app at scale?
