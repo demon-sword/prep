@@ -45,9 +45,9 @@ created: 2026-06-24
 - [x] answers/08-003-detect-policy-violations-offensive-content.md — Q3: Detect policy violations / offensive content?
 
 - [x] answers/08-004-protect-against-prompt-injection-and-jailbreaking.md — Q4: Protect against prompt injection and jailbreaking?
+- [x] answers/08-005-handle-exceptions-in-genai-applications.md — Q5: Handle exceptions in GenAI applications?
 
 ## Next
-- [ ] answers/08-005-handle-exceptions-in-genai-applications.md — Q5: Handle exceptions in GenAI applications?
 - [ ] answers/08-006-constitutional-ai-and-alignment.md — Q6: Constitutional AI and alignment?
 - [ ] answers/08-007-data-privacy-and-pii-in-prompts-and-logs.md — Q7: Data privacy and PII in prompts and logs?
 - [ ] answers/08-008-bias-in-training-data-and-generated-content.md — Q8: Bias in training data and generated content?
