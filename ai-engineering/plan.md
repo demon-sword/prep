@@ -1,42 +1,16 @@
 # Plan: AI Engineering Interview Prep
 
 ## Meta
-current_category: 06-ml-fundamentals
-category_name: ML Fundamentals
-category_num: 6
-question_range: 1–26
-task_count: 28
-created: 2026-06-19
+current_category: 07-cost-latency
+category_name: Cost & Latency Optimization
+category_num: 7
+question_range: 1–16
+task_count: 18
+created: 2026-06-24
 
 ## Done
 - [x] 0 scaffold — category queue created
-- [x] categories/06-ml-fundamentals.md — category overview: ML Fundamentals (26 questions)
-- [x] answers/06-001-data-pre-processing-and-feature-engineering.md — Q1: Data pre-processing and feature engineering?
-- [x] answers/06-002-sql-vs-nosql-for-ai-workloads.md — Q2: SQL vs NoSQL for AI workloads?
-- [x] answers/06-003-diagnose-performance-bugs-in-a-model.md — Q3: Diagnose performance bugs in a model?
-- [x] answers/06-004-optimize-for-latency-or-throughput-personal-assistant-one-re.md — Q4: Optimize for latency or throughput? (personal assistant, one request)
-- [x] answers/06-005-data-parallelism-for-single-request-assistant.md — Q5: Data parallelism for single-request assistant?
-- [x] answers/06-006-transformers-why-foundational.md — Q6: Transformers — why foundational? ⭐
-- [x] answers/06-007-real-time-vs-batch-processing-for-data-updates.md — Q7: Real-time vs batch processing for data updates?
-- [x] answers/06-008-ingest-structured-unstructured-event-data.md — Q8: Ingest structured, unstructured, event data?
-- [x] answers/06-009-bias-variance-tradeoff.md — Q9: Bias-variance tradeoff?
-- [x] answers/06-010-why-neural-networks-not-first-choice-for-tabular-data.md — Q10: Why neural networks not first choice for tabular data?
-- [x] answers/06-011-imbalanced-datasets-in-real-projects.md — Q11: Imbalanced datasets in real projects?
-- [x] answers/06-012-rnn-vs-lstm.md — Q12: RNN vs LSTM?
-- [x] answers/06-013-debug-model-that-runs-but-doesnt-learn-broadcasting-dimensio.md — Q13: Debug model that runs but doesn't learn — broadcasting, dimension mismatches?
-- [x] answers/06-014-statistics-probability-distributions-regression-bayesian-hyp.md — Q14: Statistics: probability, distributions, regression, Bayesian, hypothesis testing
-- [x] answers/06-015-supervised-vs-unsupervised-learning.md — Q15: Supervised vs unsupervised learning?
-- [x] answers/06-016-regularization-l1-l2-dropout.md — Q16: Regularization — L1, L2, dropout?
-- [x] answers/06-017-feature-scaling-normalization-vs-standardization.md — Q17: Feature scaling — normalization vs standardization?
-- [x] answers/06-018-implement-cosine-similarity-in-numpy-amazon.md — Q18: Implement cosine similarity in NumPy (Amazon)
-- [x] answers/06-019-precision-vs-recall-fraud-detection.md — Q19: Precision vs recall — fraud detection?
-- [x] answers/06-020-f1-score-roc-curve.md — Q20: F1 score, ROC curve?
-- [x] answers/06-021-linear-vs-logistic-regression.md — Q21: Linear vs logistic regression?
-- [x] answers/06-022-gradient-descent.md — Q22: Gradient descent?
-- [x] answers/06-023-classification-algorithms.md — Q23: Classification algorithms?
-- [x] answers/06-024-gans-basic-principles.md — Q24: GANs basic principles?
-- [x] answers/06-025-cnn-architecture.md — Q25: CNN architecture?
-- [x] answers/06-026-bert-architecture.md — Q26: BERT architecture?
+- [x] categories/07-cost-latency.md — category overview: Cost & Latency Optimization (16 questions)
 
 ## Categories completed
 - 08-safety-guardrails (switched on 2026-06-16)
@@ -46,6 +20,23 @@ created: 2026-06-19
 - 04-fine-tuning-training (completed 2026-06-17)
 - 05-evaluation-metrics (completed 2026-06-18)
 - 05-evaluation-metrics (switched on 2026-06-19)
+- 06-ml-fundamentals (switched on 2026-06-24)
 
 ## Next
-- [ ] validate — run: bash ralph-ai-engineering/validate.sh 06-ml-fundamentals
+- [ ] answers/07-001-your-app-gets-1m-queriesday-how-optimize-cost.md — Q1: Your app gets 1M queries/day — how optimize cost? ⭐
+- [ ] answers/07-002-how-reduce-token-costs-at-scale.md — Q2: How reduce token costs at scale? ⭐
+- [ ] answers/07-003-how-reduce-latency-in-genai-applications.md — Q3: How reduce latency in GenAI applications? ⭐
+- [ ] answers/07-004-cost-and-capacity-planning-for-llm-app-at-scale.md — Q4: Cost and capacity planning for LLM app at scale?
+- [ ] answers/07-005-gpt-based-api-calls-cost-efficient-under-heavy-load.md — Q5: GPT-based API calls cost-efficient under heavy load?
+- [ ] answers/07-006-quantization-and-model-distillation-for-inference.md — Q6: Quantization and model distillation for inference?
+- [ ] answers/07-007-cost-vs-quality-when-is-small-open-source-model-good-enough.md — Q7: Cost vs quality: when is small open-source model "good enough"?
+- [ ] answers/07-008-trim-prompts-cache-embeddings-beforeafter-cost-breakdown.md — Q8: Trim prompts + cache embeddings — before/after cost breakdown?
+- [ ] answers/07-009-multi-layer-caching-retrieval-prompt-response.md — Q9: Multi-layer caching: retrieval, prompt, response?
+- [ ] answers/07-010-model-tiering-small-distilled-vs-large-llm.md — Q10: Model tiering — small distilled vs large LLM?
+- [ ] answers/07-011-prompt-compression.md — Q11: Prompt compression?
+- [ ] answers/07-012-budget-estimate-for-rag-at-enterprise-scale-eg-300k-legal-co.md — Q12: Budget estimate for RAG at enterprise scale (e.g. 300K legal contracts)?
+- [ ] answers/07-013-latencycostrelevancy-tradeoff-triangle.md — Q13: Latency/cost/relevancy tradeoff triangle?
+- [ ] answers/07-014-latency-vs-throughput-for-llm-serving.md — Q14: Latency vs throughput for LLM serving?
+- [ ] answers/07-015-benchmark-each-llm-call-in-multi-step-pipeline.md — Q15: Benchmark each LLM call in multi-step pipeline?
+- [ ] answers/07-016-real-bottleneck-in-llm-serving-throughput-pagedattention.md — Q16: Real bottleneck in LLM serving throughput? PagedAttention?
+- [ ] validate — run: bash ralph-ai-engineering/validate.sh 07-cost-latency
