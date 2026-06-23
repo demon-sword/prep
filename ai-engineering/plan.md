@@ -17,6 +17,7 @@ created: 2026-06-24
 - [x] answers/07-004-cost-and-capacity-planning-for-llm-app-at-scale.md — Q4: Cost and capacity planning for LLM app at scale?
 - [x] answers/07-005-gpt-based-api-calls-cost-efficient-under-heavy-load.md — Q5: GPT-based API calls cost-efficient under heavy load?
 - [x] answers/07-006-quantization-and-model-distillation-for-inference.md — Q6: Quantization and model distillation for inference?
+- [x] answers/07-007-cost-vs-quality-when-is-small-open-source-model-good-enough.md — Q7: Cost vs quality: when is small open-source model "good enough"?
 
 ## Categories completed
 - 08-safety-guardrails (switched on 2026-06-16)
@@ -29,7 +30,6 @@ created: 2026-06-24
 - 06-ml-fundamentals (switched on 2026-06-24)
 
 ## Next
-- [ ] answers/07-007-cost-vs-quality-when-is-small-open-source-model-good-enough.md — Q7: Cost vs quality: when is small open-source model "good enough"?
 - [ ] answers/07-008-trim-prompts-cache-embeddings-beforeafter-cost-breakdown.md — Q8: Trim prompts + cache embeddings — before/after cost breakdown?
 - [ ] answers/07-009-multi-layer-caching-retrieval-prompt-response.md — Q9: Multi-layer caching: retrieval, prompt, response?
 - [ ] answers/07-010-model-tiering-small-distilled-vs-large-llm.md — Q10: Model tiering — small distilled vs large LLM?
