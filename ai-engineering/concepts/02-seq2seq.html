@@ -1,0 +1,870 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1.0"/>
+  <title>Seq2Seq Architecture — AI Engineering Concepts</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com"/>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet"/>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg: #0d0f17;
+      --surface: #141720;
+      --card: #1a1e2e;
+      --border: #252a3d;
+      --accent: #00d4ff;
+      --purple: #7c3aed;
+      --green: #00ff88;
+      --yellow: #ffd700;
+      --red: #ff4757;
+      --orange: #ff9500;
+      --text: #e2e8f0;
+      --text-dim: #8892a4;
+      --mono: 'JetBrains Mono', monospace;
+      --sans: 'Inter', system-ui, sans-serif;
+    }
+
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: var(--sans);
+      line-height: 1.7;
+      min-height: 100vh;
+    }
+
+    header {
+      background: var(--surface);
+      border-bottom: 1px solid var(--border);
+      padding: 2rem;
+      display: flex;
+      flex-direction: column;
+      gap: 0.5rem;
+    }
+
+    .group-badge {
+      display: inline-block;
+      background: var(--purple);
+      color: #fff;
+      font-size: 0.72rem;
+      font-weight: 600;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      padding: 0.2rem 0.7rem;
+      border-radius: 999px;
+      width: fit-content;
+    }
+
+    header h1 {
+      font-size: clamp(1.6rem, 4vw, 2.4rem);
+      font-weight: 700;
+      color: var(--text);
+      line-height: 1.2;
+    }
+
+    header p.desc {
+      color: var(--text-dim);
+      font-size: 1rem;
+      max-width: 70ch;
+    }
+
+    main {
+      max-width: 1100px;
+      margin: 0 auto;
+      padding: 2rem 1.5rem 4rem;
+      display: flex;
+      flex-direction: column;
+      gap: 3rem;
+    }
+
+    section { display: flex; flex-direction: column; gap: 1.25rem; }
+
+    section > h2 {
+      font-size: 1.5rem;
+      font-weight: 700;
+      color: var(--accent);
+      padding-bottom: 0.5rem;
+      border-bottom: 1px solid var(--border);
+    }
+
+    h3 {
+      font-size: 1.1rem;
+      font-weight: 600;
+      color: var(--yellow);
+      margin-top: 1rem;
+      margin-bottom: 0.25rem;
+    }
+
+    p { color: var(--text); max-width: 80ch; }
+
+    ul { padding-left: 1.4rem; display: flex; flex-direction: column; gap: 0.4rem; }
+    ul li { color: var(--text); }
+
+    code {
+      font-family: var(--mono);
+      font-size: 0.85em;
+      background: var(--card);
+      color: var(--accent);
+      padding: 0.1em 0.4em;
+      border-radius: 4px;
+      border: 1px solid var(--border);
+    }
+
+    pre {
+      font-family: var(--mono);
+      font-size: 0.82rem;
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 1rem 1.25rem;
+      overflow-x: auto;
+      color: var(--green);
+      line-height: 1.6;
+    }
+
+    .formula-block {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-left: 3px solid var(--accent);
+      border-radius: 6px;
+      padding: 1rem 1.25rem;
+      font-family: var(--mono);
+      font-size: 0.9rem;
+      color: var(--yellow);
+      display: flex;
+      flex-direction: column;
+      gap: 0.3rem;
+      max-width: 70ch;
+    }
+
+    .formula-block span { color: var(--text-dim); font-size: 0.78rem; }
+
+    /* Visualization */
+    .viz-container {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 1.5rem;
+      display: flex;
+      flex-direction: column;
+      gap: 1rem;
+    }
+
+    .viz-title {
+      font-size: 1rem;
+      font-weight: 600;
+      color: var(--text);
+    }
+
+    .viz-desc {
+      font-size: 0.85rem;
+      color: var(--text-dim);
+    }
+
+    .controls {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 1rem;
+      align-items: center;
+    }
+
+    .control-group {
+      display: flex;
+      flex-direction: column;
+      gap: 0.3rem;
+    }
+
+    .control-group label {
+      font-size: 0.78rem;
+      color: var(--text-dim);
+      font-family: var(--mono);
+    }
+
+    .btn {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      color: var(--text);
+      padding: 0.45rem 1rem;
+      border-radius: 6px;
+      font-family: var(--sans);
+      font-size: 0.85rem;
+      cursor: pointer;
+      transition: all 0.15s;
+    }
+    .btn:hover { border-color: var(--accent); color: var(--accent); }
+    .btn.active { background: var(--accent); color: var(--bg); border-color: var(--accent); font-weight: 600; }
+
+    canvas {
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      width: 100%;
+      display: block;
+      background: var(--bg);
+    }
+
+    .step-info {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 0.75rem 1rem;
+      font-size: 0.85rem;
+      color: var(--text-dim);
+      font-family: var(--mono);
+      min-height: 2.5rem;
+    }
+
+    /* Takeaways */
+    #takeaways ul {
+      list-style: none;
+      padding-left: 0;
+      display: flex;
+      flex-direction: column;
+      gap: 0.75rem;
+    }
+
+    #takeaways ul li {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-left: 3px solid var(--green);
+      border-radius: 6px;
+      padding: 0.75rem 1rem;
+      font-size: 0.92rem;
+      line-height: 1.6;
+    }
+
+    #takeaways ul li strong { color: var(--green); }
+
+    /* Nav */
+    .concept-nav {
+      background: var(--surface);
+      border-top: 1px solid var(--border);
+      padding: 1.25rem 2rem;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 1rem;
+      flex-wrap: wrap;
+    }
+
+    .concept-nav a {
+      color: var(--accent);
+      text-decoration: none;
+      font-size: 0.9rem;
+      font-weight: 500;
+      display: flex;
+      align-items: center;
+      gap: 0.4rem;
+      transition: opacity 0.15s;
+    }
+    .concept-nav a:hover { opacity: 0.8; }
+    .concept-nav a.disabled { color: var(--text-dim); pointer-events: none; }
+
+    .speed-control { display: flex; align-items: center; gap: 0.5rem; }
+    .speed-control label { font-size: 0.78rem; color: var(--text-dim); font-family: var(--mono); }
+    .speed-control input[type=range] { width: 100px; accent-color: var(--accent); }
+
+    @media (max-width: 640px) {
+      main { padding: 1.25rem 1rem 3rem; }
+      header { padding: 1.25rem 1rem; }
+      .concept-nav { padding: 1rem; }
+    }
+  </style>
+</head>
+<body>
+
+<header>
+  <span class="group-badge">Foundations</span>
+  <h1>Seq2Seq Architecture</h1>
+  <p class="desc">Encoder-decoder sequence-to-sequence architecture, attention mechanism, and how it preceded the transformer — mapping variable-length inputs to variable-length outputs.</p>
+</header>
+
+<main>
+  <!-- ==================== THEORY ==================== -->
+  <section id="theory">
+    <h2>Theory</h2>
+
+    <h3>What is Seq2Seq?</h3>
+    <p>
+      Sequence-to-sequence (Seq2Seq) models, introduced by Sutskever, Vinyals &amp; Le at Google in 2014, solve the fundamental problem of mapping an input sequence of arbitrary length to an output sequence of (potentially different) arbitrary length. Before Seq2Seq, neural networks required fixed-size inputs and outputs, which made tasks like machine translation — where source and target sentences have different lengths — extremely difficult to handle in a principled way.
+    </p>
+    <p>
+      The key insight was a two-component design: an <strong>encoder</strong> that reads the entire input sequence and compresses it into a fixed-size vector (the context vector), and a <strong>decoder</strong> that takes that context vector and generates the output sequence one token at a time. Both components are typically Recurrent Neural Networks (RNNs), though LSTMs and GRUs quickly became standard due to their ability to capture longer-range dependencies.
+    </p>
+
+    <h3>Encoder: Compressing the Source</h3>
+    <p>
+      The encoder processes input tokens x₁, x₂, …, xₙ sequentially. At each step t, it updates a hidden state:
+    </p>
+    <div class="formula-block">
+      <div>hₜ = f(hₜ₋₁, xₜ)</div>
+      <span>where f is an RNN/LSTM/GRU cell, h₀ is the zero vector</span>
+    </div>
+    <p>
+      After processing all n tokens, the final hidden state hₙ serves as the context vector c. This vector must encode the entire semantic content of the source sequence — a major bottleneck. For long sequences (e.g., a 50-word sentence), compressing everything into a 512- or 1024-dimensional vector causes an information bottleneck that leads to forgetting early tokens.
+    </p>
+
+    <h3>Decoder: Generating the Target</h3>
+    <p>
+      The decoder generates output tokens y₁, y₂, …, yₘ autoregressively. At each step t, it takes its previous hidden state sₜ₋₁, the previously generated token yₜ₋₁, and the context vector c:
+    </p>
+    <div class="formula-block">
+      <div>sₜ = g(sₜ₋₁, yₜ₋₁, c)</div>
+      <div>P(yₜ | y₁…yₜ₋₁, x) = softmax(Wsₜ + b)</div>
+      <span>g is another RNN cell; W projects hidden state to vocabulary logits</span>
+    </div>
+    <p>
+      During training, teacher forcing is used: the ground-truth previous token yₜ₋₁ is fed rather than the model's own prediction. This stabilizes training but creates a train/inference mismatch (exposure bias). At inference time, the model uses its own outputs — introducing error accumulation.
+    </p>
+
+    <h3>The Attention Mechanism: Solving the Bottleneck</h3>
+    <p>
+      The single context vector bottleneck was the key failure mode for long sequences. Bahdanau et al. (2015) introduced <strong>additive attention</strong> (also called Bahdanau attention), which fundamentally changed Seq2Seq. Instead of using a single fixed context vector, the decoder dynamically computes a weighted combination of <em>all</em> encoder hidden states at each decoding step:
+    </p>
+    <div class="formula-block">
+      <div>eᵢⱼ = vᵀ tanh(W₁hᵢ + W₂sⱼ₋₁)   &nbsp;  &lt;-- alignment score</div>
+      <div>αᵢⱼ = exp(eᵢⱼ) / Σₖ exp(eₖⱼ)   &nbsp;  &lt;-- softmax weights</div>
+      <div>cⱼ  = Σᵢ αᵢⱼ · hᵢ              &nbsp;  &lt;-- dynamic context</div>
+      <span>at decoder step j, the model looks at all encoder states h₁…hₙ</span>
+    </div>
+    <p>
+      Luong attention (2015) offered a simpler <strong>multiplicative</strong> variant: <code>eᵢⱼ = sⱼᵀ · hᵢ</code>, which is computationally cheaper and scales better to larger hidden dimensions. Scaled dot-product attention in the Transformer is a parallelized version of this exact idea.
+    </p>
+
+    <h3>How Attention Weights Are Learned</h3>
+    <p>
+      The alignment model (computing eᵢⱼ) is trained jointly with the encoder and decoder via backpropagation. No explicit supervision is needed — the model learns which source tokens to attend to based on the translation objective alone. Visualizing attention matrices in trained models reveals linguistically meaningful patterns: when translating "bank" (financial institution) vs "bank" (river bank), the model attends to different context words to disambiguate.
+    </p>
+
+    <h3>Seq2Seq in Production: When It Was Used</h3>
+    <p>
+      Google's first neural machine translation (GNMT, 2016) used an 8-layer LSTM Seq2Seq with attention and reduced translation errors by 55–85% on some language pairs vs phrase-based MT. The model had ~380M parameters, trained on 36M sentence pairs. Despite this success, three fundamental limitations remained:
+    </p>
+    <ul>
+      <li><strong>Sequential bottleneck:</strong> RNNs process tokens one at a time — can't parallelize across the sequence. Training a 6-layer LSTM on WMT English-German took ~1 week on 8 GPUs.</li>
+      <li><strong>Quadratic attention cost:</strong> Computing all attention weights is O(n·m) — expensive for long documents.</li>
+      <li><strong>Vanishing gradients:</strong> Despite LSTMs helping, gradients still degrade across 100+ token sequences.</li>
+    </ul>
+    <p>
+      "Attention Is All You Need" (Vaswani et al., 2017) kept the encoder-decoder structure but replaced RNNs entirely with self-attention, enabling full parallelism. The Transformer trained in 12 hours on 8 P100 GPUs and outperformed all prior Seq2Seq models — effectively making pure RNN-based Seq2Seq architecturally obsolete for most tasks.
+    </p>
+
+    <h3>Legacy: Why Seq2Seq Still Matters</h3>
+    <p>
+      Understanding Seq2Seq is essential because: (1) Transformer encoder-decoder models (T5, BART, mBART) inherit the same high-level structure — encoder reads, decoder generates; (2) the attention mechanism it pioneered is the core of every modern LLM; (3) many deployed edge systems and lightweight translation models still run LSTM Seq2Seq due to lower inference cost; (4) seq2seq framing (read all context → generate output) is how decoder-only LLMs like GPT work conceptually, just with the "encoder" being the prompt and the attention being self-attention.
+    </p>
+  </section>
+
+  <!-- ==================== VISUALIZATION ==================== -->
+  <section id="visualization">
+    <h2>Visualization</h2>
+    <div class="viz-container">
+      <div class="viz-title">Seq2Seq Animated Flow: Encoder → Context → Decoder with Attention</div>
+      <div class="viz-desc">
+        Watch the encoder process source tokens into hidden states, the context vector form, and the decoder generate output tokens step-by-step.
+        The attention heatmap shows which encoder states the decoder attends to at each step. Use controls to play/pause or step through manually.
+      </div>
+
+      <div class="controls">
+        <button class="btn active" id="btnPlay">▶ Play</button>
+        <button class="btn" id="btnStep">Step →</button>
+        <button class="btn" id="btnReset">↺ Reset</button>
+        <div class="speed-control">
+          <label>Speed</label>
+          <input type="range" id="speedSlider" min="0.5" max="3" step="0.5" value="1.5"/>
+          <label id="speedLabel">1.5×</label>
+        </div>
+        <button class="btn" id="btnToggleAttn">Attention: ON</button>
+      </div>
+
+      <canvas id="seqCanvas" height="420"></canvas>
+
+      <div class="step-info" id="stepInfo">Press Play to start the Seq2Seq animation.</div>
+    </div>
+  </section>
+
+  <!-- ==================== TAKEAWAYS ==================== -->
+  <section id="takeaways">
+    <h2>Key Takeaways</h2>
+    <ul>
+      <li>
+        <strong>Context vector is the original bottleneck.</strong> A single fixed-size vector encoding an entire sequence caused catastrophic forgetting on sentences longer than ~20 tokens. Attention solved this by giving the decoder a dynamic, content-based view into <em>all</em> encoder states — not just the final one.
+      </li>
+      <li>
+        <strong>Teacher forcing creates exposure bias.</strong> Training with ground-truth previous tokens but decoding with model-predicted tokens causes distribution mismatch. In production, scheduled sampling (gradually replacing ground-truth with model outputs during training) or minimum-risk training mitigates this — but it's still a gap Transformers don't fully escape either.
+      </li>
+      <li>
+        <strong>Seq2Seq → Transformer is architectural, not conceptual.</strong> T5, BART, and mBART still use encoder-decoder design — they replaced RNN cells with self-attention layers. Tasks needing full-input comprehension before generation (e.g., translation, summarization with extractive step) still benefit from the encoder-decoder split vs decoder-only GPT-style.
+      </li>
+      <li>
+        <strong>Attention weights ≠ interpretability.</strong> Visualizing attention matrices became popular for interpretability, but Jain &amp; Wallace (2019) showed attention weights often don't correlate with feature importance. They are alignment scores, not causal explanations. Don't over-index on them as ground truth.
+      </li>
+      <li>
+        <strong>GNMT showed the compounding power of engineering tricks.</strong> Google's production Seq2Seq (2016) used 8 LSTM layers, residual connections between layers, attention, and aggressive quantization (INT8 weights). The tricks together — not any single one — produced the 55–85% error reduction. System-level thinking beats algorithmic purity.
+      </li>
+      <li>
+        <strong>Beam search is the default Seq2Seq decoder.</strong> Greedy decoding is fast but suboptimal. Beam search (width 4–10) improves output quality at the cost of latency proportional to beam size. Modern LLMs mostly use sampling (top-p, temperature) instead — beam search often produces repetitive, safe outputs.
+      </li>
+    </ul>
+  </section>
+</main>
+
+<nav class="concept-nav">
+  <a href="01-self-supervision.html">← 01 · Self-Supervision in LLMs</a>
+  <a href="03-rnn.html">03 · Recurrent Neural Networks (RNN) →</a>
+</nav>
+
+<script>
+(function() {
+  const canvas = document.getElementById('seqCanvas');
+  const ctx = canvas.getContext('2d');
+  const stepInfo = document.getElementById('stepInfo');
+  const btnPlay = document.getElementById('btnPlay');
+  const btnStep = document.getElementById('btnStep');
+  const btnReset = document.getElementById('btnReset');
+  const speedSlider = document.getElementById('speedSlider');
+  const speedLabel = document.getElementById('speedLabel');
+  const btnToggleAttn = document.getElementById('btnToggleAttn');
+
+  // ---- Config ----
+  const SOURCE = ['The', 'cat', 'sat', 'here'];
+  const TARGET = ['Le', 'chat', 'est', 'assis', '<EOS>'];
+  const N_ENC = SOURCE.length;
+  const N_DEC = TARGET.length;
+
+  // Fake attention weights [dec_step][enc_step] — plausible alignment
+  const ATTN = [
+    [0.70, 0.15, 0.10, 0.05], // "Le"    <- attends mostly to "The"
+    [0.10, 0.75, 0.10, 0.05], // "chat"  <- attends mostly to "cat"
+    [0.10, 0.10, 0.60, 0.20], // "est"   <- "sat"
+    [0.05, 0.10, 0.35, 0.50], // "assis" <- "sat/here"
+    [0.05, 0.05, 0.20, 0.70], // "<EOS>" <- "here"
+  ];
+
+  let playing = false;
+  let showAttn = true;
+  let animId = null;
+  let encStep = 0;   // 0..N_ENC: encoder steps completed
+  let decStep = 0;   // 0..N_DEC: decoder steps completed
+  let phase = 'enc'; // 'enc' | 'ctx' | 'dec' | 'done'
+  let t = 0;         // animation time within current step
+  let speed = 1.5;
+  let lastTs = null;
+
+  const STEP_DURATION = 900; // ms per step (base)
+
+  function getStepDuration() {
+    return STEP_DURATION / speed;
+  }
+
+  // ---- Layout helpers ----
+  function dpr() { return window.devicePixelRatio || 1; }
+
+  function resize() {
+    const w = canvas.parentElement.clientWidth - 48;
+    canvas.style.width = w + 'px';
+    canvas.style.height = '420px';
+    canvas.width = w * dpr();
+    canvas.height = 420 * dpr();
+    ctx.scale(dpr(), dpr());
+    draw();
+  }
+
+  function logicalW() { return parseInt(canvas.style.width) || 700; }
+  function logicalH() { return 420; }
+
+  // ---- Drawing primitives ----
+  const C = {
+    bg: '#0d0f17',
+    surface: '#141720',
+    card: '#1a1e2e',
+    border: '#252a3d',
+    accent: '#00d4ff',
+    purple: '#7c3aed',
+    green: '#00ff88',
+    yellow: '#ffd700',
+    red: '#ff4757',
+    orange: '#ff9500',
+    text: '#e2e8f0',
+    dim: '#8892a4',
+  };
+
+  function roundRect(x, y, w, h, r, fill, stroke) {
+    ctx.beginPath();
+    ctx.roundRect(x, y, w, h, r);
+    if (fill) { ctx.fillStyle = fill; ctx.fill(); }
+    if (stroke) { ctx.strokeStyle = stroke; ctx.lineWidth = 1.5; ctx.stroke(); }
+  }
+
+  function text(str, x, y, style = {}) {
+    ctx.save();
+    ctx.fillStyle = style.color || C.text;
+    ctx.font = `${style.bold ? '600 ' : ''}${style.size || 13}px ${style.mono ? "'JetBrains Mono', monospace" : "'Inter', sans-serif"}`;
+    ctx.textAlign = style.align || 'center';
+    ctx.textBaseline = style.baseline || 'middle';
+    ctx.fillText(str, x, y);
+    ctx.restore();
+  }
+
+  function arrow(x1, y1, x2, y2, color, alpha = 1) {
+    ctx.save();
+    ctx.globalAlpha = alpha;
+    ctx.strokeStyle = color;
+    ctx.fillStyle = color;
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(x1, y1);
+    ctx.lineTo(x2, y2);
+    ctx.stroke();
+    // arrowhead
+    const angle = Math.atan2(y2 - y1, x2 - x1);
+    const len = 8;
+    ctx.beginPath();
+    ctx.moveTo(x2, y2);
+    ctx.lineTo(x2 - len * Math.cos(angle - 0.4), y2 - len * Math.sin(angle - 0.4));
+    ctx.lineTo(x2 - len * Math.cos(angle + 0.4), y2 - len * Math.sin(angle + 0.4));
+    ctx.closePath();
+    ctx.fill();
+    ctx.restore();
+  }
+
+  // ---- Main draw ----
+  function draw() {
+    const W = logicalW();
+    const H = logicalH();
+
+    ctx.clearRect(0, 0, W, H);
+    ctx.fillStyle = C.bg;
+    ctx.fillRect(0, 0, W, H);
+
+    const encY = 100;
+    const decY = 300;
+    const cellH = 44;
+    const cellW = Math.min(70, (W * 0.38) / N_ENC);
+    const encStartX = W * 0.06;
+    const decStartX = W * 0.55;
+    const ctxX = W * 0.47;
+    const ctxY = H / 2;
+
+    // ---- Section labels ----
+    text('ENCODER', encStartX + (N_ENC * (cellW + 12)) / 2, 22, { color: C.accent, size: 11, bold: true });
+    text('DECODER', decStartX + (N_DEC * (cellW + 8)) / 2, 22, { color: C.purple, size: 11, bold: true });
+
+    // ---- Encoder cells ----
+    for (let i = 0; i < N_ENC; i++) {
+      const cx = encStartX + i * (cellW + 12);
+      const cy = encY;
+      const active = i < encStep;
+      const current = i === encStep - 1 && phase === 'enc';
+
+      // hidden state flow arrow
+      if (i > 0) {
+        arrow(cx - 12, cy + cellH / 2, cx, cy + cellH / 2, C.accent, active ? 0.9 : 0.2);
+      }
+
+      roundRect(cx, cy, cellW, cellH, 7,
+        current ? '#0f2a35' : (active ? '#0d1f2b' : C.card),
+        current ? C.accent : (active ? C.accent + '55' : C.border)
+      );
+
+      text(SOURCE[i], cx + cellW / 2, cy + cellH / 2 - 7, {
+        color: current ? C.accent : (active ? C.text : C.dim),
+        size: 12, bold: current
+      });
+      text('h' + (i + 1), cx + cellW / 2, cy + cellH / 2 + 9, {
+        color: current ? C.yellow : (active ? C.dim : '#3a4050'),
+        size: 10, mono: true
+      });
+
+      // Pulse ring for current
+      if (current && t < 0.6) {
+        ctx.save();
+        ctx.globalAlpha = (0.6 - t) * 1.6;
+        ctx.strokeStyle = C.accent;
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.roundRect(cx - 3, cy - 3, cellW + 6, cellH + 6, 10);
+        ctx.stroke();
+        ctx.restore();
+      }
+    }
+
+    // ---- Context vector ----
+    const ctxW = 60;
+    const ctxH = 38;
+    const ctxXc = ctxX - ctxW / 2;
+    const ctxYc = ctxY - ctxH / 2;
+    const ctxActive = phase === 'ctx' || phase === 'dec' || phase === 'done';
+    const ctxCurrent = phase === 'ctx';
+    const ctxAlpha = phase === 'enc' ? (encStep / N_ENC) * 0.4 : 1;
+
+    ctx.save();
+    ctx.globalAlpha = ctxAlpha;
+    roundRect(ctxXc, ctxYc, ctxW, ctxH, 8,
+      ctxActive ? '#1a1240' : C.card,
+      ctxCurrent ? C.purple : (ctxActive ? C.purple + '88' : C.border)
+    );
+    text('c', ctxX, ctxY - 5, { color: ctxActive ? C.purple : C.dim, size: 14, bold: true, mono: true });
+    text('context', ctxX, ctxY + 8, { color: ctxActive ? C.dim : '#2a2f40', size: 9 });
+    ctx.restore();
+
+    // Arrow: last encoder → context
+    if (encStep === N_ENC || phase !== 'enc') {
+      const encLastX = encStartX + (N_ENC - 1) * (cellW + 12) + cellW;
+      const alpha = phase === 'enc' ? t : 1;
+      arrow(encLastX, encY + cellH / 2, ctxXc, ctxYc + ctxH / 2, C.accent, Math.min(1, alpha));
+    }
+
+    // ---- Decoder cells ----
+    for (let i = 0; i < N_DEC; i++) {
+      const cx = decStartX + i * (cellW + 8);
+      const cy = decY;
+      const active = i < decStep;
+      const current = i === decStep - 1 && phase === 'dec';
+
+      // hidden state arrows between decoder cells
+      if (i > 0) {
+        arrow(cx - 8, cy + cellH / 2, cx, cy + cellH / 2, C.purple, active ? 0.9 : 0.2);
+      }
+
+      roundRect(cx, cy, cellW, cellH, 7,
+        current ? '#1a1040' : (active ? '#150e30' : C.card),
+        current ? C.purple : (active ? C.purple + '55' : C.border)
+      );
+
+      text(active ? TARGET[i] : '?', cx + cellW / 2, cy + cellH / 2 - 7, {
+        color: current ? C.purple : (active ? C.text : C.dim),
+        size: 12, bold: current
+      });
+      text('s' + (i + 1), cx + cellW / 2, cy + cellH / 2 + 9, {
+        color: current ? C.yellow : (active ? C.dim : '#3a4050'),
+        size: 10, mono: true
+      });
+
+      if (current && t < 0.6) {
+        ctx.save();
+        ctx.globalAlpha = (0.6 - t) * 1.6;
+        ctx.strokeStyle = C.purple;
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.roundRect(cx - 3, cy - 3, cellW + 6, cellH + 6, 10);
+        ctx.stroke();
+        ctx.restore();
+      }
+    }
+
+    // Arrow: context → first decoder
+    if (phase === 'ctx' || phase === 'dec' || phase === 'done') {
+      const alpha = phase === 'ctx' ? t : 1;
+      arrow(ctxX, ctxYc + ctxH, decStartX, decY + cellH / 2, C.purple, Math.min(1, alpha));
+    }
+
+    // ---- Attention lines: encoder states → current decoder ----
+    if (showAttn && (phase === 'dec' || phase === 'done') && decStep > 0) {
+      const di = Math.min(decStep - 1, N_DEC - 1);
+      const dcx = decStartX + di * (cellW + 8) + cellW / 2;
+      const dcy = decY;
+
+      for (let ei = 0; ei < N_ENC; ei++) {
+        const weight = ATTN[di][ei];
+        const ecx = encStartX + ei * (cellW + 12) + cellW / 2;
+        const ecy = encY + cellH;
+
+        ctx.save();
+        ctx.globalAlpha = weight * (phase === 'dec' && di === decStep - 1 ? Math.min(1, t * 2) : 1);
+        ctx.strokeStyle = C.yellow;
+        ctx.lineWidth = weight * 5 + 0.5;
+        ctx.setLineDash([4, 4]);
+        ctx.beginPath();
+        ctx.moveTo(ecx, ecy);
+
+        // Curve through midpoint
+        const mx = (ecx + dcx) / 2;
+        const my = (ecy + dcy) / 2 - 30;
+        ctx.quadraticCurveTo(mx, my, dcx, dcy);
+        ctx.stroke();
+        ctx.restore();
+
+        // Weight label on heaviest line
+        if (weight > 0.4) {
+          ctx.save();
+          ctx.globalAlpha = phase === 'dec' && di === decStep - 1 ? Math.min(1, t * 2) : 1;
+          const lx = mx;
+          const ly = my - 12;
+          roundRect(lx - 18, ly - 10, 36, 18, 4, C.card, C.border);
+          text((weight * 100).toFixed(0) + '%', lx, ly, { color: C.yellow, size: 10, mono: true });
+          ctx.restore();
+        }
+      }
+    }
+
+    // ---- Attention heatmap ----
+    if (showAttn && (phase === 'dec' || phase === 'done')) {
+      const hmX = W - 130;
+      const hmY = 40;
+      const cellSz = 20;
+      const hmAlpha = phase === 'dec' ? Math.min(1, (decStep / N_DEC) * 2) : 1;
+
+      ctx.save();
+      ctx.globalAlpha = hmAlpha;
+      text('Attention', hmX + (N_ENC * cellSz) / 2, hmY - 14, { color: C.dim, size: 10 });
+      text('Heatmap', hmX + (N_ENC * cellSz) / 2, hmY - 2, { color: C.dim, size: 9 });
+
+      for (let di = 0; di < Math.min(decStep, N_DEC); di++) {
+        for (let ei = 0; ei < N_ENC; ei++) {
+          const w = ATTN[di][ei];
+          const hx = hmX + ei * cellSz;
+          const hy = hmY + di * cellSz + 12;
+          const alpha = w;
+          ctx.fillStyle = `rgba(255,215,0,${alpha})`;
+          ctx.fillRect(hx, hy, cellSz - 1, cellSz - 1);
+          if (w > 0.3) {
+            text((w * 10).toFixed(0), hx + cellSz / 2, hy + cellSz / 2,
+              { color: '#000', size: 8, mono: true });
+          }
+        }
+        // Row label
+        text(TARGET[di], hmX - 4, hmY + di * cellSz + 12 + cellSz / 2,
+          { color: C.dim, size: 9, align: 'right' });
+      }
+
+      // Column labels
+      for (let ei = 0; ei < N_ENC; ei++) {
+        text(SOURCE[ei], hmX + ei * cellSz + cellSz / 2, hmY + 12 + N_DEC * cellSz + 8,
+          { color: C.dim, size: 8 });
+      }
+      ctx.restore();
+    }
+
+    // ---- Phase label ----
+    let phaseLabel = '';
+    if (phase === 'enc') phaseLabel = `Encoding token ${encStep}/${N_ENC}…`;
+    else if (phase === 'ctx') phaseLabel = 'Forming context vector from final encoder state…';
+    else if (phase === 'dec') phaseLabel = `Decoding: generating "${TARGET[decStep - 1] || ''}" (step ${decStep}/${N_DEC})`;
+    else if (phase === 'done') phaseLabel = 'Done! Decoder generated full target sequence.';
+
+    stepInfo.textContent = phaseLabel;
+
+    // ---- Labels below sections ----
+    text('Source sequence', encStartX + (N_ENC * (cellW + 12)) / 2, encY + cellH + 18, { color: C.dim, size: 10 });
+    text('Target sequence', decStartX + (N_DEC * (cellW + 8)) / 2, decY + cellH + 18, { color: C.dim, size: 10 });
+
+    // Encoder label on left
+    text('▶', encStartX - 18, encY + cellH / 2, { color: C.accent, size: 14 });
+  }
+
+  // ---- State machine ----
+  function advance() {
+    if (phase === 'enc') {
+      if (encStep < N_ENC) {
+        encStep++;
+        t = 0;
+        if (encStep === N_ENC) {
+          // briefly pause, then go to ctx
+        }
+      } else {
+        phase = 'ctx';
+        t = 0;
+      }
+    } else if (phase === 'ctx') {
+      phase = 'dec';
+      t = 0;
+    } else if (phase === 'dec') {
+      if (decStep < N_DEC) {
+        decStep++;
+        t = 0;
+      } else {
+        phase = 'done';
+        t = 0;
+        playing = false;
+        btnPlay.textContent = '▶ Play';
+        btnPlay.classList.remove('active');
+      }
+    }
+  }
+
+  // ---- Animation loop ----
+  function loop(ts) {
+    if (!playing) { lastTs = null; return; }
+    if (!lastTs) lastTs = ts;
+    const dt = ts - lastTs;
+    lastTs = ts;
+
+    t += dt / getStepDuration();
+
+    if (t >= 1) {
+      t = 0;
+      advance();
+    }
+
+    draw();
+    if (playing) animId = requestAnimationFrame(loop);
+  }
+
+  function startPlay() {
+    if (phase === 'done') reset();
+    playing = true;
+    btnPlay.textContent = '⏸ Pause';
+    btnPlay.classList.add('active');
+    lastTs = null;
+    animId = requestAnimationFrame(loop);
+  }
+
+  function pausePlay() {
+    playing = false;
+    btnPlay.textContent = '▶ Play';
+    btnPlay.classList.remove('active');
+    if (animId) cancelAnimationFrame(animId);
+  }
+
+  function reset() {
+    pausePlay();
+    encStep = 0;
+    decStep = 0;
+    phase = 'enc';
+    t = 0;
+    draw();
+  }
+
+  // ---- Event listeners ----
+  btnPlay.addEventListener('click', () => {
+    if (playing) pausePlay();
+    else startPlay();
+  });
+
+  btnStep.addEventListener('click', () => {
+    pausePlay();
+    t = 0;
+    advance();
+    draw();
+  });
+
+  btnReset.addEventListener('click', reset);
+
+  speedSlider.addEventListener('input', () => {
+    speed = parseFloat(speedSlider.value);
+    speedLabel.textContent = speed + '×';
+  });
+
+  btnToggleAttn.addEventListener('click', () => {
+    showAttn = !showAttn;
+    btnToggleAttn.textContent = 'Attention: ' + (showAttn ? 'ON' : 'OFF');
+    btnToggleAttn.classList.toggle('active', showAttn);
+    draw();
+  });
+  btnToggleAttn.classList.add('active');
+
+  // ---- Resize handling ----
+  window.addEventListener('resize', () => {
+    resize();
+    draw();
+  });
+
+  // ---- Init ----
+  resize();
+  draw();
+})();
+</script>
+
+</body>
+</html>

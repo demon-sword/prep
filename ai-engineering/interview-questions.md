@@ -875,4 +875,26 @@ Questions from the [LLMInterviewQuestions](https://github.com/llmgenai/LLMInterv
 
 ---
 
+## 22. Context management
+
+Questions on managing context windows, long-document handling, memory strategies, and conversation history at production scale.
+
+- How do you handle inputs that exceed the context window of an LLM?
+- What strategies exist for compressing conversation history without losing meaning?
+- Compare sliding-window, summarization, and retrieval-augmented memory approaches for long conversations.
+- How do you decide what to keep vs. drop when truncating context?
+- What is "lost in the middle" and how do you mitigate it in long-context models?
+- How would you design a multi-turn chat system that maintains coherent context across 100+ turns?
+- What is the difference between in-context memory, external memory, and parametric memory?
+- How do you handle document-wide context when chunking (e.g., "amounts in thousands" on page 1)?
+- When would you use a long-context model (e.g., 128K tokens) vs. a RAG pipeline?
+- How do you measure context utilization — are models using the full context effectively?
+- What are the latency and cost implications of increasing context length?
+- How do you implement per-user conversation memory at scale?
+- What role does KV cache play in managing context efficiently at inference time?
+- How do you avoid context pollution when retrieved chunks are irrelevant?
+- Describe a production incident caused by poor context management and how you'd prevent it.
+
+---
+
 *Last updated: June 2026. Sources linked in [README](./README.md).*

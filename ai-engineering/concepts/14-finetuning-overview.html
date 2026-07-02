@@ -1,0 +1,1125 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1.0"/>
+  <title>Fine-Tuning: When, Why &amp; Decision Framework — AI Engineering Concepts</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com"/>
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet"/>
+  <style>
+    :root {
+      --bg: #0d0f17;
+      --surface: #141720;
+      --card: #1a1e2e;
+      --border: #252a3d;
+      --accent: #00d4ff;
+      --purple: #7c3aed;
+      --green: #00ff88;
+      --yellow: #ffd700;
+      --red: #ff4757;
+      --orange: #ff9500;
+      --text: #e2e8f0;
+      --text-dim: #8892a4;
+      --mono: 'JetBrains Mono', monospace;
+      --sans: 'Inter', system-ui, sans-serif;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: var(--sans);
+      line-height: 1.7;
+      min-height: 100vh;
+    }
+
+    /* HEADER */
+    header {
+      background: var(--surface);
+      border-bottom: 1px solid var(--border);
+      padding: 2rem;
+      text-align: center;
+    }
+    header .badge {
+      display: inline-block;
+      background: var(--purple);
+      color: #fff;
+      font-size: 0.7rem;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      padding: 0.25rem 0.75rem;
+      border-radius: 999px;
+      margin-bottom: 1rem;
+    }
+    header h1 {
+      font-size: clamp(1.6rem, 4vw, 2.4rem);
+      font-weight: 700;
+      color: var(--accent);
+      margin-bottom: 0.5rem;
+    }
+    header p {
+      color: var(--text-dim);
+      font-size: 1rem;
+      max-width: 640px;
+      margin: 0 auto;
+    }
+
+    /* MAIN */
+    main { max-width: 900px; margin: 0 auto; padding: 2rem 1.5rem 4rem; }
+
+    /* SECTIONS */
+    section { margin-bottom: 3rem; }
+    section > h2 {
+      font-size: 1.4rem;
+      font-weight: 700;
+      color: var(--accent);
+      border-bottom: 1px solid var(--border);
+      padding-bottom: 0.5rem;
+      margin-bottom: 1.5rem;
+    }
+    h3 {
+      font-size: 1.1rem;
+      font-weight: 600;
+      color: var(--yellow);
+      margin: 1.5rem 0 0.6rem;
+    }
+    p { color: var(--text); margin-bottom: 0.9rem; }
+    ul, ol { padding-left: 1.5rem; margin-bottom: 0.9rem; }
+    li { margin-bottom: 0.4rem; color: var(--text); }
+    code {
+      font-family: var(--mono);
+      font-size: 0.85em;
+      background: var(--card);
+      color: var(--green);
+      padding: 0.1em 0.4em;
+      border-radius: 4px;
+    }
+    pre {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 1rem;
+      overflow-x: auto;
+      font-family: var(--mono);
+      font-size: 0.85rem;
+      color: var(--green);
+      margin-bottom: 1rem;
+    }
+    .callout {
+      background: var(--card);
+      border-left: 3px solid var(--accent);
+      border-radius: 0 8px 8px 0;
+      padding: 1rem 1.2rem;
+      margin: 1rem 0;
+      font-size: 0.95rem;
+    }
+    .callout.warn { border-left-color: var(--yellow); }
+    .callout.danger { border-left-color: var(--red); }
+    .callout.success { border-left-color: var(--green); }
+
+    /* TABLE */
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-bottom: 1.2rem;
+      font-size: 0.92rem;
+    }
+    th {
+      background: var(--card);
+      color: var(--accent);
+      font-weight: 600;
+      padding: 0.6rem 0.8rem;
+      text-align: left;
+      border-bottom: 1px solid var(--border);
+    }
+    td {
+      padding: 0.55rem 0.8rem;
+      border-bottom: 1px solid var(--border);
+      color: var(--text);
+    }
+    tr:hover td { background: var(--card); }
+
+    /* VISUALIZATION */
+    #visualization {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 1.5rem;
+    }
+    .viz-desc {
+      color: var(--text-dim);
+      font-size: 0.92rem;
+      margin-bottom: 1.5rem;
+      padding-bottom: 1rem;
+      border-bottom: 1px solid var(--border);
+    }
+    .tree-container {
+      position: relative;
+      min-height: 520px;
+    }
+    .tree-node {
+      background: var(--card);
+      border: 2px solid var(--border);
+      border-radius: 10px;
+      padding: 0.7rem 1rem;
+      cursor: pointer;
+      transition: all 0.2s ease;
+      user-select: none;
+      position: absolute;
+    }
+    .tree-node:hover { border-color: var(--accent); }
+    .tree-node.active { border-color: var(--accent); background: rgba(0,212,255,0.08); }
+    .tree-node.chosen { border-color: var(--green); background: rgba(0,255,136,0.08); }
+    .tree-node .node-label {
+      font-size: 0.85rem;
+      font-weight: 600;
+      color: var(--text);
+    }
+    .tree-node .node-question {
+      font-size: 0.78rem;
+      color: var(--text-dim);
+      margin-top: 0.2rem;
+    }
+    .tree-node .node-badge {
+      display: inline-block;
+      font-size: 0.65rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      padding: 0.15rem 0.45rem;
+      border-radius: 999px;
+      margin-bottom: 0.3rem;
+    }
+    .badge-question { background: rgba(124,58,237,0.3); color: var(--purple); }
+    .badge-answer { background: rgba(0,212,255,0.2); color: var(--accent); }
+    .badge-result { background: rgba(0,255,136,0.2); color: var(--green); }
+
+    svg.tree-lines {
+      position: absolute;
+      top: 0; left: 0;
+      width: 100%; height: 100%;
+      pointer-events: none;
+      overflow: visible;
+    }
+    svg.tree-lines line {
+      stroke: var(--border);
+      stroke-width: 1.5;
+      transition: stroke 0.2s;
+    }
+    svg.tree-lines line.active-line { stroke: var(--accent); stroke-width: 2; }
+
+    .result-panel {
+      background: var(--card);
+      border: 1px solid var(--green);
+      border-radius: 10px;
+      padding: 1.2rem;
+      margin-top: 1.5rem;
+      display: none;
+    }
+    .result-panel.visible { display: block; }
+    .result-panel h4 {
+      color: var(--green);
+      font-size: 1rem;
+      margin-bottom: 0.6rem;
+    }
+    .result-panel p { font-size: 0.88rem; margin-bottom: 0.5rem; }
+    .result-panel .result-cost {
+      display: inline-block;
+      background: rgba(255,215,0,0.15);
+      color: var(--yellow);
+      font-size: 0.78rem;
+      font-weight: 600;
+      padding: 0.2rem 0.6rem;
+      border-radius: 4px;
+      margin-right: 0.4rem;
+      margin-bottom: 0.4rem;
+    }
+    .result-panel .result-when {
+      display: inline-block;
+      background: rgba(0,212,255,0.12);
+      color: var(--accent);
+      font-size: 0.78rem;
+      font-weight: 600;
+      padding: 0.2rem 0.6rem;
+      border-radius: 4px;
+      margin-right: 0.4rem;
+      margin-bottom: 0.4rem;
+    }
+    .btn-reset {
+      background: var(--card);
+      border: 1px solid var(--border);
+      color: var(--text-dim);
+      padding: 0.45rem 1rem;
+      border-radius: 6px;
+      cursor: pointer;
+      font-size: 0.83rem;
+      font-family: var(--sans);
+      margin-top: 0.8rem;
+      transition: all 0.2s;
+    }
+    .btn-reset:hover { border-color: var(--accent); color: var(--accent); }
+
+    .path-breadcrumb {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.3rem;
+      align-items: center;
+      margin-bottom: 1rem;
+      min-height: 28px;
+    }
+    .crumb {
+      font-size: 0.75rem;
+      color: var(--accent);
+      background: rgba(0,212,255,0.1);
+      padding: 0.2rem 0.5rem;
+      border-radius: 4px;
+    }
+    .crumb-arrow { color: var(--text-dim); font-size: 0.75rem; }
+
+    /* TAKEAWAYS */
+    #takeaways ul { list-style: none; padding: 0; }
+    #takeaways li {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 0.8rem 1.1rem;
+      margin-bottom: 0.7rem;
+      padding-left: 1.1rem;
+      border-left: 3px solid var(--accent);
+      font-size: 0.93rem;
+    }
+
+    /* NAV */
+    .concept-nav {
+      background: var(--surface);
+      border-top: 1px solid var(--border);
+      padding: 1.2rem 2rem;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 1rem;
+    }
+    .concept-nav a {
+      color: var(--accent);
+      text-decoration: none;
+      font-size: 0.88rem;
+      display: flex;
+      align-items: center;
+      gap: 0.4rem;
+      padding: 0.5rem 1rem;
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      transition: all 0.2s;
+    }
+    .concept-nav a:hover { background: var(--card); border-color: var(--accent); }
+    .concept-nav a.disabled {
+      color: var(--text-dim);
+      pointer-events: none;
+      opacity: 0.4;
+    }
+    .concept-nav .nav-label { font-size: 0.75rem; color: var(--text-dim); display: block; }
+
+    @media (max-width: 640px) {
+      .tree-container { min-height: 700px; overflow-x: auto; }
+      .concept-nav { flex-direction: column; }
+    }
+  </style>
+</head>
+<body>
+
+<header>
+  <div class="badge">finetuning</div>
+  <h1>Fine-Tuning: When, Why &amp; Decision Framework</h1>
+  <p>When to fine-tune vs prompt-engineer vs RAG, the two capabilities it improves, cost realities, and the decision tree for choosing your approach.</p>
+</header>
+
+<main>
+
+  <!-- THEORY -->
+  <section id="theory">
+    <h2>Theory</h2>
+
+    <h3>What Is Fine-Tuning?</h3>
+    <p>
+      Fine-tuning is the process of continuing to train a pretrained base model on a curated, task-specific dataset
+      using supervised learning. The base model already "knows" language — its weights encode world knowledge, reasoning
+      patterns, and grammar from trillions of tokens. Fine-tuning adjusts those weights (or a subset of them) so the
+      model behaves differently: following specific instructions, adopting a domain vocabulary, producing a particular
+      output format, or avoiding certain response patterns.
+    </p>
+    <p>
+      Critically, fine-tuning does <em>not</em> give the model new knowledge from documents the way RAG does. It changes
+      how the model responds — its style, format adherence, instruction-following, and learned behavioral patterns —
+      rather than expanding what facts it can retrieve at query time.
+    </p>
+
+    <h3>The Two Capabilities Fine-Tuning Improves</h3>
+    <p>Fine-tuning affects two distinct dimensions:</p>
+    <ul>
+      <li>
+        <strong>Domain knowledge &amp; vocabulary:</strong> Adapting to specialized jargon, proprietary ontologies,
+        or rare patterns not well-represented in pretraining (e.g., medical ICD codes, legal clause structures,
+        internal API schema names). The model learns to "think" in your domain's language.
+      </li>
+      <li>
+        <strong>Instruction following &amp; behavior:</strong> Reliable adherence to output formats (strict JSON,
+        specific XML schemas), consistent tone, persona maintenance, refusal patterns, or multi-step task completion.
+        A base model prompted to output JSON will drift; a fine-tuned model won't.
+      </li>
+    </ul>
+    <p>
+      Most production fine-tuning targets one of these. Trying to solve both simultaneously with a single fine-tuning
+      run often requires more data and risks catastrophic forgetting of general capabilities.
+    </p>
+
+    <h3>Fine-Tuning vs the Alternatives</h3>
+    <p>
+      Before committing to fine-tuning, engineers should exhaust cheaper options. The decision is not binary — it's
+      a spectrum ordered by cost and complexity:
+    </p>
+    <table>
+      <thead>
+        <tr>
+          <th>Approach</th>
+          <th>Cost</th>
+          <th>Latency</th>
+          <th>Best For</th>
+          <th>Limitation</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><strong>Prompt Engineering</strong></td>
+          <td>~$0</td>
+          <td>+0ms</td>
+          <td>Format, tone, few-shot examples</td>
+          <td>Context-length constrained; prompt costs at scale</td>
+        </tr>
+        <tr>
+          <td><strong>RAG</strong></td>
+          <td>Low–medium (vector infra)</td>
+          <td>+50–200ms retrieval</td>
+          <td>Fresh/proprietary factual knowledge</td>
+          <td>Can't change behavior, only grounding</td>
+        </tr>
+        <tr>
+          <td><strong>Fine-Tuning</strong></td>
+          <td>High (GPU hours + data)</td>
+          <td>Baseline (model is faster)</td>
+          <td>Behavior, format, domain style</td>
+          <td>Doesn't add real-time knowledge; training cost</td>
+        </tr>
+        <tr>
+          <td><strong>Fine-Tuning + RAG</strong></td>
+          <td>Highest</td>
+          <td>+retrieval overhead</td>
+          <td>Domain behavior + fresh facts</td>
+          <td>Complex pipeline; cost compounds</td>
+        </tr>
+      </tbody>
+    </table>
+
+    <h3>The Case for Prompt Engineering First</h3>
+    <p>
+      Modern LLMs (GPT-4, Claude 3.x, Llama 3) respond dramatically better to well-crafted prompts than their
+      predecessors. A carefully structured system prompt with 5–10 high-quality few-shot examples can often achieve
+      80–90% of what a fine-tuned model would deliver. The cost difference is stark: iterating on a system prompt
+      takes minutes; preparing a fine-tuning dataset takes days to weeks.
+    </p>
+    <p>
+      The key threshold: <strong>if the base model can't demonstrate the target behavior at all given examples
+      in-context, fine-tuning won't magically teach it</strong>. If it can do it sometimes with prompts,
+      fine-tuning makes it reliable. This is the "capability gap" test.
+    </p>
+
+    <h3>The Case for RAG First</h3>
+    <p>
+      If your problem is "the model doesn't know our internal documents / product catalog / recent events", RAG is
+      almost always the right first step. RAG decouples knowledge freshness from model training. You can update the
+      document store without retraining. Fine-tuning on private facts rarely works well because:
+    </p>
+    <ul>
+      <li>The model memorizes patterns but hallucinates variations it wasn't trained on</li>
+      <li>You can't update facts without rerunning fine-tuning</li>
+      <li>RAGAS-measurable retrieval precision typically outperforms fact memorization</li>
+    </ul>
+
+    <h3>The Case for Fine-Tuning</h3>
+    <p>Fine-tuning is the right choice when:</p>
+    <ul>
+      <li><strong>Format reliability is mission-critical:</strong> You need 99.9% valid JSON, not 95%. Every failure
+          is a parsing error in production.</li>
+      <li><strong>Prompt cost is unsustainable:</strong> Long system prompts with many few-shot examples can add
+          500–2000 tokens per call. At 10M calls/day, that's millions in extra token costs.</li>
+      <li><strong>Latency from context length is a constraint:</strong> Shorter prompts → lower TTFT and per-token
+          latency. A fine-tuned model needs no few-shot examples in the prompt.</li>
+      <li><strong>The behavior can't be expressed in a prompt:</strong> Nuanced domain-specific judgment (e.g.,
+          "flag claims where the attribution is ambiguous per our editorial standards") is hard to specify
+          exhaustively.</li>
+      <li><strong>Serving cost reduction:</strong> Fine-tuning a 7B model on a task where you'd otherwise use GPT-4
+          can cut inference cost by 50–100x.</li>
+    </ul>
+
+    <h3>Cost Realities</h3>
+    <p>
+      Fine-tuning is expensive — not just in compute, but in data preparation, iteration cycles, and evaluation.
+      A realistic breakdown for a production LoRA fine-tune on 7–13B model:
+    </p>
+    <ul>
+      <li><strong>Data:</strong> 500–10,000 high-quality examples minimum. At $2–5 per example with expert annotation,
+          that's $1,000–$50,000 before touching a GPU.</li>
+      <li><strong>Compute:</strong> LoRA on a 7B model for 1–3 epochs: $30–200 on 1x A100 via cloud. Full fine-tune
+          on 13B: $500–2,000. Fine-tuning a 70B model: $5,000–20,000+.</li>
+      <li><strong>Evaluation:</strong> Building a proper eval harness (not vibes-based) takes 1–2 weeks of engineering.</li>
+      <li><strong>Maintenance:</strong> Every major base model version requires re-fine-tuning. Plan for quarterly cycles.</li>
+    </ul>
+    <p>
+      OpenAI's fine-tuning API prices GPT-3.5 at $0.008/1K tokens for training. Fine-tuning 100K examples of
+      average length ~200 tokens = ~$160 — but this doesn't include the data pipeline cost which typically dominates.
+    </p>
+
+    <div class="callout warn">
+      <strong>The 80/20 trap:</strong> Teams often invest weeks fine-tuning to go from 80% to 85% accuracy on a task
+      that 3 days of prompt engineering already brings to 78%. The marginal cost per percentage point rises sharply
+      in the fine-tuning regime.
+    </div>
+
+    <h3>When Fine-Tuning Fails</h3>
+    <p>Fine-tuning will not save you if:</p>
+    <ul>
+      <li>The base model fundamentally lacks the reasoning capability (e.g., fine-tuning a 7B model for PhD-level
+          theorem proving)</li>
+      <li>Your dataset has label noise or inconsistency (the model learns the noise)</li>
+      <li>You're trying to inject facts that may change (use RAG instead)</li>
+      <li>You only have &lt;100 examples (overfitting is near-certain; use few-shot prompting)</li>
+    </ul>
+
+    <h3>The Decision Framework</h3>
+    <p>
+      A systematic decision process: start with the simplest approach, measure against your quality bar, and
+      escalate only when the simpler approach demonstrably fails. The interactive tree below walks through this
+      decision process step by step.
+    </p>
+  </section>
+
+  <!-- VISUALIZATION -->
+  <section id="visualization">
+    <h2>Interactive Decision Tree</h2>
+    <p class="viz-desc">
+      Walk through the fine-tuning decision framework step by step. Click each answer to progress through the tree.
+      The tree guides you from your use case to the recommended approach, showing why each branch exists.
+    </p>
+
+    <div class="path-breadcrumb" id="breadcrumb"></div>
+
+    <div class="tree-container" id="tree-container">
+      <svg class="tree-lines" id="tree-lines"></svg>
+      <!-- nodes rendered by JS -->
+    </div>
+
+    <div class="result-panel" id="result-panel">
+      <h4 id="result-title"></h4>
+      <p id="result-desc"></p>
+      <div id="result-tags"></div>
+      <button class="btn-reset" id="btn-reset">↺ Start Over</button>
+    </div>
+  </section>
+
+  <!-- TAKEAWAYS -->
+  <section id="takeaways">
+    <h2>Key Takeaways</h2>
+    <ul>
+      <li>
+        <strong>Exhaust prompting before fine-tuning.</strong> GPT-4-class models with 5–10 curated few-shot examples
+        in-context often reach 80–90% of fine-tuned quality. The iteration speed of prompting (minutes) vs fine-tuning
+        (days) makes this the right first move every time.
+      </li>
+      <li>
+        <strong>Fine-tuning changes behavior, not knowledge.</strong> Use RAG for "the model needs to know X" and
+        fine-tuning for "the model needs to reliably do X." Mixing them up wastes GPU hours and builds hallucination-prone
+        pipelines.
+      </li>
+      <li>
+        <strong>Data cost dominates compute cost.</strong> 1,000 high-quality expert-labeled examples at $5/example
+        = $5,000. The A100 hour costs are often 10–20% of that. Invest in data quality, not just quantity — 500
+        clean examples outperform 5,000 noisy ones.
+      </li>
+      <li>
+        <strong>Prompt cost is the hidden fine-tuning ROI driver.</strong> If your system prompt + few-shot examples
+        add 800 tokens per call at 50M calls/month, that's 40B extra tokens — worth tens of thousands of dollars.
+        Fine-tuning the few-shot examples away pays for itself in weeks at scale.
+      </li>
+      <li>
+        <strong>The capability gap test:</strong> If the model cannot demonstrate the target behavior even with examples
+        in context, fine-tuning won't fix it. Fine-tuning amplifies latent capabilities; it doesn't create new ones.
+        Test with in-context examples first.
+      </li>
+      <li>
+        <strong>Maintenance debt is real.</strong> Every base model update potentially breaks your fine-tune. Teams
+        running fine-tuned models in production budget 1–2 weeks per quarter for re-evaluation and potential
+        re-training as providers ship new base model versions (Llama 3.1 → 3.2 → 3.3, GPT-3.5 → 4o-mini, etc.).
+      </li>
+    </ul>
+  </section>
+
+</main>
+
+<nav class="concept-nav">
+  <a href="./13-best-of-n.html">
+    <span>←</span>
+    <span>
+      <span class="nav-label">Previous</span>
+      Best-of-N / Beam Search
+    </span>
+  </a>
+  <a href="./15-finetuning-types.html">
+    <span>
+      <span class="nav-label">Next</span>
+      Fine-Tuning Types: Full, Partial, PEFT
+    </span>
+    <span>→</span>
+  </a>
+</nav>
+
+<script>
+(function() {
+  // Decision tree data structure
+  // Each node: { id, type: 'question'|'result', label, question, children?, result? }
+  const TREE = {
+    id: 'root',
+    type: 'question',
+    label: 'What is your primary gap?',
+    question: 'What problem are you trying to solve?',
+    children: [
+      {
+        id: 'q-knowledge',
+        label: 'The model lacks knowledge',
+        type: 'question',
+        question: 'Is the knowledge static or frequently updated?',
+        children: [
+          {
+            id: 'q-static',
+            label: 'Mostly static (changes rarely)',
+            type: 'question',
+            question: 'How large is the knowledge corpus?',
+            children: [
+              {
+                id: 'r-rag-small',
+                label: 'Small (< 10K docs)',
+                type: 'result',
+                result: {
+                  title: '✓ Recommendation: RAG',
+                  desc: 'Your knowledge base is small and stable enough for vector indexing. Use embedding-based retrieval (FAISS, Qdrant, Weaviate). Even static knowledge is better served by RAG than fine-tuning — facts memorized in weights hallucinate variants not seen during training. Fine-tuning on facts is a well-known antipattern.',
+                  tags: ['RAG', 'FAISS', 'Qdrant', 'Cost: Low', 'Updates: Easy']
+                }
+              },
+              {
+                id: 'r-rag-large',
+                label: 'Large (10K+ docs)',
+                type: 'result',
+                result: {
+                  title: '✓ Recommendation: RAG with Hybrid Retrieval',
+                  desc: 'At this scale, use HNSW-indexed approximate nearest neighbor search with BM25 hybrid retrieval. Chunk size tuning and reranking (Cohere Rerank, BGE) become critical. Still prefer RAG over fine-tuning for knowledge — the retrieval is auditable, updatable, and more accurate than weight-memorized facts.',
+                  tags: ['RAG + Hybrid', 'HNSW', 'BM25', 'Reranking', 'Cost: Medium']
+                }
+              }
+            ]
+          },
+          {
+            id: 'r-rag-fresh',
+            label: 'Frequently updated (daily/weekly)',
+            type: 'result',
+            result: {
+              title: '✓ Recommendation: RAG (streaming updates)',
+              desc: 'Dynamic knowledge must use RAG — fine-tuning cycles take days/weeks, making it impossible to keep pace with frequently changing data. Use a real-time indexing pipeline (Elasticsearch, Qdrant with upserts, Pinecone). Fine-tuning here would be malpractice.',
+              tags: ['RAG', 'Streaming index', 'Pinecone', 'Cost: Low–Medium', 'Updates: Real-time']
+            }
+          }
+        ]
+      },
+      {
+        id: 'q-behavior',
+        label: 'The model behavior is wrong',
+        type: 'question',
+        question: 'Can you fix it with a better prompt?',
+        children: [
+          {
+            id: 'q-prompt-works',
+            label: 'Yes — with examples in-context it works',
+            type: 'question',
+            question: 'What is your call volume / token budget situation?',
+            children: [
+              {
+                id: 'r-prompt-only',
+                label: 'Low volume (< 1M calls/month)',
+                type: 'result',
+                result: {
+                  title: '✓ Recommendation: Prompt Engineering',
+                  desc: 'At low volume, the overhead of few-shot examples in your system prompt is affordable. Invest in prompt iteration — it\'s 100x cheaper and faster to ship. Use structured output libraries (Instructor, Outlines) to enforce formats without fine-tuning. Revisit if volume grows significantly.',
+                  tags: ['Prompt Engineering', 'Instructor', 'Outlines', 'Cost: $0 setup', 'Time-to-ship: Days']
+                }
+              },
+              {
+                id: 'r-ft-cost',
+                label: 'High volume (1M+ calls/month)',
+                type: 'result',
+                result: {
+                  title: '✓ Recommendation: Fine-Tune to Remove Few-Shot Examples',
+                  desc: 'At scale, every extra token in your prompt is real money. Fine-tuning to internalize the behavior (eliminating few-shot examples from the prompt) pays for itself quickly. Use LoRA on a smaller open-weight model (Llama 3 8B, Mistral 7B) if you can match quality — the inference cost reduction is substantial.',
+                  tags: ['LoRA Fine-tune', 'Llama 3 8B', 'Mistral 7B', 'Cost: $100–500', 'ROI: High at scale']
+                }
+              }
+            ]
+          },
+          {
+            id: 'q-prompt-fails',
+            label: 'No — even with examples it fails',
+            type: 'question',
+            question: 'Is this a capability the base model class can do at all?',
+            children: [
+              {
+                id: 'r-bigger-model',
+                label: 'No — it\'s beyond the model\'s capability',
+                type: 'result',
+                result: {
+                  title: '✗ Fine-Tuning Won\'t Help — Use a Larger Model',
+                  desc: 'Fine-tuning amplifies latent capabilities; it cannot create new ones. If GPT-4 can solve the problem but Llama 3 8B cannot even with extensive prompting, fine-tuning the 8B model will not get you to GPT-4 quality. Use a larger/stronger base model. Consider a capable proprietary API or a larger open-weight model.',
+                  tags: ['Use GPT-4 / Claude 3', 'Larger base model', 'Cost: Higher inference', 'Don\'t fine-tune']
+                }
+              },
+              {
+                id: 'r-ft-behavior',
+                label: 'Yes — larger models can do it with prompting',
+                type: 'result',
+                result: {
+                  title: '✓ Recommendation: Fine-Tune on Task Examples',
+                  desc: 'The capability exists in the model class but needs to be made reliable. Gather 1,000–10,000 high-quality (input, output) pairs demonstrating the exact behavior. Use SFT (supervised fine-tuning). Start with LoRA (rank 16–64) to reduce GPU requirements. Run on 3–5 epochs with early stopping. Evaluate with a held-out set and an automated metric aligned to your task.',
+                  tags: ['SFT', 'LoRA r=16–64', '1K–10K examples', 'Cost: $100–2000', 'Eval: Required']
+                }
+              }
+            ]
+          }
+        ]
+      },
+      {
+        id: 'q-format',
+        label: 'Output format / style is unreliable',
+        type: 'question',
+        question: 'Is this a strict schema requirement (JSON/XML) or a style requirement?',
+        children: [
+          {
+            id: 'q-schema',
+            label: 'Strict schema (JSON, structured output)',
+            type: 'question',
+            question: 'Have you tried constrained decoding libraries?',
+            children: [
+              {
+                id: 'r-constrained',
+                label: 'Not yet',
+                type: 'result',
+                result: {
+                  title: '✓ Recommendation: Constrained Decoding First',
+                  desc: 'Before fine-tuning for JSON output, try Outlines, Guidance, or LM-Format-Enforcer. These libraries constrain the model\'s token sampling to only produce valid tokens at each position — guaranteeing schema compliance without any fine-tuning. This is the right first step for format enforcement.',
+                  tags: ['Outlines', 'Guidance', 'LM-Format-Enforcer', 'Cost: $0', 'Guarantees: Hard']
+                }
+              },
+              {
+                id: 'r-ft-format',
+                label: 'Yes, but latency/cost is a concern',
+                type: 'result',
+                result: {
+                  title: '✓ Recommendation: Fine-Tune for Native Format Output',
+                  desc: 'When constrained decoding adds too much overhead, fine-tuning to produce native structured output is justified. 500–2,000 examples of (input, schema-valid JSON) pairs with SFT produces very reliable format adherence. Use with a lighter model to reduce inference cost further.',
+                  tags: ['SFT', '500–2K examples', 'Format fine-tuning', 'Cost: $50–500', 'Latency: Better']
+                }
+              }
+            ]
+          },
+          {
+            id: 'r-style-ft',
+            label: 'Style / tone / persona',
+            type: 'result',
+            result: {
+              title: '✓ Recommendation: Prompt Engineering → Fine-Tune if Unstable',
+              desc: 'Tone and persona are often achievable through system prompt alone. Start there. If the style drifts over long conversations or is critical to brand identity (customer-facing product), fine-tuning on examples with the desired style gives consistent behavior. Collect 500–2,000 (input, ideal-style output) pairs.',
+              tags: ['System prompt first', 'Style SFT', '500–2K examples', 'Cost: $50–500', 'Drift: Fixed']
+            }
+          }
+        ]
+      }
+    ]
+  };
+
+  // State
+  let currentNode = TREE;
+  let path = []; // { label, nodeId }
+  let activePath = new Set(['root']);
+
+  const treeContainer = document.getElementById('tree-container');
+  const svgEl = document.getElementById('tree-lines');
+  const resultPanel = document.getElementById('result-panel');
+  const breadcrumb = document.getElementById('breadcrumb');
+
+  // Layout config
+  const NODE_W = 190;
+  const NODE_H = 72;
+  const LEVELS = [
+    { y: 10 },
+    { y: 130 },
+    { y: 260 },
+    { y: 390 },
+  ];
+
+  // Flatten tree for layout
+  function flattenTree(node, depth, xIndex, xSiblings) {
+    node._depth = depth;
+    node._xIndex = xIndex;
+    node._xSiblings = xSiblings;
+    if (node.children) {
+      const n = node.children.length;
+      node.children.forEach((c, i) => flattenTree(c, depth + 1, i, n));
+    }
+    return node;
+  }
+
+  // Compute x position for each node based on parent and sibling count
+  function computePositions(node, parentX, parentW, idx, total) {
+    const y = LEVELS[Math.min(node._depth, LEVELS.length - 1)].y;
+    const sectionW = parentW / total;
+    const x = parentX + sectionW * idx + sectionW / 2 - NODE_W / 2;
+    node._px = x;
+    node._py = y;
+    if (node.children) {
+      const childW = sectionW;
+      node.children.forEach((c, i) => computePositions(c, parentX + sectionW * idx, sectionW, i, node.children.length));
+    }
+  }
+
+  const CANVAS_W = 820;
+  flattenTree(TREE, 0, 0, 1);
+  computePositions(TREE, 0, CANVAS_W, 0, 1);
+
+  // Collect all nodes flat
+  function allNodes(node) {
+    let result = [node];
+    if (node.children) node.children.forEach(c => result = result.concat(allNodes(c)));
+    return result;
+  }
+  const nodes = allNodes(TREE);
+
+  // Collect all edges
+  function allEdges(node) {
+    let result = [];
+    if (node.children) {
+      node.children.forEach(c => {
+        result.push({ from: node, to: c });
+        result = result.concat(allEdges(c));
+      });
+    }
+    return result;
+  }
+  const edges = allEdges(TREE);
+
+  const canvasH = LEVELS[3].y + NODE_H + 40;
+  treeContainer.style.minHeight = canvasH + 'px';
+
+  function isOnActivePath(node) {
+    return activePath.has(node.id);
+  }
+
+  function renderTree() {
+    // Clear
+    treeContainer.querySelectorAll('.tree-node').forEach(e => e.remove());
+    while (svgEl.firstChild) svgEl.removeChild(svgEl.firstChild);
+
+    svgEl.setAttribute('viewBox', `0 0 ${CANVAS_W} ${canvasH}`);
+    svgEl.style.width = '100%';
+    svgEl.style.height = canvasH + 'px';
+
+    // Draw edges
+    edges.forEach(({ from, to }) => {
+      const line = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+      const x1 = from._px + NODE_W / 2;
+      const y1 = from._py + NODE_H;
+      const x2 = to._px + NODE_W / 2;
+      const y2 = to._py;
+      line.setAttribute('x1', x1);
+      line.setAttribute('y1', y1);
+      line.setAttribute('x2', x2);
+      line.setAttribute('y2', y2);
+      if (activePath.has(from.id) && activePath.has(to.id)) {
+        line.classList.add('active-line');
+      }
+      svgEl.appendChild(line);
+    });
+
+    // Draw nodes
+    nodes.forEach(node => {
+      // Skip results that are siblings of non-active path
+      const isVisible = shouldShowNode(node);
+      if (!isVisible) return;
+
+      const div = document.createElement('div');
+      div.className = 'tree-node';
+      div.style.left = node._px + 'px';
+      div.style.top = node._py + 'px';
+      div.style.width = NODE_W + 'px';
+      div.style.minHeight = NODE_H + 'px';
+
+      if (node.id === currentNode.id) div.classList.add('active');
+      if (node.type === 'result' && activePath.has(node.id)) div.classList.add('chosen');
+      if (activePath.has(node.id)) div.classList.add('active');
+
+      const badgeType = node.type === 'result'
+        ? (activePath.has(node.id) ? 'badge-result' : 'badge-answer')
+        : (node.id === 'root' ? 'badge-question' : 'badge-answer');
+
+      const badgeLabel = node.type === 'result' ? (activePath.has(node.id) ? 'Result' : 'Option') :
+                         (node.id === 'root' ? 'Start' : 'Option');
+
+      div.innerHTML = `
+        <span class="node-badge ${badgeType}">${badgeLabel}</span>
+        <div class="node-label">${node.label}</div>
+        ${node.question ? `<div class="node-question">${node.question}</div>` : ''}
+      `;
+
+      // Click logic
+      if (node.type === 'result') {
+        div.addEventListener('click', () => {
+          if (!canClick(node)) return;
+          // Navigate to this result
+          activePath.add(node.id);
+          currentNode = node;
+          showResult(node.result);
+          updateBreadcrumb();
+          renderTree();
+        });
+      } else if (node.children && node.id !== 'root' && node.id !== currentNode.id) {
+        div.addEventListener('click', () => {
+          if (!canClick(node)) return;
+          activePath.add(node.id);
+          currentNode = node;
+          hideResult();
+          updateBreadcrumb();
+          renderTree();
+        });
+      }
+
+      treeContainer.appendChild(div);
+    });
+
+    // Highlight children of current node as clickable
+    if (currentNode.children) {
+      currentNode.children.forEach(child => {
+        const el = treeContainer.querySelector(`[data-id="${child.id}"]`);
+      });
+    }
+  }
+
+  function shouldShowNode(node) {
+    // Always show root
+    if (node.id === 'root') return true;
+    // Show if on active path
+    if (activePath.has(node.id)) return true;
+    // Show if parent is the current node (candidate children)
+    if (currentNode.children && currentNode.children.some(c => c.id === node.id)) return true;
+    // Show if parent is on active path and is a question we've passed through
+    // Find parent
+    const parent = findParent(TREE, node.id);
+    if (parent && activePath.has(parent.id) && parent.id === currentNode.id) return true;
+    return false;
+  }
+
+  function findParent(root, targetId) {
+    if (root.children) {
+      for (const c of root.children) {
+        if (c.id === targetId) return root;
+        const found = findParent(c, targetId);
+        if (found) return found;
+      }
+    }
+    return null;
+  }
+
+  function canClick(node) {
+    // Can click a node if its parent is on the active path
+    if (node.id === 'root') return true;
+    const parent = findParent(TREE, node.id);
+    return parent && activePath.has(parent.id) && parent.id === currentNode.id;
+  }
+
+  function showResult(result) {
+    const panel = resultPanel;
+    panel.classList.add('visible');
+    document.getElementById('result-title').textContent = result.title;
+    document.getElementById('result-desc').textContent = result.desc;
+    const tags = document.getElementById('result-tags');
+    tags.innerHTML = '';
+    result.tags.forEach(tag => {
+      const span = document.createElement('span');
+      span.className = tag.startsWith('Cost') || tag.startsWith('ROI') ? 'result-cost' : 'result-when';
+      span.textContent = tag;
+      tags.appendChild(span);
+    });
+  }
+
+  function hideResult() {
+    resultPanel.classList.remove('visible');
+  }
+
+  function updateBreadcrumb() {
+    breadcrumb.innerHTML = '';
+    // Build chain from root to currentNode
+    const chain = buildChain(TREE, currentNode.id);
+    chain.forEach((node, i) => {
+      if (i > 0) {
+        const arrow = document.createElement('span');
+        arrow.className = 'crumb-arrow';
+        arrow.textContent = '→';
+        breadcrumb.appendChild(arrow);
+      }
+      const crumb = document.createElement('span');
+      crumb.className = 'crumb';
+      crumb.textContent = node.label.length > 28 ? node.label.slice(0, 26) + '…' : node.label;
+      breadcrumb.appendChild(crumb);
+    });
+  }
+
+  function buildChain(root, targetId) {
+    if (root.id === targetId) return [root];
+    if (root.children) {
+      for (const c of root.children) {
+        const chain = buildChain(c, targetId);
+        if (chain.length) return [root, ...chain];
+      }
+    }
+    return [];
+  }
+
+  document.getElementById('btn-reset').addEventListener('click', () => {
+    currentNode = TREE;
+    activePath = new Set(['root']);
+    path = [];
+    hideResult();
+    updateBreadcrumb();
+    renderTree();
+  });
+
+  // Add data-id to nodes after render for targeting
+  function renderTreeWithIds() {
+    renderTree();
+    treeContainer.querySelectorAll('.tree-node').forEach((el, i) => {
+      // The order matches our nodes array filtered
+    });
+  }
+
+  // Patch renderTree to add data-id
+  const origRenderTree = renderTree;
+
+  function render() {
+    // Clear
+    treeContainer.querySelectorAll('.tree-node').forEach(e => e.remove());
+    while (svgEl.firstChild) svgEl.removeChild(svgEl.firstChild);
+
+    svgEl.setAttribute('viewBox', `0 0 ${CANVAS_W} ${canvasH}`);
+    svgEl.style.width = '100%';
+    svgEl.style.height = canvasH + 'px';
+
+    // Draw edges
+    edges.forEach(({ from, to }) => {
+      const isFromActive = activePath.has(from.id);
+      const isToActive = activePath.has(to.id);
+      const isFromCurrent = from.id === currentNode.id;
+      const isChildOfCurrent = currentNode.children && currentNode.children.some(c => c.id === to.id);
+
+      if (!shouldShowNode(from) || !shouldShowNode(to)) return;
+
+      const line = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+      const x1 = from._px + NODE_W / 2;
+      const y1 = from._py + NODE_H;
+      const x2 = to._px + NODE_W / 2;
+      const y2 = to._py;
+      line.setAttribute('x1', x1);
+      line.setAttribute('y1', y1);
+      line.setAttribute('x2', x2);
+      line.setAttribute('y2', y2);
+      if (isFromActive && isToActive) {
+        line.classList.add('active-line');
+      }
+      svgEl.appendChild(line);
+    });
+
+    // Draw nodes
+    nodes.forEach(node => {
+      if (!shouldShowNode(node)) return;
+
+      const isActive = activePath.has(node.id);
+      const isCurrent = node.id === currentNode.id;
+      const isChildOfCurrent = currentNode.children && currentNode.children.some(c => c.id === node.id);
+      const isChosen = node.type === 'result' && isActive;
+
+      const div = document.createElement('div');
+      div.className = 'tree-node';
+      div.dataset.id = node.id;
+      div.style.left = node._px + 'px';
+      div.style.top = node._py + 'px';
+      div.style.width = NODE_W + 'px';
+      div.style.minHeight = NODE_H + 'px';
+
+      if (isChosen) div.classList.add('chosen');
+      else if (isActive || isCurrent) div.classList.add('active');
+      if (isChildOfCurrent) {
+        div.style.cursor = 'pointer';
+        div.style.borderColor = 'rgba(0,212,255,0.4)';
+      }
+
+      const badgeLabel = node.type === 'result' ? (isActive ? 'Result' : 'Option') :
+                         (node.id === 'root' ? 'Start' : (isCurrent ? 'Current' : (isActive ? 'Chosen' : 'Option')));
+      const badgeClass = node.type === 'result' ? (isActive ? 'badge-result' : 'badge-answer') :
+                         (node.id === 'root' || isCurrent ? 'badge-question' : 'badge-answer');
+
+      div.innerHTML = `
+        <span class="node-badge ${badgeClass}">${badgeLabel}</span>
+        <div class="node-label">${node.label}</div>
+        ${(node.question && (isCurrent)) ? `<div class="node-question">${node.question}</div>` : ''}
+      `;
+
+      // Click handler
+      if (isChildOfCurrent) {
+        div.addEventListener('click', () => {
+          activePath.add(node.id);
+          currentNode = node;
+          if (node.type === 'result') {
+            showResult(node.result);
+          } else {
+            hideResult();
+          }
+          updateBreadcrumb();
+          render();
+        });
+      } else if (node.type !== 'result' && isActive && node.id !== 'root') {
+        // Allow going back by clicking a previous active node
+        div.style.cursor = 'pointer';
+        div.addEventListener('click', () => {
+          // Reset to this node — trim path
+          const chain = buildChain(TREE, node.id);
+          activePath = new Set(chain.map(n => n.id));
+          currentNode = node;
+          hideResult();
+          updateBreadcrumb();
+          render();
+        });
+      }
+
+      treeContainer.appendChild(div);
+    });
+  }
+
+  render();
+  updateBreadcrumb();
+
+})();
+</script>
+
+</body>
+</html>

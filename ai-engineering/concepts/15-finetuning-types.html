@@ -1,0 +1,893 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1.0"/>
+  <title>Fine-Tuning Types: Full, Partial, PEFT — AI Engineering Concepts</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com"/>
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet"/>
+  <style>
+    :root {
+      --bg: #0d0f17;
+      --surface: #141720;
+      --card: #1a1e2e;
+      --border: #252a3d;
+      --accent: #00d4ff;
+      --purple: #7c3aed;
+      --green: #00ff88;
+      --yellow: #ffd700;
+      --red: #ff4757;
+      --orange: #ff9500;
+      --text: #e2e8f0;
+      --text-dim: #8892a4;
+      --mono: 'JetBrains Mono', monospace;
+      --sans: 'Inter', system-ui, sans-serif;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: var(--sans);
+      line-height: 1.7;
+    }
+    header {
+      background: var(--surface);
+      border-bottom: 1px solid var(--border);
+      padding: 2rem;
+      text-align: center;
+    }
+    header h1 {
+      font-size: 2rem;
+      font-weight: 700;
+      color: var(--accent);
+      margin-bottom: 0.5rem;
+    }
+    header p.desc {
+      color: var(--text-dim);
+      font-size: 1rem;
+      max-width: 640px;
+      margin: 0 auto 0.75rem;
+    }
+    .badge {
+      display: inline-block;
+      background: var(--card);
+      border: 1px solid var(--border);
+      color: var(--purple);
+      font-size: 0.75rem;
+      font-family: var(--mono);
+      padding: 0.25rem 0.75rem;
+      border-radius: 999px;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+    }
+    main { max-width: 1100px; margin: 0 auto; padding: 2rem 1.5rem; }
+    section { margin-bottom: 3rem; }
+    h2 {
+      font-size: 1.4rem;
+      font-weight: 700;
+      color: var(--accent);
+      margin-bottom: 1.25rem;
+      padding-bottom: 0.5rem;
+      border-bottom: 1px solid var(--border);
+    }
+    h3 {
+      font-size: 1.1rem;
+      font-weight: 600;
+      color: var(--yellow);
+      margin: 1.5rem 0 0.75rem;
+    }
+    p { margin-bottom: 1rem; color: var(--text); }
+    ul { margin: 0.5rem 0 1rem 1.5rem; }
+    li { margin-bottom: 0.5rem; }
+    code {
+      font-family: var(--mono);
+      background: var(--card);
+      border: 1px solid var(--border);
+      padding: 0.1rem 0.4rem;
+      border-radius: 4px;
+      font-size: 0.85em;
+      color: var(--green);
+    }
+    pre {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 1rem 1.25rem;
+      overflow-x: auto;
+      font-family: var(--mono);
+      font-size: 0.85rem;
+      color: var(--green);
+      margin-bottom: 1rem;
+    }
+    .card {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 1.25rem 1.5rem;
+      margin-bottom: 1rem;
+    }
+    .card-title {
+      font-weight: 600;
+      color: var(--accent);
+      margin-bottom: 0.5rem;
+    }
+    .highlight { color: var(--accent); font-weight: 600; }
+    .warn { color: var(--orange); }
+    .good { color: var(--green); }
+    .bad { color: var(--red); }
+
+    /* Visualization */
+    #viz-container {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 1.5rem;
+      margin-top: 1rem;
+    }
+    .viz-title {
+      font-size: 1.05rem;
+      font-weight: 600;
+      color: var(--text);
+      margin-bottom: 0.25rem;
+    }
+    .viz-subtitle {
+      color: var(--text-dim);
+      font-size: 0.875rem;
+      margin-bottom: 1.5rem;
+    }
+    .mode-tabs {
+      display: flex;
+      gap: 0.5rem;
+      margin-bottom: 1.5rem;
+      flex-wrap: wrap;
+    }
+    .mode-tab {
+      padding: 0.5rem 1.25rem;
+      border-radius: 8px;
+      border: 1px solid var(--border);
+      background: var(--surface);
+      color: var(--text-dim);
+      font-size: 0.875rem;
+      font-family: var(--mono);
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+    .mode-tab.active {
+      background: var(--accent);
+      color: #0d0f17;
+      border-color: var(--accent);
+      font-weight: 700;
+    }
+    .mode-tab:hover:not(.active) {
+      border-color: var(--accent);
+      color: var(--accent);
+    }
+    #model-diagram {
+      width: 100%;
+      overflow-x: auto;
+    }
+    canvas#layerCanvas {
+      display: block;
+      margin: 0 auto;
+      max-width: 100%;
+    }
+    .stats-row {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+      gap: 0.75rem;
+      margin-top: 1.25rem;
+    }
+    .stat-box {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 0.75rem 1rem;
+      text-align: center;
+    }
+    .stat-label {
+      font-size: 0.75rem;
+      color: var(--text-dim);
+      font-family: var(--mono);
+      margin-bottom: 0.25rem;
+      text-transform: uppercase;
+    }
+    .stat-value {
+      font-size: 1.15rem;
+      font-weight: 700;
+      font-family: var(--mono);
+    }
+    .legend-row {
+      display: flex;
+      gap: 1.5rem;
+      margin-top: 1rem;
+      flex-wrap: wrap;
+    }
+    .legend-item {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      font-size: 0.8rem;
+      color: var(--text-dim);
+    }
+    .legend-swatch {
+      width: 16px;
+      height: 16px;
+      border-radius: 3px;
+      flex-shrink: 0;
+    }
+    .layer-info {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 0.75rem 1rem;
+      margin-top: 1rem;
+      font-size: 0.875rem;
+      color: var(--text-dim);
+      min-height: 48px;
+    }
+    .layer-info strong { color: var(--accent); }
+
+    /* Takeaways */
+    #takeaways ul { list-style: none; margin-left: 0; }
+    #takeaways li {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-left: 3px solid var(--accent);
+      border-radius: 6px;
+      padding: 0.75rem 1rem;
+      margin-bottom: 0.75rem;
+      color: var(--text);
+    }
+
+    /* Nav */
+    .concept-nav {
+      border-top: 1px solid var(--border);
+      padding: 1.5rem 2rem;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      max-width: 1100px;
+      margin: 0 auto;
+    }
+    .nav-link {
+      display: flex;
+      flex-direction: column;
+      text-decoration: none;
+      padding: 0.75rem 1.25rem;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      background: var(--surface);
+      transition: border-color 0.2s;
+      max-width: 280px;
+    }
+    .nav-link:hover { border-color: var(--accent); }
+    .nav-dir { font-size: 0.7rem; color: var(--text-dim); text-transform: uppercase; letter-spacing: 0.1em; margin-bottom: 0.25rem; }
+    .nav-title { font-size: 0.875rem; color: var(--accent); font-weight: 600; }
+    .nav-link.disabled { opacity: 0.4; pointer-events: none; }
+
+    @media (max-width: 640px) {
+      header h1 { font-size: 1.5rem; }
+      .concept-nav { flex-direction: column; gap: 1rem; }
+    }
+  </style>
+</head>
+<body>
+
+<header>
+  <div class="badge">finetuning</div>
+  <h1>Fine-Tuning Types: Full, Partial, PEFT</h1>
+  <p class="desc">Full fine-tuning vs partial (frozen layers) vs Parameter-Efficient Fine-Tuning (PEFT) — tradeoffs in memory, data needs, and serving.</p>
+</header>
+
+<main>
+  <section id="theory">
+    <h2>Theory</h2>
+
+    <p>When adapting a pretrained LLM to a specific task or domain, you have a spectrum of choices that trade off memory cost, compute, data requirements, and serving complexity. Understanding these tradeoffs at a mechanistic level is what separates a principled approach from guesswork.</p>
+
+    <h3>Full Fine-Tuning</h3>
+    <p>Full fine-tuning updates <strong>all parameters</strong> of the model. For a 7B parameter model in fp32, that's ~28 GB just for the weights. During training you also need gradients (~28 GB), optimizer states like Adam's first and second moment estimates (~56 GB), and activations — easily exceeding 128 GB of GPU VRAM for a single node. This forces multi-GPU setups (DDP, FSDP, or DeepSpeed ZeRO-3) for any serious model size.</p>
+    <p>The upside: maximum expressiveness. Every parameter can shift, so the model can learn new representations throughout the entire stack — from early token embedding patterns to high-level reasoning circuits in the later layers. Full fine-tuning generally achieves the best downstream performance ceiling, especially for dramatic domain shifts (e.g., pretrained on general web → specialized to medical or legal text with highly different vocabulary distributions).</p>
+    <p>The practical ceiling: a 70B model at bf16 needs ~140 GB for weights alone. At fp32 with Adam optimizer states: ~560 GB. This requires 8× A100 80GB GPUs just for parameter storage. Training cost for full fine-tuning a 70B model on 10B tokens can run $50k–$200k+ on cloud compute.</p>
+
+    <h3>Partial (Layer) Fine-Tuning</h3>
+    <p>Partial fine-tuning freezes a subset of layers and only trains the rest. Common strategies:</p>
+    <ul>
+      <li><strong>Top-layer fine-tuning</strong> — freeze all layers except the last N transformer blocks and the LM head. Intuition: lower layers capture universal syntax and semantics; upper layers encode task-specific reasoning. Updating only upper layers can adapt task behavior cheaply.</li>
+      <li><strong>Head fine-tuning</strong> — only update the final classification/LM head. Useful for classification tasks where you attach a new linear layer. Memory cost is minimal but expressive power is limited.</li>
+      <li><strong>Layer-selective fine-tuning</strong> — identify which layers have the most task-relevant gradient signal (e.g., via Fisher information) and update only those. More sophisticated but rarely used in practice due to complexity.</li>
+    </ul>
+    <p>Memory savings are proportional to the fraction of frozen layers. Freezing 90% of a 7B model means you only backpropagate through 700M parameters, reducing gradient memory by ~90%. Optimizer states also shrink proportionally. However, you still need the full forward pass through the frozen layers, so activation memory for those is still incurred (though gradient checkpointing can mitigate this).</p>
+    <p>Risk: partial fine-tuning can underfit if the frozen layers encode representations that are misaligned with the target domain. You're betting that the pretrained lower layers generalize.</p>
+
+    <h3>Parameter-Efficient Fine-Tuning (PEFT)</h3>
+    <p>PEFT methods freeze the original model weights entirely and add a small number of new trainable parameters. The core insight: LLMs are massively over-parameterized, and task-specific adaptation lives in a low-dimensional subspace. You don't need to move all parameters — you need to add a small perturbation in the right direction.</p>
+
+    <h3>LoRA (Low-Rank Adaptation)</h3>
+    <p>LoRA is the dominant PEFT method in production. For each weight matrix W ∈ ℝ<sup>d×k</sup>, instead of learning ΔW (same size as W), LoRA constrains the update to a low-rank decomposition:</p>
+    <pre>W' = W₀ + ΔW = W₀ + A·B
+where A ∈ ℝ^(d×r), B ∈ ℝ^(r×k), rank r ≪ min(d, k)</pre>
+    <p>Only A and B are trained; W₀ is frozen. For a typical attention projection with d=4096, k=4096, and rank r=16: the original matrix has 16.7M parameters, while A+B has only 131K — a 128× reduction. Total trainable parameters for a LoRA-adapted 7B model at rank 16 might be ~40M, or ~0.57% of the original.</p>
+    <p>At inference time, A·B can be merged back into W: <code>W_merged = W₀ + A·B</code>. This means zero inference overhead — the merged adapter is just a different set of weights, not an extra module. This is critical for production: you serve the fine-tuned model at exactly the same latency as the base model.</p>
+    <p>The <strong>alpha/rank ratio</strong> controls effective learning rate: the LoRA update is scaled by α/r before being added, so increasing α with fixed r amplifies the update. Typical values: r=8–64, α=r or 2r.</p>
+    <p><strong>QLoRA</strong> (Dettmers et al., 2023) extends LoRA by quantizing the frozen base model to 4-bit NF4 (Normal Float 4) format while keeping the LoRA adapters in bf16. This allows fine-tuning a 65B model on a single 48GB GPU — something previously impossible. The quantization introduces small accuracy loss (~1–2% on benchmarks) but enables consumer-hardware fine-tuning.</p>
+
+    <h3>Adapter-Based Methods</h3>
+    <p>Earlier PEFT approaches insert small feed-forward "adapter" modules between transformer layers. The adapter has a down-projection to a bottleneck dimension r, a nonlinearity, and an up-projection back to the original dimension — with a residual skip connection. Adapter-tuning was introduced by Houlsby et al. (2019) and was popular before LoRA. Drawback: adapters add latency at inference since they can't be merged into the base weights (unlike LoRA A·B).</p>
+
+    <h3>Soft Prompt / Prefix Tuning</h3>
+    <p>Prefix tuning (Li & Liang, 2021) prepends a sequence of learnable "virtual tokens" (soft prompt vectors) to the input at every layer. Only these prefix vectors are trained; the LLM weights are frozen. The prefix acts like a task-specific key-value cache that conditions all attention computations downstream. Memory cost is minimal (prefix length × hidden size × num layers). Drawback: soft prompts don't generalize as well as LoRA across tasks, and the virtual tokens occupy context length.</p>
+    <p><strong>Prompt tuning</strong> is a simpler variant that only adds soft tokens at the input embedding layer (not every layer). It works reasonably well for very large models (≥11B) but underperforms LoRA on smaller models.</p>
+
+    <h3>Choosing the Right Method</h3>
+    <p>The practical decision tree:</p>
+    <ul>
+      <li><strong>Extreme domain shift + lots of data + budget</strong> → Full fine-tuning (medical, legal, code from scratch)</li>
+      <li><strong>Moderate domain shift + multi-task serving</strong> → LoRA (adapters can be swapped per request, enabling hot-swapping in vLLM)</li>
+      <li><strong>Resource-constrained (single GPU, &lt;48GB)</strong> → QLoRA</li>
+      <li><strong>Classification/structured output head only</strong> → Head fine-tuning</li>
+      <li><strong>Serving multiple domain variants of same base</strong> → LoRA (S-LoRA in vLLM can serve 1000+ LoRA adapters from one base model using unified paging)</li>
+    </ul>
+
+    <h3>Production Reality</h3>
+    <p>LoRA has become the default choice for most production fine-tuning for two reasons: (1) it enables adapter hot-swapping in inference servers without reloading the entire model, and (2) QLoRA makes it accessible on consumer/research hardware. Tools like <strong>Hugging Face PEFT</strong>, <strong>Axolotl</strong>, and <strong>LLaMA-Factory</strong> make LoRA fine-tuning a commodity. The key engineering question is no longer "which method" but "which rank and alpha" — and the answer increasingly comes from ablation on a held-out eval set rather than heuristics. A rank of 16–64 covers 95% of use cases; ranks above 128 rarely help and increase memory cost.</p>
+  </section>
+
+  <section id="visualization">
+    <h2>Visualization</h2>
+    <div id="viz-container">
+      <div class="viz-title">Model Layer Freeze Diagram</div>
+      <div class="viz-subtitle">Toggle between fine-tuning modes to see which layers are trainable (🔥) vs frozen (❄️). Hover over a layer to see its role. Stats update in real time.</div>
+
+      <div class="mode-tabs">
+        <button class="mode-tab active" data-mode="full">Full Fine-Tuning</button>
+        <button class="mode-tab" data-mode="partial">Partial (Top-3 Layers)</button>
+        <button class="mode-tab" data-mode="lora">LoRA</button>
+        <button class="mode-tab" data-mode="qlora">QLoRA</button>
+        <button class="mode-tab" data-mode="adapter">Adapter</button>
+        <button class="mode-tab" data-mode="head">Head Only</button>
+      </div>
+
+      <div id="model-diagram">
+        <canvas id="layerCanvas" width="760" height="480"></canvas>
+      </div>
+
+      <div class="layer-info" id="layerInfo">Hover over a layer to see details about its role and whether it's trainable in the current mode.</div>
+
+      <div class="legend-row">
+        <div class="legend-item"><div class="legend-swatch" style="background:#00ff88;"></div> Trainable (updates during backprop)</div>
+        <div class="legend-item"><div class="legend-swatch" style="background:#252a3d;border:1px solid #8892a4;"></div> Frozen (no gradient)</div>
+        <div class="legend-item"><div class="legend-swatch" style="background:#7c3aed;"></div> LoRA Adapter (A·B matrices)</div>
+        <div class="legend-item"><div class="legend-swatch" style="background:#ffd700;"></div> 4-bit Quantized (NF4)</div>
+        <div class="legend-item"><div class="legend-swatch" style="background:#ff9500;"></div> Bottleneck Adapter Module</div>
+      </div>
+
+      <div class="stats-row" id="statsRow">
+        <div class="stat-box">
+          <div class="stat-label">Trainable Params</div>
+          <div class="stat-value" id="statTrainable" style="color:var(--green);">—</div>
+        </div>
+        <div class="stat-box">
+          <div class="stat-label">% of Total</div>
+          <div class="stat-value" id="statPct" style="color:var(--accent);">—</div>
+        </div>
+        <div class="stat-box">
+          <div class="stat-label">GPU Memory (est.)</div>
+          <div class="stat-value" id="statMemory" style="color:var(--yellow);">—</div>
+        </div>
+        <div class="stat-box">
+          <div class="stat-label">Inference Overhead</div>
+          <div class="stat-value" id="statOverhead" style="color:var(--orange);">—</div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section id="takeaways">
+    <h2>Key Takeaways</h2>
+    <ul>
+      <li><strong>LoRA is mergeable, adapters aren't.</strong> LoRA's A·B update can be folded into W₀ at inference time, giving zero latency overhead. Adapter bottleneck modules sit in the forward path and add ~3–8% latency per adapter — a real cost at scale.</li>
+      <li><strong>QLoRA enables single-GPU fine-tuning of 65B+ models</strong> by quantizing frozen weights to 4-bit NF4. The accuracy loss (~1–2% on benchmarks) is acceptable for most domain adaptation tasks, making previously cloud-only workloads accessible on a single 48GB GPU.</li>
+      <li><strong>LoRA rank is not a free hyperparameter.</strong> Rank controls the intrinsic dimension of adaptation. Too low (r=1–2): underfits complex tasks. Too high (r=256+): wastes parameters without gain, can overfit. r=16–64 is the sweet spot for most tasks. Run a quick ablation on your eval set.</li>
+      <li><strong>S-LoRA (vLLM) can serve 1000+ adapters from one base model</strong> using unified paging. This means you can fine-tune a different adapter per customer and serve all of them from a single GPU cluster — a transformative serving architecture for multi-tenant AI products.</li>
+      <li><strong>Full fine-tuning's memory cost is 4× the model size for Adam in fp32</strong> (weights + gradients + 2 Adam moments). A 7B model needs ~112 GB; a 70B model needs ~1.1 TB. Gradient checkpointing trades compute for activation memory (up to 10× reduction) but doesn't help with optimizer states.</li>
+      <li><strong>Partial fine-tuning's frozen layers still consume forward-pass memory</strong> — activations accumulate through the full network. "Freezing" only saves gradient and optimizer state memory, not activation memory, unless paired with gradient checkpointing and layer-wise memory release tricks.</li>
+    </ul>
+  </section>
+</main>
+
+<nav class="concept-nav">
+  <a href="14-finetuning-overview.html" class="nav-link">
+    <span class="nav-dir">← Previous</span>
+    <span class="nav-title">Fine-Tuning: When, Why & Decision Framework</span>
+  </a>
+  <a href="16-lora.html" class="nav-link">
+    <span class="nav-dir">Next →</span>
+    <span class="nav-title">LoRA — Low-Rank Adaptation</span>
+  </a>
+</nav>
+
+<script>
+(function() {
+  const canvas = document.getElementById('layerCanvas');
+  const ctx = canvas.getContext('2d');
+  const layerInfoEl = document.getElementById('layerInfo');
+  const statTrainable = document.getElementById('statTrainable');
+  const statPct = document.getElementById('statPct');
+  const statMemory = document.getElementById('statMemory');
+  const statOverhead = document.getElementById('statOverhead');
+
+  let currentMode = 'full';
+  let hoveredLayer = null;
+  let animFrame = null;
+  let animProgress = 0;
+
+  // Model: 7B param model simplified to representative layers
+  const TOTAL_PARAMS = 7000; // in millions
+  const LAYERS = [
+    { id: 'embed',    label: 'Token Embedding',        params: 131,  role: 'Maps token IDs → dense vectors. Rows = vocab size × hidden dim. Rarely updated in partial tuning.' },
+    { id: 'l1',       label: 'Transformer Block 1',    params: 536,  role: 'Lower layer: captures syntax, basic token co-occurrence. Universally transferable. Often frozen.' },
+    { id: 'l2',       label: 'Transformer Block 2',    params: 536,  role: 'Lower layer: morphological and positional patterns. Strong generalization — safe to freeze.' },
+    { id: 'l3',       label: 'Transformer Block 3',    params: 536,  role: 'Transition layer: begins encoding semantic relationships. Often frozen in partial tuning.' },
+    { id: 'l4',       label: 'Transformer Block 4',    params: 536,  role: 'Mid-stack: encodes factual associations and entity relationships. Task-relevant gradient signal starts here.' },
+    { id: 'l5',       label: 'Transformer Block 5',    params: 536,  role: 'Upper-mid: reasoning circuits, instruction following behavior. High gradient signal for most tasks.' },
+    { id: 'l6',       label: 'Transformer Block 6',    params: 536,  role: 'Upper layer: task-specific behavior, output style, instruction adherence. Usually trained.' },
+    { id: 'l7',       label: 'Transformer Block 7',    params: 536,  role: 'Top layer: directly influences next-token distribution. Almost always trained in any fine-tuning scheme.' },
+    { id: 'norm',     label: 'Final LayerNorm',        params: 4,    role: 'Normalizes final hidden state before the LM head. Small but important — usually trained.' },
+    { id: 'lmhead',   label: 'LM Head (vocab proj)',   params: 131,  role: 'Projects hidden dim → vocab logits. Directly determines output distribution. Always trained.' },
+  ];
+
+  // Per-mode configuration
+  const MODES = {
+    full: {
+      label: 'Full Fine-Tuning',
+      trainable: (l) => true,
+      extra: null,
+      loraRank: 0,
+      quantized: false,
+      adapterRank: 0,
+      trainableParams: TOTAL_PARAMS,
+      memGB: '112 GB',
+      overhead: 'None',
+      pct: '100%',
+    },
+    partial: {
+      label: 'Partial (Top-3)',
+      trainable: (l) => ['l5','l6','l7','norm','lmhead'].includes(l.id),
+      extra: null,
+      loraRank: 0,
+      quantized: false,
+      adapterRank: 0,
+      trainableParams: 536*3 + 4 + 131,
+      memGB: '~36 GB',
+      overhead: 'None',
+      pct: null,
+    },
+    lora: {
+      label: 'LoRA (r=16)',
+      trainable: (l) => false,
+      extra: 'lora',
+      loraRank: 16,
+      quantized: false,
+      adapterRank: 0,
+      trainableParams: 40,
+      memGB: '~18 GB',
+      overhead: 'None (merged)',
+      pct: '0.57%',
+    },
+    qlora: {
+      label: 'QLoRA (4-bit + r=16)',
+      trainable: (l) => false,
+      extra: 'lora',
+      loraRank: 16,
+      quantized: true,
+      adapterRank: 0,
+      trainableParams: 40,
+      memGB: '~6 GB',
+      overhead: 'None (merged)',
+      pct: '0.57%',
+    },
+    adapter: {
+      label: 'Adapter Bottleneck',
+      trainable: (l) => false,
+      extra: 'adapter',
+      loraRank: 0,
+      quantized: false,
+      adapterRank: 64,
+      trainableParams: 21,
+      memGB: '~16 GB',
+      overhead: '+3–8% latency',
+      pct: '0.30%',
+    },
+    head: {
+      label: 'Head Only',
+      trainable: (l) => ['norm','lmhead'].includes(l.id),
+      extra: null,
+      loraRank: 0,
+      quantized: false,
+      adapterRank: 0,
+      trainableParams: 135,
+      memGB: '~14 GB',
+      overhead: 'None',
+      pct: null,
+    },
+  };
+
+  function getModeConfig() { return MODES[currentMode]; }
+
+  function getLayerState(layer) {
+    const cfg = getModeConfig();
+    if (cfg.trainable(layer)) return 'trainable';
+    if (cfg.extra === 'lora') return 'lora-frozen';
+    if (cfg.extra === 'adapter') return 'adapter-frozen';
+    return 'frozen';
+  }
+
+  function drawArrow(x1, y1, x2, y2, color) {
+    ctx.save();
+    ctx.strokeStyle = color;
+    ctx.fillStyle = color;
+    ctx.lineWidth = 1.5;
+    ctx.beginPath();
+    ctx.moveTo(x1, y1);
+    ctx.lineTo(x2, y2);
+    ctx.stroke();
+    // arrowhead
+    const angle = Math.atan2(y2 - y1, x2 - x1);
+    ctx.beginPath();
+    ctx.moveTo(x2, y2);
+    ctx.lineTo(x2 - 8 * Math.cos(angle - 0.4), y2 - 8 * Math.sin(angle - 0.4));
+    ctx.lineTo(x2 - 8 * Math.cos(angle + 0.4), y2 - 8 * Math.sin(angle + 0.4));
+    ctx.closePath();
+    ctx.fill();
+    ctx.restore();
+  }
+
+  function draw() {
+    const W = canvas.width;
+    const H = canvas.height;
+    const cfg = getModeConfig();
+
+    ctx.clearRect(0, 0, W, H);
+
+    // Background
+    ctx.fillStyle = '#0d0f17';
+    ctx.fillRect(0, 0, W, H);
+
+    const numLayers = LAYERS.length;
+    const layerH = 36;
+    const layerW = 300;
+    const startX = 80;
+    const startY = 30;
+    const gap = 10;
+    const stride = layerH + gap;
+
+    // Draw data flow pipe on left
+    const pipeX = startX - 30;
+    ctx.strokeStyle = '#252a3d';
+    ctx.lineWidth = 3;
+    ctx.setLineDash([4, 4]);
+    ctx.beginPath();
+    ctx.moveTo(pipeX, startY + layerH / 2);
+    ctx.lineTo(pipeX, startY + (numLayers - 1) * stride + layerH / 2);
+    ctx.stroke();
+    ctx.setLineDash([]);
+
+    // Animate flow dots on pipe
+    const dotCount = 4;
+    for (let d = 0; d < dotCount; d++) {
+      const t = ((animProgress / 100 + d / dotCount)) % 1;
+      const dotY = startY + layerH / 2 + t * ((numLayers - 1) * stride);
+      ctx.beginPath();
+      ctx.arc(pipeX, dotY, 4, 0, Math.PI * 2);
+      ctx.fillStyle = '#00d4ff';
+      ctx.fill();
+    }
+
+    // Draw each layer
+    LAYERS.forEach((layer, i) => {
+      const y = startY + i * stride;
+      const state = getLayerState(layer);
+      const isHovered = hoveredLayer === i;
+
+      // Choose fill color
+      let fillColor, borderColor, textColor;
+      const isQuantized = cfg.quantized;
+
+      if (state === 'trainable') {
+        fillColor = isHovered ? '#00ff8844' : '#00ff8822';
+        borderColor = '#00ff88';
+        textColor = '#00ff88';
+      } else if (state === 'lora-frozen') {
+        if (isQuantized) {
+          fillColor = isHovered ? '#ffd70033' : '#ffd70015';
+          borderColor = '#ffd700';
+          textColor = '#ffd700';
+        } else {
+          fillColor = isHovered ? '#1a1e2e' : '#141720';
+          borderColor = isHovered ? '#8892a4' : '#252a3d';
+          textColor = '#8892a4';
+        }
+      } else if (state === 'adapter-frozen') {
+        fillColor = isHovered ? '#1a1e2e' : '#141720';
+        borderColor = isHovered ? '#8892a4' : '#252a3d';
+        textColor = '#8892a4';
+      } else {
+        fillColor = isHovered ? '#1a1e2e' : '#141720';
+        borderColor = isHovered ? '#8892a4' : '#252a3d';
+        textColor = '#8892a4';
+      }
+
+      // Main layer rect
+      ctx.fillStyle = fillColor;
+      ctx.strokeStyle = borderColor;
+      ctx.lineWidth = isHovered ? 2 : 1;
+      roundRect(ctx, startX, y, layerW, layerH, 6);
+      ctx.fill();
+      ctx.stroke();
+
+      // Frozen / trainable icon
+      const icon = state === 'trainable' ? '🔥' : '❄️';
+      ctx.font = '14px sans-serif';
+      ctx.fillText(icon, startX + 8, y + layerH / 2 + 5);
+
+      // Layer label
+      ctx.fillStyle = textColor;
+      ctx.font = `${isHovered ? 600 : 500} 12px Inter, sans-serif`;
+      ctx.fillText(layer.label, startX + 30, y + layerH / 2 + 4);
+
+      // Param count
+      ctx.fillStyle = '#8892a4';
+      ctx.font = '11px JetBrains Mono, monospace';
+      ctx.textAlign = 'right';
+      ctx.fillText(`${layer.params}M`, startX + layerW - 10, y + layerH / 2 + 4);
+      ctx.textAlign = 'left';
+
+      // LoRA adapter badge
+      if (state === 'lora-frozen' && ['l1','l2','l3','l4','l5','l6','l7'].includes(layer.id)) {
+        const bx = startX + layerW + 16;
+        const bw = 90;
+        const bh = 28;
+        const by = y + (layerH - bh) / 2;
+        ctx.fillStyle = '#7c3aed33';
+        ctx.strokeStyle = '#7c3aed';
+        ctx.lineWidth = 1;
+        roundRect(ctx, bx, by, bw, bh, 5);
+        ctx.fill();
+        ctx.stroke();
+        ctx.fillStyle = '#7c3aed';
+        ctx.font = 'bold 10px JetBrains Mono, monospace';
+        ctx.fillText(`LoRA r=${cfg.loraRank}`, bx + 8, by + bh / 2 + 3);
+        // connector line
+        ctx.strokeStyle = '#7c3aed55';
+        ctx.lineWidth = 1;
+        ctx.setLineDash([3, 3]);
+        ctx.beginPath();
+        ctx.moveTo(startX + layerW, y + layerH / 2);
+        ctx.lineTo(bx, by + bh / 2);
+        ctx.stroke();
+        ctx.setLineDash([]);
+      }
+
+      // Adapter badge
+      if (state === 'adapter-frozen' && ['l1','l2','l3','l4','l5','l6','l7'].includes(layer.id)) {
+        const bx = startX + layerW + 16;
+        const bw = 100;
+        const bh = 28;
+        const by = y + (layerH - bh) / 2;
+        ctx.fillStyle = '#ff950033';
+        ctx.strokeStyle = '#ff9500';
+        ctx.lineWidth = 1;
+        roundRect(ctx, bx, by, bw, bh, 5);
+        ctx.fill();
+        ctx.stroke();
+        ctx.fillStyle = '#ff9500';
+        ctx.font = 'bold 10px JetBrains Mono, monospace';
+        ctx.fillText(`Adapter r=${cfg.adapterRank}`, bx + 8, by + bh / 2 + 3);
+        // connector with bidirectional arrow
+        ctx.strokeStyle = '#ff950055';
+        ctx.lineWidth = 1;
+        ctx.setLineDash([3, 3]);
+        ctx.beginPath();
+        ctx.moveTo(startX + layerW, y + layerH / 2);
+        ctx.lineTo(bx, by + bh / 2);
+        ctx.stroke();
+        ctx.setLineDash([]);
+      }
+
+      // NF4 quantization badge
+      if (isQuantized) {
+        const qx = startX + layerW - 60;
+        const qy = y + 4;
+        ctx.fillStyle = '#ffd70022';
+        ctx.strokeStyle = '#ffd700';
+        ctx.lineWidth = 0.5;
+        roundRect(ctx, qx, qy, 55, 12, 3);
+        ctx.fill();
+        ctx.stroke();
+        ctx.fillStyle = '#ffd700';
+        ctx.font = '9px JetBrains Mono, monospace';
+        ctx.fillText('NF4 4-bit', qx + 4, qy + 9);
+      }
+
+      // Arrow from layer to next
+      if (i < numLayers - 1) {
+        const nx = startX + layerW / 2;
+        drawArrow(nx, y + layerH, nx, y + layerH + gap, '#252a3d');
+      }
+    });
+
+    // Right side: Gradient flow annotation
+    const annotX = startX + layerW + (cfg.extra ? 130 : 20);
+    ctx.save();
+    ctx.font = '11px Inter, sans-serif';
+    ctx.fillStyle = '#8892a4';
+    ctx.textAlign = 'left';
+
+    // Mode title box
+    ctx.fillStyle = '#141720';
+    ctx.strokeStyle = '#252a3d';
+    ctx.lineWidth = 1;
+    roundRect(ctx, annotX + 10, startY, 220, 60, 8);
+    ctx.fill();
+    ctx.stroke();
+    ctx.fillStyle = '#00d4ff';
+    ctx.font = 'bold 12px Inter, sans-serif';
+    ctx.fillText(cfg.label, annotX + 22, startY + 20);
+    ctx.fillStyle = '#8892a4';
+    ctx.font = '11px Inter, sans-serif';
+
+    let descLines = [];
+    if (currentMode === 'full') descLines = ['All params trained', '∇W everywhere', 'Max expressiveness'];
+    else if (currentMode === 'partial') descLines = ['Top layers + head', 'Frozen: bottom 4', 'Lower gradient cost'];
+    else if (currentMode === 'lora') descLines = ['A·B trained only', 'W₀ frozen', 'Merge at inference'];
+    else if (currentMode === 'qlora') descLines = ['A·B trained (bf16)', 'W₀ frozen (NF4)', 'Merge at inference'];
+    else if (currentMode === 'adapter') descLines = ['Adapter modules', 'Inserted between', 'blocks (in-path)'];
+    else if (currentMode === 'head') descLines = ['LM head + norm', 'All others frozen', 'Minimal training'];
+
+    descLines.forEach((line, di) => {
+      ctx.fillText(line, annotX + 22, startY + 35 + di * 14);
+    });
+
+    ctx.restore();
+
+    // Gradient flow legend on right
+    const gx = annotX + 10;
+    const gy = startY + 80;
+    ctx.save();
+    ctx.fillStyle = '#141720';
+    ctx.strokeStyle = '#252a3d';
+    ctx.lineWidth = 1;
+    roundRect(ctx, gx, gy, 220, 100, 8);
+    ctx.fill();
+    ctx.stroke();
+    ctx.fillStyle = '#8892a4';
+    ctx.font = '10px Inter, sans-serif';
+    ctx.fillText('GRADIENT FLOW', gx + 10, gy + 18);
+    // Gradient bar from red (high) → dim (none)
+    const grad = ctx.createLinearGradient(gx + 10, 0, gx + 200, 0);
+    grad.addColorStop(0, '#ff4757');
+    grad.addColorStop(0.5, '#ff9500');
+    grad.addColorStop(1, '#252a3d');
+    ctx.fillStyle = grad;
+    ctx.fillRect(gx + 10, gy + 28, 200, 10);
+    ctx.fillStyle = '#8892a4';
+    ctx.font = '9px JetBrains Mono, monospace';
+    ctx.textAlign = 'left';
+    ctx.fillText('HIGH ∇', gx + 10, gy + 52);
+    ctx.textAlign = 'right';
+    ctx.fillText('NONE ∇', gx + 210, gy + 52);
+    ctx.textAlign = 'left';
+
+    // Info about current mode's gradient behavior
+    ctx.fillStyle = '#8892a4';
+    ctx.font = '10px Inter, sans-serif';
+    let gradDesc = '';
+    if (currentMode === 'full') gradDesc = 'Full backward pass through all layers.';
+    else if (currentMode === 'partial') gradDesc = 'Backprop stops at frozen layer boundary.';
+    else if (currentMode === 'lora') gradDesc = 'Only ∇A and ∇B computed. W₀ untouched.';
+    else if (currentMode === 'qlora') gradDesc = '∇A, ∇B in bf16; W₀ in NF4 dequantized.';
+    else if (currentMode === 'adapter') gradDesc = 'Backprop through adapter; W₀ frozen.';
+    else if (currentMode === 'head') gradDesc = 'Backprop only through norm + LM head.';
+
+    ctx.fillText(gradDesc, gx + 10, gy + 70);
+    const modeParams = getModeConfig().trainableParams;
+    ctx.fillStyle = '#00ff88';
+    ctx.font = 'bold 11px JetBrains Mono, monospace';
+    ctx.fillText(`~${modeParams}M trainable params`, gx + 10, gy + 88);
+    ctx.restore();
+
+    animProgress = (animProgress + 0.5) % 100;
+    animFrame = requestAnimationFrame(draw);
+  }
+
+  function roundRect(ctx, x, y, w, h, r) {
+    ctx.beginPath();
+    ctx.moveTo(x + r, y);
+    ctx.lineTo(x + w - r, y);
+    ctx.arcTo(x + w, y, x + w, y + r, r);
+    ctx.lineTo(x + w, y + h - r);
+    ctx.arcTo(x + w, y + h, x + w - r, y + h, r);
+    ctx.lineTo(x + r, y + h);
+    ctx.arcTo(x, y + h, x, y + h - r, r);
+    ctx.lineTo(x, y + r);
+    ctx.arcTo(x, y, x + r, y, r);
+    ctx.closePath();
+  }
+
+  function getHoveredLayer(mx, my) {
+    const rect = canvas.getBoundingClientRect();
+    const scaleX = canvas.width / rect.width;
+    const scaleY = canvas.height / rect.height;
+    const cx = (mx - rect.left) * scaleX;
+    const cy = (my - rect.top) * scaleY;
+
+    const startX = 80;
+    const startY = 30;
+    const layerH = 36;
+    const layerW = 300;
+    const stride = layerH + 10;
+
+    for (let i = 0; i < LAYERS.length; i++) {
+      const y = startY + i * stride;
+      if (cx >= startX && cx <= startX + layerW && cy >= y && cy <= y + layerH) {
+        return i;
+      }
+    }
+    return null;
+  }
+
+  canvas.addEventListener('mousemove', (e) => {
+    const idx = getHoveredLayer(e.clientX, e.clientY);
+    hoveredLayer = idx;
+    if (idx !== null) {
+      const layer = LAYERS[idx];
+      const cfg = getModeConfig();
+      const state = getLayerState(layer);
+      const stateLabel = state === 'trainable' ? '🔥 Trainable' : '❄️ Frozen';
+      layerInfoEl.innerHTML = `<strong>${layer.label}</strong> — ${stateLabel} — ${layer.params}M params. <em>${layer.role}</em>`;
+    } else {
+      layerInfoEl.innerHTML = 'Hover over a layer to see details about its role and whether it\'s trainable in the current mode.';
+    }
+  });
+
+  canvas.addEventListener('mouseleave', () => {
+    hoveredLayer = null;
+    layerInfoEl.innerHTML = 'Hover over a layer to see details about its role and whether it\'s trainable in the current mode.';
+  });
+
+  function updateStats() {
+    const cfg = getModeConfig();
+    const tp = cfg.trainableParams;
+    statTrainable.textContent = tp >= 1000 ? `${(tp/1000).toFixed(1)}B` : `${tp}M`;
+    statPct.textContent = cfg.pct || `${((tp / TOTAL_PARAMS) * 100).toFixed(1)}%`;
+    statMemory.textContent = cfg.memGB;
+    statOverhead.textContent = cfg.overhead;
+  }
+
+  document.querySelectorAll('.mode-tab').forEach(btn => {
+    btn.addEventListener('click', () => {
+      document.querySelectorAll('.mode-tab').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      currentMode = btn.dataset.mode;
+      updateStats();
+    });
+  });
+
+  // Responsive canvas sizing
+  function resizeCanvas() {
+    const container = document.getElementById('model-diagram');
+    const maxW = Math.min(container.clientWidth, 760);
+    canvas.style.width = maxW + 'px';
+    canvas.style.height = (maxW * 480 / 760) + 'px';
+  }
+  window.addEventListener('resize', resizeCanvas);
+  resizeCanvas();
+
+  updateStats();
+  draw();
+})();
+</script>
+</body>
+</html>

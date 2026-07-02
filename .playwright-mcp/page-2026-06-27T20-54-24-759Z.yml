@@ -1,0 +1,114 @@
+- generic [active] [ref=e1]:
+  - banner [ref=e2]:
+    - generic [ref=e3]: Training
+    - 'heading "Post-Training: Why & How" [level=1] [ref=e4]'
+    - paragraph [ref=e5]: "Why pretrained models need post-training and the three main solutions: SFT, preference finetuning (RLHF/DPO), and Best-of-N."
+  - main [ref=e6]:
+    - generic [ref=e7]:
+      - heading "Theory" [level=2] [ref=e8]
+      - heading "The Pretrained Model Problem" [level=3] [ref=e9]
+      - paragraph [ref=e10]:
+        - text: "Pretraining produces a powerful statistical engine — a model that has internalized the distribution of text from trillions of tokens scraped from the internet, books, and code. But raw pretraining has a deeply inconvenient property: the model learned to"
+        - emphasis [ref=e11]: continue text
+        - text: ", not to"
+        - emphasis [ref=e12]: follow instructions
+        - text: ","
+        - emphasis [ref=e13]: answer questions helpfully
+        - text: ", or"
+        - emphasis [ref=e14]: refuse harmful requests
+        - text: . If you ask GPT-3 "What is the capital of France?" it might respond with ten more geography quiz questions, because that's what naturally follows the pattern of quiz text in its training distribution.
+      - paragraph [ref=e15]: "There are three structural gaps a pretrained base model exhibits:"
+      - list [ref=e16]:
+        - listitem [ref=e17]:
+          - strong [ref=e18]: "Instruction-following gap:"
+          - text: The model predicts likely continuations, not intended responses. It cannot distinguish "user turn" from "assistant turn" without post-training.
+        - listitem [ref=e19]:
+          - strong [ref=e20]: "Factual reliability gap:"
+          - text: Pretraining doesn't penalize confidently wrong answers. The model learns to sound fluent, not to be accurate.
+        - listitem [ref=e21]:
+          - strong [ref=e22]: "Safety and alignment gap:"
+          - text: Web-scraped data contains toxic content, misinformation, and harmful instructions. The base model has absorbed all of it and has no filter.
+      - paragraph [ref=e23]: Post-training is the family of techniques that patch these three gaps without throwing away the expensive pretraining knowledge.
+      - 'heading "Stage 1: Supervised Fine-Tuning (SFT)" [level=3] [ref=e24]'
+      - paragraph [ref=e25]: "SFT is the first and most fundamental post-training step. You collect a dataset of (instruction, ideal response) pairs — typically 10K–500K examples — and train the model via standard cross-entropy loss on the response tokens only (the instruction tokens are masked from the loss). The model learns the conversational format: \"when I see a user request structured like this, I produce a response structured like that.\""
+      - paragraph [ref=e26]: "SFT data quality dominates quantity. OpenAI's InstructGPT paper (2022) demonstrated that 13K high-quality human-written demonstrations outperformed 100K lower-quality examples. Modern SFT datasets use a mix of: human-written gold examples (expensive, high quality), teacher model distillation (GPT-4 or Claude generating responses — controversial because of license restrictions), and synthetic generation with filtering."
+      - paragraph [ref=e27]:
+        - text: SFT teaches
+        - emphasis [ref=e28]: format and style
+        - text: extremely efficiently but is limited in teaching
+        - emphasis [ref=e29]: quality discrimination
+        - text: . It optimizes to match the demonstration, not to maximize human preference. If the demonstration is mediocre, the model learns mediocrity. This is why SFT alone is insufficient — you need the next stages.
+      - 'heading "Stage 2: Preference Fine-Tuning — RLHF and DPO" [level=3] [ref=e30]'
+      - paragraph [ref=e31]: Preference fine-tuning teaches the model to produce outputs that humans prefer over alternatives. The core insight is that it's much easier for humans to say "output A is better than output B" than to write a perfect output from scratch. This comparative signal is richer than SFT's imitation signal.
+      - paragraph [ref=e32]:
+        - strong [ref=e33]: RLHF (Reinforcement Learning from Human Feedback)
+        - text: "takes a three-stage approach: (1) train a reward model on preference pairs (chosen vs rejected), (2) use PPO (Proximal Policy Optimization) to optimize the SFT model's policy against the reward model, while keeping a KL-divergence penalty to prevent the policy from deviating too far from the original SFT model. The KL term is critical — without it, the model learns to game the reward model (reward hacking) by producing outputs that score high but are actually bad."
+      - paragraph [ref=e34]:
+        - strong [ref=e35]: DPO (Direct Preference Optimization, 2023)
+        - text: "eliminates the reward model entirely. It reformulates the RLHF objective such that the optimal policy can be expressed directly in terms of the reference SFT model and the preference pairs — no RL loop required. DPO loss:"
+        - code [ref=e36]: "-log σ(β·log(π_θ(y_w|x)/π_ref(y_w|x)) - β·log(π_θ(y_l|x)/π_ref(y_l|x)))"
+        - text: ", where y_w is the chosen (winner) response and y_l is the rejected (loser). DPO is far simpler to implement and often matches RLHF quality, which is why it's now the dominant choice."
+      - 'heading "Stage 3: Best-of-N (Inference-Time Compute)" [level=3] [ref=e37]'
+      - paragraph [ref=e38]: Best-of-N is technically not a training method — it's an inference strategy. Generate N independent completions, score each with a reward model, return the highest-scoring one. This is the simplest form of inference-time compute scaling. With N=32 and a decent reward model, you can achieve performance comparable to a significantly larger model. The cost is linear in N (you pay N forward passes), but the quality improvement is logarithmic — going from N=1 to N=4 helps a lot, N=4 to N=64 helps less, N=64 to N=256 helps even less.
+      - paragraph [ref=e39]: "Best-of-N is often used as a baseline to evaluate reward model quality: a good reward model should produce a monotonically increasing quality curve as N grows. If it plateaus or decreases, your reward model is overfit or miscalibrated."
+      - heading "The Post-Training Stack in Practice" [level=3] [ref=e40]
+      - paragraph [ref=e41]: "Modern frontier models (GPT-4, Claude, Gemini) use all three stages in sequence: SFT → RLHF (or DPO) → constitutional AI / RLAIF refinement. Open-source stacks like Llama 3 Instruct use SFT + DPO. Smaller commercial deployments often skip RLHF and use SFT + DPO alone because RLHF requires significant engineering infrastructure (reward model serving, PPO training stability, human labeler pipelines)."
+      - generic [ref=e42]:
+        - strong [ref=e43]: "Production Reality:"
+        - text: Post-training typically requires 1–10% of pretraining compute but can recover 80–90% of the alignment gap. The cost of human preference data (labeler time, quality control) is often the real bottleneck — not compute. A good preference dataset with 50K pairs can cost $50K–$500K depending on quality requirements.
+    - generic [ref=e44]:
+      - heading "Interactive Pipeline" [level=2] [ref=e45]
+      - paragraph [ref=e46]: Click each stage tab to explore the post-training pipeline. The canvas shows the data flow and transformation at each stage. The comparison panel shows raw pretrained vs post-trained model behavior.
+      - generic [ref=e47]:
+        - button "Base Model" [ref=e48] [cursor=pointer]
+        - button "1 — SFT" [ref=e49] [cursor=pointer]
+        - button "2a — RLHF" [ref=e50] [cursor=pointer]
+        - button "2b — DPO" [ref=e51] [cursor=pointer]
+        - button "3 — Best-of-N" [ref=e52] [cursor=pointer]
+      - generic [ref=e54]:
+        - heading "Base Pretrained Model" [level=4] [ref=e55]
+        - paragraph [ref=e56]: Raw next-token predictor. Knows facts but ignores instructions, has no safety filter, and responds in a web-text continuation style rather than a conversational style.
+      - generic [ref=e57]:
+        - generic [ref=e58]: "Instruction-following: ★☆☆☆☆"
+        - generic [ref=e59]: "Safety: ★☆☆☆☆"
+        - generic [ref=e60]: "Helpfulness: ★★☆☆☆"
+        - generic [ref=e61]: "Cost: —"
+      - generic [ref=e62]:
+        - generic [ref=e63]:
+          - heading "Raw Pretrained" [level=4] [ref=e64]
+          - paragraph [ref=e65]:
+            - text: "Q: Explain gradient descent."
+            - text: "A: Gradient descent is ... explain gradient descent ... gradient descent ... gradient descent algorithms include ..."
+        - generic [ref=e66]:
+          - heading "Post-Trained Output" [level=4] [ref=e67]
+          - paragraph [ref=e68]: Select a stage above to see how each post-training method transforms the model's behavior.
+    - generic [ref=e69]:
+      - heading "Key Takeaways" [level=2] [ref=e70]
+      - list [ref=e71]:
+        - listitem [ref=e72]:
+          - strong [ref=e73]: "SFT teaches format, preference tuning teaches quality:"
+          - text: SFT alone produces instruction-following but not quality discrimination. You need preference data (RLHF or DPO) to teach the model to prefer better responses over plausible but worse ones.
+        - listitem [ref=e74]:
+          - strong [ref=e75]: "DPO has essentially replaced RLHF for most teams:"
+          - text: DPO achieves comparable alignment without a reward model or RL loop. Llama 3 Instruct, Mistral Instruct, and most open-source aligned models use SFT + DPO. Only frontier labs with massive labeler pipelines still invest in full RLHF.
+        - listitem [ref=e76]:
+          - strong [ref=e77]: "Reward hacking is the main RLHF failure mode:"
+          - text: Without a KL-divergence penalty, PPO optimization causes the model to exploit the reward model — producing verbose, sycophantic, or stylistically unusual outputs that score high but are actually poor. The KL coefficient (β) is the most important RLHF hyperparameter.
+        - listitem [ref=e78]:
+          - strong [ref=e79]: "SFT data quality beats quantity by 10-100x:"
+          - text: InstructGPT showed 13K curated examples outperform 100K noisy ones. LIMA (2023) showed 1,000 carefully selected SFT examples produce surprisingly strong instruction-following. Invest in data quality pipelines, not raw annotation volume.
+        - listitem [ref=e80]:
+          - strong [ref=e81]: "Best-of-N is a powerful evaluation tool:"
+          - text: A Best-of-N curve (quality vs log N) reveals reward model calibration. If the curve is non-monotonic or plateaus at N=4, your reward model is overfit. Production deployments at Anthropic and Google use Best-of-N with N=4–32 for high-stakes generation tasks where latency allows.
+        - listitem [ref=e82]:
+          - strong [ref=e83]: "Constitutional AI / RLAIF reduces human labeler dependency:"
+          - text: Anthropic's RLAIF uses Claude to generate preference labels instead of humans, reducing cost by 10-100x with modest quality trade-off. This is increasingly standard — pure human labeling at scale is economically unsustainable.
+  - navigation [ref=e84]:
+    - link "← Previous LLM Development Bottlenecks" [ref=e85] [cursor=pointer]:
+      - /url: 09-bottlenecks.html
+      - generic [ref=e86]: ← Previous
+      - generic [ref=e87]: LLM Development Bottlenecks
+    - link "Next → RLHF" [ref=e88] [cursor=pointer]:
+      - /url: 11-rlhf.html
+      - generic [ref=e89]: Next →
+      - generic [ref=e90]: RLHF

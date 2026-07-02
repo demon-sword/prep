@@ -1,0 +1,217 @@
+- generic [active] [ref=e1]:
+  - banner [ref=e2]:
+    - generic [ref=e3]: RAG
+    - 'heading "RAG: Retrieval-Augmented Generation" [level=1] [ref=e4]'
+    - paragraph [ref=e5]: "Full RAG pipeline: indexing → querying → retrieval → generation. Term-based vs embedding-based vs hybrid retrieval, chunking, query rewriting, and reranking."
+  - main [ref=e6]:
+    - generic [ref=e7]:
+      - heading "Theory" [level=2] [ref=e8]
+      - paragraph [ref=e9]:
+        - text: "Retrieval-Augmented Generation (RAG) was formalized in the Lewis et al. 2020 paper from Facebook AI, but the core intuition predates it: instead of forcing a language model to memorize all facts in its weights during training, let it"
+        - emphasis [ref=e10]: look things up
+        - text: at inference time. This separates parametric memory (weights) from non-parametric memory (a retrieval corpus), enabling knowledge updates without retraining.
+      - heading "Why LLMs Need Retrieval" [level=3] [ref=e11]
+      - paragraph [ref=e12]: "A standard LLM has three fundamental limitations that RAG addresses:"
+      - list [ref=e13]:
+        - listitem [ref=e14]:
+          - strong [ref=e15]: "Knowledge cutoff:"
+          - text: GPT-4's training data ends in early 2024. A RAG system can answer questions about events from this morning.
+        - listitem [ref=e16]:
+          - strong [ref=e17]: "Hallucination on long-tail facts:"
+          - text: Models interpolate from training distributions. For niche domain data (your company's internal docs, a specific legal corpus), the model never saw enough signal. RAG grounds the generation in retrieved source material.
+        - listitem [ref=e18]:
+          - strong [ref=e19]: "Context window limits for large knowledge bases:"
+          - text: You cannot fit 100,000 documents in a 128K context. RAG retrieves the ~5–20 most relevant chunks — typically 2,000–8,000 tokens — and fits them precisely.
+      - heading "The Full RAG Pipeline" [level=3] [ref=e20]
+      - paragraph [ref=e21]: "A production RAG system has two distinct phases:"
+      - paragraph [ref=e22]:
+        - strong [ref=e23]: Offline Indexing Phase
+        - text: "— runs once (or incrementally on updates):"
+      - list [ref=e24]:
+        - listitem [ref=e25]:
+          - strong [ref=e26]: "Document ingestion:"
+          - text: "Load PDFs, HTML, markdown, databases. Tools: LlamaIndex, LangChain document loaders, Unstructured.io."
+        - listitem [ref=e27]:
+          - strong [ref=e28]: "Chunking:"
+          - text: "Split documents into chunks. Typical sizes: 256–1024 tokens. Strategy matters enormously (fixed-size, recursive, semantic, document-structure-aware). Chunk overlap (10–15%) prevents boundary artifacts."
+        - listitem [ref=e29]:
+          - strong [ref=e30]: "Embedding:"
+          - text: Encode each chunk using a dense retrieval model (e.g.,
+          - code [ref=e31]: text-embedding-3-large
+          - text: at 3072 dims, or
+          - code [ref=e32]: bge-large-en-v1.5
+          - text: "at 1024 dims). Cost: ~$0.13 per 1M tokens with OpenAI."
+        - listitem [ref=e33]:
+          - strong [ref=e34]: "Vector store indexing:"
+          - text: Store embeddings + metadata in FAISS, Pinecone, Weaviate, Qdrant, or pgvector. HNSW index gives sub-millisecond ANN retrieval even at 100M vectors.
+      - paragraph [ref=e35]:
+        - strong [ref=e36]: Online Query Phase
+        - text: "— runs per request:"
+      - list [ref=e37]:
+        - listitem [ref=e38]:
+          - strong [ref=e39]: "Query understanding:"
+          - text: Optionally rewrite the query (HyDE, multi-query expansion) to improve recall.
+        - listitem [ref=e40]:
+          - strong [ref=e41]: "Retrieval:"
+          - text: Fetch top-K candidates using term-based (BM25), semantic (vector ANN), or hybrid search.
+        - listitem [ref=e42]:
+          - strong [ref=e43]: "Reranking:"
+          - text: Apply a cross-encoder reranker (Cohere Rerank, BGE reranker) on the top-K to re-score and cut to top-N (K=100 → N=5).
+        - listitem [ref=e44]:
+          - strong [ref=e45]: "Context assembly:"
+          - text: Format retrieved chunks into the prompt. Include source metadata for citations.
+        - listitem [ref=e46]:
+          - strong [ref=e47]: "Generation:"
+          - text: LLM generates grounded answer. The prompt instructs the model to cite sources and refuse if context is insufficient.
+      - 'heading "Retrieval Strategies: Term vs Semantic vs Hybrid" [level=3] [ref=e48]'
+      - table [ref=e49]:
+        - rowgroup [ref=e50]:
+          - row "Strategy Mechanism Strengths Weaknesses Latency" [ref=e51]:
+            - columnheader "Strategy" [ref=e52]
+            - columnheader "Mechanism" [ref=e53]
+            - columnheader "Strengths" [ref=e54]
+            - columnheader "Weaknesses" [ref=e55]
+            - columnheader "Latency" [ref=e56]
+        - rowgroup [ref=e57]:
+          - row "BM25 (Term-based) TF-IDF variant with length normalization Exact keyword match, interpretable, no GPU needed Fails on paraphrase, synonyms, semantic meaning <5ms" [ref=e58]:
+            - cell "BM25 (Term-based)" [ref=e59]:
+              - strong [ref=e60]: BM25 (Term-based)
+            - cell "TF-IDF variant with length normalization" [ref=e61]
+            - cell "Exact keyword match, interpretable, no GPU needed" [ref=e62]
+            - cell "Fails on paraphrase, synonyms, semantic meaning" [ref=e63]
+            - cell "<5ms" [ref=e64]
+          - row "Dense Retrieval (ANN) Cosine similarity in embedding space Semantic understanding, paraphrase-robust Misses exact terms, requires embedding infrastructure 10–50ms" [ref=e65]:
+            - cell "Dense Retrieval (ANN)" [ref=e66]:
+              - strong [ref=e67]: Dense Retrieval (ANN)
+            - cell "Cosine similarity in embedding space" [ref=e68]
+            - cell "Semantic understanding, paraphrase-robust" [ref=e69]
+            - cell "Misses exact terms, requires embedding infrastructure" [ref=e70]
+            - cell "10–50ms" [ref=e71]
+          - row "Hybrid (BM25 + Dense) Reciprocal Rank Fusion (RRF) or weighted combination Best of both worlds; state-of-the-art recall More infrastructure; score normalization tricky 15–60ms" [ref=e72]:
+            - cell "Hybrid (BM25 + Dense)" [ref=e73]:
+              - strong [ref=e74]: Hybrid (BM25 + Dense)
+            - cell "Reciprocal Rank Fusion (RRF) or weighted combination" [ref=e75]
+            - cell "Best of both worlds; state-of-the-art recall" [ref=e76]
+            - cell "More infrastructure; score normalization tricky" [ref=e77]
+            - cell "15–60ms" [ref=e78]
+          - row "Multi-query expansion LLM generates N phrasings of the query; union of results Higher recall on ambiguous queries N× retrieval cost; slower 50–200ms" [ref=e79]:
+            - cell "Multi-query expansion" [ref=e80]:
+              - strong [ref=e81]: Multi-query expansion
+            - cell "LLM generates N phrasings of the query; union of results" [ref=e82]
+            - cell "Higher recall on ambiguous queries" [ref=e83]
+            - cell "N× retrieval cost; slower" [ref=e84]
+            - cell "50–200ms" [ref=e85]
+      - 'heading "Chunking: The Most Underrated Hyperparameter" [level=3] [ref=e86]'
+      - paragraph [ref=e87]: "Chunking strategy has an outsized impact on RAG quality — often more than the choice of LLM. Key considerations:"
+      - list [ref=e88]:
+        - listitem [ref=e89]:
+          - strong [ref=e90]: Fixed-size chunking
+          - text: (e.g., 512 tokens, 10% overlap) is the default but breaks mid-sentence and loses context. Fast to implement.
+        - listitem [ref=e91]:
+          - strong [ref=e92]: Recursive character splitter
+          - text: "(LangChain default): splits on paragraph → sentence → word boundaries in priority order. Much better than fixed-size."
+        - listitem [ref=e93]:
+          - strong [ref=e94]: Semantic chunking
+          - text: ": embed sentences, split where cosine similarity drops sharply. Better boundaries, higher compute."
+        - listitem [ref=e95]:
+          - strong [ref=e96]: Document-structure-aware
+          - text: ": respect markdown headers, HTML structure, PDF sections. Produces the most coherent chunks for structured docs."
+        - listitem [ref=e97]:
+          - strong [ref=e98]: Small-to-large retrieval
+          - text: ": index small chunks for precision, but retrieve parent sections for context. Used in LlamaIndex's SentenceWindowNodeParser."
+      - heading "Advanced RAG Patterns" [level=3] [ref=e99]
+      - paragraph [ref=e100]:
+        - strong [ref=e101]: "HyDE (Hypothetical Document Embeddings):"
+        - text: Generate a hypothetical answer using the LLM, embed that answer, retrieve documents similar to the hypothetical answer rather than the query. Improves recall when queries are short/ambiguous (Gao et al., 2022).
+      - paragraph [ref=e102]:
+        - strong [ref=e103]: "Self-RAG:"
+        - text: The LLM learns when to retrieve (via a retrieval token), critiques retrieved passages (relevant? supported? useful?), and decides whether to use them. Trained with special tokens; achieves better faithfulness than vanilla RAG.
+      - paragraph [ref=e104]:
+        - strong [ref=e105]: "RAPTOR:"
+        - text: Build a hierarchical tree of chunk summaries; retrieve at multiple levels of abstraction simultaneously. Better for multi-hop questions requiring synthesis across many documents.
+      - paragraph [ref=e106]:
+        - strong [ref=e107]: "GraphRAG (Microsoft, 2024):"
+        - text: Build a knowledge graph over the corpus; retrieve entity neighborhoods and community summaries rather than raw chunks. 2–3× better on global questions ("What are the main themes in this corpus?").
+      - 'heading "RAG Evaluation: RAGAS and Beyond" [level=3] [ref=e108]'
+      - paragraph [ref=e109]: "RAG introduces its own failure modes that standard LLM metrics miss. The RAGAS framework (Es et al., 2023) decomposes evaluation into:"
+      - list [ref=e110]:
+        - listitem [ref=e111]:
+          - strong [ref=e112]: "Faithfulness:"
+          - text: Does the answer only contain claims supported by the retrieved context? (Measures hallucination on top of retrieval)
+        - listitem [ref=e113]:
+          - strong [ref=e114]: "Answer Relevance:"
+          - text: Does the answer address the question? (LLM-as-judge)
+        - listitem [ref=e115]:
+          - strong [ref=e116]: "Context Precision:"
+          - text: Of the retrieved chunks, what fraction were actually useful?
+        - listitem [ref=e117]:
+          - strong [ref=e118]: "Context Recall:"
+          - text: What fraction of the ground-truth answer is supported by the retrieved context? (Requires ground truth)
+      - paragraph [ref=e120]:
+        - text: "Production rule of thumb:"
+        - strong [ref=e121]: Context Precision
+        - text: is more important than K. Retrieving 5 highly relevant chunks beats retrieving 20 chunks where 15 are noise — noise chunks confuse the LLM and inflate latency. Use a reranker to achieve high precision at reasonable recall.
+      - heading "Production Realities" [level=3] [ref=e122]
+      - generic [ref=e123]:
+        - generic [ref=e124]:
+          - generic [ref=e125]: Typical Retrieval Latency
+          - generic [ref=e126]: 10–80ms
+          - paragraph [ref=e127]: Dense ANN retrieval in FAISS/Qdrant at scale
+        - generic [ref=e128]:
+          - generic [ref=e129]: Reranker Latency
+          - generic [ref=e130]: 50–200ms
+          - paragraph [ref=e131]: Cross-encoder adds cost; worth it for precision gain
+        - generic [ref=e132]:
+          - generic [ref=e133]: Typical Chunk Count (K)
+          - generic [ref=e134]: 3–10
+          - paragraph [ref=e135]: Beyond 10 chunks, noise outweighs recall gains
+        - generic [ref=e136]:
+          - generic [ref=e137]: Embedding Cost (OpenAI)
+          - generic [ref=e138]: $0.13/M tok
+          - paragraph [ref=e139]: text-embedding-3-large; much less for self-hosted BGE
+    - generic [ref=e140]:
+      - heading "Interactive RAG Pipeline" [level=2] [ref=e141]
+      - paragraph [ref=e142]:
+        - text: Watch a query flow through the full RAG pipeline — from raw question to grounded answer. Click
+        - strong [ref=e143]: Run Query
+        - text: to animate the pipeline step by step. Use the retrieval mode buttons to switch between term-based, semantic, and hybrid retrieval and see how retrieved chunks change. Hover over pipeline stages to see detailed descriptions.
+      - generic [ref=e144]:
+        - generic [ref=e145]: "Retrieval Mode:"
+        - button "Hybrid (BM25 + Dense)" [ref=e146] [cursor=pointer]
+        - button "Dense / Semantic" [ref=e147] [cursor=pointer]
+        - button "Term-based (BM25)" [ref=e148] [cursor=pointer]
+      - generic [ref=e149]:
+        - button "▶ Run Query" [ref=e150] [cursor=pointer]
+        - button "↺ Reset" [ref=e151] [cursor=pointer]
+      - generic [ref=e153]:
+        - heading "Pipeline Ready" [level=4] [ref=e154]
+        - paragraph [ref=e155]: Click "Run Query" to animate the full RAG pipeline. Each stage will light up as it processes the query.
+    - generic [ref=e156]:
+      - heading "Key Takeaways" [level=2] [ref=e157]
+      - list [ref=e158]:
+        - listitem [ref=e159]:
+          - strong [ref=e160]: Chunking strategy often matters more than model choice.
+          - text: A poorly chunked corpus with GPT-4 will underperform a well-chunked corpus with a smaller model. Invest in document-structure-aware splitting, test with RAGAS Context Precision, and use small-to-large retrieval for length-sensitive documents.
+        - listitem [ref=e161]:
+          - strong [ref=e162]: Hybrid retrieval (BM25 + dense) wins on most benchmarks.
+          - text: BM25 catches exact keyword matches that dense retrieval misses (product codes, names, acronyms); dense retrieval catches paraphrase and semantic intent. Reciprocal Rank Fusion fusion at K=60 is simple and effective — use Elasticsearch or Weaviate's built-in hybrid mode in production.
+        - listitem [ref=e163]:
+          - strong [ref=e164]: A reranker is the highest ROI retrieval improvement.
+          - text: Retrieve K=100 with ANN (cheap), rerank to N=5 with a cross-encoder (Cohere Rerank API at ~$1/1000 requests, or BGE-reranker-large self-hosted). This dramatically improves Context Precision without rebuilding the index.
+        - listitem [ref=e165]:
+          - strong [ref=e166]: RAG ≠ no hallucination.
+          - text: LLMs still hallucinate
+          - emphasis [ref=e167]: on top of
+          - text: retrieved context — they misread chunks, confabulate details not in the context, or ignore retrieved content entirely. Measure Faithfulness (RAGAS) in addition to answer quality. System prompts like "Only answer based on the provided context; say I don't know if uncertain" reduce but do not eliminate this.
+        - listitem [ref=e168]:
+          - strong [ref=e169]: Knowledge graph RAG (GraphRAG) for analytical queries; chunk RAG for lookup queries.
+          - text: Flat chunk RAG fails on cross-document synthesis ("What themes appear across all company memos?"). GraphRAG or RAPTOR hierarchical retrieval handle these at the cost of a more complex offline pipeline. Pick based on your query distribution.
+        - listitem [ref=e170]:
+          - strong [ref=e171]: Embedding model choice has a hard floor.
+          - text: If your domain uses specialized vocabulary (medical, legal, code), a general-purpose embedding model degrades precision significantly. Fine-tune an embedding model on domain pairs (Matryoshka embeddings, MTEB-optimized) or use domain-specific models (MedCPT for biomedical, CodeBERT for code retrieval).
+  - navigation [ref=e172]:
+    - link "← 28 · Prompt Attacks & Defenses" [ref=e173] [cursor=pointer]:
+      - /url: 28-prompt-attacks.html
+    - generic [ref=e174]: 29 of 36
+    - link "30 · Vector Search & KNN →" [ref=e175] [cursor=pointer]:
+      - /url: 30-vector-search.html

@@ -1,0 +1,613 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Customer Support Agent with Escalation — System Design</title>
+  <style>
+    :root {
+      --bg: #0f1117;
+      --card: #1a1d27;
+      --card2: #1e2130;
+      --border: #2a2d3e;
+      --accent: #7c6af7;
+      --accent2: #4fc3f7;
+      --green: #4caf98;
+      --yellow: #f0c040;
+      --red: #e06c75;
+      --text: #e0e0e0;
+      --muted: #8a8fa8;
+      --tag-bg: #2a2d3e;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: 'Segoe UI', system-ui, sans-serif;
+      font-size: 15px;
+      line-height: 1.6;
+    }
+    header {
+      background: linear-gradient(135deg, #1a1d27 0%, #1e1b3a 100%);
+      border-bottom: 1px solid var(--border);
+      padding: 28px 40px;
+      text-align: center;
+    }
+    header h1 { font-size: 1.8rem; color: #fff; letter-spacing: 0.3px; }
+    header p { color: var(--muted); font-size: 0.9rem; margin-top: 6px; }
+    main { max-width: 900px; margin: 0 auto; padding: 36px 24px 60px; }
+    .section-header {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      border-bottom: 1px solid var(--border);
+      padding-bottom: 12px;
+      margin-bottom: 24px;
+    }
+    .section-header .icon {
+      width: 36px; height: 36px;
+      border-radius: 8px;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 1.1rem;
+      flex-shrink: 0;
+    }
+    .icon.purple { background: rgba(124,106,247,0.15); }
+    .section-header h2 { font-size: 1.1rem; color: #fff; }
+    .section-header small { color: var(--muted); font-size: 0.82rem; display: block; margin-top: 1px; }
+    .letter-block {
+      background: var(--card2);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 16px;
+      margin-bottom: 12px;
+    }
+    .letter-block h4 {
+      font-size: 1.1rem;
+      color: var(--accent);
+      margin-bottom: 8px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .letter-block h4 span {
+      background: rgba(124,106,247,0.2);
+      color: var(--accent);
+      width: 32px;
+      height: 32px;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-weight: 700;
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: 10px;
+      font-size: 0.85rem;
+    }
+    th, td {
+      padding: 10px 12px;
+      text-align: left;
+      border-bottom: 1px solid var(--border);
+    }
+    th {
+      color: var(--accent2);
+      font-weight: 600;
+      background: rgba(79,195,247,0.05);
+    }
+    td { color: var(--text); }
+    .snippet {
+      background: #12141f;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 14px 16px;
+      font-family: 'Fira Code', 'Cascadia Code', monospace;
+      font-size: 0.82rem;
+      line-height: 1.55;
+      margin-top: 10px;
+      color: var(--muted);
+    }
+    .snippet strong { color: #fff; }
+    .opener {
+      background: linear-gradient(135deg, rgba(124,106,247,0.08), rgba(79,195,247,0.05));
+      border: 1px solid rgba(124,106,247,0.3);
+      border-radius: 12px;
+      padding: 20px 22px;
+      font-style: italic;
+      border-left: 3px solid var(--accent);
+      line-height: 1.7;
+      margin-bottom: 14px;
+    }
+    .time-bar {
+      display: flex;
+      gap: 4px;
+      margin-top: 10px;
+    }
+    .time-segment {
+      flex: 1;
+      padding: 8px 12px;
+      background: var(--card2);
+      border-radius: 6px;
+      text-align: center;
+      font-size: 0.85rem;
+    }
+    .time-segment .label { display: block; color: var(--accent); font-weight: 600; }
+    .time-segment .duration { display: block; color: var(--muted); font-size: 0.75rem; }
+    .two-col { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+    @media (max-width: 640px) { .two-col { grid-template-columns: 1fr; } }
+    .back-btn {
+      display: inline-block;
+      padding: 12px 24px;
+      background: var(--card2);
+      color: var(--text);
+      text-decoration: none;
+      border-radius: 6px;
+      margin-top: 20px;
+      border: 1px solid var(--border);
+      transition: all 0.2s;
+    }
+    .back-btn:hover {
+      background: var(--accent);
+      color: #fff;
+    }
+.architecture-diagram-container {
+    max-width: 700px;
+    width: 100%;
+    margin: 0 auto 24px auto;
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    background: var(--card2);
+    padding: 20px;
+    overflow: visible;
+}
+.architecture-diagram-container svg {
+    display: block;
+    width: 100%;
+    height: auto;
+    overflow: visible;
+}
+  </style>
+</head>
+<body>
+
+<header>
+  <div>
+    <h1>🛠 Customer Support Agent with Escalation</h1>
+    <p>System Design Solution using ARCH Framework</p>
+  </div>
+</header>
+
+<main>
+  <!-- Back Button -->
+  <a href="../index.html" class="back-btn">← Back to Problems</a>
+
+  <!-- Opening Line -->
+  <div class="opener">
+    "I'll design this using the ARCH framework: Architecture — the components and agents; Routing — how they communicate; Constraints — what can break and how we handle it; and Heuristics — why I chose this design."
+  </div>
+
+  <!-- Architecture Diagram -->
+  <div class="architecture-diagram-container">
+    <svg viewBox="0 0 700 780" xmlns="http://www.w3.org/2000/svg">
+      <defs>
+        <marker id="arrow-main" markerWidth="8" markerHeight="8" refX="7" refY="3.5" orient="auto">
+          <path d="M0,0 L8,3.5 L0,7 Z" fill="#7c6af7"/>
+        </marker>
+        <marker id="arrow-escalation" markerWidth="8" markerHeight="8" refX="7" refY="3.5" orient="auto">
+          <path d="M0,0 L8,3.5 L0,7 Z" fill="#f0c040"/>
+        </marker>
+        <marker id="arrow-success" markerWidth="8" markerHeight="8" refX="7" refY="3.5" orient="auto">
+          <path d="M0,0 L8,3.5 L0,7 Z" fill="#4caf98"/>
+        </marker>
+        <marker id="arrow-negative" markerWidth="8" markerHeight="8" refX="7" refY="3.5" orient="auto">
+          <path d="M0,0 L8,3.5 L0,7 Z" fill="#e06c75"/>
+        </marker>
+      </defs>
+
+      <!-- Customer Query -->
+      <rect x="250" y="20" rx="8" width="200" height="40" fill="#1a1d27" stroke="#2a2d3e" stroke-width="2"/>
+      <text x="350" y="45" text-anchor="middle" fill="#e0e0e0" font-size="13" font-family="'Segoe UI', system-ui, sans-serif" font-weight="600">Customer Query</text>
+
+      <!-- Arrow to Intent Classifier -->
+      <line x1="350" y1="60" x2="350" y2="90" stroke="#7c6af7" stroke-width="2" marker-end="url(#arrow-main)"/>
+
+      <!-- Intent Classifier -->
+      <rect x="210" y="95" rx="8" width="280" height="50" fill="#1a1d27" stroke="#2a2d3e" stroke-width="2"/>
+      <text x="350" y="120" text-anchor="middle" fill="#7c6af7" font-size="13" font-family="'Segoe UI', system-ui, sans-serif" font-weight="600">Intent Classifier</text>
+      <text x="350" y="138" text-anchor="middle" fill="#8a8fa8" font-size="11" font-family="'Segoe UI', system-ui, sans-serif">FAQ / Technical / Billing / Human</text>
+
+      <!-- Arrows from Intent Classifier to agents -->
+      <line x1="290" y1="145" x2="170" y2="185" stroke="#7c6af7" stroke-width="2" marker-end="url(#arrow-main)"/>
+      <line x1="350" y1="145" x2="350" y2="185" stroke="#7c6af7" stroke-width="2" marker-end="url(#arrow-main)"/>
+      <line x1="410" y1="145" x2="530" y2="185" stroke="#7c6af7" stroke-width="2" marker-end="url(#arrow-main)"/>
+
+      <!-- FAQ Agent -->
+      <rect x="80" y="195" rx="8" width="160" height="40" fill="#1a1d27" stroke="#2a2d3e" stroke-width="2"/>
+      <text x="160" y="217.5" text-anchor="middle" fill="#e0e0e0" font-size="12" font-family="'Segoe UI', system-ui, sans-serif" font-weight="600">FAQ Agent</text>
+
+      <!-- Technical Agent -->
+      <rect x="290" y="195" rx="8" width="120" height="40" fill="#1a1d27" stroke="#2a2d3e" stroke-width="2"/>
+      <text x="350" y="220" text-anchor="middle" fill="#e0e0e0" font-size="12" font-family="'Segoe UI', system-ui, sans-serif" font-weight="600">Technical Agent</text>
+
+      <!-- Billing Agent -->
+      <rect x="470" y="195" rx="8" width="120" height="40" fill="#1a1d27" stroke="#2a2d3e" stroke-width="2"/>
+      <text x="530" y="220" text-anchor="middle" fill="#e0e0e0" font-size="12" font-family="'Segoe UI', system-ui, sans-serif" font-weight="600">Billing Agent</text>
+
+      <!-- FAQ: Auto-Response -->
+      <line x1="160" y1="235" x2="160" y2="270" stroke="#7c6af7" stroke-width="2" marker-end="url(#arrow-main)"/>
+      <rect x="100" y="275" rx="8" width="120" height="35" fill="#1a1d27" stroke="#2a2d3e" stroke-width="2"/>
+      <text x="160" y="297" text-anchor="middle" fill="#e0e0e0" font-size="11" font-family="'Segoe UI', system-ui, sans-serif">Auto-Response</text>
+
+      <!-- Technical: Diagnosis -->
+      <line x1="350" y1="235" x2="350" y2="260" stroke="#7c6af7" stroke-width="2" marker-end="url(#arrow-main)"/>
+      <rect x="280" y="268" rx="8" width="120" height="35" fill="#1a1d27" stroke="#2a2d3e" stroke-width="2"/>
+      <text x="340" y="290" text-anchor="middle" fill="#e0e0e0" font-size="11" font-family="'Segoe UI', system-ui, sans-serif">Diagnosis</text>
+
+      <!-- Billing: Account Lookup -->
+      <line x1="530" y1="235" x2="530" y2="260" stroke="#7c6af7" stroke-width="2" marker-end="url(#arrow-main)"/>
+      <rect x="470" y="268" rx="8" width="120" height="35" fill="#1a1d27" stroke="#2a2d3e" stroke-width="2"/>
+      <text x="530" y="290" text-anchor="middle" fill="#e0e0e0" font-size="11" font-family="'Segoe UI', system-ui, sans-serif">Account Lookup</text>
+
+      <!-- Technical: Troubleshooting -->
+      <line x1="340" y1="303" x2="340" y2="330" stroke="#7c6af7" stroke-width="2" marker-end="url(#arrow-main)"/>
+      <rect x="280" y="335" rx="8" width="120" height="35" fill="#1a1d27" stroke="#2a2d3e" stroke-width="2"/>
+      <text x="340" y="357" text-anchor="middle" fill="#e0e0e0" font-size="11" font-family="'Segoe UI', system-ui, sans-serif">Troubleshooting</text>
+
+      <!-- Billing: Refund/Charge -->
+      <line x1="530" y1="303" x2="530" y2="330" stroke="#7c6af7" stroke-width="2" marker-end="url(#arrow-main)"/>
+      <rect x="470" y="335" rx="8" width="120" height="35" fill="#1a1d27" stroke="#2a2d3e" stroke-width="2"/>
+      <text x="530" y="357" text-anchor="middle" fill="#e0e0e0" font-size="11" font-family="'Segoe UI', system-ui, sans-serif">Refund/Charge</text>
+
+      <!-- FAQ: Resolution Check Diamond -->
+      <line x1="160" y1="310" x2="160" y2="340" stroke="#7c6af7" stroke-width="2" marker-end="url(#arrow-main)"/>
+      <polygon points="160,350 200,380 160,410 120,380" fill="#1a1d27" stroke="#2a2d3e" stroke-width="2"/>
+      <text x="160" y="377" text-anchor="middle" fill="#e0e0e0" font-size="10" font-family="'Segoe UI', system-ui, sans-serif">Resolved?</text>
+
+      <!-- Technical: Fix Verification -->
+      <line x1="340" y1="370" x2="340" y2="390" stroke="#7c6af7" stroke-width="2" marker-end="url(#arrow-main)"/>
+      <rect x="275" y="395" rx="8" width="130" height="35" fill="#1a1d27" stroke="#2a2d3e" stroke-width="2"/>
+      <text x="340" y="417" text-anchor="middle" fill="#e0e0e0" font-size="11" font-family="'Segoe UI', system-ui, sans-serif">Fix Verification</text>
+
+      <!-- Billing: Resolution Check Diamond -->
+      <line x1="530" y1="370" x2="530" y2="400" stroke="#7c6af7" stroke-width="2" marker-end="url(#arrow-main)"/>
+      <polygon points="530,410 570,440 530,470 490,440" fill="#1a1d27" stroke="#2a2d3e" stroke-width="2"/>
+      <text x="530" y="437" text-anchor="middle" fill="#e0e0e0" font-size="11"font-family="'Segoe UI, sans-serif">Resolved?</text>
+
+      <!-- Technical: Resolution Check Diamond -->
+      <line x1="340" y1="430" x2="340" y2="460" stroke="#7c6af7" stroke-width="2" marker-end="url(#arrow-main)"/>
+      <polygon points="340,470 380,500 340,530 300,500" fill="#1a1d27" stroke="#2a2d3e" stroke-width="2"/>
+      <text x="340" y="497" text-anchor="middle" fill="#e0e0e0" font-size="10" font-family="'Segoe UI', system-ui, sans-serif">Resolved?</text>
+
+      <!-- Yes paths from FAQ -->
+      <line x1="200" y1="380" x2="330" y2="380" stroke="#4caf98" stroke-width="2" marker-end="url(#arrow-success)"/>
+      <text x="260" y="372" text-anchor="middle" fill="#4caf98" font-size="10" font-family="'Segoe UI', system-ui, sans-serif">Yes</text>
+
+      <!-- Satisfaction Survey -->
+      <rect x="330" y="365" rx="8" width="160" height="30" fill="#1a1d27" stroke="#2a2d3e" stroke-width="2"/>
+      <text x="410" y="383" text-anchor="middle" fill="#4caf98" font-size="11" font-family="'Segoe UI', system-ui, sans-serif">CSAT Survey</text>
+
+      <!-- End node -->
+      <line x1="410" y1="365" x2="410" y2="330" stroke="#4caf98" stroke-width="2" marker-end="url(#arrow-success)"/>
+      <rect x="370" y="300" rx="8" width="80" height="30" fill="#1a1d27" stroke="#4caf98" stroke-width="2"/>
+      <text x="410" y="318" text-anchor="middle" fill="#4caf98" font-size="11" font-family="'Segoe UI', system-ui, sans-serif" font-weight="600">End</text>
+
+      <!-- No path from FAQ to Escalation Gate -->
+      <line x1="160" y1="410" x2="160" y2="570" stroke="#e06c75" stroke-width="2" marker-end="url(#arrow-negative)"/>
+      <text x="140" y="495" text-anchor="middle" fill="#e06c75" font-size="10" font-family="'Segoe UI', system-ui, sans-serif">No</text>
+
+      <!-- No path from Technical to Escalation Gate -->
+      <line x1="340" y1="530" x2="340" y2="570" stroke="#e06c75" stroke-width="2" marker-end="url(#arrow-negative)"/>
+      <text x="320" y="555" text-anchor="middle" fill="#e06c75" font-size="10" font-family="'Segoe UI', system-ui, sans-serif">No</text>
+
+      <!-- No path from Billing to Escalation Gate -->
+      <line x1="530" y1="470" x2="530" y2="570" stroke="#e06c75" stroke-width="2" marker-end="url(#arrow-negative)"/>
+      <text x="550" y="525" text-anchor="middle" fill="#e06c75" font-size="10" font-family="'Segoe UI', system-ui, sans-serif">No</text>
+
+      <!-- Escalation Gate -->
+      <rect x="220" y="575" rx="8" width="280" height="45" fill="#1a1d27" stroke="#f0c040" stroke-width="2"/>
+      <text x="350" y="595" text-anchor="middle" fill="#f0c040" font-size="12" font-family="'Segoe UI', system-ui, sans-serif" font-weight="600">Escalation Gate</text>
+      <text x="350" y="612" text-anchor="middle" fill="#8a8fa8" font-size="10" font-family="'Segoe UI', system-ui, sans-serif">Resolution=No OR Confidence < Threshold</text>
+
+      <!-- Hand-off arrow to Human Agent -->
+      <line x1="500" y1="597" x2="600" y2="597" stroke="#f0c040" stroke-width="2" marker-end="url(#arrow-escalation)"/>
+      <text x="550" y="588" text-anchor="middle" fill="#f0c040" font-size="10" font-family="'Segoe UI', system-ui, sans-serif">Hand-off</text>
+
+      <!-- Human Agent -->
+      <rect x="610" y="575" rx="8" width="80" height="45" fill="#1a1d27" stroke="#f0c040" stroke-width="2"/>
+      <text x="650" y="597" text-anchor="middle" fill="#f0c040" font-size="12" font-family="'Segoe UI', system-ui, sans-serif" font-weight="600">Human</text>
+      <text x="650" y="612" text-anchor="middle" fill="#f0c040" font-size="11" font-family="'Segoe UI', system-ui, sans-serif">Agent</text>
+
+      <!-- Post-resolution feedback loop to Knowledge Base -->
+      <line x1="220" y1="597" x2="100" y2="597" stroke="#7c6af7" stroke-width="2" marker-end="url(#arrow-main)"/>
+      <text x="160" y="588" text-anchor="middle" fill="#7c6af7" font-size="10" font-family="'Segoe UI', system-ui, sans-serif">Learn</text>
+
+      <!-- Knowledge Base -->
+      <rect x="10" y="575" rx="8" width="80" height="45" fill="#1a1d27" stroke="#7c6af7" stroke-width="2"/>
+      <text x="50" y="597" text-anchor="middle" fill="#7c6af7" font-size="10" font-family="'Segoe UI', system-ui, sans-serif" font-weight="600">Knowledge</text>
+      <text x="50" y="611" text-anchor="middle" fill="#7c6af7" font-size="10" font-family="'Segoe UI', system-ui, sans-serif">Base</text>
+
+      <!-- Dotted line from KB back up for feedback loop -->
+      <line x1="50" y1="620" x2="50" y2="660" stroke="#7c6af7" stroke-width="2" stroke-dasharray="4,4" marker-end="url(#arrow-main)"/>
+      <line x1="50" y1="660" x2="530" y2="660" stroke="#7c6af7" stroke-width="2" stroke-dasharray="4,4" marker-end="url(#arrow-main)"/>
+      <line x1="530" y1="660" x2="530" y2="620" stroke="#7c6af7" stroke-width="2" stroke-dasharray="4,4"/>
+      <text x="290" y="654" text-anchor="middle" fill="#7c6af7" font-size="10" font-family="'Segoe UI', system-ui, sans-serif">Feedback Loop → Knowledge Base Updates</text>
+
+      <!-- Legend -->
+      <g transform="translate(20, 700)">
+        <rect x="0" y="0" width="12" height="12" fill="#7c6af7" rx="2"/>
+        <text x="18" y="11" fill="#8a8fa8" font-size="10" font-family="'Segoe UI', system-ui, sans-serif">Main Flow</text>
+
+        <rect x="100" y="0" width="12" height="12" fill="#4caf98" rx="2"/>
+        <text x="118" y="11" fill="#8a8fa8" font-size="10" font-family="'Segoe UI', system-ui, sans-serif">Resolved</text>
+
+        <rect x="200" y="0" width="12" height="12" fill="#e06c75" rx="2"/>
+        <text x="218" y="11" fill="#8a8fa8" font-size="10" font-family="'Segoe UI', system-ui, sans-serif">Escalation</text>
+
+        <rect x="300" y="0" width="12" height="12" fill="#f0c040" rx="2"/>
+        <text x="318" y="11" fill="#8a8fa8" font-size="10" font-family="'Segoe UI', system-ui, sans-serif">Human Hand-off</text>
+      </g>
+    </svg>
+  </div>
+
+  <!-- TIME ALLOCATION -->
+  <section>
+    <div class="section-header">
+      <div class="icon purple">⏱</div>
+      <div>
+        <h2>Time Allocation</h2>
+        <small>Total: 8-12 min (leaves time for questions)</small>
+      </div>
+    </div>
+    <div class="time-bar">
+      <div class="time-segment">
+        <span class="label">A</span>
+        <span class="duration">3-4 min</span>
+      </div>
+      <div class="time-segment">
+        <span class="label">R</span>
+        <span class="duration">2-3 min</span>
+      </div>
+      <div class="time-segment">
+        <span class="label">C</span>
+        <span class="duration">2-3 min</span>
+      </div>
+      <div class="time-segment">
+        <span class="label">H</span>
+        <span class="duration">1-2 min</span>
+      </div>
+    </div>
+  </section>
+
+  <!-- ARCH BREAKDOWN -->
+  <section>
+    <div class="section-header">
+      <div class="icon blue">🏗</div>
+      <div>
+        <h2>The ARCH Framework</h2>
+        <small>Four components with specific things to mention</small>
+      </div>
+    </div>
+
+    <!-- A - Architecture -->
+    <div class="letter-block">
+      <h4><span>A</span> Architecture — Components & Data Flow</h4>
+      <p style="color:var(--muted); margin-bottom:12px;">What pieces exist and how they connect</p>
+      <table>
+        <tr>
+          <th>What to Mention</th>
+          <th>IRCTC Example</th>
+        </tr>
+        <tr>
+          <td>Components</td>
+          <td>Intake Agent, FAQ Agent, Troubleshooting Agent, Human Escalation Agent, Feedback Agent, Session Manager, Knowledge Base, Tool Registry</td>
+        </tr>
+        <tr>
+          <td>Data Flow</td>
+          <td>User Query → Intake → [FAQ → Troubleshooting]* → [Human Escalation if needed] → Feedback → Response</td>
+        </tr>
+        <tr>
+          <td>Agents</td>
+          <td>Specialized agents: Intake (classify intent), FAQ (answer from knowledge), Troubleshooting (run diagnostics), Human Escalation (handoff), Feedback (learn from outcomes)</td>
+        </tr>
+        <tr>
+          <td>Services</td>
+          <td>Knowledge Base (FAQs/documents), CRM System, Chat/Web Interface, Email/SMS Gateway, Analytics DB, Tool Registry (for diagnostics)</td>
+        </tr>
+        <tr>
+          <td>State Management</td>
+          <td>Session context (conversation history), User profile (preferences/history), Escalation history, Feedback logs, Knowledge base versions</td>
+        </tr>
+      </table>
+      <div class="snippet">
+        <strong>Key line:</strong> "We have five specialized agents: Intake (classifies user intent), FAQ (tries to answer from knowledge base), Troubleshooting (runs diagnostic steps), Human Escalation (handles handoff to human), and Feedback (learns from outcomes). They operate in a tiered escalation model."
+      </div>
+    </div>
+
+    <!-- R - Routing -->
+    <div class="letter-block">
+      <h4><span>R</span> Routing — Agent Orchestration</h4>
+      <p style="color:var(--muted); margin-bottom:12px;">How agents run and communicate</p>
+      <table>
+        <tr>
+          <th>What to Mention</th>
+          <th>IRCTC Example</th>
+        </tr>
+        <tr>
+          <td>Agent Orchestration</t    <td>Sequential escalation: Intake → FAQ → Troubleshooting → Human Escalation → Feedback; each step can terminate early</td>
+        </tr>
+        <tr>
+          <td>Communication Pattern</th>
+          <td>Sequential with early termination; shared session context; async feedback learning</td>
+        </tr>
+        <tr>
+          <td>Decision Logic</th>
+          <td>Intake agent determines complexity; FAQ agent uses confidence threshold; Troubleshooting uses success criteria; Human Escalation triggered by repeated failures or anger detection</td>
+        </tr>
+      </table>
+      <div class="snippet">
+        <strong>Key line:</strong> "Agents operate in sequential escalation: Intake → FAQ → Troubleshooting → Human Escalation. Each agent can terminate early if successful (e.g., FAQ agent answers confidently). Feedback agent learns asynchronously from outcomes."
+      </div>
+    </div>
+
+    <!-- C - Constraints -->
+    <div class="letter-block">
+      <h4><span>C</span> Constraints — What Can Break</h4>
+      <p style="color:var(--muted); margin-bottom:12px;">Failure modes, limits, and edge cases</p>
+      <table>
+        <tr>
+          <th>What to Mention</th>
+          <th>IRCTC Example</th>
+        </tr>
+        <tr>
+          <td>Angry/Frustrated Users</td>
+          <td>Sentiment analysis in Intake agent; fast-track to human if anger detected; de-escalation scripts in Troubleshooting agent</td>
+        </tr>
+        <tr>
+          <td>Knowledge Base Gaps</td
+          <td>FAQ agent confidence threshold; if low, proceed to Troubleshooting; log gaps for KB updates</td>
+        </tr>
+        <tr>
+          <td>Escalation Thresholds</td>
+          <td>Balance resolution rate vs cost: too low → poor experience; too high → wasted human effort; tune based on historical data</td>
+        </tr>
+        <tr>
+          <td>Context Loss in Handoff</td>
+          <td>Transfer full session context + summary + user profile to human agent; use screen sharing/co-browse if needed</td>
+        </tr>
+        <tr>
+          <td>Feedback Latency</td>
+          <td>Asynchronous learning: store outcomes, batch process for model updates; real-time alerts for critical failures</td>
+        </tr>
+      </table>
+      <div class="snippet">
+        <strong>Key line:</strong> "We handle angry users via sentiment analysis in Intake agent for fast-track to human. Knowledge base gaps trigger progression to Troubleshooting agent. Full session context is transferred during human handoff."
+      </div>
+    </div>
+
+    <!-- H - Heuristics -->
+    <div class="letter-block">
+      <h4><span>H</span> Heuristics — Why This Design</h4>
+      <p style="color:var(--muted); margin-bottom:12px;">Trade-offs, scaling, and decisions</p>
+      <table>
+        <tr>
+          <th>What to Mention</th>
+          <th>IRCTC Example</th>
+        </tr>
+        <tr>
+          <td>Why This Architecture?</td>
+          <td>Tiered escalation balances cost and quality; specialized agents allow expertise; feedback loop enables continuous improvement</td>
+        </tr>
+        <tr>
+          <td>Why Not X?</td>
+          <td>Single agent would be inconsistent; always-human would be expensive; no feedback loop would prevent learning from mistakes</td>
+        </tr>
+        <tr>
+          <td>Scaling Path</td>
+          <td>Horizontal scaling of agents; intelligent routing based on complexity; self-service ratio improvement over time; AI-assisted human agents</td>
+        </tr>
+        <tr>
+          <td>Monitoring</td>
+          <td>Track escalation rate, first-contact resolution, average handling time, customer satisfaction (CSAT), agent utilization, knowledge base effectiveness</td>
+        </tr>
+      </table>
+      <div class="snippet">
+        <strong>Key line:</strong> "I chose tiered escalation to balance cost and quality. We monitor escalation rate and CSAT to tune thresholds. Feedback loop enables continuous improvement from both AI and human interactions."
+      </div>
+    </div>
+
+    <!-- E - Evaluation (NEW) -->
+    <div class="letter-block">
+      <h4><span style="background: rgba(76,175,152,0.2); color: var(--green); width: 32px; height: 32px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: 700;">E</span> Evaluation — How We Measure Success</h4>
+      <p style="color:var(--muted); margin-bottom:12px;">Offline benchmarks, online metrics, and per-agent KPIs</p>
+      <table>
+        <tr>
+          <th>Type</th>
+          <th>Metric</th>
+          <th>Target / Example</th>
+        </tr>
+        <tr>
+          <td><strong>Offline</strong></td>
+          <td>Intent classification accuracy</td>
+          <td>> 95% intent classification accuracy; > 90% sentiment detection accuracy</td>
+        </tr>
+        <tr>
+          <td><strong>Offline</strong></td>
+          <td>FAQ coverage</td>
+          <td>> 90% of common questions answered correctly; zero false positives on critical escalations</td>
+        </tr>
+        <tr>
+          <td><strong>Offline</strong></td>
+          <td>Regression tests</td>
+          <td>Zero regression on historical support tickets; no increase in false escalations</td>
+        </tr>
+        <tr>
+          <td><strong>Online</strong></td>
+          <td>First Contact Resolution (FCR)</td>
+          <td>> 70% FCR; < 5% re-contact rate for same issue</td>
+        </tr>
+        <tr>
+          <td><strong>Online</strong></td>
+          <td>Escalation rate</td>
+          <td>< 15% for Tier 1; < 5% for Tier 2; track trend over time</td>
+        </tr>
+        <tr>
+          <td><strong>Online</strong></td>
+          <td>Customer satisfaction (CSAT)</td>
+          <td>> 4.5/5; < 3% "dissatisfied" ratings; NPS > 50</td>
+        </tr>
+        <tr>
+          <td><strong>Per-Agent</strong></td>
+          <td>Intake Agent</td>
+          <td>Intent classification > 95%; sentiment detection > 90%; routing accuracy > 95%</td>
+        </tr>
+        <tr>
+          <td><strong>Per-Agent</strong></td>
+          <td>FAQ Agent</td>
+          <td>Answer relevance > 90% (human rated); resolution rate > 80%</td>
+        </tr>
+        <tr>
+          <td><strong>Per-Agent</strong></td>
+          <td>Troubleshooting Agent</td>
+          <td>Diagnostic accuracy > 85%; mean time to suggest fix < 3 minutes</td>
+        </tr>
+        <tr>
+          <td><strong>System</strong></td>
+          <td>Human handoff quality</td>
+          <td>Average handling time (AHT) < 60% of baseline; context completeness > 95%</td>
+        </tr>
+        <tr>
+          <td><strong>System</strong></td>
+          <td>Learning loop</td>
+          <td>Weekly model updates; feedback incorporation > 90%; knowledge base growth > 10%/quarter</td>
+        </tr>
+      </table>
+      <div class="snippet">
+        <strong>Key line:</strong> "We evaluate offline on intent classification (> 95%) and sentiment detection (> 90%). Online, we track First Contact Resolution (> 70%), escalation rate (< 15%), and CSAT (> 4.5/5). Weekly model updates incorporate 90%+ of feedback."
+      </div>
+    </div>
+  </section>
+
+  <!-- QUICK REFERENCE -->
+  <section>
+    <div class="section-header">
+      <div class="icon green">📋</div>
+      <div>
+        <h2>Quick Reference: ARCH Summary</h2>
+        <small>Memorize this for your answer</small>
+      </div>
+    </div>
+    <div class="card">
+      <div class="snippet" style="font-size:0.9rem; line-height:1.8;">
+        <strong>A</strong> — Architecture: Five specialized agents (Intake, FAQ, Troubleshooting, Human Escalation, Feedback) in tiered escalation model.<br>
+        <strong>R</strong> — Routing: Sequential escalation with early termination. Intake → FAQ → Troubleshooting → Human Escalation → Feedback. Each step can terminate early on success.<br>
+        <strong>C</strong> — Constraints: Angry users → sentiment-based fast-track to human; Knowledge gaps → proceed to Troubleshooting; Context loss → transfer full session + summary during handoff.<br>
+        <strong>H</strong> — Heuristics: Tiered escalation balances cost/quality. Monitor escalation rate and CSAT to tune thresholds. Feedback loop enables continuous improvement.
+      </div>
+    </div>
+  </section>
+
+</main>
+
+</body>
+</html>

@@ -1,0 +1,222 @@
+- generic [ref=e1]:
+  - banner [ref=e2]:
+    - generic [ref=e3]: Agents
+    - heading "Agent Memory Systems" [level=1] [ref=e4]
+    - paragraph [ref=e5]: Short-term (in-context) vs long-term (external storage) memory, why memory matters beyond context window, cross-session persistence, and consistency benefits.
+  - main [ref=e6]:
+    - generic [ref=e7]:
+      - heading "Theory" [level=2] [ref=e8]
+      - paragraph [ref=e9]:
+        - text: AI agents are only as capable as the information they can recall and reason over. Unlike a stateless LLM call that begins fresh each time, a
+        - strong [ref=e10]: memory system
+        - text: allows an agent to maintain continuity — tracking what it has done, what the user has told it, and what knowledge it has acquired — across turns, sessions, and even deployments. Understanding memory architectures is essential for building agents that are reliable, personalized, and cost-efficient at scale.
+      - heading "Why Context Window Alone Is Not Enough" [level=3] [ref=e11]
+      - paragraph [ref=e12]: "Every LLM operates on a fixed-length context window — typically 4K–200K tokens. Early GPT-3 was 4,096 tokens; Claude 3's context extends to 200K; Gemini 1.5 Pro supports 1M tokens experimentally. But even a 200K context window has fundamental limits:"
+      - list [ref=e13]:
+        - listitem [ref=e14]:
+          - strong [ref=e15]: "Cost:"
+          - text: Prefilling a full 200K context on every turn costs ~$0.30–$1.00 per request at current API pricing, making it economically prohibitive for persistent agents.
+        - listitem [ref=e16]:
+          - strong [ref=e17]: "Latency:"
+          - text: Long prompts have longer time-to-first-token. A 100K token prefill can take 3–15 seconds even on fast hardware.
+        - listitem [ref=e18]:
+          - strong [ref=e19]: "Lost-in-the-middle problem:"
+          - text: Empirically (Liu et al., 2023), LLM accuracy degrades significantly for information positioned in the middle of a long context — models attend most reliably to the start and end.
+        - listitem [ref=e20]:
+          - strong [ref=e21]: "Cross-session persistence:"
+          - text: Context evaporates when the session ends. A user returning next week appears as a complete stranger without external memory.
+      - paragraph [ref=e22]: External memory systems solve these problems by selectively retrieving only the relevant memories into the context window — maintaining the illusion of perfect recall without burning the full window.
+      - 'heading "Memory Taxonomy: Four Tiers" [level=3] [ref=e23]'
+      - paragraph [ref=e24]: "Agent memory systems map naturally onto four functional tiers, each with different latency, capacity, and persistence characteristics:"
+      - table [ref=e25]:
+        - rowgroup [ref=e26]:
+          - row "Tier Where Capacity Latency Persists" [ref=e27]:
+            - columnheader "Tier" [ref=e28]
+            - columnheader "Where" [ref=e29]
+            - columnheader "Capacity" [ref=e30]
+            - columnheader "Latency" [ref=e31]
+            - columnheader "Persists" [ref=e32]
+        - rowgroup [ref=e33]:
+          - row "In-context (working memory) The active prompt 4K–200K tokens 0 ms (already there) Session only" [ref=e34]:
+            - cell "In-context (working memory)" [ref=e35]:
+              - strong [ref=e36]: In-context
+              - text: (working memory)
+            - cell "The active prompt" [ref=e37]
+            - cell "4K–200K tokens" [ref=e38]
+            - cell "0 ms (already there)" [ref=e39]
+            - cell "Session only" [ref=e40]:
+              - generic [ref=e41]: Session only
+          - row "Episodic (short-term) External KV store, conversation DB Millions of turns 1–20 ms Sessions" [ref=e42]:
+            - cell "Episodic (short-term)" [ref=e43]:
+              - strong [ref=e44]: Episodic
+              - text: (short-term)
+            - cell "External KV store, conversation DB" [ref=e45]
+            - cell "Millions of turns" [ref=e46]
+            - cell "1–20 ms" [ref=e47]
+            - cell "Sessions" [ref=e48]:
+              - generic [ref=e49]: Sessions
+          - row "Semantic (long-term) Vector DB (Pinecone, Weaviate, pgvector) Billions of facts 5–50 ms Indefinite" [ref=e50]:
+            - cell "Semantic (long-term)" [ref=e51]:
+              - strong [ref=e52]: Semantic
+              - text: (long-term)
+            - cell "Vector DB (Pinecone, Weaviate, pgvector)" [ref=e53]
+            - cell "Billions of facts" [ref=e54]
+            - cell "5–50 ms" [ref=e55]
+            - cell "Indefinite" [ref=e56]:
+              - generic [ref=e57]: Indefinite
+          - row "Procedural (skill memory) Fine-tuned weights, cached tool schemas Model parameters 0 ms (baked in) Permanent" [ref=e58]:
+            - cell "Procedural (skill memory)" [ref=e59]:
+              - strong [ref=e60]: Procedural
+              - text: (skill memory)
+            - cell "Fine-tuned weights, cached tool schemas" [ref=e61]
+            - cell "Model parameters" [ref=e62]
+            - cell "0 ms (baked in)" [ref=e63]
+            - cell "Permanent" [ref=e64]:
+              - generic [ref=e65]: Permanent
+      - heading "In-Context (Working) Memory" [level=3] [ref=e66]
+      - paragraph [ref=e67]:
+        - text: "The simplest form: everything in the current prompt. The agent sees all prior conversation turns, tool results, and system instructions. This is the"
+        - emphasis [ref=e68]: highest fidelity
+        - text: form of memory — the model has full attention over every token. But it's also the most expensive. A naive full-history agent doubles context length with every few turns, leading to quadratic cost growth and eventual truncation.
+      - generic [ref=e69]:
+        - strong [ref=e70]: "Gotcha:"
+        - text: When context overflows, most frameworks silently truncate the oldest messages. This can cause the agent to "forget" critical setup instructions or user preferences that appeared early in the conversation. Always implement explicit memory management — don't rely on framework defaults.
+      - 'heading "Episodic Memory: Conversation History Retrieval" [level=3] [ref=e71]'
+      - paragraph [ref=e72]: Episodic memory stores individual turns or chunks of past conversations in a fast database (Redis, DynamoDB, PostgreSQL). On each new turn, the agent retrieves the N most relevant prior exchanges — by recency, or by semantic similarity to the current query — and injects them into context. This is the approach used by systems like MemGPT (Packer et al., 2023) and LangChain's conversation memory modules.
+      - paragraph [ref=e73]: "The retrieval can be:"
+      - list [ref=e74]:
+        - listitem [ref=e75]:
+          - strong [ref=e76]: "Recency-based:"
+          - text: "Always inject the last K turns. Simple, effective for conversational continuity. Risk: irrelevant old turns consume context."
+        - listitem [ref=e77]:
+          - strong [ref=e78]: "Semantic retrieval:"
+          - text: Embed each turn, retrieve top-K by cosine similarity to the current query. More precise for factual recall across long histories.
+        - listitem [ref=e79]:
+          - strong [ref=e80]: "Summary-based:"
+          - text: Periodically compress older turns into a rolling summary (using the LLM itself), then store the summary. Reduces token cost but introduces lossy compression.
+      - 'heading "Semantic Memory: Knowledge Stores" [level=3] [ref=e81]'
+      - paragraph [ref=e82]: Semantic memory holds facts, documents, user preferences, and domain knowledge as embeddings in a vector database. This is architecturally identical to the retrieval side of RAG (Retrieval-Augmented Generation), but scoped to the agent's personal or task-specific knowledge base.
+      - paragraph [ref=e83]: "Production setups commonly use:"
+      - list [ref=e84]:
+        - listitem [ref=e85]:
+          - strong [ref=e86]: "Pinecone / Weaviate / Qdrant:"
+          - text: Managed vector databases for high-scale deployments. Weaviate supports native hybrid (BM25 + vector) search.
+        - listitem [ref=e87]:
+          - strong [ref=e88]: "pgvector:"
+          - text: Vector similarity search inside PostgreSQL — ideal when you already run Postgres and want to avoid a separate vector DB. Supports HNSW and IVF indexing.
+        - listitem [ref=e89]:
+          - strong [ref=e90]: "Chroma / LanceDB:"
+          - text: Lightweight local options for development and small-scale deployments.
+      - paragraph [ref=e91]:
+        - text: A key design decision is the
+        - strong [ref=e92]: memory write policy
+        - text: ": when does the agent commit a fact to long-term memory? Options include:"
+      - list [ref=e93]:
+        - listitem [ref=e94]:
+          - emphasis [ref=e95]: "Explicit:"
+          - text: Only on user instruction ("remember this"). Low write volume, high relevance.
+        - listitem [ref=e96]:
+          - emphasis [ref=e97]: "Implicit:"
+          - text: The agent automatically decides what's worth storing (using an LLM judge). Higher quality but adds latency and cost per turn.
+        - listitem [ref=e98]:
+          - emphasis [ref=e99]: "Scheduled:"
+          - text: Batch summarization and compression at session end — compress the full session into a few key facts before storing.
+      - 'heading "Procedural Memory: What the Model Already Knows" [level=3] [ref=e100]'
+      - paragraph [ref=e101]: Procedural memory is implicit — it's the knowledge baked into the model's weights through pretraining and fine-tuning. An agent fine-tuned on a company's internal procedures "knows" those procedures without needing to retrieve them. This is the cheapest form of retrieval (zero latency, zero tokens) but is the hardest to update — changing it requires re-training or LoRA adaptation.
+      - heading "Memory Management Mechanics" [level=3] [ref=e102]
+      - paragraph [ref=e103]: "Production agent frameworks implement memory management as an explicit policy layer, not as an afterthought. Key operations:"
+      - list [ref=e104]:
+        - listitem [ref=e105]:
+          - strong [ref=e106]: "Consolidation:"
+          - text: Merging near-duplicate memories. Two facts about a user's preference ("prefers Python" and "dislikes JavaScript") should be merged, not stored as 50 separate entries.
+        - listitem [ref=e107]:
+          - strong [ref=e108]: "Decay / eviction:"
+          - text: Memories not accessed in N days get demoted or deleted. Prevents unbounded growth and keeps retrieval precision high.
+        - listitem [ref=e109]:
+          - strong [ref=e110]: "Conflict resolution:"
+          - text: If a new memory contradicts an old one ("user moved to Berlin" vs. earlier "user lives in NYC"), the agent must update or retire the stale fact — not accumulate contradictions.
+        - listitem [ref=e111]:
+          - strong [ref=e112]: "Privacy scoping:"
+          - text: Different users must have isolated memory namespaces. Memory cross-contamination (agent recalling facts from another user's session) is a critical security failure.
+      - 'heading "Cross-Session Continuity: Why It Matters" [level=3] [ref=e113]'
+      - paragraph [ref=e114]:
+        - text: The most valuable property of long-term memory is
+        - strong [ref=e115]: cross-session continuity
+        - text: "— the user doesn't have to re-explain context every session. Research from Anthropic's internal deployments and published work on personal AI assistants consistently shows that cross-session memory is the single highest-rated feature for user satisfaction. Practically, this means:"
+      - list [ref=e116]:
+        - listitem [ref=e117]: User preferences stored once, recalled automatically.
+        - listitem [ref=e118]: Task progress persisted — a coding agent remembers what you were building last week.
+        - listitem [ref=e119]: Relationship history — the agent recalls past decisions and their outcomes, enabling better advice over time.
+      - generic [ref=e120]:
+        - strong [ref=e121]: "Production pattern:"
+        - text: The OpenAI Assistants API implements a built-in thread model where each thread persists its message history. Memory retrieval is handled by the platform (sliding window). For more control, frameworks like LangGraph expose explicit memory nodes in the agent graph — you write the read/write/consolidation logic yourself, which is more work but gives full control over cost and retrieval strategy.
+      - 'heading "MemGPT: Self-Managed Memory" [level=3] [ref=e122]'
+      - paragraph [ref=e123]:
+        - text: "MemGPT (Packer et al., 2023) proposed treating an LLM's context window as a CPU register file, with external storage analogous to disk. The LLM itself is given tools to read/write its own memory:"
+        - code [ref=e124]: core_memory_append
+        - text: ","
+        - code [ref=e125]: archival_memory_search
+        - text: ","
+        - code [ref=e126]: conversation_search
+        - text: . The model decides what to remember, what to evict, and what to retrieve. This is compelling architecturally because it keeps memory management within the LLM's reasoning loop — but it also adds tool call overhead on every turn and depends heavily on the model's ability to make good memory decisions.
+      - heading "Consistency and Grounding Benefits" [level=3] [ref=e127]
+      - paragraph [ref=e128]:
+        - text: Memory doesn't just help with recall — it improves
+        - emphasis [ref=e129]: consistency
+        - text: ". An agent with no memory can give contradictory advice in two different sessions. An agent with long-term memory can check its prior recommendations and maintain a coherent stance over time. This is especially important for professional use cases: a legal research agent should not contradict its own prior analysis without explicitly reasoning through the contradiction."
+    - generic [ref=e130]:
+      - 'heading "Visualization: Agent Memory Flow" [level=2] [ref=e131]'
+      - paragraph [ref=e132]:
+        - text: Watch how an agent's context window fills up across multiple turns, triggers overflow, and routes memories to long-term storage. On each new turn, relevant memories are retrieved and injected back.
+        - strong [ref=e133]: Use the buttons to step through turns or run auto-animation. Click a memory block to inspect it.
+      - generic [ref=e134]:
+        - button "← Prev Turn" [ref=e135] [cursor=pointer]
+        - button "Next Turn →" [active] [ref=e136] [cursor=pointer]
+        - button "▶ Auto Play" [ref=e137] [cursor=pointer]
+        - button "↺ Reset" [ref=e138] [cursor=pointer]
+        - generic [ref=e139]:
+          - generic [ref=e140]: "Speed:"
+          - slider [ref=e141]: "1"
+          - generic [ref=e142]: 1×
+      - generic [ref=e145]:
+        - generic [ref=e146]: Active context (in-window)
+        - generic [ref=e148]: Episodic memory (retrieved)
+        - generic [ref=e150]: Semantic / long-term memory
+        - generic [ref=e152]: Overflow → evicted to storage
+        - generic [ref=e154]: Retrieved from long-term on this turn
+    - generic [ref=e156]:
+      - heading "Key Takeaways" [level=2] [ref=e157]
+      - list [ref=e158]:
+        - listitem [ref=e159]:
+          - text: →
+          - strong [ref=e160]: Context window ≠ memory.
+          - text: Even 200K tokens is too expensive to fill every turn. At $5/M input tokens, a 100K-token prefill costs $0.50 per request — a 1M DAU agent burns $500K/day just on memory. Selective retrieval is not optional; it's economic necessity.
+        - listitem [ref=e161]:
+          - text: →
+          - strong [ref=e162]: The "lost-in-the-middle" problem is real and measured.
+          - text: Liu et al. (2023) showed accuracy drops 20–30% for retrieval tasks when relevant content is in the middle of a 128K context vs. at the start. Prioritize injecting memories at the beginning or end of context, never the middle.
+        - listitem [ref=e163]:
+          - text: →
+          - strong [ref=e164]: Memory write policy determines system quality.
+          - text: Implicit "always-store" policies bloat vector DBs with noise, degrading retrieval precision. Explicit or scheduled consolidation (session-end summaries) keeps the store clean — but requires careful design to avoid lossy compression of critical facts.
+        - listitem [ref=e165]:
+          - text: →
+          - strong [ref=e166]: Conflict resolution is the hardest problem.
+          - text: Unlike databases with atomic updates, LLM memory stores can accumulate contradictory facts silently. Production systems need an explicit conflict detection pass — either an LLM-as-judge at write time, or metadata versioning with timestamp-based precedence.
+        - listitem [ref=e167]:
+          - text: →
+          - strong [ref=e168]: Privacy isolation must be enforced at the infrastructure level.
+          - text: Memory namespace bugs — where one user's agent recalls another user's facts — are catastrophic security failures. Use tenant-namespaced collection IDs in your vector DB, not just soft filtering. Chroma and Qdrant support collection-level isolation; pgvector needs RLS policies.
+        - listitem [ref=e169]:
+          - text: →
+          - strong [ref=e170]: MemGPT-style self-managed memory trades tool-call overhead for flexibility.
+          - text: Every turn that requires memory operations adds 1–3 extra LLM calls. At scale, this can double per-turn cost. Evaluate whether this cost is justified vs. a simpler sliding-window + async summarization approach for your specific workload.
+  - navigation [ref=e171]:
+    - 'link "← Previous AI Agents: Observe → Decide → Act → Learn" [ref=e172] [cursor=pointer]':
+      - /url: 31-agents-overview.html
+      - generic [ref=e173]: ← Previous
+      - generic [ref=e174]: "AI Agents: Observe → Decide → Act → Learn"
+    - link "Next → Dataset Engineering for LLMs" [ref=e175] [cursor=pointer]:
+      - /url: 33-dataset-engineering.html
+      - generic [ref=e176]: Next →
+      - generic [ref=e177]: Dataset Engineering for LLMs

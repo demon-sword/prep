@@ -1,0 +1,160 @@
+- generic [ref=e1]:
+  - banner [ref=e2]:
+    - generic [ref=e3]: finetuning
+    - heading "Multi-Task Fine-Tuning & Model Merging" [level=1] [ref=e4]
+    - paragraph [ref=e5]: Simultaneous vs sequential fine-tuning, catastrophic forgetting, and weight-space model merging techniques — with tradeoffs that matter in production.
+  - main [ref=e6]:
+    - generic [ref=e7]:
+      - heading "Theory" [level=2] [ref=e8]
+      - heading "The Multi-Task Premise" [level=3] [ref=e9]
+      - paragraph [ref=e10]: "When deploying LLMs in production you rarely need exactly one skill — you need a model that can translate, summarize, classify, extract, and answer questions, often within the same product. The naive solution is to fine-tune one model per task. That explodes serving cost and ignores the fact that tasks share representations. Multi-task learning (MTL) asks: can a single set of weights serve many objectives simultaneously?"
+      - paragraph [ref=e11]: "MTL in NLP pre-dates LLMs (it powered early BERT adaptations), but the LLM era has added a new dimension: with billions of parameters, models are large enough that task-specific heads are cheap, but the instruction-following training (SFT) dataset can itself be multi-task by construction — mixing different prompt-completion pairs from many tasks during the same training run."
+      - heading "Simultaneous vs Sequential Fine-Tuning" [level=3] [ref=e12]
+      - paragraph [ref=e13]: "You have two high-level strategies to teach a model multiple tasks:"
+      - list [ref=e14]:
+        - listitem [ref=e15]:
+          - strong [ref=e16]: "Simultaneous (Joint) Fine-Tuning:"
+          - text: "mix all task data into one dataset, shuffle, train once. The gradient updates for Task A and Task B come interleaved through the same weights. The model converges to a shared optimum that trades off all tasks. Pros: no catastrophic forgetting, efficient compute. Cons: task conflicts if objectives diverge (summarization prefers compression; translation prefers fidelity), requires careful per-task sampling ratios."
+        - listitem [ref=e17]:
+          - strong [ref=e18]: "Sequential Fine-Tuning:"
+          - text: "fully train on Task A, then fine-tune the result on Task B. Quick to implement, lets you specialize deeply. Fatal flaw: catastrophic forgetting — the gradient descent for Task B overwrites the weight regions carved for Task A."
+      - paragraph [ref=e19]:
+        - text: In practice, large language models are surprisingly resistant to catastrophic forgetting
+        - emphasis [ref=e20]: within the same domain
+        - text: (because of parameter redundancy), but are very susceptible across very different domains (e.g., fine-tuning a general model to write code then to do legal analysis).
+      - heading "Catastrophic Forgetting — The Mechanism" [level=3] [ref=e21]
+      - paragraph [ref=e22]: Neural networks store knowledge in weight configurations, not discrete memory slots. When you optimize weights for Task B using gradient descent, you move weights along the loss gradient for B. If the B-optimal region of weight space differs from the A-optimal region, gradient steps toward B necessarily move away from A's minimum.
+      - paragraph [ref=e23]: "This isn't catastrophic-in-all-cases: if Task B uses the same low-level features as Task A (same language, similar distribution), the B-gradient barely displaces A's critical weights. But if distributions differ sharply, a few thousand gradient steps on Task B can degrade Task A performance by 30–50%."
+      - generic [ref=e24]: Loss_B(θ) minimized → θ moves away from Loss_A(θ) minimum if ∇Loss_A(θ) and ∇Loss_B(θ) are not aligned
+      - paragraph [ref=e25]: Elastic Weight Consolidation (EWC), an academic mitigation, adds a regularization term that penalizes moving weights that were important for Task A (measured by Fisher information). It works in toy settings but is expensive to compute at billion-parameter scale and rarely used in production LLM workflows.
+      - heading "Task Sampling Ratios in Joint Training" [level=3] [ref=e26]
+      - paragraph [ref=e27]: "When mixing tasks in a joint training run, the sampling ratio dramatically affects outcome. If Task A has 10M examples and Task B has 50K, naively mixing them means the model trains on A ~200× more often — it will overfit A and learn B poorly. Standard approaches:"
+      - list [ref=e28]:
+        - listitem [ref=e29]:
+          - strong [ref=e30]: "Temperature sampling:"
+          - text: sample each task with probability proportional to |D_t|^(1/T). T=1 = proportional, T→∞ = uniform. T ≈ 2–3 is typical for LLM SFT datasets, biasing toward smaller tasks.
+        - listitem [ref=e31]:
+          - strong [ref=e32]: "Cap-and-upsample:"
+          - text: cap each task at N_max examples, upsample smaller tasks with replacement. Common at N_max = 100K–500K.
+        - listitem [ref=e33]:
+          - strong [ref=e34]: "Curriculum scheduling:"
+          - text: start with broad coverage, later epochs over-represent harder or more important tasks.
+      - generic [ref=e35]:
+        - strong [ref=e36]: "Real-world ratio impact:"
+        - text: The Flan-T5 paper (Google, 2022) trained on 1,836 tasks. They found that proportional sampling catastrophically under-trained rare tasks, and temperature sampling with T=2 was critical. Llama-2-Chat used a specific 1:3:6 ratio mix of different conversation types in SFT.
+      - heading "Model Merging — A Different Paradigm" [level=3] [ref=e37]
+      - paragraph [ref=e38]: Model merging sidesteps the forgetting problem by training separate specialist models, then combining their weights in weight space — without any additional training. This produces a "frankenmerge" that hopefully inherits the skills of all specialists.
+      - paragraph [ref=e39]: Why does this work at all? Because modern LLMs trained from the same base checkpoint occupy nearby regions in weight space. The differences between a summarization-specialist and a translation-specialist are small perturbations on top of the shared base. Averaging those perturbations can blend the specializations.
+      - heading "Merging Techniques" [level=3] [ref=e40]
+      - paragraph [ref=e41]:
+        - strong [ref=e42]: 1. Linear Weight Summing (Model Soup / Weight Averaging)
+      - generic [ref=e43]: θ_merge = Σ_i α_i · θ_i where Σ α_i = 1
+      - paragraph [ref=e44]: "The simplest form: average the weights of multiple models. Ilharco et al. (2022) \"Model Soups\" showed that averaging models fine-tuned with different hyperparameters on the same task beats any single model. The key insight is that fine-tuned models lie in the same loss basin when initialized from the same pretrained checkpoint — averaging stays in that basin."
+      - paragraph [ref=e45]:
+        - strong [ref=e46]: 2. Task Arithmetic (TA)
+      - generic [ref=e47]: τ_i = θ_ft_i − θ_pretrained (task vector) θ_merge = θ_pretrained + Σ_i λ_i · τ_i
+      - paragraph [ref=e48]:
+        - text: Instead of averaging full weight vectors, Task Arithmetic (Ilharco et al., 2023) computes
+        - emphasis [ref=e49]: task vectors
+        - text: — the delta between fine-tuned and pretrained weights. You can then add, subtract, or scale task vectors on the pretrained base. Subtracting a task vector "unlearns" a capability. Scaling λ_i controls contribution of each task. This is the foundation of DARE and TIES merging.
+      - paragraph [ref=e50]:
+        - strong [ref=e51]: 3. TIES-Merging (Trim, Elect Sign, Disjoint Merge)
+      - paragraph [ref=e52]: "TIES (Yadav et al., 2023) addresses a known failure mode of linear merging: sign conflicts. When two task vectors disagree on the sign of a weight delta, they cancel in the sum — producing a noisy merged model. TIES:"
+      - list [ref=e53]:
+        - listitem [ref=e54]:
+          - strong [ref=e55]: Trims
+          - text: small-magnitude deltas (sets to 0) — removes noise.
+        - listitem [ref=e56]:
+          - strong [ref=e57]: Elects
+          - text: a sign per weight by majority vote across task vectors.
+        - listitem [ref=e58]:
+          - strong [ref=e59]: Merges
+          - text: only task vectors that agree with the elected sign — the dissenters are zeroed out.
+      - paragraph [ref=e60]: TIES consistently outperforms simple weight averaging, especially when merging 5+ models.
+      - paragraph [ref=e61]:
+        - strong [ref=e62]: 4. DARE (Drop And REscale)
+      - paragraph [ref=e63]: "DARE (Yu et al., 2023) randomly drops a large fraction (e.g. 90–99%) of task vector deltas, then rescales the survivors to maintain the original expected norm. The insight: most task vector deltas are redundant — sparse merging causes less interference. Works best when combined with TIES sign resolution."
+      - paragraph [ref=e64]:
+        - strong [ref=e65]: 5. Layer Stacking / Model Concatenation
+      - paragraph [ref=e66]: "An alternative to weight-space blending: stack the full layers of two (or more) models end-to-end, creating a deeper model. Or concatenate hidden dimensions, making a wider model. These approaches increase parameter count but avoid gradient interference. They require a brief adapter-training phase to bridge the stacked layers. Used in \"Frankenmerge\" community models (e.g., Goliath-120B was created by layer-interleaving two 70B models)."
+      - heading "Production Reality" [level=3] [ref=e67]
+      - paragraph [ref=e68]: "Model merging is genuinely useful in production and has seen explosive community adoption on Hugging Face (mergekit library). Key production patterns:"
+      - list [ref=e69]:
+        - listitem [ref=e70]:
+          - strong [ref=e71]: "SFT + DPO merging:"
+          - text: fine-tune one checkpoint for instruction-following (SFT), another for preference alignment (DPO), merge to get both — avoiding the lengthy RLHF pipeline.
+        - listitem [ref=e72]:
+          - strong [ref=e73]: "Language specialist merging:"
+          - text: merge an English-strong model with a multilingual model to improve non-English performance without English regression.
+        - listitem [ref=e74]:
+          - strong [ref=e75]: "Cost:"
+          - text: merging is essentially free — it's weight arithmetic, no GPU training required. The only cost is evaluation to find good λ parameters (usually a grid search over 5–20 evaluation examples).
+        - listitem [ref=e76]:
+          - strong [ref=e77]: "Failure mode:"
+          - text: merging models that are too far apart in weight space (different architectures, different base models) degrades all tasks. All merged models must share the exact same architecture and ideally the same pretrained base.
+    - generic [ref=e78]:
+      - heading "Interactive Visualization" [level=2] [ref=e79]
+      - paragraph [ref=e80]:
+        - text: Switch between
+        - strong [ref=e81]: Sequential Fine-Tuning
+        - text: (catastrophic forgetting) and
+        - strong [ref=e82]: Model Merging
+        - text: modes. In sequential mode, step through training phases and watch Task A performance collapse. In merge mode, adjust merge weights and see the blended performance profile.
+      - generic [ref=e83]:
+        - button "Sequential Fine-Tuning" [ref=e84] [cursor=pointer]
+        - button "Joint Fine-Tuning" [ref=e85] [cursor=pointer]
+        - button "Model Merging" [ref=e86] [cursor=pointer]
+      - generic [ref=e87]:
+        - button "▶ Next Phase" [active] [ref=e88] [cursor=pointer]
+        - button "↺ Reset" [ref=e89] [cursor=pointer]
+        - generic [ref=e90]:
+          - generic [ref=e91]: "Task B intensity:"
+          - slider [ref=e92] [cursor=pointer]: "0.7"
+          - generic [ref=e93]: "0.70"
+      - generic [ref=e96]:
+        - generic [ref=e97]: Task A Accuracy
+        - generic [ref=e99]: Task B Accuracy
+        - generic [ref=e101]: Pretrained Base
+      - generic [ref=e103]:
+        - generic [ref=e104]:
+          - generic [ref=e105]: Task A Score
+          - generic [ref=e106]: "0.890"
+        - generic [ref=e107]:
+          - generic [ref=e108]: Task B Score
+          - generic [ref=e109]: "0.330"
+        - generic [ref=e110]:
+          - generic [ref=e111]: Avg Score
+          - generic [ref=e112]: "0.610"
+        - generic [ref=e113]:
+          - generic [ref=e114]: Forgetting Δ
+          - generic [ref=e115]: 0%
+    - generic [ref=e116]:
+      - heading "Key Takeaways" [level=2] [ref=e117]
+      - list [ref=e118]:
+        - listitem [ref=e119]:
+          - strong [ref=e120]: Catastrophic forgetting scales with task distance.
+          - text: A code model fine-tuned on summarization loses ~5–10% on coding benchmarks. The same model fine-tuned on a foreign language can lose 30–50%. Measure forgetting on a held-out eval set from the original task before committing to sequential fine-tuning.
+        - listitem [ref=e121]:
+          - strong [ref=e122]: Joint fine-tuning is almost always better than sequential for production multi-task models
+          - text: — but it requires building a mixed dataset with explicit sampling ratios. T≈2 temperature sampling is a strong baseline. Proportional sampling (T=1) consistently under-trains smaller tasks.
+        - listitem [ref=e123]:
+          - strong [ref=e124]: Model merging via mergekit is a near-zero-cost post-hoc solution.
+          - text: If you already have two specialist models from the same base, weight averaging or task arithmetic takes minutes on CPU and often outperforms either specialist on a held-out mixture benchmark. TIES outperforms naive averaging when merging 4+ specialists with sign conflicts.
+        - listitem [ref=e125]:
+          - strong [ref=e126]: DARE's drop rate 90–99% sounds extreme but works.
+          - text: LLM task vectors are extremely sparse in practice — most fine-tuned weight deltas are noise. Dropping 90% and rescaling the survivors reduces inter-task interference dramatically and improves merge quality for 5+ model combinations.
+        - listitem [ref=e127]:
+          - strong [ref=e128]: All merging methods require identical architecture and ideally the same pretrained base.
+          - text: Merging Llama-3-8B-instruct with Mistral-7B-instruct will degrade both — they have different positional embeddings, vocabulary sizes, and weight initialization regimes. Even the same model from different training stages (e.g., v1 and v2) can produce poor merges.
+        - listitem [ref=e129]:
+          - strong [ref=e130]: Layer stacking (Frankenstein merges) can create models that exceed the sum of their parts
+          - text: on reasoning tasks — Goliath-120B (two 70B models interleaved) beat GPT-4 on some benchmarks when released. But this doubles GPU memory cost and adds inference latency proportionally — validate that you can serve it.
+  - navigation [ref=e131]:
+    - link "← Previous 17 — Model Distillation" [ref=e132] [cursor=pointer]:
+      - /url: 17-distillation.html
+      - generic [ref=e133]: ← Previous
+      - generic [ref=e134]: 17 — Model Distillation
+    - link "Next → 19 — Fine-Tuning Hyperparameters" [ref=e135] [cursor=pointer]:
+      - /url: 19-finetuning-hyperparams.html
+      - generic [ref=e136]: Next →
+      - generic [ref=e137]: 19 — Fine-Tuning Hyperparameters

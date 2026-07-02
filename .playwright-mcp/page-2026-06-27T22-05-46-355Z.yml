@@ -1,0 +1,192 @@
+- generic [ref=e1]:
+  - banner [ref=e2]:
+    - generic [ref=e3]:
+      - generic [ref=e4]: Training
+      - generic [ref=e5]: "#24"
+    - 'heading "Loss Functions: Cross-Entropy & Perplexity" [level=1] [ref=e6]'
+    - paragraph [ref=e7]: Cross-entropy loss for next-token prediction, perplexity as its exponent, KL divergence for distribution comparison — intuition, formulas, and what they measure.
+  - main [ref=e8]:
+    - generic [ref=e9]:
+      - generic [ref=e10]: Theory
+      - heading "What Is the Training Objective for LLMs?" [level=3] [ref=e11]
+      - paragraph [ref=e12]:
+        - text: "Language model pretraining is a self-supervised task: given a sequence of tokens, the model predicts the next token at every position. The training signal is the"
+        - strong [ref=e13]: cross-entropy loss
+        - text: between the model's predicted probability distribution over the vocabulary and the true one-hot distribution of the actual next token.
+      - paragraph [ref=e14]: "For a vocabulary of size V and a true next token at index y, the cross-entropy loss for one position is:"
+      - generic [ref=e15]:
+        - text: L = −log(p_model(y))
+        - text: // −log of the probability the model assigns to the correct token
+        - text: "For a full sequence of T tokens:"
+        - text: L = −(1/T) Σ log(p_model(y_t | y_<t)) // average over all positions
+      - paragraph [ref=e16]:
+        - text: This loss is computed in the forward pass, and gradients flow backward to update every weight. The model never sees a "label" — the next token
+        - emphasis [ref=e17]: is
+        - text: the label, harvested from the raw text itself.
+      - heading "Why Cross-Entropy?" [level=3] [ref=e18]
+      - paragraph [ref=e19]:
+        - text: Cross-entropy comes from information theory. It measures how many bits you need to encode samples from distribution P (the true distribution) using a code optimized for distribution Q (the model's distribution). When P is a one-hot (we know the exact next token), cross-entropy reduces to
+        - code [ref=e20]: −log₂(q_y)
+        - text: — the number of bits needed to encode the true token under the model's distribution.
+      - paragraph [ref=e21]: "In ML we use natural log (nats) rather than log₂ (bits), but the intuition is the same: a loss of 0 means the model is perfectly certain about the correct token (probability 1.0). A random model over a vocabulary of 50,000 tokens would have loss = log(50,000) ≈ 10.8 nats. Real LLM training converges to losses of ~1.5–3.5 nats depending on model size and data quality."
+      - 'heading "Perplexity: The Exponent" [level=3] [ref=e22]'
+      - paragraph [ref=e23]: "Perplexity (PPL) is simply the exponentiated average cross-entropy loss:"
+      - generic [ref=e24]:
+        - text: PPL = exp(L) = exp(−(1/T) Σ log p(y_t | y_<t))
+        - text: // Equivalent to the geometric mean of 1/p over all positions
+        - text: PPL = (Π 1/p(y_t))^(1/T)
+      - paragraph [ref=e25]:
+        - text: "Perplexity has an intuitive reading: it is the"
+        - strong [ref=e26]: average number of equally-likely choices
+        - text: the model is deliberating between at each step. A perplexity of 10 means the model is, on average, as uncertain as a fair choice among 10 options. GPT-2 (1.5B) achieved ~18 PPL on Penn Treebank; GPT-3 achieved ~20 PPL on PTB (though PTB is not its training distribution). LLaMA-2 70B achieves ~3.3 PPL on its test split — roughly 6× better than GPT-2 on equivalent benchmarks.
+      - paragraph [ref=e27]: "Key property: PPL = 1 means perfect confidence, PPL = V (vocabulary size) means a completely uniform random model. A 1-point reduction in perplexity is exponentially more meaningful at low perplexity than at high perplexity — going from 5 to 4 is much harder than going from 100 to 99."
+      - 'heading "KL Divergence: Comparing Distributions" [level=3] [ref=e28]'
+      - paragraph [ref=e29]:
+        - text: While cross-entropy compares a model distribution to a one-hot truth,
+        - strong [ref=e30]: KL divergence
+        - text: "compares two full distributions P and Q:"
+      - generic [ref=e31]:
+        - text: KL(P ‖ Q) = Σ P(x) · log(P(x) / Q(x))
+        - text: // "Extra bits needed to encode P using code optimized for Q"
+        - text: KL(P ‖ Q) = H(P, Q) − H(P) // cross-entropy minus true entropy of P
+      - paragraph [ref=e32]:
+        - text: "KL divergence is asymmetric:"
+        - code [ref=e33]: KL(P‖Q) ≠ KL(Q‖P)
+        - text: ". This matters enormously in practice:"
+      - list [ref=e34]:
+        - listitem [ref=e35]:
+          - strong [ref=e36]: KL(P‖Q)
+          - text: — forward KL. Penalizes Q assigning low mass where P has high mass (mode-seeking behavior). Used in variational autoencoders.
+        - listitem [ref=e37]:
+          - strong [ref=e38]: KL(Q‖P)
+          - text: — reverse KL. Penalizes Q assigning high mass where P has low mass (mode-covering behavior). Used in RLHF PPO as the KL penalty term against the reference policy.
+      - paragraph [ref=e39]:
+        - text: In RLHF, the KL penalty
+        - code [ref=e40]: KL(π_θ ‖ π_ref)
+        - text: "prevents the policy from drifting too far from the SFT reference model during PPO optimization. Without it, the model collapses into reward hacking. Typical KL budget: 0.1–2.0 depending on task. In DPO, the KL divergence is implicitly controlled by the β parameter."
+      - heading "Cross-Entropy in Different Training Regimes" [level=3] [ref=e41]
+      - paragraph [ref=e42]: "The same cross-entropy formula underlies multiple training objectives with different data sources:"
+      - list [ref=e43]:
+        - listitem [ref=e44]:
+          - strong [ref=e45]: Pretraining (CLM)
+          - text: ": predict each token from all prior tokens. Loss over the entire sequence. No masking of prompt tokens — all positions contribute equally."
+        - listitem [ref=e46]:
+          - strong [ref=e47]: Instruction fine-tuning
+          - text: ": typically"
+          - emphasis [ref=e48]: only compute loss on the response tokens
+          - text: ", not the system prompt or user turn. This focuses gradients on the behavior you want, not on memorizing the prompt format."
+        - listitem [ref=e49]:
+          - strong [ref=e50]: Masked LM (BERT)
+          - text: ": 15% of tokens are masked. Loss only on masked positions. This gives bidirectional context but cannot directly generate text autoregressively."
+        - listitem [ref=e51]:
+          - strong [ref=e52]: Sequence-to-sequence
+          - text: ": loss only on decoder outputs. The encoder is trained via backprop through the decoder's cross-attention into encoder representations."
+      - heading "Prompt Loss Weight and Training Efficiency" [level=3] [ref=e53]
+      - paragraph [ref=e54]: "A common pitfall in fine-tuning: including the prompt in the loss computation dilutes training signal. If your instruction is 512 tokens and response is 64 tokens, you waste 88% of compute budget learning to predict tokens already learned in pretraining. Solutions:"
+      - list [ref=e55]:
+        - listitem [ref=e56]:
+          - text: Set
+          - code [ref=e57]: prompt_loss_weight = 0
+          - text: (mask prompt tokens) — best for instruction following
+        - listitem [ref=e58]: Use weighted cross-entropy — downweight prompt tokens by a factor like 0.01
+        - listitem [ref=e59]: Pack sequences efficiently — concatenate examples to minimize padding waste
+      - paragraph [ref=e60]:
+        - text: In practice, most fine-tuning frameworks (TRL, Axolotl, LLaMA-Factory) support response-only loss masking out of the box via
+        - code [ref=e61]: DataCollatorForCompletionOnlyLM
+        - text: .
+      - 'heading "Perplexity as an Evaluation Metric: Caveats" [level=3] [ref=e62]'
+      - paragraph [ref=e63]:
+        - text: Perplexity is only meaningful
+        - emphasis [ref=e64]: within the same tokenizer and test set
+        - text: ". Comparing GPT-4's PPL to LLaMA's PPL on the same text gives a misleading number because different tokenizers produce different token sequences. PPL on in-distribution data doesn't predict out-of-distribution performance. BLEU, ROUGE, and LLM-as-judge are better for downstream task evaluation. PPL remains useful for: training loss monitoring, detecting catastrophic forgetting, comparing checkpoints within the same run, and setting data mixing ratios."
+    - generic [ref=e65]:
+      - generic [ref=e66]: Visualization
+      - paragraph [ref=e67]: "Three interactive panels: (1) Drag the model probability slider and watch cross-entropy and perplexity compute live over an animated probability distribution. (2) Click tokens in a sequence to see per-token loss contributions. (3) Adjust two distributions and see KL divergence update in real time."
+      - generic [ref=e68]:
+        - generic [ref=e69]:
+          - button "Cross-Entropy Live" [ref=e70] [cursor=pointer]
+          - button "Per-Token Loss" [active] [ref=e71] [cursor=pointer]
+          - button "KL Divergence" [ref=e72] [cursor=pointer]
+        - generic [ref=e129]:
+          - paragraph [ref=e130]: Click a token to see how the model's confidence at each position contributes to total sequence loss and perplexity.
+          - generic [ref=e131]:
+            - generic [ref=e132] [cursor=pointer]:
+              - generic [ref=e133]: The
+              - generic [ref=e134]: "0.20"
+            - generic [ref=e135] [cursor=pointer]:
+              - generic [ref=e136]: quick
+              - generic [ref=e137]: "1.05"
+            - generic [ref=e138] [cursor=pointer]:
+              - generic [ref=e139]: brown
+              - generic [ref=e140]: "0.40"
+            - generic [ref=e141] [cursor=pointer]:
+              - generic [ref=e142]: fox
+              - generic [ref=e143]: "0.09"
+            - generic [ref=e144] [cursor=pointer]:
+              - generic [ref=e145]: jumps
+              - generic [ref=e146]: "0.73"
+            - generic [ref=e147] [cursor=pointer]:
+              - generic [ref=e148]: over
+              - generic [ref=e149]: "0.30"
+            - generic [ref=e150] [cursor=pointer]:
+              - generic [ref=e151]: the
+              - generic [ref=e152]: "0.13"
+            - generic [ref=e153] [cursor=pointer]:
+              - generic [ref=e154]: lazy
+              - generic [ref=e155]: "1.24"
+            - generic [ref=e156] [cursor=pointer]:
+              - generic [ref=e157]: dog
+              - generic [ref=e158]: "0.27"
+            - generic [ref=e159] [cursor=pointer]:
+              - generic [ref=e160]: today
+              - generic [ref=e161]: "2.21"
+            - generic [ref=e162] [cursor=pointer]:
+              - generic [ref=e163]: .
+              - generic [ref=e164]: "0.07"
+          - generic [ref=e166]:
+            - generic [ref=e167]:
+              - generic [ref=e168]: Avg Cross-Entropy
+              - generic [ref=e169]: "0.6089"
+              - generic [ref=e170]: nats (avg over tokens)
+            - generic [ref=e171]:
+              - generic [ref=e172]: Sequence PPL
+              - generic [ref=e173]: "1.838"
+              - generic [ref=e174]: exp(avg CE)
+            - generic [ref=e175]:
+              - generic [ref=e176]: Selected Token
+              - generic [ref=e177]: "\"The\" p=0.82"
+              - generic [ref=e178]: token info
+            - generic [ref=e179]:
+              - generic [ref=e180]: Token Loss
+              - generic [ref=e181]: "0.1985"
+              - generic [ref=e182]: −log(p) nats
+    - generic [ref=e107]:
+      - generic [ref=e108]: Key Takeaways
+      - list [ref=e109]:
+        - listitem [ref=e110]:
+          - strong [ref=e111]: Perplexity comparisons must use the same tokenizer and test set.
+          - text: A model with 10B parameters reporting PPL=5 on its own test split is not comparable to another model reporting PPL=8 on a different split or with a different BPE vocabulary. Always benchmark on a standardized, held-out eval set like HellaSwag or a fixed WikiText-103 slice.
+        - listitem [ref=e112]:
+          - strong [ref=e113]: Always mask prompt tokens from loss in instruction fine-tuning.
+          - text: Including the system prompt in loss computation typically wastes 50–90% of gradient signal on tokens the model already knows perfectly. Response-only loss (DataCollatorForCompletionOnlyLM in TRL) consistently improves instruction-following on the same compute budget.
+        - listitem [ref=e114]:
+          - strong [ref=e115]: Forward vs reverse KL determines mode-seeking vs mode-covering.
+          - text: RLHF uses reverse KL (KL(π‖π_ref)) to prevent reward hacking while allowing the policy to be sharper than the reference. VAEs use forward KL which encourages broader posterior coverage. Getting this direction wrong causes pathological training behavior.
+        - listitem [ref=e116]:
+          - strong [ref=e117]: A 1-nat reduction in cross-entropy loss gets exponentially harder at low loss.
+          - text: Going from loss=3.0 → 2.0 (PPL 20→7.4) is achieved with 10× compute scaling. Going from loss=2.0 → 1.0 (PPL 7.4→2.7) requires roughly 100× more compute. This is why scaling returns diminish and data quality becomes the binding constraint.
+        - listitem [ref=e118]:
+          - strong [ref=e119]: The KL penalty in PPO has a practical sweet spot of 0.1–2.0.
+          - text: "Too small: reward hacking dominates. Too large: the policy can't move from the reference and reward never improves. AnthropicKL annealing schedules or adaptive β (as in KTO/DPO) avoid this hyperparameter sensitivity."
+        - listitem [ref=e120]:
+          - strong [ref=e121]: Per-token loss variance is a signal for data quality and memorization.
+          - text: Spikes in loss (high-loss tokens) often correspond to rare names, numbers, or code identifiers. Very low loss on entire passages is a memorization signal — the model has seen that exact text in training. Log per-token loss during eval to detect both failure modes.
+  - navigation [ref=e122]:
+    - link "← Previous Evaluation Pipeline Design" [ref=e123] [cursor=pointer]:
+      - /url: 23-evaluation-pipeline.html
+      - generic [ref=e124]: ← Previous
+      - generic [ref=e125]: Evaluation Pipeline Design
+    - link "Next → Model Evaluation Workflow" [ref=e126] [cursor=pointer]:
+      - /url: 25-model-evaluation-workflow.html
+      - generic [ref=e127]: Next →
+      - generic [ref=e128]: Model Evaluation Workflow

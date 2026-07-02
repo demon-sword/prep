@@ -1,0 +1,755 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1.0"/>
+  <title>Post-Training: Why &amp; How — AI Engineering Concepts</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com"/>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet"/>
+  <style>
+    :root {
+      --bg:       #0d0f17;
+      --surface:  #141720;
+      --card:     #1a1e2e;
+      --border:   #252a3d;
+      --accent:   #00d4ff;
+      --purple:   #7c3aed;
+      --green:    #00ff88;
+      --yellow:   #ffd700;
+      --red:      #ff4757;
+      --orange:   #ff9500;
+      --text:     #e2e8f0;
+      --text-dim: #8892a4;
+      --mono:     'JetBrains Mono', monospace;
+      --sans:     'Inter', system-ui, sans-serif;
+    }
+
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: var(--sans);
+      line-height: 1.7;
+      min-height: 100vh;
+    }
+
+    /* ── Header ── */
+    header {
+      background: var(--surface);
+      border-bottom: 1px solid var(--border);
+      padding: 2rem 1.5rem 1.5rem;
+      text-align: center;
+    }
+
+    .group-badge {
+      display: inline-block;
+      background: var(--purple);
+      color: #fff;
+      font-size: 0.7rem;
+      font-weight: 600;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      padding: 0.25rem 0.75rem;
+      border-radius: 999px;
+      margin-bottom: 0.75rem;
+    }
+
+    header h1 {
+      font-size: clamp(1.6rem, 4vw, 2.4rem);
+      font-weight: 700;
+      color: var(--accent);
+      margin-bottom: 0.5rem;
+    }
+
+    header p {
+      color: var(--text-dim);
+      font-size: 1rem;
+      max-width: 640px;
+      margin: 0 auto;
+    }
+
+    /* ── Layout ── */
+    main {
+      max-width: 900px;
+      margin: 0 auto;
+      padding: 2rem 1.5rem 4rem;
+    }
+
+    section {
+      margin-bottom: 3rem;
+    }
+
+    section > h2 {
+      font-size: 1.4rem;
+      font-weight: 700;
+      color: var(--accent);
+      border-left: 3px solid var(--accent);
+      padding-left: 0.75rem;
+      margin-bottom: 1.25rem;
+    }
+
+    h3 {
+      font-size: 1.05rem;
+      font-weight: 600;
+      color: var(--yellow);
+      margin: 1.5rem 0 0.5rem;
+    }
+
+    p { margin-bottom: 0.9rem; color: var(--text); }
+
+    ul, ol {
+      padding-left: 1.4rem;
+      margin-bottom: 0.9rem;
+    }
+    li { margin-bottom: 0.4rem; }
+
+    code {
+      font-family: var(--mono);
+      font-size: 0.85em;
+      background: var(--border);
+      color: var(--green);
+      padding: 0.1em 0.4em;
+      border-radius: 4px;
+    }
+
+    pre {
+      font-family: var(--mono);
+      font-size: 0.82rem;
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 1rem 1.25rem;
+      overflow-x: auto;
+      margin-bottom: 1rem;
+      color: var(--green);
+      line-height: 1.6;
+    }
+
+    .callout {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-left: 3px solid var(--orange);
+      border-radius: 6px;
+      padding: 0.9rem 1.1rem;
+      margin: 1rem 0;
+      font-size: 0.92rem;
+      color: var(--text-dim);
+    }
+
+    .callout strong { color: var(--orange); }
+
+    /* ── Visualization ── */
+    #visualization {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 1.5rem;
+    }
+
+    #visualization h2 {
+      border-left-color: var(--green);
+      color: var(--green);
+    }
+
+    .viz-desc {
+      color: var(--text-dim);
+      font-size: 0.9rem;
+      margin-bottom: 1.25rem;
+    }
+
+    /* Stage selector tabs */
+    .stage-tabs {
+      display: flex;
+      gap: 0.5rem;
+      flex-wrap: wrap;
+      margin-bottom: 1.5rem;
+    }
+
+    .stage-tab {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      color: var(--text-dim);
+      font-family: var(--sans);
+      font-size: 0.82rem;
+      font-weight: 600;
+      padding: 0.45rem 1rem;
+      border-radius: 6px;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+
+    .stage-tab:hover { border-color: var(--accent); color: var(--accent); }
+    .stage-tab.active { background: var(--purple); border-color: var(--purple); color: #fff; }
+
+    /* Pipeline canvas area */
+    #pipelineCanvas {
+      width: 100%;
+      border-radius: 8px;
+      display: block;
+    }
+
+    /* Comparison panel */
+    .compare-panel {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 1rem;
+      margin-top: 1.25rem;
+    }
+
+    @media (max-width: 600px) {
+      .compare-panel { grid-template-columns: 1fr; }
+    }
+
+    .compare-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 1rem;
+    }
+
+    .compare-card h4 {
+      font-size: 0.85rem;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      margin-bottom: 0.6rem;
+    }
+
+    .compare-card.raw h4 { color: var(--red); }
+    .compare-card.trained h4 { color: var(--green); }
+
+    .compare-card p {
+      font-size: 0.85rem;
+      line-height: 1.55;
+      color: var(--text-dim);
+      margin: 0;
+    }
+
+    .compare-card.trained p { color: var(--text); }
+
+    .step-detail {
+      margin-top: 1.25rem;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 1rem 1.25rem;
+    }
+
+    .step-detail h4 {
+      font-size: 1rem;
+      font-weight: 600;
+      color: var(--accent);
+      margin-bottom: 0.5rem;
+    }
+
+    .step-detail p {
+      font-size: 0.88rem;
+      color: var(--text-dim);
+      margin: 0;
+    }
+
+    .metric-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.75rem;
+      margin-top: 1rem;
+    }
+
+    .metric-chip {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 0.35rem 0.75rem;
+      font-family: var(--mono);
+      font-size: 0.78rem;
+      color: var(--yellow);
+    }
+
+    /* ── Takeaways ── */
+    #takeaways h2 {
+      border-left-color: var(--yellow);
+      color: var(--yellow);
+    }
+
+    #takeaways ul { list-style: none; padding: 0; }
+
+    #takeaways li {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 0.85rem 1.1rem;
+      margin-bottom: 0.75rem;
+      padding-left: 1.1rem;
+      border-left: 3px solid var(--yellow);
+      font-size: 0.93rem;
+    }
+
+    #takeaways li strong { color: var(--yellow); }
+
+    /* ── Nav ── */
+    .concept-nav {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      max-width: 900px;
+      margin: 0 auto 2rem;
+      padding: 0 1.5rem;
+      gap: 1rem;
+    }
+
+    .nav-link {
+      display: flex;
+      flex-direction: column;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 0.75rem 1.25rem;
+      text-decoration: none;
+      color: var(--text-dim);
+      font-size: 0.82rem;
+      transition: border-color 0.2s, color 0.2s;
+      max-width: 45%;
+    }
+
+    .nav-link:hover { border-color: var(--accent); color: var(--accent); }
+    .nav-link span:first-child { font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.1em; margin-bottom: 0.2rem; }
+    .nav-link span:last-child { font-weight: 600; color: var(--text); }
+    .nav-link:hover span:last-child { color: var(--accent); }
+    .nav-link.disabled { opacity: 0.35; pointer-events: none; }
+    .nav-link.next { text-align: right; margin-left: auto; }
+  </style>
+</head>
+<body>
+
+<header>
+  <div class="group-badge">Training</div>
+  <h1>Post-Training: Why &amp; How</h1>
+  <p>Why pretrained models need post-training and the three main solutions: SFT, preference finetuning (RLHF/DPO), and Best-of-N.</p>
+</header>
+
+<main>
+
+  <!-- ── THEORY ── -->
+  <section id="theory">
+    <h2>Theory</h2>
+
+    <h3>The Pretrained Model Problem</h3>
+    <p>
+      Pretraining produces a powerful statistical engine — a model that has internalized the distribution of text from trillions of tokens scraped from the internet, books, and code. But raw pretraining has a deeply inconvenient property: the model learned to <em>continue text</em>, not to <em>follow instructions</em>, <em>answer questions helpfully</em>, or <em>refuse harmful requests</em>. If you ask GPT-3 "What is the capital of France?" it might respond with ten more geography quiz questions, because that's what naturally follows the pattern of quiz text in its training distribution.
+    </p>
+    <p>
+      There are three structural gaps a pretrained base model exhibits:
+    </p>
+    <ul>
+      <li><strong>Instruction-following gap:</strong> The model predicts likely continuations, not intended responses. It cannot distinguish "user turn" from "assistant turn" without post-training.</li>
+      <li><strong>Factual reliability gap:</strong> Pretraining doesn't penalize confidently wrong answers. The model learns to sound fluent, not to be accurate.</li>
+      <li><strong>Safety and alignment gap:</strong> Web-scraped data contains toxic content, misinformation, and harmful instructions. The base model has absorbed all of it and has no filter.</li>
+    </ul>
+    <p>
+      Post-training is the family of techniques that patch these three gaps without throwing away the expensive pretraining knowledge.
+    </p>
+
+    <h3>Stage 1: Supervised Fine-Tuning (SFT)</h3>
+    <p>
+      SFT is the first and most fundamental post-training step. You collect a dataset of (instruction, ideal response) pairs — typically 10K–500K examples — and train the model via standard cross-entropy loss on the response tokens only (the instruction tokens are masked from the loss). The model learns the conversational format: "when I see a user request structured like this, I produce a response structured like that."
+    </p>
+    <p>
+      SFT data quality dominates quantity. OpenAI's InstructGPT paper (2022) demonstrated that 13K high-quality human-written demonstrations outperformed 100K lower-quality examples. Modern SFT datasets use a mix of: human-written gold examples (expensive, high quality), teacher model distillation (GPT-4 or Claude generating responses — controversial because of license restrictions), and synthetic generation with filtering.
+    </p>
+    <p>
+      SFT teaches <em>format and style</em> extremely efficiently but is limited in teaching <em>quality discrimination</em>. It optimizes to match the demonstration, not to maximize human preference. If the demonstration is mediocre, the model learns mediocrity. This is why SFT alone is insufficient — you need the next stages.
+    </p>
+
+    <h3>Stage 2: Preference Fine-Tuning — RLHF and DPO</h3>
+    <p>
+      Preference fine-tuning teaches the model to produce outputs that humans prefer over alternatives. The core insight is that it's much easier for humans to say "output A is better than output B" than to write a perfect output from scratch. This comparative signal is richer than SFT's imitation signal.
+    </p>
+    <p>
+      <strong>RLHF (Reinforcement Learning from Human Feedback)</strong> takes a three-stage approach: (1) train a reward model on preference pairs (chosen vs rejected), (2) use PPO (Proximal Policy Optimization) to optimize the SFT model's policy against the reward model, while keeping a KL-divergence penalty to prevent the policy from deviating too far from the original SFT model. The KL term is critical — without it, the model learns to game the reward model (reward hacking) by producing outputs that score high but are actually bad.
+    </p>
+    <p>
+      <strong>DPO (Direct Preference Optimization, 2023)</strong> eliminates the reward model entirely. It reformulates the RLHF objective such that the optimal policy can be expressed directly in terms of the reference SFT model and the preference pairs — no RL loop required. DPO loss: <code>-log σ(β·log(π_θ(y_w|x)/π_ref(y_w|x)) - β·log(π_θ(y_l|x)/π_ref(y_l|x)))</code>, where y_w is the chosen (winner) response and y_l is the rejected (loser). DPO is far simpler to implement and often matches RLHF quality, which is why it's now the dominant choice.
+    </p>
+
+    <h3>Stage 3: Best-of-N (Inference-Time Compute)</h3>
+    <p>
+      Best-of-N is technically not a training method — it's an inference strategy. Generate N independent completions, score each with a reward model, return the highest-scoring one. This is the simplest form of inference-time compute scaling. With N=32 and a decent reward model, you can achieve performance comparable to a significantly larger model. The cost is linear in N (you pay N forward passes), but the quality improvement is logarithmic — going from N=1 to N=4 helps a lot, N=4 to N=64 helps less, N=64 to N=256 helps even less.
+    </p>
+    <p>
+      Best-of-N is often used as a baseline to evaluate reward model quality: a good reward model should produce a monotonically increasing quality curve as N grows. If it plateaus or decreases, your reward model is overfit or miscalibrated.
+    </p>
+
+    <h3>The Post-Training Stack in Practice</h3>
+    <p>
+      Modern frontier models (GPT-4, Claude, Gemini) use all three stages in sequence: SFT → RLHF (or DPO) → constitutional AI / RLAIF refinement. Open-source stacks like Llama 3 Instruct use SFT + DPO. Smaller commercial deployments often skip RLHF and use SFT + DPO alone because RLHF requires significant engineering infrastructure (reward model serving, PPO training stability, human labeler pipelines).
+    </p>
+
+    <div class="callout">
+      <strong>Production Reality:</strong> Post-training typically requires 1–10% of pretraining compute but can recover 80–90% of the alignment gap. The cost of human preference data (labeler time, quality control) is often the real bottleneck — not compute. A good preference dataset with 50K pairs can cost $50K–$500K depending on quality requirements.
+    </div>
+  </section>
+
+  <!-- ── VISUALIZATION ── -->
+  <section id="visualization">
+    <h2>Interactive Pipeline</h2>
+    <p class="viz-desc">
+      Click each stage tab to explore the post-training pipeline. The canvas shows the data flow and transformation at each stage. The comparison panel shows raw pretrained vs post-trained model behavior.
+    </p>
+
+    <div class="stage-tabs">
+      <button class="stage-tab active" data-stage="pretrained">Base Model</button>
+      <button class="stage-tab" data-stage="sft">1 — SFT</button>
+      <button class="stage-tab" data-stage="rlhf">2a — RLHF</button>
+      <button class="stage-tab" data-stage="dpo">2b — DPO</button>
+      <button class="stage-tab" data-stage="bon">3 — Best-of-N</button>
+    </div>
+
+    <canvas id="pipelineCanvas" height="260"></canvas>
+
+    <div class="step-detail" id="stepDetail">
+      <h4>Base Pretrained Model</h4>
+      <p>Raw next-token predictor. Knows facts but ignores instructions, has no safety filter, and responds in a web-text continuation style rather than a conversational style.</p>
+    </div>
+
+    <div class="metric-row" id="metricRow">
+      <div class="metric-chip">Instruction-following: ★☆☆☆☆</div>
+      <div class="metric-chip">Safety: ★☆☆☆☆</div>
+      <div class="metric-chip">Helpfulness: ★★☆☆☆</div>
+      <div class="metric-chip">Cost: —</div>
+    </div>
+
+    <div class="compare-panel">
+      <div class="compare-card raw">
+        <h4>Raw Pretrained</h4>
+        <p id="rawOutput">Q: Explain gradient descent.<br><br>A: Gradient descent is ... explain gradient descent ... gradient descent ... gradient descent algorithms include ...</p>
+      </div>
+      <div class="compare-card trained">
+        <h4 id="trainedLabel">Post-Trained Output</h4>
+        <p id="trainedOutput">Select a stage above to see how each post-training method transforms the model's behavior.</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- ── TAKEAWAYS ── -->
+  <section id="takeaways">
+    <h2>Key Takeaways</h2>
+    <ul>
+      <li><strong>SFT teaches format, preference tuning teaches quality:</strong> SFT alone produces instruction-following but not quality discrimination. You need preference data (RLHF or DPO) to teach the model to prefer better responses over plausible but worse ones.</li>
+      <li><strong>DPO has essentially replaced RLHF for most teams:</strong> DPO achieves comparable alignment without a reward model or RL loop. Llama 3 Instruct, Mistral Instruct, and most open-source aligned models use SFT + DPO. Only frontier labs with massive labeler pipelines still invest in full RLHF.</li>
+      <li><strong>Reward hacking is the main RLHF failure mode:</strong> Without a KL-divergence penalty, PPO optimization causes the model to exploit the reward model — producing verbose, sycophantic, or stylistically unusual outputs that score high but are actually poor. The KL coefficient (β) is the most important RLHF hyperparameter.</li>
+      <li><strong>SFT data quality beats quantity by 10-100x:</strong> InstructGPT showed 13K curated examples outperform 100K noisy ones. LIMA (2023) showed 1,000 carefully selected SFT examples produce surprisingly strong instruction-following. Invest in data quality pipelines, not raw annotation volume.</li>
+      <li><strong>Best-of-N is a powerful evaluation tool:</strong> A Best-of-N curve (quality vs log N) reveals reward model calibration. If the curve is non-monotonic or plateaus at N=4, your reward model is overfit. Production deployments at Anthropic and Google use Best-of-N with N=4–32 for high-stakes generation tasks where latency allows.</li>
+      <li><strong>Constitutional AI / RLAIF reduces human labeler dependency:</strong> Anthropic's RLAIF uses Claude to generate preference labels instead of humans, reducing cost by 10-100x with modest quality trade-off. This is increasingly standard — pure human labeling at scale is economically unsustainable.</li>
+    </ul>
+  </section>
+
+</main>
+
+<nav class="concept-nav">
+  <a href="09-bottlenecks.html" class="nav-link prev">
+    <span>← Previous</span>
+    <span>LLM Development Bottlenecks</span>
+  </a>
+  <a href="11-rlhf.html" class="nav-link next">
+    <span>Next →</span>
+    <span>RLHF</span>
+  </a>
+</nav>
+
+<script>
+(function() {
+  'use strict';
+
+  const canvas = document.getElementById('pipelineCanvas');
+  const ctx = canvas.getContext('2d');
+  const stepDetail = document.getElementById('stepDetail');
+  const metricRow = document.getElementById('metricRow');
+  const trainedLabel = document.getElementById('trainedLabel');
+  const trainedOutput = document.getElementById('trainedOutput');
+  const tabs = document.querySelectorAll('.stage-tab');
+
+  // ── State ──
+  let activeStage = 'pretrained';
+  let animFrame = null;
+  let animT = 0;
+  let particles = [];
+
+  // ── Stage data ──
+  const stages = {
+    pretrained: {
+      detail: {
+        title: 'Base Pretrained Model',
+        desc: 'Raw next-token predictor trained on ~10T tokens. Knows facts but ignores instructions, has no safety filter, and responds in a web-text continuation style rather than a conversational style. Inference behavior is determined solely by the pretraining distribution.'
+      },
+      metrics: ['Instruction-following: ★☆☆☆☆', 'Safety: ★☆☆☆☆', 'Helpfulness: ★★☆☆☆', 'Cost: $0 extra'],
+      output: { label: 'Base Model Output', text: 'Q: Explain gradient descent.\n\nA: Gradient descent is... 1. Gradient descent algorithm 2. Stochastic gradient descent 3. Mini-batch gradient descent. See also: conjugate gradient, Newton\'s method...' },
+      color: '#8892a4',
+      nodes: ['Pretrain\nCorpus', 'Base\nModel', 'Next-Token\nPredictor'],
+      arrows: [0, 1],
+      flowColor: '#8892a4'
+    },
+    sft: {
+      detail: {
+        title: 'Stage 1: Supervised Fine-Tuning (SFT)',
+        desc: 'Collect 10K–500K (instruction, ideal response) pairs. Train on response tokens only (instruction masked from loss). The model learns conversational format and instruction-following style. Data quality dominates quantity — 1K curated examples can beat 100K noisy ones (LIMA, 2023).'
+      },
+      metrics: ['Instruction-following: ★★★☆☆', 'Safety: ★★☆☆☆', 'Helpfulness: ★★★☆☆', 'Cost: Low (compute + data)'],
+      output: { label: 'After SFT Output', text: 'Gradient descent is an optimization algorithm that minimizes a loss function by iteratively moving in the direction of the steepest descent. At each step, parameters θ are updated as: θ ← θ − α∇L(θ), where α is the learning rate.' },
+      color: '#00d4ff',
+      nodes: ['(Instruction,\nResponse)\nPairs', 'SFT\nTraining', 'Instruction-\nFollowing\nModel'],
+      arrows: [0, 1],
+      flowColor: '#00d4ff'
+    },
+    rlhf: {
+      detail: {
+        title: 'Stage 2a: RLHF — Reinforcement Learning from Human Feedback',
+        desc: 'Three phases: (1) Collect human preference pairs (chosen vs rejected). (2) Train a reward model to predict human preference scores. (3) Use PPO with KL-divergence penalty to optimize the SFT model against the reward model. The β coefficient (KL weight) is critical — too low causes reward hacking, too high prevents improvement.'
+      },
+      metrics: ['Instruction-following: ★★★★☆', 'Safety: ★★★★☆', 'Helpfulness: ★★★★☆', 'Cost: Very High (RM + PPO)'],
+      output: { label: 'After RLHF Output', text: 'Gradient descent minimizes a function by following the negative gradient. For neural networks with loss L and parameters θ: θ ← θ − α∇L(θ). SGD uses mini-batches to estimate the gradient efficiently. Key variants: Adam (adaptive LR), AdaGrad, RMSProp. Common pitfall: LR too high → divergence.' },
+      color: '#7c3aed',
+      nodes: ['Human\nPreference\nPairs', 'Reward\nModel', 'PPO\nOptimizer', 'RLHF\nModel'],
+      arrows: [0, 1, 2],
+      flowColor: '#7c3aed'
+    },
+    dpo: {
+      detail: {
+        title: 'Stage 2b: DPO — Direct Preference Optimization',
+        desc: 'Eliminates the reward model and RL loop entirely. DPO reformulates the RLHF objective so the optimal policy can be expressed directly in terms of the reference model and preference pairs. Loss: -log σ(β·log(π/π_ref)(y_w) - β·log(π/π_ref)(y_l)). Simpler, more stable, nearly equivalent quality. Now the dominant approach for open-source alignment.'
+      },
+      metrics: ['Instruction-following: ★★★★☆', 'Safety: ★★★★☆', 'Helpfulness: ★★★★☆', 'Cost: Medium (no RM needed)'],
+      output: { label: 'After DPO Output', text: 'Gradient descent iteratively minimizes a loss function L(θ) by updating θ ← θ − α∇L(θ). For deep learning, stochastic variants (SGD, Adam) sample mini-batches to estimate ∇L efficiently. Adam adapts per-parameter learning rates using gradient moments, making it robust to sparse gradients.' },
+      color: '#00ff88',
+      nodes: ['Preference\nPairs\n(chosen/rejected)', 'DPO\nLoss', 'Aligned\nModel'],
+      arrows: [0, 1],
+      flowColor: '#00ff88'
+    },
+    bon: {
+      detail: {
+        title: 'Stage 3: Best-of-N Sampling (Inference-Time Compute)',
+        desc: 'Generate N independent completions from the model. Score each with a reward model or verifier. Return the highest-scoring output. Quality improves as ~log(N). With N=32, can match a model 2-4x larger. Quality curve flatness reveals reward model calibration quality — a non-monotonic curve signals reward overfit or distribution mismatch.'
+      },
+      metrics: ['Instruction-following: ★★★★★', 'Safety: ★★★★★', 'Helpfulness: ★★★★★', 'Cost: N× inference'],
+      output: { label: 'Best-of-N Output (best selected)', text: 'Gradient descent is the backbone of modern ML optimization. Starting from parameters θ₀, it iteratively applies θ ← θ − α∇L(θ). Mini-batch SGD makes this tractable at scale. Adam is the practical default: it adapts learning rates per parameter and corrects for gradient moment bias, converging reliably across diverse architectures.' },
+      color: '#ffd700',
+      nodes: ['Generate\nN Samples', 'Reward\nModel\nScoring', 'Select\nBest\nOutput'],
+      arrows: [0, 1],
+      flowColor: '#ffd700'
+    }
+  };
+
+  // ── Canvas setup ──
+  function resizeCanvas() {
+    const rect = canvas.parentElement.getBoundingClientRect();
+    canvas.width = rect.width - 32; // account for card padding
+    canvas.height = 260;
+    drawPipeline();
+  }
+
+  // ── Drawing ──
+  function roundRect(x, y, w, h, r) {
+    ctx.beginPath();
+    ctx.moveTo(x + r, y);
+    ctx.lineTo(x + w - r, y);
+    ctx.quadraticCurveTo(x + w, y, x + w, y + r);
+    ctx.lineTo(x + w, y + h - r);
+    ctx.quadraticCurveTo(x + w, y + h, x + w - r, y + h);
+    ctx.lineTo(x + r, y + h);
+    ctx.quadraticCurveTo(x, y + h, x, y + h - r);
+    ctx.lineTo(x, y + r);
+    ctx.quadraticCurveTo(x, y, x + r, y);
+    ctx.closePath();
+  }
+
+  function drawArrow(x1, y1, x2, y2, color, progress) {
+    const endX = x1 + (x2 - x1) * Math.min(progress, 1);
+    const endY = y1 + (y2 - y1) * Math.min(progress, 1);
+    ctx.strokeStyle = color;
+    ctx.lineWidth = 2;
+    ctx.setLineDash([]);
+    ctx.beginPath();
+    ctx.moveTo(x1, y1);
+    ctx.lineTo(endX, endY);
+    ctx.stroke();
+
+    if (progress >= 1) {
+      // arrowhead
+      const angle = Math.atan2(y2 - y1, x2 - x1);
+      ctx.fillStyle = color;
+      ctx.beginPath();
+      ctx.moveTo(x2, y2);
+      ctx.lineTo(x2 - 10 * Math.cos(angle - 0.4), y2 - 10 * Math.sin(angle - 0.4));
+      ctx.lineTo(x2 - 10 * Math.cos(angle + 0.4), y2 - 10 * Math.sin(angle + 0.4));
+      ctx.closePath();
+      ctx.fill();
+    }
+  }
+
+  function drawNode(x, y, w, h, label, color, alpha) {
+    ctx.globalAlpha = Math.max(0, Math.min(1, alpha));
+    roundRect(x, y, w, h, 8);
+    ctx.fillStyle = '#1a1e2e';
+    ctx.fill();
+    ctx.strokeStyle = color;
+    ctx.lineWidth = 2;
+    ctx.stroke();
+
+    // Label
+    ctx.fillStyle = color;
+    ctx.font = '600 11px Inter, system-ui, sans-serif';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    const lines = label.split('\n');
+    const lineH = 15;
+    lines.forEach((line, i) => {
+      ctx.fillText(line, x + w / 2, y + h / 2 + (i - (lines.length - 1) / 2) * lineH);
+    });
+    ctx.globalAlpha = 1;
+  }
+
+  function drawPipeline() {
+    const stage = stages[activeStage];
+    const W = canvas.width;
+    const H = canvas.height;
+    const nodes = stage.nodes;
+    const n = nodes.length;
+    const nodeW = Math.min(140, (W - 40) / n - 20);
+    const nodeH = 70;
+    const nodeY = H / 2 - nodeH / 2;
+    const spacing = (W - n * nodeW - 20) / (n + 1);
+    const nodeXs = nodes.map((_, i) => 10 + spacing + i * (nodeW + spacing));
+
+    ctx.clearRect(0, 0, W, H);
+
+    // Draw flowing particles
+    const t = animT / 60;
+
+    // Draw arrows with animation
+    for (let i = 0; i < n - 1; i++) {
+      const x1 = nodeXs[i] + nodeW;
+      const x2 = nodeXs[i + 1];
+      const y = nodeY + nodeH / 2;
+      const arrowProgress = Math.min(1, Math.max(0, (t - i * 0.4) * 1.5));
+      drawArrow(x1, y, x2, y, stage.flowColor, arrowProgress);
+
+      // Flowing dot
+      if (arrowProgress >= 1) {
+        const dotT = ((t * 0.8) % 1);
+        const dotX = x1 + (x2 - x1) * dotT;
+        ctx.beginPath();
+        ctx.arc(dotX, y, 4, 0, Math.PI * 2);
+        ctx.fillStyle = stage.flowColor;
+        ctx.globalAlpha = 0.8;
+        ctx.fill();
+        ctx.globalAlpha = 1;
+      }
+    }
+
+    // Draw nodes
+    nodes.forEach((label, i) => {
+      const nodeAlpha = Math.min(1, Math.max(0, (t - i * 0.4) * 3));
+      drawNode(nodeXs[i], nodeY, nodeW, nodeH, label, stage.color, nodeAlpha);
+    });
+
+    // Stage label at top
+    ctx.fillStyle = stage.color;
+    ctx.font = 'bold 13px Inter, system-ui, sans-serif';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'top';
+    ctx.globalAlpha = 0.7;
+    ctx.fillText(activeStage.toUpperCase() + ' PIPELINE', W / 2, 10);
+    ctx.globalAlpha = 1;
+
+    // RLHF extra: feedback loop indicator
+    if (activeStage === 'rlhf' && t > 1.5) {
+      const loopAlpha = Math.min(1, (t - 1.5) * 2);
+      ctx.globalAlpha = loopAlpha * 0.6;
+      ctx.strokeStyle = '#ff9500';
+      ctx.lineWidth = 1.5;
+      ctx.setLineDash([4, 4]);
+      const lx1 = nodeXs[n - 1] + nodeW / 2;
+      const lx2 = nodeXs[1] + nodeW / 2;
+      const curveY = nodeY - 30;
+      ctx.beginPath();
+      ctx.moveTo(lx1, nodeY);
+      ctx.bezierCurveTo(lx1, curveY, lx2, curveY, lx2, nodeY);
+      ctx.stroke();
+      ctx.setLineDash([]);
+      // label
+      ctx.font = '10px Inter, system-ui, sans-serif';
+      ctx.fillStyle = '#ff9500';
+      ctx.textAlign = 'center';
+      ctx.fillText('KL-penalized PPO loop', (lx1 + lx2) / 2, curveY - 8);
+      ctx.globalAlpha = 1;
+    }
+
+    // Best-of-N: fan-out lines
+    if (activeStage === 'bon' && t > 0.5) {
+      const fanAlpha = Math.min(1, (t - 0.5) * 2);
+      ctx.globalAlpha = fanAlpha * 0.5;
+      ctx.strokeStyle = '#ffd700';
+      ctx.lineWidth = 1;
+      ctx.setLineDash([3, 3]);
+      const sx = nodeXs[0] + nodeW;
+      const ex = nodeXs[1];
+      const sy = nodeY + nodeH / 2;
+      const offsets = [-40, -20, 0, 20, 40];
+      offsets.forEach(dy => {
+        ctx.beginPath();
+        ctx.moveTo(sx, sy);
+        ctx.lineTo(ex, sy + dy);
+        ctx.stroke();
+      });
+      ctx.setLineDash([]);
+      ctx.globalAlpha = 1;
+      ctx.font = '10px Inter, system-ui, sans-serif';
+      ctx.fillStyle = '#ffd700';
+      ctx.textAlign = 'center';
+      ctx.fillText('N = 1…32 samples', (sx + ex) / 2, H - 20);
+    }
+  }
+
+  function animate() {
+    animT++;
+    drawPipeline();
+    animFrame = requestAnimationFrame(animate);
+  }
+
+  // ── UI Updates ──
+  function updateStage(name) {
+    activeStage = name;
+    animT = 0;
+    const stage = stages[name];
+
+    // Detail
+    stepDetail.querySelector('h4').textContent = stage.detail.title;
+    stepDetail.querySelector('p').textContent = stage.detail.desc;
+
+    // Metrics
+    metricRow.innerHTML = stage.metrics.map(m => `<div class="metric-chip">${m}</div>`).join('');
+
+    // Compare output
+    trainedLabel.textContent = stage.output.label;
+    trainedOutput.textContent = stage.output.text;
+  }
+
+  // ── Tab listeners ──
+  tabs.forEach(tab => {
+    tab.addEventListener('click', function() {
+      tabs.forEach(t => t.classList.remove('active'));
+      this.classList.add('active');
+      updateStage(this.dataset.stage);
+    });
+  });
+
+  // ── Init ──
+  resizeCanvas();
+  window.addEventListener('resize', resizeCanvas);
+  animate();
+
+})();
+</script>
+
+</body>
+</html>

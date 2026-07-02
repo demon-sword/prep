@@ -1,0 +1,136 @@
+- generic [active] [ref=e1]:
+  - banner [ref=e2]:
+    - generic [ref=e3]: foundations
+    - heading "RWKV Model" [level=1] [ref=e4]
+    - paragraph [ref=e5]: The RNN-Transformer hybrid that achieves linear O(n) inference complexity with transformer-quality results — receptance, weight, key, value formulation and how it eliminates quadratic attention.
+  - main [ref=e6]:
+    - generic [ref=e7]:
+      - heading "Theory" [level=2] [ref=e8]
+      - heading "The Quadratic Attention Problem" [level=3] [ref=e9]
+      - paragraph [ref=e10]: Standard transformer self-attention computes a full N×N attention matrix for a sequence of N tokens. This is O(n²) in both compute and memory, which means doubling sequence length quadruples cost. For a sequence of 8,192 tokens with 96 attention heads and d_model=12288 (GPT-4 scale), the attention matrix alone requires ~25 GB of memory per forward pass. This is the central scalability wall of transformers for long contexts.
+      - paragraph [ref=e11]: RWKV (Receptance Weighted Key Value), introduced by Bo Peng in 2023, attacks this problem by replacing the quadratic attention mechanism with a linear recurrence formulation — while retaining the representational power of transformers through clever architecture choices. RWKV models can be trained in parallel like transformers (no sequential dependency during training) but run inference in O(1) memory and O(n) compute — exactly like an RNN.
+      - 'heading "The Four Components: R, W, K, V" [level=3] [ref=e12]'
+      - paragraph [ref=e13]: "RWKV's time-mixing layer computes four quantities at each position t, each a learned linear projection of the current token and the prior hidden state:"
+      - list [ref=e14]:
+        - listitem [ref=e15]:
+          - strong [ref=e16]: "R (Receptance):"
+          - text: a gating signal — determines how much of the past information to "receive". Passed through sigmoid to produce values in (0, 1).
+        - listitem [ref=e17]:
+          - strong [ref=e18]: "W (Weight decay):"
+          - text: a learned per-channel time-decay factor. Controls how fast past contributions fade. Typically a negative learned scalar per channel.
+        - listitem [ref=e19]:
+          - strong [ref=e20]: "K (Key):"
+          - text: analogous to attention keys — what the current position emits to the future.
+        - listitem [ref=e21]:
+          - strong [ref=e22]: "V (Value):"
+          - text: the actual content to be aggregated, weighted by K and decayed by W.
+      - generic [ref=e23]: "wkv_t = (Σ_{i<t} e^{-(t-1-i)·w + k_i} · v_i + e^{u + k_t} · v_t) ───────────────────────────────────────────────────────────── (Σ_{i<t} e^{-(t-1-i)·w + k_i} + e^{u + k_t}) output_t = sigmoid(r_t) ⊙ wkv_t"
+      - paragraph [ref=e24]:
+        - text: Here
+        - code [ref=e25]: u
+        - text: is a learned "first-token bonus" scalar that gives the current token extra weight (preventing complete dilution from the accumulated past).
+        - code [ref=e26]: w
+        - text: "is the per-channel time-decay vector. The key insight: this weighted sum can be computed recursively — O(1) per step at inference."
+      - heading "Parallel Training, Sequential Inference" [level=3] [ref=e27]
+      - paragraph [ref=e28]: This dual nature is RWKV's most important engineering property. During training, you can unroll all N positions simultaneously (like a transformer) because you have the full sequence available — the recurrence can be parallelized across the time dimension using a prefix-sum / "parallel scan" algorithm. At inference, you maintain a running state vector and update it token-by-token in O(1) — exactly like an LSTM, with no KV cache required.
+      - generic [ref=e29]:
+        - strong [ref=e30]: No KV cache.
+        - text: "Transformers must store K and V for every past token — for a 128K context window with 80 layers and d=8192, this is ~160 GB of KV cache (fp16). RWKV's state is a fixed-size vector regardless of sequence length. This makes long-context inference dramatically cheaper: constant memory per sequence, zero cache eviction pressure."
+      - heading "Channel Mixing (FFN Replacement)" [level=3] [ref=e31]
+      - paragraph [ref=e32]: "RWKV also replaces the FFN sublayer with a \"channel mixing\" layer, which similarly uses a learned gating mechanism (receptance) applied to a linear projection of the current and previous token's features. This keeps the full layer consistent in spirit: gated linear transformations everywhere, no quadratic ops."
+      - heading "RWKV Architecture Versions" [level=3] [ref=e33]
+      - paragraph [ref=e34]: "RWKV has gone through multiple architectural revisions:"
+      - list [ref=e35]:
+        - listitem [ref=e36]:
+          - strong [ref=e37]: "RWKV-4:"
+          - text: First widely-used version. Proved competitive with GPT-2/GPT-Neo at similar parameter counts. Introduced the WKV operator.
+        - listitem [ref=e38]:
+          - strong [ref=e39]: "RWKV-5 (Eagle):"
+          - text: Multi-head WKV, improving expressiveness. Introduced "group-norm" style normalization within time-mixing.
+        - listitem [ref=e40]:
+          - strong [ref=e41]: "RWKV-6 (Finch):"
+          - text: Added data-dependent time-decay (W becomes a function of the input, not just a learned constant). Significantly improved in-context learning. Available up to 7B and 14B parameters.
+        - listitem [ref=e42]:
+          - strong [ref=e43]: "RWKV-7 (Goose):"
+          - text: Further architectural improvements, competitive with Mistral 7B on many benchmarks at the same parameter count.
+      - heading "Where RWKV Underperforms Transformers" [level=3] [ref=e44]
+      - paragraph [ref=e45]:
+        - text: "RWKV is not a free lunch. The recurrent formulation introduces an inductive bias that transformers don't have:"
+        - strong [ref=e46]: information bottleneck across long range
+        - text: ". Transformers can attend to any past token with full precision; RWKV's exponential decay means tokens far in the past receive exponentially less weight. This shows up in:"
+      - list [ref=e47]:
+        - listitem [ref=e48]: Tasks requiring exact recall of information from many tokens ago (needle-in-haystack fails more often)
+        - listitem [ref=e49]: In-context learning on long prompts (though RWKV-6/7 improved significantly here)
+        - listitem [ref=e50]: Complex multi-hop reasoning over widely-spaced facts
+      - paragraph [ref=e51]: In practice, for most language modeling tasks under ~4K tokens, RWKV-6/7 performs comparably to transformers of the same parameter count. For streaming inference, edge deployment, or ultra-long sequences where KV cache is prohibitive, RWKV is genuinely superior.
+      - heading "Production Reality" [level=3] [ref=e52]
+      - paragraph [ref=e53]:
+        - text: "RWKV has a growing ecosystem: the"
+        - code [ref=e54]: rwkv.cpp
+        - text: "library enables CPU inference at competitive speeds, and official PyTorch implementations support CUDA kernels for the WKV operator. RWKV-6 models at 7B and 14B parameters are available on HuggingFace. The fixed-state inference makes RWKV ideal for:"
+      - list [ref=e55]:
+        - listitem [ref=e56]:
+          - strong [ref=e57]: "On-device / edge:"
+          - text: No KV cache means low and predictable memory — a 1.6B RWKV model can run on a phone.
+        - listitem [ref=e58]:
+          - strong [ref=e59]: "Streaming applications:"
+          - text: Constant-time token processing enables real-time text streaming without latency spikes.
+        - listitem [ref=e60]:
+          - strong [ref=e61]: "Long-document processing:"
+          - text: 100K+ token context with O(1) memory — transformers need O(n) KV cache.
+        - listitem [ref=e62]:
+          - strong [ref=e63]: "Continuous conversations:"
+          - text: State can be saved/restored — a conversation history can be checkpointed as a fixed-size vector and resumed later without re-processing the full context.
+    - generic [ref=e64]:
+      - 'heading "Visualization: Complexity Scaling — RWKV vs Transformer" [level=2] [ref=e65]'
+      - paragraph [ref=e66]: Compare how compute and memory scale with sequence length for RWKV (linear O(n)) vs transformer attention (quadratic O(n²)). Adjust sequence length and model size to see how costs diverge. Toggle between compute and memory views. The right panel shows the RWKV recurrent state update animating token-by-token.
+      - generic [ref=e67]:
+        - generic [ref=e68]:
+          - generic [ref=e69]: "Max Sequence Length: 4096"
+          - slider [ref=e70] [cursor=pointer]: "4096"
+        - generic [ref=e71]:
+          - generic [ref=e72]: "d_model: 2048"
+          - slider [ref=e73] [cursor=pointer]: "2048"
+        - generic [ref=e74]:
+          - generic [ref=e75]: Metric
+          - generic [ref=e76]:
+            - button "Compute (FLOPs)" [ref=e77] [cursor=pointer]
+            - button "Memory (GB)" [ref=e78] [cursor=pointer]
+        - generic [ref=e79]:
+          - generic [ref=e80]: Animation
+          - button "▮▮ Pause" [ref=e82] [cursor=pointer]
+      - generic [ref=e83]:
+        - heading "Scaling Curve" [level=4] [ref=e85]
+        - heading "RWKV Recurrent State Update" [level=4] [ref=e88]
+    - generic [ref=e92]:
+      - heading "Key Takeaways" [level=2] [ref=e93]
+      - list [ref=e94]:
+        - listitem [ref=e95]:
+          - strong [ref=e96]: "Dual-mode architecture:"
+          - text: RWKV trains as a transformer (parallel across time) but infers as an RNN (O(1) per token). This is not a compromise — it's a deliberate design that gets the best of both worlds for most practical workloads.
+        - listitem [ref=e97]:
+          - strong [ref=e98]: "KV cache elimination is the killer feature:"
+          - text: At 128K context, a 7B transformer needs ~80 GB of KV cache; RWKV needs a fixed ~few MB of state. This changes the economics of long-context inference fundamentally.
+        - listitem [ref=e99]:
+          - strong [ref=e100]: "The information bottleneck is real:"
+          - text: Exponential decay means RWKV can "forget" distant tokens — needle-in-haystack tasks and exact retrieval over very long ranges degrade more than with transformers. RWKV-6's data-dependent W mitigates but doesn't eliminate this.
+        - listitem [ref=e101]:
+          - strong [ref=e102]: "Production readiness:"
+          - text: RWKV-6 at 7B/14B is genuinely competitive on standard NLP benchmarks (MMLU, HellaSwag, ARC). The
+          - code [ref=e103]: rwkv.cpp
+          - text: and Hugging Face integrations are mature enough for production edge deployment today.
+        - listitem [ref=e104]:
+          - strong [ref=e105]: "State serialization unlocks new UX:"
+          - text: You can serialize the RWKV hidden state to disk after processing a long prompt, then restore it later — giving "free" conversation memory without re-processing history. Transformers can't do this without storing the full KV cache.
+        - listitem [ref=e106]:
+          - strong [ref=e107]: "Hybrid future:"
+          - text: The trend is toward hybrid architectures (Mamba, Griffin, Jamba) that interleave linear-recurrence layers with occasional full attention layers — giving O(n) cost for most positions while retaining perfect recall at sparse checkpoints.
+  - navigation [ref=e108]:
+    - link "← Previous Query, Key, Value Attention" [ref=e109] [cursor=pointer]:
+      - /url: 06-qkv-attention.html
+      - generic [ref=e110]: ← Previous
+      - text: Query, Key, Value Attention
+    - link "Next → Chinchilla Scaling Law" [ref=e111] [cursor=pointer]:
+      - /url: 08-chinchilla.html
+      - generic [ref=e112]: Next →
+      - text: Chinchilla Scaling Law

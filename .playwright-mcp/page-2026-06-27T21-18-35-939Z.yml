@@ -1,0 +1,146 @@
+- generic [active] [ref=e1]:
+  - banner [ref=e2]:
+    - generic [ref=e3]: finetuning
+    - 'heading "Fine-Tuning Types: Full, Partial, PEFT" [level=1] [ref=e4]'
+    - paragraph [ref=e5]: Full fine-tuning vs partial (frozen layers) vs Parameter-Efficient Fine-Tuning (PEFT) — tradeoffs in memory, data needs, and serving.
+  - main [ref=e6]:
+    - generic [ref=e7]:
+      - heading "Theory" [level=2] [ref=e8]
+      - paragraph [ref=e9]: When adapting a pretrained LLM to a specific task or domain, you have a spectrum of choices that trade off memory cost, compute, data requirements, and serving complexity. Understanding these tradeoffs at a mechanistic level is what separates a principled approach from guesswork.
+      - heading "Full Fine-Tuning" [level=3] [ref=e10]
+      - paragraph [ref=e11]:
+        - text: Full fine-tuning updates
+        - strong [ref=e12]: all parameters
+        - text: of the model. For a 7B parameter model in fp32, that's ~28 GB just for the weights. During training you also need gradients (~28 GB), optimizer states like Adam's first and second moment estimates (~56 GB), and activations — easily exceeding 128 GB of GPU VRAM for a single node. This forces multi-GPU setups (DDP, FSDP, or DeepSpeed ZeRO-3) for any serious model size.
+      - paragraph [ref=e13]: "The upside: maximum expressiveness. Every parameter can shift, so the model can learn new representations throughout the entire stack — from early token embedding patterns to high-level reasoning circuits in the later layers. Full fine-tuning generally achieves the best downstream performance ceiling, especially for dramatic domain shifts (e.g., pretrained on general web → specialized to medical or legal text with highly different vocabulary distributions)."
+      - paragraph [ref=e14]: "The practical ceiling: a 70B model at bf16 needs ~140 GB for weights alone. At fp32 with Adam optimizer states: ~560 GB. This requires 8× A100 80GB GPUs just for parameter storage. Training cost for full fine-tuning a 70B model on 10B tokens can run $50k–$200k+ on cloud compute."
+      - heading "Partial (Layer) Fine-Tuning" [level=3] [ref=e15]
+      - paragraph [ref=e16]: "Partial fine-tuning freezes a subset of layers and only trains the rest. Common strategies:"
+      - list [ref=e17]:
+        - listitem [ref=e18]:
+          - strong [ref=e19]: Top-layer fine-tuning
+          - text: "— freeze all layers except the last N transformer blocks and the LM head. Intuition: lower layers capture universal syntax and semantics; upper layers encode task-specific reasoning. Updating only upper layers can adapt task behavior cheaply."
+        - listitem [ref=e20]:
+          - strong [ref=e21]: Head fine-tuning
+          - text: — only update the final classification/LM head. Useful for classification tasks where you attach a new linear layer. Memory cost is minimal but expressive power is limited.
+        - listitem [ref=e22]:
+          - strong [ref=e23]: Layer-selective fine-tuning
+          - text: — identify which layers have the most task-relevant gradient signal (e.g., via Fisher information) and update only those. More sophisticated but rarely used in practice due to complexity.
+      - paragraph [ref=e24]: Memory savings are proportional to the fraction of frozen layers. Freezing 90% of a 7B model means you only backpropagate through 700M parameters, reducing gradient memory by ~90%. Optimizer states also shrink proportionally. However, you still need the full forward pass through the frozen layers, so activation memory for those is still incurred (though gradient checkpointing can mitigate this).
+      - paragraph [ref=e25]: "Risk: partial fine-tuning can underfit if the frozen layers encode representations that are misaligned with the target domain. You're betting that the pretrained lower layers generalize."
+      - heading "Parameter-Efficient Fine-Tuning (PEFT)" [level=3] [ref=e26]
+      - paragraph [ref=e27]: "PEFT methods freeze the original model weights entirely and add a small number of new trainable parameters. The core insight: LLMs are massively over-parameterized, and task-specific adaptation lives in a low-dimensional subspace. You don't need to move all parameters — you need to add a small perturbation in the right direction."
+      - heading "LoRA (Low-Rank Adaptation)" [level=3] [ref=e28]
+      - paragraph [ref=e29]:
+        - text: LoRA is the dominant PEFT method in production. For each weight matrix W ∈ ℝ
+        - superscript [ref=e30]: d×k
+        - text: ", instead of learning ΔW (same size as W), LoRA constrains the update to a low-rank decomposition:"
+      - generic [ref=e31]: W' = W₀ + ΔW = W₀ + A·B where A ∈ ℝ^(d×r), B ∈ ℝ^(r×k), rank r ≪ min(d, k)
+      - paragraph [ref=e32]: "Only A and B are trained; W₀ is frozen. For a typical attention projection with d=4096, k=4096, and rank r=16: the original matrix has 16.7M parameters, while A+B has only 131K — a 128× reduction. Total trainable parameters for a LoRA-adapted 7B model at rank 16 might be ~40M, or ~0.57% of the original."
+      - paragraph [ref=e33]:
+        - text: "At inference time, A·B can be merged back into W:"
+        - code [ref=e34]: W_merged = W₀ + A·B
+        - text: ". This means zero inference overhead — the merged adapter is just a different set of weights, not an extra module. This is critical for production: you serve the fine-tuned model at exactly the same latency as the base model."
+      - paragraph [ref=e35]:
+        - text: The
+        - strong [ref=e36]: alpha/rank ratio
+        - text: "controls effective learning rate: the LoRA update is scaled by α/r before being added, so increasing α with fixed r amplifies the update. Typical values: r=8–64, α=r or 2r."
+      - paragraph [ref=e37]:
+        - strong [ref=e38]: QLoRA
+        - text: (Dettmers et al., 2023) extends LoRA by quantizing the frozen base model to 4-bit NF4 (Normal Float 4) format while keeping the LoRA adapters in bf16. This allows fine-tuning a 65B model on a single 48GB GPU — something previously impossible. The quantization introduces small accuracy loss (~1–2% on benchmarks) but enables consumer-hardware fine-tuning.
+      - heading "Adapter-Based Methods" [level=3] [ref=e39]
+      - paragraph [ref=e40]: "Earlier PEFT approaches insert small feed-forward \"adapter\" modules between transformer layers. The adapter has a down-projection to a bottleneck dimension r, a nonlinearity, and an up-projection back to the original dimension — with a residual skip connection. Adapter-tuning was introduced by Houlsby et al. (2019) and was popular before LoRA. Drawback: adapters add latency at inference since they can't be merged into the base weights (unlike LoRA A·B)."
+      - heading "Soft Prompt / Prefix Tuning" [level=3] [ref=e41]
+      - paragraph [ref=e42]: "Prefix tuning (Li & Liang, 2021) prepends a sequence of learnable \"virtual tokens\" (soft prompt vectors) to the input at every layer. Only these prefix vectors are trained; the LLM weights are frozen. The prefix acts like a task-specific key-value cache that conditions all attention computations downstream. Memory cost is minimal (prefix length × hidden size × num layers). Drawback: soft prompts don't generalize as well as LoRA across tasks, and the virtual tokens occupy context length."
+      - paragraph [ref=e43]:
+        - strong [ref=e44]: Prompt tuning
+        - text: is a simpler variant that only adds soft tokens at the input embedding layer (not every layer). It works reasonably well for very large models (≥11B) but underperforms LoRA on smaller models.
+      - heading "Choosing the Right Method" [level=3] [ref=e45]
+      - paragraph [ref=e46]: "The practical decision tree:"
+      - list [ref=e47]:
+        - listitem [ref=e48]:
+          - strong [ref=e49]: Extreme domain shift + lots of data + budget
+          - text: → Full fine-tuning (medical, legal, code from scratch)
+        - listitem [ref=e50]:
+          - strong [ref=e51]: Moderate domain shift + multi-task serving
+          - text: → LoRA (adapters can be swapped per request, enabling hot-swapping in vLLM)
+        - listitem [ref=e52]:
+          - strong [ref=e53]: Resource-constrained (single GPU, <48GB)
+          - text: → QLoRA
+        - listitem [ref=e54]:
+          - strong [ref=e55]: Classification/structured output head only
+          - text: → Head fine-tuning
+        - listitem [ref=e56]:
+          - strong [ref=e57]: Serving multiple domain variants of same base
+          - text: → LoRA (S-LoRA in vLLM can serve 1000+ LoRA adapters from one base model using unified paging)
+      - heading "Production Reality" [level=3] [ref=e58]
+      - paragraph [ref=e59]:
+        - text: "LoRA has become the default choice for most production fine-tuning for two reasons: (1) it enables adapter hot-swapping in inference servers without reloading the entire model, and (2) QLoRA makes it accessible on consumer/research hardware. Tools like"
+        - strong [ref=e60]: Hugging Face PEFT
+        - text: ","
+        - strong [ref=e61]: Axolotl
+        - text: ", and"
+        - strong [ref=e62]: LLaMA-Factory
+        - text: make LoRA fine-tuning a commodity. The key engineering question is no longer "which method" but "which rank and alpha" — and the answer increasingly comes from ablation on a held-out eval set rather than heuristics. A rank of 16–64 covers 95% of use cases; ranks above 128 rarely help and increase memory cost.
+    - generic [ref=e63]:
+      - heading "Visualization" [level=2] [ref=e64]
+      - generic [ref=e65]:
+        - generic [ref=e66]: Model Layer Freeze Diagram
+        - generic [ref=e67]: Toggle between fine-tuning modes to see which layers are trainable (🔥) vs frozen (❄️). Hover over a layer to see its role. Stats update in real time.
+        - generic [ref=e68]:
+          - button "Full Fine-Tuning" [ref=e69] [cursor=pointer]
+          - button "Partial (Top-3 Layers)" [ref=e70] [cursor=pointer]
+          - button "LoRA" [ref=e71] [cursor=pointer]
+          - button "QLoRA" [ref=e72] [cursor=pointer]
+          - button "Adapter" [ref=e73] [cursor=pointer]
+          - button "Head Only" [ref=e74] [cursor=pointer]
+        - generic [ref=e77]: Hover over a layer to see details about its role and whether it's trainable in the current mode.
+        - generic [ref=e78]:
+          - generic [ref=e79]: Trainable (updates during backprop)
+          - generic [ref=e81]: Frozen (no gradient)
+          - generic [ref=e83]: LoRA Adapter (A·B matrices)
+          - generic [ref=e85]: 4-bit Quantized (NF4)
+          - generic [ref=e87]: Bottleneck Adapter Module
+        - generic [ref=e89]:
+          - generic [ref=e90]:
+            - generic [ref=e91]: Trainable Params
+            - generic [ref=e92]: 7.0B
+          - generic [ref=e93]:
+            - generic [ref=e94]: "% of Total"
+            - generic [ref=e95]: 100%
+          - generic [ref=e96]:
+            - generic [ref=e97]: GPU Memory (est.)
+            - generic [ref=e98]: 112 GB
+          - generic [ref=e99]:
+            - generic [ref=e100]: Inference Overhead
+            - generic [ref=e101]: None
+    - generic [ref=e102]:
+      - heading "Key Takeaways" [level=2] [ref=e103]
+      - list [ref=e104]:
+        - listitem [ref=e105]:
+          - strong [ref=e106]: LoRA is mergeable, adapters aren't.
+          - text: LoRA's A·B update can be folded into W₀ at inference time, giving zero latency overhead. Adapter bottleneck modules sit in the forward path and add ~3–8% latency per adapter — a real cost at scale.
+        - listitem [ref=e107]:
+          - strong [ref=e108]: QLoRA enables single-GPU fine-tuning of 65B+ models
+          - text: by quantizing frozen weights to 4-bit NF4. The accuracy loss (~1–2% on benchmarks) is acceptable for most domain adaptation tasks, making previously cloud-only workloads accessible on a single 48GB GPU.
+        - listitem [ref=e109]:
+          - strong [ref=e110]: LoRA rank is not a free hyperparameter.
+          - text: "Rank controls the intrinsic dimension of adaptation. Too low (r=1–2): underfits complex tasks. Too high (r=256+): wastes parameters without gain, can overfit. r=16–64 is the sweet spot for most tasks. Run a quick ablation on your eval set."
+        - listitem [ref=e111]:
+          - strong [ref=e112]: S-LoRA (vLLM) can serve 1000+ adapters from one base model
+          - text: using unified paging. This means you can fine-tune a different adapter per customer and serve all of them from a single GPU cluster — a transformative serving architecture for multi-tenant AI products.
+        - listitem [ref=e113]:
+          - strong [ref=e114]: Full fine-tuning's memory cost is 4× the model size for Adam in fp32
+          - text: (weights + gradients + 2 Adam moments). A 7B model needs ~112 GB; a 70B model needs ~1.1 TB. Gradient checkpointing trades compute for activation memory (up to 10× reduction) but doesn't help with optimizer states.
+        - listitem [ref=e115]:
+          - strong [ref=e116]: Partial fine-tuning's frozen layers still consume forward-pass memory
+          - text: — activations accumulate through the full network. "Freezing" only saves gradient and optimizer state memory, not activation memory, unless paired with gradient checkpointing and layer-wise memory release tricks.
+  - navigation [ref=e117]:
+    - 'link "← Previous Fine-Tuning: When, Why & Decision Framework" [ref=e118] [cursor=pointer]':
+      - /url: 14-finetuning-overview.html
+      - generic [ref=e119]: ← Previous
+      - generic [ref=e120]: "Fine-Tuning: When, Why & Decision Framework"
+    - link "Next → LoRA — Low-Rank Adaptation" [ref=e121] [cursor=pointer]:
+      - /url: 16-lora.html
+      - generic [ref=e122]: Next →
+      - generic [ref=e123]: LoRA — Low-Rank Adaptation

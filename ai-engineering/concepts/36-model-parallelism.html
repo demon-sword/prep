@@ -1,0 +1,879 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1.0"/>
+  <title>Model &amp; Tensor Parallelism — AI Engineering Concepts</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com"/>
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet"/>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg:        #0d0f17;
+      --surface:   #141720;
+      --card:      #1a1e2e;
+      --border:    #252a3d;
+      --accent:    #00d4ff;
+      --purple:    #7c3aed;
+      --green:     #00ff88;
+      --yellow:    #ffd700;
+      --red:       #ff4757;
+      --orange:    #ff9500;
+      --text:      #e2e8f0;
+      --text-dim:  #8892a4;
+      --mono:      'JetBrains Mono', monospace;
+      --sans:      'Inter', system-ui, sans-serif;
+    }
+
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: var(--sans);
+      line-height: 1.7;
+      min-height: 100vh;
+    }
+
+    /* ── HEADER ── */
+    header {
+      background: var(--surface);
+      border-bottom: 1px solid var(--border);
+      padding: 2rem 2rem 1.5rem;
+      max-width: 1100px;
+      margin: 0 auto;
+    }
+    .group-badge {
+      display: inline-block;
+      background: rgba(0,212,255,.12);
+      color: var(--accent);
+      border: 1px solid rgba(0,212,255,.3);
+      font-family: var(--mono);
+      font-size: .72rem;
+      padding: .25rem .65rem;
+      border-radius: 4px;
+      letter-spacing: .08em;
+      text-transform: uppercase;
+      margin-bottom: .9rem;
+    }
+    header h1 {
+      font-size: clamp(1.6rem, 3vw, 2.2rem);
+      font-weight: 700;
+      color: var(--accent);
+      letter-spacing: -.01em;
+      margin-bottom: .5rem;
+    }
+    header p {
+      color: var(--text-dim);
+      font-size: 1.05rem;
+      max-width: 70ch;
+    }
+
+    /* ── MAIN LAYOUT ── */
+    main {
+      max-width: 1100px;
+      margin: 0 auto;
+      padding: 0 2rem 4rem;
+    }
+
+    section {
+      margin-top: 3rem;
+    }
+
+    section > h2 {
+      font-size: 1.35rem;
+      font-weight: 700;
+      color: var(--accent);
+      border-bottom: 1px solid var(--border);
+      padding-bottom: .6rem;
+      margin-bottom: 1.4rem;
+    }
+
+    h3 {
+      font-size: 1.05rem;
+      font-weight: 600;
+      color: var(--yellow);
+      margin: 1.6rem 0 .6rem;
+    }
+
+    p { color: var(--text); margin-bottom: .9rem; }
+    p:last-child { margin-bottom: 0; }
+
+    ul, ol {
+      padding-left: 1.4rem;
+      margin-bottom: .9rem;
+    }
+    li { margin-bottom: .45rem; }
+
+    code {
+      font-family: var(--mono);
+      font-size: .88em;
+      background: rgba(255,255,255,.06);
+      padding: .1em .35em;
+      border-radius: 3px;
+      color: var(--green);
+    }
+
+    pre {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 1.1rem 1.3rem;
+      overflow-x: auto;
+      font-family: var(--mono);
+      font-size: .84rem;
+      line-height: 1.6;
+      color: var(--text);
+      margin: 1rem 0;
+    }
+
+    .callout {
+      background: var(--card);
+      border-left: 3px solid var(--accent);
+      border-radius: 0 8px 8px 0;
+      padding: 1rem 1.2rem;
+      margin: 1.2rem 0;
+      font-size: .95rem;
+    }
+    .callout.warn  { border-color: var(--yellow); }
+    .callout.note  { border-color: var(--purple); }
+    .callout.good  { border-color: var(--green);  }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: .9rem;
+      margin: 1rem 0;
+    }
+    th {
+      background: var(--card);
+      color: var(--accent);
+      font-weight: 600;
+      text-align: left;
+      padding: .6rem .8rem;
+      border-bottom: 1px solid var(--border);
+    }
+    td {
+      padding: .55rem .8rem;
+      border-bottom: 1px solid rgba(37,42,61,.6);
+      color: var(--text);
+    }
+    tr:hover td { background: rgba(255,255,255,.03); }
+
+    /* ── VISUALIZATION ── */
+    #visualization .viz-desc {
+      color: var(--text-dim);
+      font-size: .93rem;
+      margin-bottom: 1.4rem;
+    }
+
+    .viz-controls {
+      display: flex;
+      flex-wrap: wrap;
+      gap: .6rem;
+      margin-bottom: 1.4rem;
+    }
+
+    .strategy-btn {
+      font-family: var(--mono);
+      font-size: .82rem;
+      padding: .45rem 1rem;
+      border-radius: 6px;
+      border: 1.5px solid var(--border);
+      background: var(--card);
+      color: var(--text-dim);
+      cursor: pointer;
+      transition: all .2s;
+    }
+    .strategy-btn:hover { border-color: var(--accent); color: var(--text); }
+    .strategy-btn.active { border-color: var(--accent); background: rgba(0,212,255,.12); color: var(--accent); }
+
+    .gpu-count-row {
+      display: flex;
+      align-items: center;
+      gap: .9rem;
+      margin-bottom: 1.2rem;
+    }
+    .gpu-count-row label {
+      font-size: .88rem;
+      color: var(--text-dim);
+      white-space: nowrap;
+    }
+    .gpu-count-row input[type=range] {
+      accent-color: var(--accent);
+      cursor: pointer;
+    }
+    .gpu-count-row .val {
+      font-family: var(--mono);
+      color: var(--accent);
+      font-size: .9rem;
+      min-width: 2ch;
+    }
+
+    #viz-canvas {
+      display: block;
+      width: 100%;
+      border-radius: 10px;
+      border: 1px solid var(--border);
+      background: var(--card);
+    }
+
+    .legend-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 1rem;
+      margin-top: 1rem;
+    }
+    .legend-item {
+      display: flex;
+      align-items: center;
+      gap: .45rem;
+      font-size: .83rem;
+      color: var(--text-dim);
+    }
+    .legend-dot {
+      width: 12px;
+      height: 12px;
+      border-radius: 3px;
+      flex-shrink: 0;
+    }
+
+    /* ── TAKEAWAYS ── */
+    #takeaways ul {
+      list-style: none;
+      padding: 0;
+    }
+    #takeaways li {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-left: 3px solid var(--accent);
+      border-radius: 0 8px 8px 0;
+      padding: .85rem 1.1rem;
+      margin-bottom: .75rem;
+      font-size: .95rem;
+    }
+
+    /* ── NAV ── */
+    .concept-nav {
+      max-width: 1100px;
+      margin: 3rem auto 0;
+      padding: 1.2rem 2rem;
+      border-top: 1px solid var(--border);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 1rem;
+    }
+    .concept-nav a {
+      display: inline-flex;
+      align-items: center;
+      gap: .5rem;
+      color: var(--accent);
+      text-decoration: none;
+      font-size: .9rem;
+      font-weight: 500;
+      padding: .5rem .9rem;
+      border: 1px solid rgba(0,212,255,.25);
+      border-radius: 6px;
+      transition: all .2s;
+    }
+    .concept-nav a:hover { background: rgba(0,212,255,.08); border-color: var(--accent); }
+    .concept-nav a.disabled { opacity: .35; pointer-events: none; }
+    .nav-label { font-size: .75rem; color: var(--text-dim); margin-bottom: .15rem; }
+    .nav-block { display: flex; flex-direction: column; }
+
+    @media (max-width: 640px) {
+      main, header, .concept-nav { padding-left: 1rem; padding-right: 1rem; }
+      header h1 { font-size: 1.5rem; }
+    }
+  </style>
+</head>
+<body>
+
+<header>
+  <div class="group-badge">inference</div>
+  <h1>Model &amp; Tensor Parallelism</h1>
+  <p>How to split a model that doesn't fit on one GPU — tensor parallelism (intra-layer), pipeline parallelism (inter-layer), context &amp; sequence parallelism, and how to pick each strategy for training vs inference.</p>
+</header>
+
+<main>
+
+<!-- ═══════════════════════════════════════════════════════════════════
+     THEORY
+═══════════════════════════════════════════════════════════════════ -->
+<section id="theory">
+  <h2>Theory</h2>
+
+  <p>
+    Modern frontier LLMs are simply too large to fit on a single GPU. GPT-4's rumored ~1.8T parameters, Llama-3-70B's 70B parameters at float16 (~140 GB), or even a 7B model with optimizer states during training (~100 GB) all exceed the VRAM of a single A100 (80 GB) or H100 (80 GB SXM). Model parallelism is the collection of strategies that spread computation across multiple GPUs or nodes so training and inference remain feasible.
+  </p>
+  <p>
+    There are four distinct strategies, each operating at a different granularity. In practice, production systems (<code>Megatron-LM</code>, <code>vLLM</code>, <code>TensorRT-LLM</code>, <code>DeepSpeed</code>) combine all of them simultaneously — this is called <strong>3D parallelism</strong> (tensor × pipeline × data).
+  </p>
+
+  <h3>1. Tensor Parallelism (TP) — Intra-Layer Splitting</h3>
+  <p>
+    Tensor parallelism splits the weight matrices of individual layers across GPUs. The canonical example is the multi-layer perceptron (MLP) sub-block of a transformer. An FFN typically computes:
+  </p>
+  <pre>Y = GELU(X · W₁ + b₁) · W₂ + b₂</pre>
+  <p>
+    With column parallelism on W₁ (split along output dim) and row parallelism on W₂ (split along input dim), each GPU holds a shard. Each device processes its shard independently and a single <code>AllReduce</code> collective synchronises partial sums at the end. For attention, the Q/K/V heads are partitioned: GPU 0 handles heads 0…h/2, GPU 1 handles h/2…h. This requires two <code>AllReduce</code> calls per transformer block.
+  </p>
+  <div class="callout">
+    <strong>Communication pattern:</strong> TP requires fast intra-node communication (NVLink, 600 GB/s+). Crossing PCIe or InfiniBand makes TP prohibitively slow due to per-block all-reduces. <strong>TP degree is typically limited to the number of GPUs on one node (8).</strong>
+  </div>
+  <p>
+    Megatron-LM introduced this approach in 2019. With TP=8 on an 8-GPU node, each GPU holds 1/8 of every weight matrix. A 70B model's 70 GB shrinks to ~9 GB per GPU — fitting handily in an H100's 80 GB. However, activation memory still scales with the full context × batch, so TP alone isn't enough for huge contexts.
+  </p>
+
+  <h3>2. Pipeline Parallelism (PP) — Inter-Layer Splitting</h3>
+  <p>
+    Pipeline parallelism assigns different <em>layers</em> to different GPUs. GPU 0 runs layers 0–7, GPU 1 runs layers 8–15, etc. Communication is a simple point-to-point send of the activation tensor between stage boundaries — far cheaper bandwidth than all-reduce. This makes PP suitable for cross-node communication over InfiniBand (200–400 Gb/s).
+  </p>
+  <p>
+    The naive problem: GPU 1 sits idle while GPU 0 processes the first micro-batch. This is the <strong>pipeline bubble</strong>. Its fraction is:
+  </p>
+  <pre>bubble fraction = (p - 1) / (m + p - 1)</pre>
+  <p>
+    where <em>p</em> = pipeline stages, <em>m</em> = micro-batches. Sending many micro-batches (large <em>m</em>) amortises the bubble. GPipe uses <em>flush</em> scheduling; PipeDream and Megatron-LM use <strong>1F1B</strong> (one-forward-one-backward) interleaving to keep all stages busy and maintain bounded activation memory.
+  </p>
+  <div class="callout warn">
+    <strong>Gotcha:</strong> Gradient accumulation is mandatory with PP. Each stage must hold activations for all in-flight micro-batches — activation memory grows as O(p × micro-batch activations). Gradient checkpointing (recomputation) is often necessary on each stage.
+  </div>
+
+  <h3>3. Data Parallelism (DP) — Replicated Model, Split Batch</h3>
+  <p>
+    Data parallelism is the oldest strategy: each GPU holds a full model copy and processes different data shards. Gradients are averaged with an <code>AllReduce</code> after each backward pass. DP scales training throughput linearly with GPU count but requires each GPU to hold the full model — so it does <em>not</em> solve the memory problem.
+  </p>
+  <p>
+    <strong>ZeRO (Zero Redundancy Optimizer)</strong> from DeepSpeed fixes this by partitioning optimizer states (ZeRO-1), gradients (ZeRO-2), and parameters (ZeRO-3) across DP ranks. ZeRO-3 effectively distributes the entire model across GPUs while still looking like data parallelism from the code's perspective. At ZeRO-3 with 8 GPUs, each GPU only stores 1/8 of parameters, gradients, and optimizer states.
+  </p>
+
+  <h3>4. Context / Sequence Parallelism — Splitting Along the Sequence Dimension</h3>
+  <p>
+    For very long contexts (128K+), attention memory itself becomes the bottleneck: attention scores are O(n²) in sequence length. <strong>Sequence parallelism</strong> (Megatron-LM) splits the sequence dimension of LayerNorm and dropout outputs across TP ranks, complementing tensor parallelism. <strong>Ring Attention</strong> (Liu et al., 2023) shards the sequence across hosts in a ring topology so each host processes its local chunk with a causal mask, passing KV chunks around the ring — enabling essentially unlimited context by paying bandwidth.
+  </p>
+  <p>
+    <strong>Context Parallelism</strong> (used in Llama 3's training) further distributes prefill computation across devices. This is distinct from tensor parallelism: it slices the batch × sequence dimension rather than the hidden dimension.
+  </p>
+
+  <h3>3D Parallelism: Combining All Strategies</h3>
+  <p>
+    Production systems nest all strategies. A typical Llama-3 405B training run uses:
+  </p>
+  <ul>
+    <li><strong>TP = 8</strong> — within each node (NVLink)</li>
+    <li><strong>PP = 16</strong> — across nodes (InfiniBand), 16 pipeline stages</li>
+    <li><strong>DP = N</strong> — replicating the (TP × PP) unit across N data-parallel replicas</li>
+    <li>Total GPU count = TP × PP × DP</li>
+  </ul>
+  <div class="callout good">
+    <strong>Megatron-LM defaults</strong> for 405B: TP=8, PP=16, with 8-GPU nodes. You need at least 8 × 16 = 128 GPUs just for one DP replica. With DP=8, that's 1,024 H100s. This matches Meta's reported training configuration.
+  </div>
+
+  <h3>Inference vs Training Differences</h3>
+  <p>
+    At inference time, batch sizes are much smaller (often 1–32), so the pipeline bubble is less amortised. vLLM uses TP across GPUs on a single node (e.g., TP=4 for a 70B model across 4×A100s) and often avoids PP because PP adds latency per layer boundary. TensorRT-LLM supports both but recommends TP-first for latency-sensitive deployments.
+  </p>
+  <p>
+    For pure inference at massive scale, <strong>disaggregated prefill-decode</strong> (Splitwise, Mooncake) is an emerging approach: dedicate separate GPU pools to prefill (compute-bound) and decode (memory-bandwidth-bound) phases, sending KV caches between them. This avoids mixing the two workloads on the same hardware, improving utilisation.
+  </p>
+
+  <h3>Communication Cost Analysis</h3>
+  <table>
+    <thead>
+      <tr><th>Strategy</th><th>Communication Op</th><th>Volume per Layer</th><th>Bandwidth Required</th></tr>
+    </thead>
+    <tbody>
+      <tr><td>Tensor Parallelism</td><td>AllReduce ×2/block</td><td>2 × batch × seq × hidden</td><td>NVLink (600 GB/s)</td></tr>
+      <tr><td>Pipeline Parallelism</td><td>P2P at stage boundary</td><td>batch × seq × hidden</td><td>InfiniBand (200 Gb/s)</td></tr>
+      <tr><td>Data Parallelism (ZeRO)</td><td>AllReduce / AllGather</td><td>Gradient tensor (~param bytes)</td><td>InfiniBand or NVLink</td></tr>
+      <tr><td>Sequence Parallelism</td><td>AllGather + ReduceScatter</td><td>2 × batch × seq × hidden</td><td>NVLink</td></tr>
+    </tbody>
+  </table>
+
+  <h3>Practical Selection Guide</h3>
+  <ul>
+    <li><strong>Single node, fits after TP=8:</strong> use TP=8, no PP needed.</li>
+    <li><strong>Multi-node training:</strong> TP within node, PP across nodes, DP × ZeRO-3 on top.</li>
+    <li><strong>Long contexts (&gt;32K):</strong> add sequence or context parallelism.</li>
+    <li><strong>Low-latency inference (batch=1):</strong> prefer TP over PP; PP adds latency proportional to pipeline depth × activation transfer time.</li>
+    <li><strong>High-throughput inference:</strong> PP can be beneficial if stages are well-balanced; vLLM's continuous batching helps keep all stages full.</li>
+  </ul>
+</section>
+
+<!-- ═══════════════════════════════════════════════════════════════════
+     VISUALIZATION
+═══════════════════════════════════════════════════════════════════ -->
+<section id="visualization">
+  <h2>Interactive Visualization</h2>
+  <p class="viz-desc">
+    Explore how model layers are split across GPUs in four different parallelism strategies. Toggle strategy buttons and adjust GPU count to see the partitioning change. Each coloured block is a weight shard; arrows show communication patterns.
+  </p>
+
+  <div class="viz-controls">
+    <button class="strategy-btn active" data-mode="tensor">Tensor Parallelism</button>
+    <button class="strategy-btn" data-mode="pipeline">Pipeline Parallelism</button>
+    <button class="strategy-btn" data-mode="data">Data Parallelism (ZeRO)</button>
+    <button class="strategy-btn" data-mode="combined">3D Combined</button>
+  </div>
+
+  <div class="gpu-count-row">
+    <label>GPU count:</label>
+    <input type="range" id="gpu-slider" min="2" max="8" step="2" value="4"/>
+    <span class="val" id="gpu-val">4</span>
+    <label style="margin-left:1rem;">Layers:</label>
+    <input type="range" id="layer-slider" min="4" max="16" step="4" value="8"/>
+    <span class="val" id="layer-val">8</span>
+  </div>
+
+  <canvas id="viz-canvas" height="460"></canvas>
+
+  <div class="legend-row" id="legend-row"></div>
+</section>
+
+<!-- ═══════════════════════════════════════════════════════════════════
+     TAKEAWAYS
+═══════════════════════════════════════════════════════════════════ -->
+<section id="takeaways">
+  <h2>Key Takeaways</h2>
+  <ul>
+    <li><strong>TP degree is bounded by NVLink bandwidth.</strong> TP=8 is the practical ceiling on a single DGX H100 node (all-reduce over NVLink at 900 GB/s bidirectional). Going TP=16 across nodes kills throughput — every transformer block pays two cross-node all-reduces.</li>
+    <li><strong>Pipeline bubble tax is real and scales with stages.</strong> With PP=16 and only 1 micro-batch, 15/16 ≈ 94% of each stage is idle. Use micro-batch counts ≥ 4×PP to keep bubble below 20%. Megatron's 1F1B schedule halves peak activation memory vs GPipe at the same throughput.</li>
+    <li><strong>ZeRO-3 effectively shards the model like TP but with data-parallel semantics.</strong> No code changes to the model graph are required. The trade-off: ZeRO-3 doubles all-gather communication vs ZeRO-1. In practice, ZeRO-2 is the sweet spot — it shards optimizer states + gradients (the 12-byte-per-param overhead) but keeps parameters replicated, avoiding the all-gather on every forward pass.</li>
+    <li><strong>For inference, TP dominates; PP adds latency proportional to pipeline depth × inter-stage bandwidth.</strong> At 200 Gb/s InfiniBand (25 GB/s), transferring a 4096-token × 8192-hidden activation tensor (≈256 MB at fp16) takes ~10 ms per stage boundary — a 16-stage pipeline adds 160 ms to TTFT. vLLM uses TP=4 for 70B models instead.</li>
+    <li><strong>Ring Attention + context parallelism enables 1M+ token contexts</strong> at the cost of O(n) all-to-all communication across the ring. Used in Llama 3's training (up to 128K context), Gemini 1.5 (1M context claims to use a similar approach). Bandwidth-efficient but requires custom CUDA kernels to pipeline communication with computation.</li>
+    <li><strong>The 3D parallelism grid</strong> (TP × PP × DP) must divide evenly into total GPU count. Misconfigurations waste GPUs or cause OOM. Always verify: <code>assert total_gpus == tp * pp * dp</code>. Megatron-LM enforces this at launch; DeepSpeed does not, leading to silent under-utilisation bugs in naive configs.</li>
+  </ul>
+</section>
+
+</main>
+
+<nav class="concept-nav">
+  <div class="nav-block">
+    <span class="nav-label">← Previous</span>
+    <a href="35-speculative-decoding.html">35 — Speculative Decoding</a>
+  </div>
+  <div class="nav-block" style="text-align:right">
+    <span class="nav-label">Next →</span>
+    <a class="disabled" href="#">(End of Series)</a>
+  </div>
+</nav>
+
+<script>
+(function () {
+  'use strict';
+
+  // ── palette ────────────────────────────────────────────────────────
+  const C = {
+    bg:     '#0d0f17',
+    card:   '#1a1e2e',
+    border: '#252a3d',
+    accent: '#00d4ff',
+    purple: '#7c3aed',
+    green:  '#00ff88',
+    yellow: '#ffd700',
+    red:    '#ff4757',
+    orange: '#ff9500',
+    text:   '#e2e8f0',
+    dim:    '#8892a4',
+  };
+
+  // GPU colour palette — one colour per GPU
+  const GPU_COLORS = ['#00d4ff','#7c3aed','#00ff88','#ffd700','#ff4757','#ff9500','#e879f9','#38bdf8'];
+
+  // ── state ──────────────────────────────────────────────────────────
+  let mode   = 'tensor';
+  let numGPU = 4;
+  let numLayers = 8;
+
+  // ── canvas setup ───────────────────────────────────────────────────
+  const canvas = document.getElementById('viz-canvas');
+  const ctx    = canvas.getContext('2d');
+
+  function resize () {
+    const w = canvas.parentElement.clientWidth;
+    canvas.width  = w;
+    canvas.height = 460;
+    draw();
+  }
+
+  // ── controls ───────────────────────────────────────────────────────
+  document.querySelectorAll('.strategy-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      document.querySelectorAll('.strategy-btn').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      mode = btn.dataset.mode;
+      draw();
+    });
+  });
+
+  const gpuSlider   = document.getElementById('gpu-slider');
+  const gpuVal      = document.getElementById('gpu-val');
+  const layerSlider = document.getElementById('layer-slider');
+  const layerVal    = document.getElementById('layer-val');
+
+  gpuSlider.addEventListener('input', () => {
+    numGPU = +gpuSlider.value;
+    gpuVal.textContent = numGPU;
+    draw();
+  });
+  layerSlider.addEventListener('input', () => {
+    numLayers = +layerSlider.value;
+    layerVal.textContent = numLayers;
+    draw();
+  });
+
+  // ── helpers ─────────────────────────────────────────────────────────
+  function roundRect (x, y, w, h, r, fill, stroke) {
+    ctx.beginPath();
+    ctx.roundRect(x, y, w, h, r);
+    if (fill)   { ctx.fillStyle = fill;   ctx.fill(); }
+    if (stroke) { ctx.strokeStyle = stroke; ctx.lineWidth = 1.5; ctx.stroke(); }
+  }
+
+  function label (txt, x, y, color, size, align) {
+    ctx.fillStyle  = color || C.text;
+    ctx.font       = `${size || 12}px 'JetBrains Mono', monospace`;
+    ctx.textAlign  = align || 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(txt, x, y);
+  }
+
+  function arrow (x1, y1, x2, y2, color, dashed) {
+    ctx.save();
+    ctx.strokeStyle = color || C.accent;
+    ctx.lineWidth   = 1.5;
+    if (dashed) ctx.setLineDash([4, 4]);
+    ctx.beginPath();
+    ctx.moveTo(x1, y1);
+    ctx.lineTo(x2, y2);
+    ctx.stroke();
+    // arrowhead
+    const angle = Math.atan2(y2 - y1, x2 - x1);
+    ctx.setLineDash([]);
+    ctx.beginPath();
+    ctx.moveTo(x2, y2);
+    ctx.lineTo(x2 - 9 * Math.cos(angle - .3), y2 - 9 * Math.sin(angle - .3));
+    ctx.lineTo(x2 - 9 * Math.cos(angle + .3), y2 - 9 * Math.sin(angle + .3));
+    ctx.closePath();
+    ctx.fillStyle = color || C.accent;
+    ctx.fill();
+    ctx.restore();
+  }
+
+  // ── DRAW ─────────────────────────────────────────────────────────
+  function draw () {
+    const W = canvas.width;
+    const H = canvas.height;
+    ctx.clearRect(0, 0, W, H);
+
+    // background
+    roundRect(0, 0, W, H, 10, C.card);
+
+    switch (mode) {
+      case 'tensor':   drawTensor(W, H);   break;
+      case 'pipeline': drawPipeline(W, H); break;
+      case 'data':     drawData(W, H);     break;
+      case 'combined': drawCombined(W, H); break;
+    }
+
+    buildLegend();
+  }
+
+  // ─── TENSOR PARALLELISM ─────────────────────────────────────────────
+  function drawTensor (W, H) {
+    const marginX = 48;
+    const topY    = 60;
+    const gpuH    = 54;
+    const gpuGap  = 14;
+    const layerW  = Math.min(52, (W - marginX * 2 - 20) / numLayers - 4);
+    const totalLayerW = numLayers * (layerW + 4);
+    const startX  = (W - totalLayerW) / 2;
+
+    // title
+    label('Tensor Parallelism — Each layer split across all GPUs (column-sharding)', W/2, 22, C.accent, 12, 'center');
+    label('Communication: AllReduce per block (requires NVLink)', W/2, 40, C.dim, 11, 'center');
+
+    for (let g = 0; g < numGPU; g++) {
+      const y = topY + g * (gpuH + gpuGap);
+      const col = GPU_COLORS[g % GPU_COLORS.length];
+
+      // GPU label box
+      roundRect(marginX - 40, y + 4, 36, gpuH - 8, 5, 'rgba(255,255,255,.04)', col + '55');
+      label(`GPU${g}`, marginX - 22, y + gpuH/2, col, 10, 'center');
+
+      // layer shards
+      for (let l = 0; l < numLayers; l++) {
+        const x = startX + l * (layerW + 4);
+        const isAttn = l % 2 === 0;
+        const shadeBase = isAttn ? col : adjustAlpha(col, .55);
+        roundRect(x, y + 4, layerW, gpuH - 8, 4, shadeBase + '33', col + '88');
+
+        if (layerW > 30) {
+          const ltype = isAttn ? 'ATT' : 'FFN';
+          label(`${ltype}\n1/${numGPU}`, x + layerW/2, y + gpuH/2, col, 9, 'center');
+        }
+      }
+
+      // AllReduce arrow (rightmost)
+      const arrowX = startX + totalLayerW + 14;
+      if (g < numGPU - 1) {
+        const nextY = topY + (g + 1) * (gpuH + gpuGap) + gpuH/2;
+        arrow(arrowX, y + gpuH/2, arrowX, nextY, C.accent + 'aa', true);
+      }
+    }
+
+    // AllReduce label
+    const arrowX2 = startX + totalLayerW + 14;
+    label('AllReduce', arrowX2 + 26, topY + (numGPU * (gpuH + gpuGap)) / 2, C.accent, 10, 'left');
+
+    // layer type legend along top
+    const legendY = topY - 16;
+    if (numLayers >= 4) {
+      label('ATT = Attention', startX + 6, legendY, C.dim, 10, 'left');
+      label('FFN = Feed-Forward', startX + 110, legendY, C.dim, 10, 'left');
+    }
+  }
+
+  // ─── PIPELINE PARALLELISM ───────────────────────────────────────────
+  function drawPipeline (W, H) {
+    const marginX = 48;
+    const topY    = 60;
+    const stageW  = Math.floor((W - marginX * 2 - (numGPU - 1) * 10) / numGPU);
+    const stageH  = 200;
+    const layersPerStage = Math.ceil(numLayers / numGPU);
+
+    label('Pipeline Parallelism — Each GPU runs a subset of layers (stages)', W/2, 22, C.accent, 12, 'center');
+    label('Communication: point-to-point activation tensor at stage boundaries', W/2, 40, C.dim, 11, 'center');
+
+    // timeline header
+    const timelineY = topY + stageH + 30;
+    label('Micro-batch schedule (4 micro-batches, 1F1B):', marginX, timelineY, C.dim, 10, 'left');
+
+    // microbatch colors
+    const mbColors = [C.green, C.yellow, C.orange, C.purple + 'dd'];
+    const mbH = 20;
+    const cellW = stageW / 4;
+
+    for (let g = 0; g < numGPU; g++) {
+      const x   = marginX + g * (stageW + 10);
+      const col = GPU_COLORS[g % GPU_COLORS.length];
+
+      // stage box
+      roundRect(x, topY, stageW, stageH, 6, col + '18', col + '66');
+
+      // label
+      label(`GPU ${g}`, x + stageW / 2, topY + 16, col, 11, 'center');
+      label(`Layers ${g * layersPerStage}–${Math.min((g + 1) * layersPerStage - 1, numLayers - 1)}`, x + stageW/2, topY + 32, C.dim, 10, 'center');
+
+      // layer blocks inside stage
+      const innerLayers = Math.min(layersPerStage, numLayers - g * layersPerStage);
+      const lh = Math.floor((stageH - 52) / innerLayers);
+      for (let l = 0; l < innerLayers; l++) {
+        const ly = topY + 48 + l * (lh + 2);
+        const isAttn = (g * layersPerStage + l) % 2 === 0;
+        const fc = isAttn ? col : adjustAlpha(col, .5);
+        roundRect(x + 10, ly, stageW - 20, lh, 3, fc + '44', col + '66');
+        if (lh > 18) {
+          label(isAttn ? 'ATT' : 'FFN', x + stageW/2, ly + lh/2, col, 9, 'center');
+        }
+      }
+
+      // activation arrows between stages
+      if (g < numGPU - 1) {
+        const ax = x + stageW + 5;
+        arrow(ax - 3, topY + stageH/2, ax + 7, topY + stageH/2, C.accent, false);
+      }
+
+      // 1F1B timeline below
+      const tlY = timelineY + 16 + g * (mbH + 4);
+      // forward pass (first g cells idle — bubble)
+      for (let m = 0; m < 4; m++) {
+        const cellX = marginX + m * cellW * numGPU + g * cellW;
+        if (cellX + cellW > W - marginX) break;
+        roundRect(cellX, tlY, cellW - 2, mbH - 2, 3, mbColors[m] + '55', mbColors[m]);
+        if (cellW > 20) label(`m${m}`, cellX + cellW/2, tlY + mbH/2, mbColors[m], 9, 'center');
+      }
+    }
+
+    // bubble annotation
+    const bubbleX = marginX;
+    const bubbleY = timelineY + 16 + numGPU * (mbH + 4) + 10;
+    label(`Pipeline bubble ≈ ${Math.round((numGPU - 1) / (4 + numGPU - 1) * 100)}% with 4 micro-batches, ${numGPU} stages`, bubbleX, bubbleY, C.yellow, 10, 'left');
+  }
+
+  // ─── DATA PARALLELISM / ZERO ─────────────────────────────────────────
+  function drawData (W, H) {
+    const marginX = 48;
+    const topY    = 60;
+    const gpuW    = Math.floor((W - marginX * 2 - (numGPU - 1) * 10) / numGPU);
+    const gpuH    = 180;
+
+    label('Data Parallelism + ZeRO — Each GPU runs the full model on different data', W/2, 22, C.accent, 12, 'center');
+    label('ZeRO-3: partition params + grads + optimizer states across DP ranks', W/2, 40, C.dim, 11, 'center');
+
+    const segments = ['Params', 'Grads', 'Optim'];
+    const segH = Math.floor((gpuH - 40) / segments.length);
+    const zeroColors = [C.accent, C.green, C.orange];
+
+    for (let g = 0; g < numGPU; g++) {
+      const x   = marginX + g * (gpuW + 10);
+      const col = GPU_COLORS[g % GPU_COLORS.length];
+      roundRect(x, topY, gpuW, gpuH, 6, col + '18', col + '66');
+      label(`GPU ${g}`, x + gpuW/2, topY + 14, col, 11, 'center');
+      label(`Shard ${g+1}/${numGPU}`, x + gpuW/2, topY + 28, C.dim, 9, 'center');
+
+      for (let s = 0; s < segments.length; s++) {
+        const sy = topY + 42 + s * (segH + 3);
+        const fraction = 1 / numGPU;
+        const shardW = (gpuW - 20) * fraction;
+        const shardX = x + 10 + g * shardW;
+
+        // full bar (dim)
+        roundRect(x + 10, sy, gpuW - 20, segH - 2, 3, 'rgba(255,255,255,.04)', 'rgba(255,255,255,.08)');
+        // this GPU's shard (bright)
+        roundRect(shardX, sy, shardW, segH - 2, 3, zeroColors[s] + '55', zeroColors[s] + 'aa');
+
+        if (segH > 18) {
+          label(segments[s], x + gpuW/2, sy + (segH - 2)/2, zeroColors[s], 9, 'center');
+        }
+      }
+    }
+
+    // AllReduce arrow arc
+    const arcY = topY + gpuH + 20;
+    ctx.beginPath();
+    ctx.strokeStyle = C.accent + 'aa';
+    ctx.lineWidth = 1.5;
+    ctx.setLineDash([5, 4]);
+    ctx.moveTo(marginX + gpuW/2, arcY - 6);
+    ctx.bezierCurveTo(
+      W/2, arcY + 40,
+      W/2, arcY + 40,
+      marginX + (numGPU - 0.5) * (gpuW + 10), arcY - 6
+    );
+    ctx.stroke();
+    ctx.setLineDash([]);
+    label('AllReduce (ZeRO-3 AllGather + ReduceScatter on forward/backward)', W/2, arcY + 52, C.accent, 10, 'center');
+
+    // memory savings
+    const savY = arcY + 76;
+    label(`Memory per GPU: 1/${numGPU} of total — saves ${Math.round((1 - 1/numGPU) * 100)}% vs no-ZeRO`, W/2, savY, C.green, 11, 'center');
+  }
+
+  // ─── 3D COMBINED ────────────────────────────────────────────────────
+  function drawCombined (W, H) {
+    // Show a conceptual 3D grid: TP × PP × DP
+    // We'll show TP=2, PP=2, DP=numGPU/4 (if enough GPUs) or simplified
+    const tp = 2, pp = 2;
+    const dp = Math.max(1, Math.floor(numGPU / (tp * pp)));
+    const total = tp * pp * dp;
+
+    label('3D Parallelism: Tensor × Pipeline × Data (ZeRO)', W/2, 22, C.accent, 12, 'center');
+    label(`TP=${tp}  PP=${pp}  DP=${dp}  →  ${total} GPUs (showing conceptual layout)`, W/2, 40, C.dim, 11, 'center');
+
+    const cellW = 80, cellH = 56, padX = 18, padY = 14;
+    // Layout: rows = DP replicas, each row has PP stages, each stage has TP columns
+    const totalW = pp * (tp * cellW + padX) + padX;
+    const totalH = dp * (cellH + padY) + padY;
+    const startX = (W - totalW) / 2;
+    const startY = 70;
+
+    let gpuIdx = 0;
+    for (let d = 0; d < dp; d++) {
+      const rowY = startY + d * (cellH + padY) + padY;
+
+      // DP replica label
+      label(`DP rank ${d}`, startX - 6, rowY + cellH/2, C.orange, 10, 'right');
+
+      for (let p = 0; p < pp; p++) {
+        const stageX = startX + padX + p * (tp * cellW + padX);
+
+        // pipeline stage bracket
+        ctx.strokeStyle = C.yellow + '55';
+        ctx.lineWidth = 1;
+        ctx.setLineDash([3,3]);
+        roundRect(stageX - 4, rowY - 4, tp * cellW + 8, cellH + 8, 4, undefined, C.yellow + '44');
+        ctx.setLineDash([]);
+
+        if (d === 0) {
+          label(`Stage ${p}`, stageX + (tp * cellW)/2, rowY - 12, C.yellow, 9, 'center');
+        }
+
+        for (let t = 0; t < tp; t++) {
+          const cx = stageX + t * cellW;
+          const col = GPU_COLORS[gpuIdx % GPU_COLORS.length];
+
+          roundRect(cx + 2, rowY, cellW - 4, cellH, 5, col + '28', col + '88');
+          label(`GPU${gpuIdx}`, cx + cellW/2, rowY + 14, col, 10, 'center');
+          label(`TP${t}|PP${p}|DP${d}`, cx + cellW/2, rowY + 33, C.dim, 8, 'center');
+          gpuIdx++;
+        }
+
+        // TP bracket label
+        if (d === 0 && p === 0) {
+          label('← TP splits →',  stageX + (tp * cellW)/2, rowY + cellH + 18, C.accent, 9, 'center');
+        }
+
+        // inter-stage arrow
+        if (p < pp - 1) {
+          const ax = stageX + tp * cellW + 6;
+          arrow(ax, rowY + cellH/2, ax + padX - 4, rowY + cellH/2, C.yellow + 'cc');
+        }
+      }
+    }
+
+    // inter-DP AllReduce
+    if (dp > 1) {
+      const arrowX = startX + totalW + 18;
+      for (let d = 0; d < dp - 1; d++) {
+        const y1 = startY + d * (cellH + padY) + padY + cellH/2;
+        const y2 = y1 + cellH + padY;
+        arrow(arrowX, y1, arrowX, y2, C.orange + 'cc', true);
+      }
+      label('DP\nAllReduce', arrowX + 8, startY + padY + (dp * (cellH + padY))/2, C.orange, 9, 'left');
+    }
+
+    // formula summary
+    const sumY = startY + totalH + 18;
+    label(`Total memory per GPU ≈ Model ÷ (TP×PP) ÷ ZeRO-factor`, W/2, sumY, C.green, 10, 'center');
+    label(`Communication: AllReduce/layer (NVLink) + P2P at stages (IB) + grad sync (IB)`, W/2, sumY + 18, C.dim, 9, 'center');
+  }
+
+  function adjustAlpha (hex, alpha) {
+    // just return the hex — we'll append opacity manually in rgba notation
+    return hex;
+  }
+
+  // ── legend builder ─────────────────────────────────────────────────
+  function buildLegend () {
+    const legendRow = document.getElementById('legend-row');
+    legendRow.innerHTML = '';
+
+    const items = [];
+    if (mode === 'tensor') {
+      items.push(['Attention shard', C.accent], ['FFN shard', C.purple], ['AllReduce comms', C.accent]);
+    } else if (mode === 'pipeline') {
+      items.push(['GPU stage', C.accent], ['Activation P2P', C.accent], ['Micro-batch forward', C.green]);
+    } else if (mode === 'data') {
+      items.push(['Param shard (ZeRO-3)', C.accent], ['Grad shard', C.green], ['Optim-state shard', C.orange]);
+    } else {
+      items.push(['TP — intra-node split', C.accent], ['PP — stage boundary', C.yellow], ['DP — gradient sync', C.orange]);
+    }
+
+    items.forEach(([txt, col]) => {
+      const div = document.createElement('div');
+      div.className = 'legend-item';
+      div.innerHTML = `<span class="legend-dot" style="background:${col}88;border:1.5px solid ${col}"></span>${txt}`;
+      legendRow.appendChild(div);
+    });
+  }
+
+  // ── init ───────────────────────────────────────────────────────────
+  window.addEventListener('resize', resize);
+  resize();
+})();
+</script>
+</body>
+</html>

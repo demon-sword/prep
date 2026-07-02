@@ -1,0 +1,272 @@
+- generic [active] [ref=e1]:
+  - banner [ref=e2]:
+    - generic [ref=e3]: evaluation
+    - heading "LLM Evaluation Metrics" [level=1] [ref=e4]
+    - paragraph [ref=e5]: Exact match, lexical similarity (ROUGE, BLEU, edit distance), semantic similarity (cosine), and LLM-as-judge — with their biases and when to trust each.
+  - main [ref=e6]:
+    - generic [ref=e7]:
+      - heading "Theory" [level=2] [ref=e8]
+      - heading "Why Evaluation is Hard for LLMs" [level=3] [ref=e9]
+      - paragraph [ref=e10]: Evaluating LLMs is fundamentally different from evaluating classical ML classifiers. A classifier has a ground-truth label — correct or not. An LLM answering "Summarize this article" can produce dozens of valid, high-quality responses. The question is not whether the output matches a stored string but whether it conveys the right information, maintains the right tone, avoids hallucinations, and follows instructions.
+      - paragraph [ref=e11]:
+        - text: This multiplicity of valid outputs forces us to use approximate proxies. Every metric we use is a proxy — some coarser, some finer — and each captures a different facet of quality. Understanding
+        - emphasis [ref=e12]: what each metric actually measures
+        - text: and where it breaks down is essential before trusting any evaluation signal in production.
+      - heading "1. Exact Match (EM)" [level=3] [ref=e13]
+      - paragraph [ref=e14]:
+        - text: "The simplest metric:"
+        - code [ref=e15]: score = 1 if prediction == reference else 0
+        - text: . Used in extractive QA benchmarks like SQuAD (after normalizing punctuation and casing). Extremely fast to compute, zero ambiguity.
+      - generic [ref=e16]:
+        - generic [ref=e17]: Exact Match
+        - text: EM = (# predictions that exactly equal reference) / (# total predictions)
+      - paragraph [ref=e18]: "EM is appropriate only when answers are short, unambiguous facts — named entities, dates, numbers. It completely fails for free-form generation: \"Paris is the capital of France.\" vs \"The French capital is Paris.\" are semantically identical but score 0 with EM."
+      - heading "2. Edit Distance (Levenshtein)" [level=3] [ref=e19]
+      - paragraph [ref=e20]: The minimum number of single-character insertions, deletions, or substitutions needed to transform one string into another. A normalized variant divides by the length of the longer string to produce a [0,1] similarity score.
+      - generic [ref=e21]:
+        - generic [ref=e22]: Normalized Edit Distance
+        - text: NED(a,b) = 1 − levenshtein(a, b) / max(len(a), len(b))
+      - paragraph [ref=e23]: Edit distance is character-level — it's sensitive to surface changes but can't detect semantic equivalence. It's still useful as a cheap spell-check signal or to catch near-identical outputs.
+      - heading "3. ROUGE (Recall-Oriented Understudy for Gisting Evaluation)" [level=3] [ref=e24]
+      - paragraph [ref=e25]: "Developed at USC ISI (Lin, 2004) for summarization. ROUGE computes n-gram overlap between a candidate and one or more reference summaries. Three common variants:"
+      - list [ref=e26]:
+        - listitem [ref=e27]:
+          - strong [ref=e28]: ROUGE-1
+          - text: ": Unigram (word-level) overlap. Recall-oriented — penalizes missing content words."
+        - listitem [ref=e29]:
+          - strong [ref=e30]: ROUGE-2
+          - text: ": Bigram overlap. More sensitive to fluency and phrase ordering than ROUGE-1."
+        - listitem [ref=e31]:
+          - strong [ref=e32]: ROUGE-L
+          - text: ": Longest common subsequence (LCS). Captures in-sequence matches, more flexible than n-gram methods."
+      - generic [ref=e33]:
+        - generic [ref=e34]: ROUGE-N F1
+        - text: Precision = matched n-grams / candidate n-grams Recall = matched n-grams / reference n-grams F1 = 2 × P × R / (P + R)
+      - paragraph [ref=e35]: ROUGE correlates reasonably well with human judgments on summarization tasks (~0.7 Pearson on DUC datasets) but breaks down for longer, more abstractive summaries, paraphrases, and multilingual settings. It rewards token overlap without understanding meaning. A model that copies verbatim gets high ROUGE; one that rewrites creatively gets penalized.
+      - heading "4. BLEU (Bilingual Evaluation Understudy)" [level=3] [ref=e36]
+      - paragraph [ref=e37]: Originally designed for machine translation (Papineni et al., 2002). BLEU computes precision of n-gram matches (1–4 grams) between hypothesis and reference, with a brevity penalty (BP) to punish short outputs.
+      - generic [ref=e38]:
+        - generic [ref=e39]: BLEU
+        - text: BLEU = BP × exp(Σ wₙ × log pₙ) BP = min(1, exp(1 − r/c)) where r=ref length, c=candidate length wₙ = 1/N (uniform weights, typically N=4)
+      - paragraph [ref=e40]: "BLEU correlates with human translation quality at the corpus level but poorly at the sentence level. It assumes translators and summarizers reuse source vocabulary heavily — an assumption that breaks down for LLMs that paraphrase. A well-known BLEU failure mode: two equally correct translations of the same sentence can have BLEU = 0 if they happen to use different valid word choices. BLEU scores below 10 are essentially random noise for single-sentence evaluations."
+      - heading "5. Semantic Similarity (Cosine)" [level=3] [ref=e41]
+      - paragraph [ref=e42]:
+        - text: Encode both candidate and reference with a sentence embedding model (e.g.,
+        - code [ref=e43]: all-MiniLM-L6-v2
+        - text: ","
+        - code [ref=e44]: text-embedding-3-small
+        - text: ", or"
+        - code [ref=e45]: bge-large-en-v1.5
+        - text: "), then compute cosine similarity of the embedding vectors:"
+      - generic [ref=e46]:
+        - generic [ref=e47]: Cosine Similarity
+        - text: cos(a, b) = (a · b) / (‖a‖ × ‖b‖) ∈ [−1, 1] In practice, sentence embeddings cluster in [0.3, 1.0] for English text
+      - paragraph [ref=e48]: "Semantic similarity captures paraphrase equivalence that lexical metrics miss entirely. It's model-dependent — the quality of the signal is only as good as your embedding model. Risks: embedding models can be insensitive to negation (\"the drug is safe\" vs \"the drug is not safe\" can score ~0.95 semantic similarity on some models) and can miss factual errors that sound plausible."
+      - heading "6. LLM-as-Judge" [level=3] [ref=e49]
+      - paragraph [ref=e50]: Use a capable LLM (GPT-4o, Claude 3.5 Sonnet, or a fine-tuned evaluator) to score outputs on rubrics — accuracy, helpfulness, groundedness, fluency, safety. This approach dramatically reduces the need for expensive human annotation and captures nuances that lexical/embedding metrics miss. RAGAS uses LLM-as-judge for RAG pipeline evaluation (faithfulness, answer relevancy, context precision/recall).
+      - paragraph [ref=e51]: "LLM judges are powerful but carry three critical biases:"
+      - list [ref=e52]:
+        - listitem [ref=e53]:
+          - strong [ref=e54]: Self-bias
+          - text: ": A model tends to prefer outputs that match its own style. GPT-4 rates GPT-4 outputs higher; Claude rates Claude outputs higher. Use cross-model judging to mitigate."
+        - listitem [ref=e55]:
+          - strong [ref=e56]: Position bias
+          - text: ": When comparing two answers (A vs B), the judge often prefers whichever comes first. Always swap order and average to cancel this out."
+        - listitem [ref=e57]:
+          - strong [ref=e58]: Verbosity bias
+          - text: ": Longer, more verbose answers get rated higher even when the shorter answer is more accurate. Empirically, GPT-4 shows ~15–20% preference for verbose answers on factual tasks."
+      - generic [ref=e59]:
+        - strong [ref=e60]: "Critical gotcha:"
+        - text: LLM judges can be systematically fooled. A model fine-tuned to get high judge scores without being actually better ("reward hacking" via judge proxies) is a real failure mode. Always cross-validate judge scores against human labels on a held-out set before fully trusting them.
+      - heading "7. Metric Selection Framework" [level=3] [ref=e61]
+      - paragraph [ref=e62]: "No single metric is sufficient. A production evaluation harness typically uses 2–3 metrics at different granularities:"
+      - generic [ref=e63]:
+        - generic [ref=e64]:
+          - generic [ref=e65]: Exact Match
+          - generic [ref=e66]: "Range: {0, 1}"
+          - paragraph [ref=e67]: "Use for structured extraction: dates, entity spans, classification labels. Fails for any free-form generation."
+        - generic [ref=e68]:
+          - generic [ref=e69]: ROUGE-L / ROUGE-2
+          - generic [ref=e70]: "Range: [0, 1]"
+          - paragraph [ref=e71]: Use for summarization with fixed references. Reasonable human correlation for extractive tasks. Fails for abstractive / paraphrase-heavy outputs.
+        - generic [ref=e72]:
+          - generic [ref=e73]: BLEU
+          - generic [ref=e74]: "Range: [0, 100]"
+          - paragraph [ref=e75]: Use for translation with multiple references. Corpus-level only — single-sentence BLEU is noisy. Penalizes valid paraphrases.
+        - generic [ref=e76]:
+          - generic [ref=e77]: Semantic Similarity
+          - generic [ref=e78]: "Range: [0, 1] (practical)"
+          - paragraph [ref=e79]: Use when surface form varies but meaning should be preserved. Model-dependent. Poor at detecting factual errors that sound plausible.
+        - generic [ref=e80]:
+          - generic [ref=e81]: LLM-as-Judge
+          - generic [ref=e82]: "Range: [1, 5] or [0, 1]"
+          - paragraph [ref=e83]: Best for complex, multi-dimensional quality (instruction following, groundedness, coherence). Expensive. Requires bias mitigation and human calibration.
+      - generic [ref=e84]:
+        - strong [ref=e85]: "Production stack:"
+        - text: Start with cheap lexical metrics for CI regression detection. Add semantic similarity for paraphrase tolerance. Add LLM-as-judge for nuanced quality signals. Budget $0.01–$0.10 per LLM judge evaluation — compare to human annotation at $0.50–$5.00 per sample.
+    - generic [ref=e86]:
+      - heading "Interactive Metric Comparison" [level=2] [ref=e87]
+      - paragraph [ref=e88]:
+        - text: Enter a
+        - strong [ref=e89]: reference
+        - text: text and a
+        - strong [ref=e90]: candidate
+        - text: text. Click
+        - emphasis [ref=e91]: Compute Metrics
+        - text: to see all metric scores calculated live, with a breakdown of what each captures.
+      - generic [ref=e92]:
+        - generic [ref=e93]:
+          - generic [ref=e94]: Reference Text (ground truth)
+          - textbox [ref=e95]: The transformer model uses self-attention to process all tokens in parallel, enabling efficient training on large datasets.
+        - generic [ref=e96]:
+          - generic [ref=e97]: Candidate Text (model output)
+          - textbox [ref=e98]: Transformers leverage self-attention mechanisms to handle all tokens simultaneously, making training on massive data efficient.
+      - button "⚡ Compute Metrics" [ref=e99] [cursor=pointer]
+      - generic [ref=e100]:
+        - generic [ref=e101]:
+          - generic [ref=e102]: Exact Match
+          - generic [ref=e103]: "0.00"
+          - generic [ref=e104]: "[0 or 1]"
+        - generic [ref=e106]:
+          - generic [ref=e107]: Edit Similarity
+          - generic [ref=e108]: "0.45"
+          - generic [ref=e109]: "[0 → 1]"
+        - generic [ref=e112]:
+          - generic [ref=e113]: ROUGE-1 F1
+          - generic [ref=e114]: "0.44"
+          - generic [ref=e115]: "[0 → 1]"
+        - generic [ref=e118]:
+          - generic [ref=e119]: ROUGE-2 F1
+          - generic [ref=e120]: "0.13"
+          - generic [ref=e121]: "[0 → 1]"
+        - generic [ref=e124]:
+          - generic [ref=e125]: ROUGE-L F1
+          - generic [ref=e126]: "0.38"
+          - generic [ref=e127]: "[0 → 1]"
+        - generic [ref=e130]:
+          - generic [ref=e131]: BLEU
+          - generic [ref=e132]: "0.0"
+          - generic [ref=e133]: "[0 → 100]"
+        - generic [ref=e135]:
+          - generic [ref=e136]: Semantic Sim*
+          - generic [ref=e137]: "0.59"
+          - generic [ref=e138]: "[0 → 1] *approx"
+      - generic [ref=e141]:
+        - heading "📋 Metric Breakdown" [level=4] [ref=e142]
+        - generic [ref=e143]:
+          - generic [ref=e144]:
+            - generic [ref=e145]: Exact Match
+            - generic [ref=e146]: No match — texts differ after normalization
+          - generic [ref=e147]:
+            - generic [ref=e148]: Edit Distance
+            - generic [ref=e149]:
+              - text: Levenshtein =
+              - strong [ref=e150]: "70"
+              - text: chars | similarity =
+              - strong [ref=e151]: "0.449"
+          - generic [ref=e152]:
+            - generic [ref=e153]: ROUGE-1
+            - generic [ref=e154]:
+              - text: "Matched unigrams:"
+              - strong [ref=e155]: "7"
+              - text: "| Ref total:"
+              - strong [ref=e156]: "17"
+              - text: "| Cand total:"
+              - strong [ref=e157]: "15"
+              - text: "| P:"
+              - strong [ref=e158]: "0.467"
+              - text: "R:"
+              - strong [ref=e159]: "0.412"
+          - generic [ref=e160]:
+            - generic [ref=e161]: ROUGE-2
+            - generic [ref=e162]:
+              - text: "Matched bigrams:"
+              - strong [ref=e163]: "2"
+              - text: "| P:"
+              - strong [ref=e164]: "0.143"
+              - text: "R:"
+              - strong [ref=e165]: "0.125"
+          - generic [ref=e166]:
+            - generic [ref=e167]: ROUGE-L
+            - generic [ref=e168]:
+              - text: "LCS length:"
+              - strong [ref=e169]: "6"
+              - text: "tokens | P:"
+              - strong [ref=e170]: "0.400"
+              - text: "R:"
+              - strong [ref=e171]: "0.353"
+          - generic [ref=e172]:
+            - generic [ref=e173]: BLEU
+            - generic [ref=e174]:
+              - text: "Score:"
+              - strong [ref=e175]: "0.00"
+              - text: "/100 | BP:"
+              - strong [ref=e176]: "0.875"
+              - text: "| Ref len:"
+              - strong [ref=e177]: "17"
+              - text: "Cand len:"
+              - strong [ref=e178]: "15"
+          - generic [ref=e179]:
+            - generic [ref=e180]: Semantic Sim*
+            - generic [ref=e181]:
+              - strong [ref=e182]: "0.585"
+              - text: (approximated via n-gram TF vectors; real embeddings via text-embedding-3-small would be more accurate)
+      - generic [ref=e183]:
+        - generic [ref=e184]:
+          - generic [ref=e185]: 🪞
+          - generic [ref=e186]: Self-Bias
+          - paragraph [ref=e187]: LLM judges prefer outputs matching their own style. GPT-4 judges GPT-4 outputs ~15% higher. Cross-model judging mitigates this.
+        - generic [ref=e188]:
+          - generic [ref=e189]: 🔢
+          - generic [ref=e190]: Position Bias
+          - paragraph [ref=e191]: "In A vs B comparison, judges favor the first answer. Always swap order and average scores. Effect size: ~5–10% preference shift."
+        - generic [ref=e192]:
+          - generic [ref=e193]: 📝
+          - generic [ref=e194]: Verbosity Bias
+          - paragraph [ref=e195]: Longer answers get higher scores even when the shorter is more accurate. Observed ~20% preference for length in GPT-4 judge studies.
+        - generic [ref=e196]:
+          - generic [ref=e197]: 🧲
+          - generic [ref=e198]: Anchoring
+          - paragraph [ref=e199]: If shown a reference answer first, judges anchor to its style and vocabulary — unfairly penalizing valid alternatives.
+    - generic [ref=e200]:
+      - heading "Key Takeaways" [level=2] [ref=e201]
+      - list [ref=e202]:
+        - listitem [ref=e203]:
+          - generic [ref=e204]: ⚠️
+          - generic [ref=e205]:
+            - strong [ref=e206]: No single metric is sufficient.
+            - text: Lexical metrics (ROUGE, BLEU) punish valid paraphrases; semantic metrics miss factual errors; LLM judges carry systematic biases. Production harnesses stack 2–3 metrics at different granularities and calibrate against human labels.
+        - listitem [ref=e207]:
+          - generic [ref=e208]: 📉
+          - generic [ref=e209]:
+            - strong [ref=e210]: BLEU below 10 is noise at sentence level.
+            - text: BLEU was designed for corpus-level MT evaluation with multiple human references. Using single-sentence BLEU on LLM outputs often produces misleading signals — two correct paraphrases can both score 0.
+        - listitem [ref=e211]:
+          - generic [ref=e212]: 🤖
+          - generic [ref=e213]:
+            - strong [ref=e214]: LLM-as-judge requires bias controls.
+            - text: "Always: (1) swap A/B order and average, (2) use cross-model judging not same-model, (3) validate judge–human correlation on a 200+ sample holdout before deploying. RAGAS provides a ready framework for RAG evaluation using these principles."
+        - listitem [ref=e215]:
+          - generic [ref=e216]: 🧲
+          - generic [ref=e217]:
+            - strong [ref=e218]: Semantic similarity is blind to negation.
+            - text: Embedding models like MiniLM can assign cosine similarity >0.9 to "the treatment is effective" vs "the treatment is not effective". Never use semantic similarity alone for factual or medical/legal correctness checks.
+        - listitem [ref=e219]:
+          - generic [ref=e220]: 💰
+          - generic [ref=e221]:
+            - strong [ref=e222]: Cost hierarchy matters.
+            - text: Exact match and ROUGE cost ~$0/1k evals. Semantic similarity via API costs ~$0.001/eval. LLM-as-judge via GPT-4o costs ~$0.01–$0.05/eval. Human annotation costs $0.50–$5.00/eval. Design your evaluation pipeline as a funnel — cheap filters first, expensive judges on hard cases only.
+        - listitem [ref=e223]:
+          - generic [ref=e224]: 🎯
+          - generic [ref=e225]:
+            - strong [ref=e226]: ROUGE-L outperforms ROUGE-1/2 for abstractive summaries.
+            - text: LCS-based matching is more robust to paraphrase than n-gram counting. For multi-document summarization, use multi-reference ROUGE to reduce variance — single-reference ROUGE has very high variance on creative tasks.
+  - navigation [ref=e227]:
+    - generic [ref=e228]:
+      - generic [ref=e229]: ← Previous
+      - 'link "21 · Token Sampling: Temperature, Top-K, Top-P" [ref=e230] [cursor=pointer]':
+        - /url: 21-token-sampling.html
+    - generic [ref=e231]:
+      - generic [ref=e232]: Next →
+      - link "23 · Evaluation Pipeline Design" [ref=e233] [cursor=pointer]:
+        - /url: 23-evaluation-pipeline.html

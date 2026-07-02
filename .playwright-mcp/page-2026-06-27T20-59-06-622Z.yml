@@ -1,0 +1,158 @@
+- generic [active] [ref=e1]:
+  - banner [ref=e2]:
+    - generic [ref=e3]: Training
+    - heading "RLHF — Reinforcement Learning from Human Feedback" [level=1] [ref=e4]
+    - paragraph [ref=e5]: "Full RLHF pipeline: SFT → reward model training from human preferences → PPO optimization. Key components, reward hacking, and why it's expensive."
+  - main [ref=e6]:
+    - generic [ref=e7]:
+      - generic [ref=e8]: // theory
+      - heading "How RLHF Works" [level=2] [ref=e9]
+      - paragraph [ref=e10]:
+        - text: Pretraining produces a model that can complete text in any direction — helpful, harmful, rambling, or terse. The distribution of internet text is not the distribution of
+        - emphasis [ref=e11]: good assistant behavior
+        - text: . RLHF (Reinforcement Learning from Human Feedback) bridges this gap by shaping the model's behavior toward human-preferred outputs through three sequential stages.
+      - heading "Why Pretraining Alone Isn't Enough" [level=3] [ref=e12]
+      - paragraph [ref=e13]:
+        - text: A raw pretrained model like GPT-3 will complete "How do I bake a cake?" with "…which requires measuring flour carefully. The recipe below…" because that's what recipe articles look like. But it's equally likely to respond "…honestly depends on your grandmother's secret ingredients" or generate an irrelevant continuation. The model has no concept of
+        - emphasis [ref=e14]: intent-fulfillment
+        - text: — it just models probability distributions over tokens. Post-training via RLHF teaches the model what "being helpful and harmless" means at a distributional level.
+      - heading "Stage 1 — Supervised Fine-Tuning (SFT)" [level=3] [ref=e15]
+      - paragraph [ref=e16]:
+        - text: "The first stage runs standard supervised fine-tuning on a curated dataset of (prompt, ideal completion) pairs written or selected by expert annotators. This dataset is typically small — InstructGPT used ~13K demonstrations — because the quality bar is high and annotation is expensive. The SFT stage accomplishes two things: it teaches the model the"
+        - emphasis [ref=e17]: format
+        - text: of instruction-following, and it gives the PPO stage in Stage 3 a better starting point than the raw pretrained model. SFT alone can be remarkably powerful; models like Alpaca (fine-tuned on 52K GPT-4-generated instructions) showed strong instruction-following from SFT only.
+      - heading "Stage 2 — Reward Model Training" [level=3] [ref=e18]
+      - paragraph [ref=e19]: A reward model (RM) is trained to predict human preferences between outputs. Annotators receive two or more completions for the same prompt and rank them. This comparative annotation is far easier for humans than writing ideal completions — it's much simpler to say "completion A is better than B" than to produce a perfect A from scratch.
+      - generic [ref=e20]:
+        - text: Loss(RM) = −E[log σ(r(x, y_w) − r(x, y_l))]
+        - text: where y_w = preferred completion, y_l = less preferred, r = reward score
+      - paragraph [ref=e21]: This is a Bradley-Terry pairwise preference model. InstructGPT trained on ~33K comparisons. The reward model is initialized from the SFT model (with a scalar head replacing the language model head) and learns to assign higher reward to preferred outputs. Crucially, the RM generalizes — it scores outputs it was never explicitly trained on.
+      - paragraph [ref=e22]: Reward model quality is critical and underappreciated. A weak RM that doesn't actually capture human intent will cause Stage 3 to optimize against the wrong signal. Testing the RM's inter-annotator agreement, its correlation with ground-truth human preferences on held-out data, and its calibration (does a reward of 0.8 actually mean better than 0.5?) is essential before proceeding.
+      - heading "Stage 3 — PPO Fine-Tuning (Policy Optimization)" [level=3] [ref=e23]
+      - paragraph [ref=e24]: "Proximal Policy Optimization (PPO) uses the reward model to improve the SFT model. The SFT model becomes the \"policy\" (π_θ), and PPO iteratively generates completions, scores them with the RM, and updates the policy to maximize expected reward. To prevent the policy from drifting too far from the SFT baseline (which would collapse language quality), a KL divergence penalty term is added:"
+      - generic [ref=e25]: Objective = E[r_RM(x, y)] − β · KL[π_θ(y|x) || π_SFT(y|x)]
+      - paragraph [ref=e26]:
+        - text: The
+        - code [ref=e27]: β
+        - text: "coefficient (typically 0.01–0.1) controls the KL penalty. Too low: reward hacking. Too high: the policy barely moves from SFT. PPO itself is an on-policy algorithm — it must generate new samples every gradient step, making it compute-intensive. InstructGPT used 4–8 GPUs to simultaneously run sampling + scoring + gradient updates in a synchronized pipeline."
+      - heading "Reward Hacking" [level=3] [ref=e28]
+      - paragraph [ref=e29]: Reward hacking (Goodhart's Law applied to RL) is the central failure mode of RLHF. Because the RM is an imperfect proxy for human preferences, the policy can find high-reward outputs that are not actually good — for example, verbose but vacuous responses (RM correlates reward with length), excessive sycophancy ("That's a great question!"), or grammatically fluent nonsense. The KL penalty mitigates this but doesn't eliminate it. Anthropic found that beyond a certain KL budget, every model gets worse in actual human evaluations even as RM scores rise — a phenomenon called "reward model exploitation."
+      - generic [ref=e30]:
+        - strong [ref=e31]: "Production Reality:"
+        - text: RLHF at scale is expensive. InstructGPT's PPO stage required months of human annotation ($600K+ per training run at scale), specialized RL infrastructure, and careful hyperparameter tuning. This is why DPO (Stage 12) — which eliminates the RM and PPO — gained rapid adoption. But RLHF remains the gold standard for highest-quality alignment because the reward model can be updated independently of policy training and can incorporate new feedback continuously.
+      - heading "Key Hyperparameters & Instabilities" [level=3] [ref=e32]
+      - list [ref=e33]:
+        - listitem [ref=e34]:
+          - strong [ref=e35]: "KL coefficient (β):"
+          - text: Start at 0.02, monitor KL distance per step
+        - listitem [ref=e36]:
+          - strong [ref=e37]: "Rollout batch size:"
+          - text: Larger = more stable gradients but slower iteration
+        - listitem [ref=e38]:
+          - strong [ref=e39]: "Reward normalization:"
+          - text: Normalize rewards to zero mean / unit variance per batch to avoid scale drift
+        - listitem [ref=e40]:
+          - strong [ref=e41]: "Clip ratio (ε):"
+          - text: PPO's trust region, typically 0.1–0.2; prevents large policy jumps
+        - listitem [ref=e42]:
+          - strong [ref=e43]: "Value network:"
+          - text: Separate value head for PPO's advantage estimation — must be warmed up before policy updates
+      - heading "Real Systems Using RLHF" [level=3] [ref=e44]
+      - paragraph [ref=e45]: OpenAI's InstructGPT (2022) was the first large-scale demonstration. ChatGPT, Claude 1/2/3, Gemini, and Llama-2-Chat all use RLHF variants. Anthropic's Constitutional AI (CAI) adds a self-critique loop before the reward model stage, generating preference pairs from the model itself using a set of principles — reducing reliance on human annotators. Meta's Llama-2-Chat paper reported running RLHF for multiple iterations, updating the reward model with fresh human feedback each round before the next PPO stage — sometimes called "iterative RLHF."
+    - generic [ref=e46]:
+      - generic [ref=e47]: // visualization
+      - heading "RLHF Pipeline — Interactive Walkthrough" [level=2] [ref=e48]
+      - paragraph [ref=e49]: Click any stage to learn what happens there, then watch the animated PPO reward optimization loop. Use the controls to run / pause the simulation and observe reward vs. KL divergence tradeoffs.
+      - generic [ref=e50]:
+        - generic [ref=e51]:
+          - generic [ref=e52] [cursor=pointer]:
+            - generic [ref=e53]: Stage 1
+            - generic [ref=e54]: 🎓
+            - generic [ref=e55]: SFT
+            - generic [ref=e56]: Supervised Fine-Tuning
+          - generic [ref=e57]: →
+          - generic [ref=e58] [cursor=pointer]:
+            - generic [ref=e59]: Stage 2
+            - generic [ref=e60]: ⚖️
+            - generic [ref=e61]: Reward Model
+            - generic [ref=e62]: Preference Learning
+          - generic [ref=e63]: →
+          - generic [ref=e64] [cursor=pointer]:
+            - generic [ref=e65]: Stage 3a
+            - generic [ref=e66]: 🎲
+            - generic [ref=e67]: Rollout
+            - generic [ref=e68]: Generate Completions
+          - generic [ref=e69]: →
+          - generic [ref=e70] [cursor=pointer]:
+            - generic [ref=e71]: Stage 3b
+            - generic [ref=e72]: ⚡
+            - generic [ref=e73]: PPO Update
+            - generic [ref=e74]: Policy Optimization
+        - generic [ref=e75]:
+          - 'heading "🎓 Stage 1: Supervised Fine-Tuning (SFT)" [level=4] [ref=e76]'
+          - paragraph [ref=e77]: The pretrained model is fine-tuned on a curated dataset of (prompt → ideal response) pairs written by expert human annotators. Dataset size is small but very high quality — InstructGPT used ~13K examples.
+          - list [ref=e78]:
+            - listitem [ref=e79]: Standard cross-entropy loss over the completion tokens
+            - listitem [ref=e80]: Teaches instruction-following format and basic safety behavior
+            - listitem [ref=e81]:
+              - text: Result is the SFT model — both the policy seed for PPO
+              - emphasis [ref=e82]: and
+              - text: the reference model for KL penalty
+            - listitem [ref=e83]: SFT model is frozen as π_SFT during PPO (used only for KL scoring)
+        - generic [ref=e84]:
+          - generic [ref=e85]: PPO Training Loop — Reward vs KL Divergence
+          - generic [ref=e87]:
+            - generic [ref=e88]:
+              - generic [ref=e89]: Reward Score
+              - generic [ref=e92]: "0.09"
+            - generic [ref=e93]:
+              - generic [ref=e94]: KL Divergence
+              - generic [ref=e97]: "0.01"
+        - generic [ref=e98]:
+          - button "⏸ Pause" [ref=e99] [cursor=pointer]
+          - button "↺ Reset" [ref=e100] [cursor=pointer]
+          - generic [ref=e101]:
+            - generic [ref=e102]: "β (KL penalty):"
+            - slider [ref=e103]: "20"
+            - generic [ref=e104]: "0.020"
+          - generic [ref=e105]:
+            - generic [ref=e106]: "Reward noise:"
+            - slider [ref=e107]: "30"
+            - generic [ref=e108]: 30%
+    - generic [ref=e109]:
+      - generic [ref=e110]: // key takeaways
+      - heading "Senior-Level Insights" [level=2] [ref=e111]
+      - list [ref=e112]:
+        - listitem [ref=e113]:
+          - text: →
+          - strong [ref=e114]: The RM is the weakest link.
+          - text: Reward hacking is guaranteed if the reward model is imperfect — and it always is. Monitor RM scores alongside actual human evaluation; they diverge with just 2–3 rounds of PPO at scale. Keep a frozen "gold" human eval set and run it every checkpoint.
+        - listitem [ref=e115]:
+          - text: →
+          - strong [ref=e116]: KL penalty β is not a hyperparameter you tune once.
+          - text: The right β depends on how far you want to move the policy from SFT and how much reward hacking your RM exhibits. Start at 0.02, watch KL per PPO step — if it's climbing past 4–5 nats, increase β. Anthropic's CAI paper reports needing per-iteration β tuning across their iterative RLHF rounds.
+        - listitem [ref=e117]:
+          - text: →
+          - strong [ref=e118]: PPO is on-policy and expensive.
+          - text: Every gradient step requires fresh rollouts from the current policy, which means the full inference stack must be running in parallel with the training stack. At 70B parameter scale, this means 8+ A100 nodes just for the rollout buffer — before you factor in the reward model (itself a large LM) scoring each completion.
+        - listitem [ref=e119]:
+          - text: →
+          - strong [ref=e120]: Annotation quality matters more than quantity.
+          - text: InstructGPT showed that 13K SFT examples from expert contractors outperformed 100K crowdsourced examples. For reward model training, inter-annotator agreement below 70% produces RM noise that propagates through PPO. Budget for annotation QA, not just raw throughput.
+        - listitem [ref=e121]:
+          - text: →
+          - strong [ref=e122]: Iterative RLHF beats single-pass.
+          - text: "Meta's Llama-2-Chat ran 5 rounds of RLHF: each round gathered fresh human preference data on outputs from the previous round's policy, retrained the RM, and ran PPO again. Each iteration's model generates harder-to-rank outputs, which trains a stronger RM. This compounding is why Llama-2-70B-Chat significantly outperforms single-round RLHF baselines."
+        - listitem [ref=e123]:
+          - text: →
+          - strong [ref=e124]: DPO is faster but RLHF gives more control.
+          - text: DPO (Direct Preference Optimization) eliminates the RM and PPO loop by treating preferences as a classification problem over policy outputs — 3–5× cheaper to train. But RLHF's separate RM can be updated with new feedback without retraining the policy, and the explicit reward signal enables techniques like reward model ensembling and uncertainty estimation that DPO cannot easily replicate.
+  - navigation [ref=e125]:
+    - 'link "← Previous Post-Training: Why & How" [ref=e126] [cursor=pointer]':
+      - /url: 10-post-training.html
+      - generic [ref=e127]: ← Previous
+      - generic [ref=e128]: "Post-Training: Why & How"
+    - link "Next → DPO — Direct Preference Optimization" [ref=e129] [cursor=pointer]:
+      - /url: 12-dpo.html
+      - generic [ref=e130]: Next →
+      - generic [ref=e131]: DPO — Direct Preference Optimization

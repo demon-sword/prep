@@ -1,0 +1,219 @@
+- generic [active] [ref=e1]:
+  - banner [ref=e2]:
+    - generic [ref=e3]: finetuning
+    - generic [ref=e4]:
+      - heading "Fine-Tuning Hyperparameters" [level=1] [ref=e5]
+      - paragraph [ref=e6]: Learning rate, batch size, epochs, and prompt loss weight — what each controls, typical ranges, and how to tune them systematically for LLM fine-tuning.
+  - main [ref=e7]:
+    - generic [ref=e8]:
+      - heading "Theory" [level=2] [ref=e9]
+      - paragraph [ref=e10]:
+        - text: Fine-tuning an LLM is not equivalent to training a neural network from scratch. You start with a model that has already converged to a rich representation of language and world knowledge. Your goal is to
+        - emphasis [ref=e11]: steer
+        - text: that representation — not to discover it. This changes the entire philosophy of hyperparameter selection. Every decision must balance adaptation against
+        - strong [ref=e12]: catastrophic forgetting
+        - text: ", and fast convergence against"
+        - strong [ref=e13]: overfitting
+        - text: on a small dataset.
+      - paragraph [ref=e14]: The four hyperparameters that matter most — learning rate, batch size, epochs, and prompt loss weight — interact in ways that can make the difference between a perfectly aligned specialist model and a model that either forgets how to be coherent or never learns the target distribution at all.
+      - heading "1. Learning Rate — The Most Critical Knob" [level=3] [ref=e15]
+      - paragraph [ref=e16]:
+        - text: The learning rate (LR) controls how much pretrained weights shift per gradient update. It is the single most impactful hyperparameter in fine-tuning. Unlike pretraining where LRs of
+        - code [ref=e17]: "1e-4"
+        - text: to
+        - code [ref=e18]: "3e-4"
+        - text: are common, fine-tuning demands much smaller values to avoid destroying the pretrained representations.
+      - generic [ref=e19]: "θ_{t+1} = θ_t − η · ∇_θ L(θ_t) where η (eta) = learning rate θ = model weights L = loss on the fine-tune batch"
+      - paragraph [ref=e20]: "Typical production LR ranges for full fine-tuning:"
+      - list [ref=e21]:
+        - listitem [ref=e22]:
+          - strong [ref=e23]: 1e-5 to 5e-5
+          - text: — safe zone for most instruction fine-tuning. Slow but preserves pretraining knowledge.
+        - listitem [ref=e24]:
+          - strong [ref=e25]: 1e-4 to 3e-4
+          - text: — aggressive; may be needed if fine-tune dataset is large (100k+ examples), but risks forgetting.
+        - listitem [ref=e26]:
+          - strong [ref=e27]: 1e-6 or lower
+          - text: — so slow you'll need many epochs; use when your dataset is tiny (< 1000 examples) and quality is paramount.
+      - paragraph [ref=e28]:
+        - text: For
+        - strong [ref=e29]: LoRA fine-tuning
+        - text: ", the adapter matrices A and B are initialized differently (A with Gaussian noise, B with zeros), so they start at zero change. Higher LRs of"
+        - code [ref=e30]: "1e-4"
+        - text: to
+        - code [ref=e31]: "3e-4"
+        - text: are common for LoRA adapters without risking the base weights, since the base is frozen.
+      - paragraph [ref=e32]:
+        - strong [ref=e33]: Learning rate schedules
+        - text: matter as much as the initial value. The standard approach is a
+        - emphasis [ref=e34]: cosine decay with warmup
+        - text: ": linearly ramp LR from 0 over the first 1–5% of training steps, then cosine-decay to a floor (often 10% of peak LR). Warmup prevents large updates when the gradient signal is noisy in early steps. Linear decay is simpler and often comparable in practice."
+      - heading "2. Batch Size — Gradient Noise and Gradient Accumulation" [level=3] [ref=e35]
+      - paragraph [ref=e36]: "Batch size controls gradient noise and training stability. Larger batches produce smoother, more accurate gradient estimates but reduce update frequency and require proportionally higher LRs (the \"linear scaling rule\" from Goyal et al. 2017: double batch size → double LR approximately holds within a range)."
+      - paragraph [ref=e37]:
+        - text: In LLM fine-tuning, raw batch size is constrained by GPU memory. A 7B model at fp16 takes ~14 GB just for weights — leaving limited headroom for activation storage. The workaround is
+        - strong [ref=e38]: gradient accumulation
+        - text: ": run micro-batches of size 1–4, accumulate gradients for N steps, then apply one optimizer update. Effective batch size = micro-batch × accumulation steps × number of GPUs."
+      - generic [ref=e39]: "Effective Batch Size = micro_batch_size × grad_accum_steps × num_gpus Example: 4 GPUs × micro_batch=2 × accum=8 = 64 effective batch size"
+      - paragraph [ref=e40]:
+        - text: "Typical effective batch sizes for instruction fine-tuning:"
+        - strong [ref=e41]: 32–256 sequences
+        - text: . Too small (< 8) and gradient noise dominates, causing erratic training. Too large (> 512) and you may need to run fewer total gradient updates, which can underfit when your dataset is small.
+      - heading "3. Epochs — When to Stop" [level=3] [ref=e42]
+      - paragraph [ref=e43]: An epoch is one full pass over the fine-tune dataset. Because fine-tune datasets are typically small (1k–100k examples vs pretraining's billions), overfitting can happen quickly — sometimes within 2–3 epochs.
+      - paragraph [ref=e44]: "Practical guidance from production systems like Alpaca, Vicuna, and Llama fine-tunes:"
+      - list [ref=e45]:
+        - listitem [ref=e46]:
+          - strong [ref=e47]: 1–3 epochs
+          - text: ": standard for large datasets (50k+ instruction pairs). More will overfit."
+        - listitem [ref=e48]:
+          - strong [ref=e49]: 3–10 epochs
+          - text: ": appropriate for small, high-quality datasets (1k–10k examples). Watch the validation loss."
+        - listitem [ref=e50]:
+          - strong [ref=e51]: More than 10 epochs
+          - text: ": almost always overfitting. The model memorizes training formatting and degrades on held-out distribution."
+      - paragraph [ref=e52]:
+        - strong [ref=e53]: Early stopping
+        - text: on a held-out validation split is strongly recommended. Track both validation loss and actual task metrics — it's common for validation loss to plateau while task performance (measured by an LLM judge or benchmark) continues improving, or vice versa. Use validation loss to detect overfitting but measure task metrics to determine the real stopping point.
+      - heading "4. Prompt Loss Weight (Instruction Masking)" [level=3] [ref=e54]
+      - paragraph [ref=e55]:
+        - text: "In instruction fine-tuning, each training example has two parts: the"
+        - emphasis [ref=e56]: prompt/instruction
+        - text: (input) and the
+        - emphasis [ref=e57]: completion/response
+        - text: (target). A critical but often overlooked hyperparameter is
+        - strong [ref=e58]: whether to compute loss on the prompt tokens
+        - text: .
+      - generic [ref=e59]: "Completion-only loss: L = − Σ_{t ∈ response} log P(x_t | x_{<t}) Full sequence loss: L = − Σ_{t ∈ all tokens} log P(x_t | x_{<t}) Prompt loss weight ∈ [0.0, 1.0] — scales the loss on prompt tokens"
+      - list [ref=e60]:
+        - listitem [ref=e61]:
+          - strong [ref=e62]: Weight = 0 (response-only)
+          - text: ": Model only learns from response tokens. Preferred when prompts are templated/repetitive (system prompts, few-shot examples) — no signal wasted on boilerplate."
+        - listitem [ref=e63]:
+          - strong [ref=e64]: Weight = 1.0 (full sequence)
+          - text: ": Include loss on all tokens. Can help when prompts are informative and variable, but hurts when prompts are formulaic (the model wastes capacity memorizing template text)."
+        - listitem [ref=e65]:
+          - strong [ref=e66]: Weight = 0.1–0.5
+          - text: ": Intermediate — used in models where prompt context matters but shouldn't dominate gradient signal."
+      - paragraph [ref=e67]: The original Alpaca paper used full sequence loss (weight = 1.0). Later analysis showed response-only training (weight = 0) produces better instruction-following in most cases, especially when fine-tuning on chat templates with a fixed system prompt.
+      - heading "5. Interaction Effects and Systematic Tuning" [level=3] [ref=e68]
+      - paragraph [ref=e69]:
+        - text: These hyperparameters don't operate in isolation. A high LR requires more warmup steps. A small batch needs a lower LR. More epochs require stronger regularization (weight decay, dropout). The
+        - strong [ref=e70]: token budget
+        - text: "— total tokens seen during fine-tuning — is the fundamental constraint:"
+      - generic [ref=e71]: Total tokens seen = dataset_size_tokens × num_epochs ≈ n_examples × avg_seq_len × num_epochs
+      - paragraph [ref=e72]: "For a 7B model fine-tuned on 10k examples of 512 tokens each for 3 epochs, you process ~15M tokens. Compare to the pretraining corpus of ~1T tokens — fine-tuning is a tiny perturbation. This is why LRs must be small and epochs few: you have almost no data relative to the model's prior knowledge."
+      - paragraph [ref=e73]:
+        - strong [ref=e74]: Practical tuning order
+        - text: ": (1) Fix batch size to fill GPU memory. (2) Tune LR with a short grid search (3–5 values on log scale). (3) Tune epochs by watching validation loss. (4) Tune prompt loss weight last — run 2 ablations."
+      - generic [ref=e75]:
+        - generic [ref=e76]:
+          - generic [ref=e77]: Learning Rate
+          - generic [ref=e78]: 1e-5 to 5e-5
+          - generic [ref=e79]: Full fine-tune safe zone
+        - generic [ref=e80]:
+          - generic [ref=e81]: LoRA LR
+          - generic [ref=e82]: 1e-4 to 3e-4
+          - generic [ref=e83]: Adapters only, base frozen
+        - generic [ref=e84]:
+          - generic [ref=e85]: Effective Batch
+          - generic [ref=e86]: 32–256
+          - generic [ref=e87]: Sequences; via grad accum
+        - generic [ref=e88]:
+          - generic [ref=e89]: Epochs
+          - generic [ref=e90]: 1–5
+          - generic [ref=e91]: More = overfit risk
+        - generic [ref=e92]:
+          - generic [ref=e93]: Warmup
+          - generic [ref=e94]: 1–5% of steps
+          - generic [ref=e95]: Linear ramp from zero
+        - generic [ref=e96]:
+          - generic [ref=e97]: Prompt Loss
+          - generic [ref=e98]: 0.0 (preferred)
+          - generic [ref=e99]: Response-only masking
+    - generic [ref=e100]:
+      - heading "Interactive Training Curve Simulator" [level=2] [ref=e101]
+      - paragraph [ref=e102]: Adjust the four key hyperparameters and watch how the training and validation loss curves evolve. See overfitting, instability, and optimal training regimes emerge in real time.
+      - generic [ref=e103]:
+        - generic [ref=e104]:
+          - generic [ref=e105]:
+            - generic [ref=e106]:
+              - generic [ref=e107]: Learning Rate
+              - generic [ref=e108]: "2e-5"
+            - slider [ref=e109] [cursor=pointer]: "3"
+            - generic [ref=e110]: Low → slow/stable. High → fast but risks instability or forgetting.
+          - separator [ref=e111]
+          - generic [ref=e112]:
+            - generic [ref=e113]:
+              - generic [ref=e114]: Batch Size
+              - generic [ref=e115]: "32"
+            - slider [ref=e116] [cursor=pointer]: "2"
+            - generic [ref=e117]: Too small → noisy curves. Too large → may underfit small datasets.
+          - separator [ref=e118]
+          - generic [ref=e119]:
+            - generic [ref=e120]:
+              - generic [ref=e121]: Epochs
+              - generic [ref=e122]: "3"
+            - slider [ref=e123] [cursor=pointer]: "3"
+            - generic [ref=e124]: Watch for val loss to diverge from train loss — that's overfitting.
+          - separator [ref=e125]
+          - generic [ref=e126]:
+            - generic [ref=e127]:
+              - generic [ref=e128]: Prompt Loss Weight
+              - generic [ref=e129]: "0.0"
+            - slider [ref=e130] [cursor=pointer]: "0"
+            - generic [ref=e131]: 0.0 = response-only (recommended). 1.0 = full sequence loss.
+          - separator [ref=e132]
+          - generic [ref=e133]:
+            - generic [ref=e135]: Dataset Size
+            - generic [ref=e136]:
+              - button "Small 1k ex" [ref=e137] [cursor=pointer]:
+                - text: Small
+                - text: 1k ex
+              - button "Medium 10k ex" [ref=e138] [cursor=pointer]:
+                - text: Medium
+                - text: 10k ex
+              - button "Large 100k ex" [ref=e139] [cursor=pointer]:
+                - text: Large
+                - text: 100k ex
+        - generic [ref=e143]:
+          - generic [ref=e144]:
+            - generic [ref=e145]: Final Train Loss
+            - generic [ref=e146]: "1.040"
+          - generic [ref=e147]:
+            - generic [ref=e148]: Final Val Loss
+            - generic [ref=e149]: "1.071"
+          - generic [ref=e150]:
+            - generic [ref=e151]: Verdict
+            - generic [ref=e152]: ✓ Good
+    - generic [ref=e153]:
+      - heading "Key Takeaways" [level=2] [ref=e154]
+      - list [ref=e155]:
+        - listitem [ref=e156]:
+          - strong [ref=e157]: Learning rate is the most consequential knob.
+          - text: Full fine-tuning on 7B+ models at LR > 1e-4 often causes catastrophic forgetting within the first epoch. Start at 2e-5 and double only if convergence is too slow after watching 1–2 epoch curves.
+        - listitem [ref=e158]:
+          - strong [ref=e159]: Gradient accumulation is a mandatory trick.
+          - text: With 40 GB GPUs and a 13B fp16 model, you can fit micro-batch = 1–2. Use gradient accumulation × 32 to reach an effective batch of 64 without buying more hardware. TRL, Axolotl, and LLaMA-Factory all handle this transparently.
+        - listitem [ref=e160]:
+          - strong [ref=e161]: Overfitting happens fast on small datasets.
+          - text: A fine-tune on 1k examples with 10 epochs will typically see val loss diverge by epoch 3–4. Always reserve 5–10% of data for a validation split and monitor it. Don't optimize train loss alone.
+        - listitem [ref=e162]:
+          - strong [ref=e163]: Prompt loss weight = 0 is almost always better for instruction tuning.
+          - text: Including loss on system prompt tokens causes the model to waste capacity memorizing template phrasing. OpenAI's supervised fine-tune guide and most production practitioners (Axolotl default) mask prompt tokens.
+        - listitem [ref=e164]:
+          - strong [ref=e165]: Warmup steps matter more than people realize.
+          - text: "At LR 2e-5 with no warmup, early gradient estimates (when weights are still \"wrong\" for the new distribution) can cause destructive updates. Standard practice: warmup over 5% of total steps. Cosine decay vs linear decay rarely changes final quality by >0.5 loss points."
+        - listitem [ref=e166]:
+          - strong [ref=e167]: For LoRA, tune rank before LR.
+          - text: Rank 8–64 covers 95% of use cases. A higher rank (128+) with high LR on a tiny dataset will overfit the LoRA matrices — you get a model that perfectly copies training examples and generalizes poorly. Validate with a task-specific metric, not just loss.
+  - navigation [ref=e168]:
+    - link "← Previous 18 · Multi-Task Fine-Tuning & Model Merging" [ref=e169] [cursor=pointer]:
+      - /url: 18-multitask-finetuning.html
+      - generic [ref=e170]: ← Previous
+      - generic [ref=e171]: 18 · Multi-Task Fine-Tuning & Model Merging
+    - generic [ref=e172]: 19 of 36
+    - link "Next → 20 · Memory Bottlenecks in Fine-Tuning" [ref=e173] [cursor=pointer]:
+      - /url: 20-memory-bottlenecks.html
+      - generic [ref=e174]: Next →
+      - generic [ref=e175]: 20 · Memory Bottlenecks in Fine-Tuning

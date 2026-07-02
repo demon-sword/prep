@@ -1,0 +1,577 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Multi-Agent Code Review System — System Design</title>
+  <style>
+    :root {
+      --bg: #0f1117;
+      --card: #1a1d27;
+      --card2: #1e2130;
+      --border: #2a2d3e;
+      --accent: #7c6af7;
+      --accent2: #4fc3f7;
+      --green: #4caf98;
+      --yellow: #f0c040;
+      --red: #e06c75;
+      --text: #e0e0e0;
+      --muted: #8a8fa8;
+      --tag-bg: #2a2d3e;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: 'Segoe UI', system-ui, sans-serif;
+      font-size: 15px;
+      line-height: 1.6;
+    }
+    header {
+      background: linear-gradient(135deg, #1a1d27 0%, #1e1b3a 100%);
+      border-bottom: 1px solid var(--border);
+      padding: 28px 40px;
+      text-align: center;
+    }
+    header h1 { font-size: 1.8rem; color: #fff; letter-spacing: 0.3px; }
+    header p { color: var(--muted); font-size: 0.9rem; margin-top: 6px; }
+    main { max-width: 900px; margin: 0 auto; padding: 36px 24px 60px; }
+    .section-header {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      border-bottom: 1px solid var(--border);
+      padding-bottom: 12px;
+      margin-bottom: 24px;
+    }
+    .section-header .icon {
+      width: 36px; height: 36px;
+      border-radius: 8px;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 1.1rem;
+      flex-shrink: 0;
+    }
+    .icon.purple { background: rgba(124,106,247,0.15); }
+    .section-header h2 { font-size: 1.1rem; color: #fff; }
+    .section-header small { color: var(--muted); font-size: 0.82rem; display: block; margin-top: 1px; }
+    .letter-block {
+      background: var(--card2);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 16px;
+      margin-bottom: 12px;
+    }
+    .letter-block h4 {
+      font-size: 1.1rem;
+      color: var(--accent);
+      margin-bottom: 8px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .letter-block h4 span {
+      background: rgba(124,106,247,0.2);
+      color: var(--accent);
+      width: 32px;
+      height: 32px;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-weight: 700;
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: 10px;
+      font-size: 0.85rem;
+    }
+    th, td {
+      padding: 10px 12px;
+      text-align: left;
+      border-bottom: 1px solid var(--border);
+    }
+    th {
+      color: var(--accent2);
+      font-weight: 600;
+      background: rgba(79,195,247,0.05);
+    }
+    td { color: var(--text); }
+    .snippet {
+      background: #12141f;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 14px 16px;
+      font-family: 'Fira Code', 'Cascadia Code', monospace;
+      font-size: 0.82rem;
+      line-height: 1.55;
+      margin-top: 10px;
+      color: var(--muted);
+    }
+    .snippet strong { color: #fff; }
+    .opener {
+      background: linear-gradient(135deg, rgba(124,106,247,0.08), rgba(79,195,247,0.05));
+      border: 1px solid rgba(124,106,247,0.3);
+      border-radius: 12px;
+      padding: 20px 22px;
+      font-style: italic;
+      border-left: 3px solid var(--accent);
+      line-height: 1.7;
+      margin-bottom: 14px;
+    }
+    .time-bar {
+      display: flex;
+      gap: 4px;
+      margin-top: 10px;
+    }
+    .time-segment {
+      flex: 1;
+      padding: 8px 12px;
+      background: var(--card2);
+      border-radius: 6px;
+      text-align: center;
+      font-size: 0.85rem;
+    }
+    .time-segment .label { display: block; color: var(--accent); font-weight: 600; }
+    .time-segment .duration { display: block; color: var(--muted); font-size: 0.75rem; }
+    .two-col { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+    @media (max-width: 640px) { .two-col { grid-template-columns: 1fr; } }
+    .back-btn {
+      display: inline-block;
+      padding: 12px 24px;
+      background: var(--card2);
+      color: var(--text);
+      text-decoration: none;
+      border-radius: 6px;
+      margin-top: 20px;
+      border: 1px solid var(--border);
+      transition: all 0.2s;
+    }
+.architecture-diagram-container {
+    width: 100%;
+    max-width: 700px;
+    margin: 0 auto 24px;
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    background: var(--card2);
+    padding: 20px;
+    overflow: visible;
+}
+.architecture-diagram-container svg {
+    display: block;
+    width: 100%;
+    height: auto;
+    overflow: visible;
+}
+      background: var(--accent);
+      color: #fff;
+    }
+  </style>
+</head>
+<body>
+
+<header>
+  <div>
+    <h1>🛠 Multi-Agent Code Review System</h1>
+    <p>System Design Solution using ARCH Framework</p>
+  </div>
+</header>
+
+<main>
+  <!-- Back Button -->
+  <a href="../index.html" class="back-btn">← Back to Problems</a>
+
+  <!-- Opening Line -->
+  <div class="opener">
+    "I'll design this using the ARCH framework: Architecture — the components and agents; Routing — how they communicate; Constraints — what can break and how we handle it; and Heuristics — why I chose this design."
+  </div>
+
+  <!-- Architecture Diagram -->
+  <div class="architecture-diagram-container">
+    <svg viewBox="0 0 700 920" xmlns="http://www.w3.org/2000/svg">
+      <defs>
+        <!-- Arrowhead for main flow -->
+        <marker id="arrow-main" markerWidth="8" markerHeight="8" refX="6" refY="4" orient="auto" markerUnits="strokeWidth">
+          <path d="M0,0 L0,8 L7,4 z" fill="#7c6af7" />
+        </marker>
+        <!-- Arrowhead for warning flow -->
+        <marker id="arrow-warn" markerWidth="8" markerHeight="8" refX="6" refY="4" orient="auto" markerUnits="strokeWidth">
+          <path d="M0,0 L0,8 L7,4 z" fill="#f0c040" />
+        </marker>
+        <!-- Arrowhead for final output -->
+        <marker id="arrow-final" markerWidth="8" markerHeight="8" refX="6" refY="4" orient="auto" markerUnits="strokeWidth">
+          <path d="M0,0 L0,8 L7,4 z" fill="#4caf98" />
+        </marker>
+
+        <!-- Filter for card shadow -->
+        <filter id="shadow" x="-10%" y="-10%" width="120%" height="120%">
+          <feDropShadow dx="0" dy="2" stdDeviation="3" flood-color="#000000" flood-opacity="0.3" />
+        </filter>
+      </defs>
+
+      <!-- Background -->
+      <rect width="700" height="920" fill="#0f1117" rx="10" />
+
+      <!-- Title -->
+      <text x="350" y="35" text-anchor="middle" fill="#e0e0e0" font-size="18" font-weight="600" font-family="'Segoe UI', system-ui, sans-serif">Multi-Agent Code Review Flow</text>
+
+      <!-- 1. User Uploads Code -->
+      <g transform="translate(220, 60)">
+        <rect x="0" y="0" width="260" height="50" rx="8" fill="#1a1d27" stroke="#2a2d3e" stroke-width="1.5" filter="url(#shadow)" />
+        <text x="130" y="30" text-anchor="middle" fill="#e0e0e0" font-size="14" font-weight="500" font-family="'Segoe UI', system-ui, sans-serif">User Uploads Code</text>
+      </g>
+      <!-- Arrow to Parser -->
+      <line x1="350" y1="110" x2="350" y2="130" stroke="#7c6af7" stroke-width="2" marker-end="url(#arrow-main)" />
+
+      <!-- 2. Initial Parser (AST, static analysis) -->
+      <g transform="translate(180, 140)">
+        <rect x="0" y="0" width="340" height="50" rx="8" fill="#1a1d27" stroke="#2a2d3e" stroke-width="1.5" filter="url(#shadow)" />
+        <text x="170" y="30" text-anchor="middle" fill="#e0e0e0" font-size="14" font-weight="500" font-family="'Segoe UI', system-ui, sans-serif">Initial Parser (AST, Static Analysis)</text>
+      </g>
+      <!-- Arrow to Classifier -->
+      <line x1="350" y1="190" x2="350" y2="210" stroke="#7c6af7" stroke-width="2" marker-end="url(#arrow-main)" />
+
+      <!-- 3. Issue Type Classifier -->
+      <g transform="translate(180, 220)">
+        <rect x="0" y="0" width="340" height="50" rx="8" fill="#1a1d27" stroke="#2a2d3e" stroke-width="1.5" filter="url(#shadow)" />
+        <text x="170" y="30" text-anchor="middle" fill="#e0e0e0" font-size="14" font-weight="500" font-family="'Segoe UI', system-ui, sans-serif">Issue Type Classifier</text>
+      </g>
+
+      <!-- Routing arrows from Classifier to Agents -->
+      <line x1="250" y1="270" x2="200" y2="310" stroke="#f0c040" stroke-width="2" marker-end="url(#arrow-warn)" />
+      <line x1="350" y1="270" x2="350" y2="310" stroke="#f0c040" stroke-width="2" marker-end="url(#arrow-warn)" />
+      <line x1="450" y1="270" x2="500" y2="310" stroke="#f0c040" stroke-width="2" marker-end="url(#arrow-warn)" />
+
+      <!-- 4. Parallel Agent Lanes -->
+      <!-- Bug Detection Agent -->
+      <g transform="translate(40, 320)">
+        <rect x="0" y="0" width="200" height="80" rx="8" fill="#1a1d27" stroke="#2a2d3e" stroke-width="1.5" filter="url(#shadow)" />
+        <text x="100" y="30" text-anchor="middle" fill="#f0c040" font-size="14" font-weight="600" font-family="'Segoe UI', system-ui, sans-serif">Bug Detection Agent</text>
+        <text x="100" y="55" text-anchor="middle" fill="#8a8fa8" font-size="12" font-family="'Segoe UI', system-ui, sans-serif">Deep Analysis</text>
+      </g>
+      <!-- Style Audit Agent -->
+      <g transform="translate(260, 320)">
+        <rect x="0" y="0" width="180" height="80" rx="8" fill="#1a1d27" stroke="#2a2d3e" stroke-width="1.5" filter="url(#shadow)" />
+        <text x="90" y="30" text-anchor="middle" fill="#f0c040" font-size="14" font-weight="600" font-family="'Segoe UI', system-ui, sans-serif">Style Audit Agent</text>
+        <text x="90" y="55" text-anchor="middle" fill="#8a8fa8" font-size="12" font-family="'Segoe UI', system-ui, sans-serif">Linting, Formatting</text>
+      </g>
+      <!-- Performance Bot Agent -->
+      <g transform="translate(460, 320)">
+        <rect x="0" y="0" width="200" height="80" rx="8" fill="#1a1d27" stroke="#2a2d3e" stroke-width="1.5" filter="url(#shadow)" />
+        <text x="100" y="30" text-anchor="middle" fill="#f0c040" font-size="14" font-weight="600" font-family="'Segoe UI', system-ui, sans-serif">Performance Bot Agent</text>
+        <text x="100" y="55" text-anchor="middle" fill="#8a8fa8" font-size="12" font-family="'Segoe UI', system-ui, sans-serif">Complexity, Efficiency</text>
+      </g>
+
+      <!-- Arrows from Agents to Aggregator -->
+      <line x1="140" y1="400" x2="230" y2="460" stroke="#7c6af7" stroke-width="2" marker-end="url(#arrow-main)" />
+      <line x1="350" y1="400" x2="350" y2="460" stroke="#7c6af7" stroke-width="2" marker-end="url(#arrow-main)" />
+      <line x1="560" y1="400" x2="470" y2="460" stroke="#7c6af7" stroke-width="2" marker-end="url(#arrow-main)" />
+
+      <!-- 5. Evidence Aggregator / Vulnerability Merger -->
+      <g transform="translate(190, 470)">
+        <rect x="0" y="0" width="320" height="50" rx="8" fill="#1a1d27" stroke="#2a2d3e" stroke-width="1.5" filter="url(#shadow)" />
+        <text x="160" y="30" text-anchor="middle" fill="#e0e0e0" font-size="14" font-weight="500" font-family="'Segoe UI', system-ui, sans-serif">Evidence Aggregator / Vulnerability Merger</text>
+      </g>
+      <!-- Arrow to Severity Ranker -->
+      <line x1="350" y1="520" x2="350" y2="540" stroke="#7c6af7" stroke-width="2" marker-end="url(#arrow-main)" />
+
+      <!-- 6. Severity Ranker / Prioritizer -->
+      <g transform="translate(190, 550)">
+        <rect x="0" y="0" width="320" height="50" rx="8" fill="#1a1d27" stroke="#2a2d3e" stroke-width="1.5" filter="url(#shadow)" />
+        <text x="160" y="30" text-anchor="middle" fill="#e0e0e0" font-size="14" font-weight="500" font-family="'Segoe UI', system-ui, sans-serif">Severity Ranker / Prioritizer</text>
+      </g>
+      <!-- Arrow to Final Report -->
+      <line x1="350" y1="600" x2="350" y2="620" stroke="#4caf98" stroke-width="2" marker-end="url(#arrow-final)" />
+
+      <!-- 7. Final Report with Patches -->
+      <g transform="translate(190, 630)">
+        <rect x="0" y="0" width="320" height="50" rx="8" fill="#1a1d27" stroke="#4caf98" stroke-width="2" filter="url(#shadow)" />
+        <text x="160" y="30" text-anchor="middle" fill="#4caf98" font-size="14" font-weight="600" font-family="'Segoe UI', system-ui, sans-serif">Final Report with Patches</text>
+      </g>
+      <!-- Arrow to GitHub/GitLab Integration -->
+      <line x1="350" y1="680" x2="350" y2="700" stroke="#4caf98" stroke-width="2" marker-end="url(#arrow-final)" />
+
+      <!-- 8. GitHub/GitLab Integration -->
+      <g transform="translate(190, 710)">
+        <rect x="0" y="0" width="320" height="50" rx="8" fill="#1a1d27" stroke="#2a2d3e" stroke-width="1.5" filter="url(#shadow)" />
+        <text x="160" y="30" text-anchor="middle" fill="#e0e0e0" font-size="14" font-weight="500" font-family="'Segoe UI', system-ui, sans-serif">GitHub / GitLab Integration</text>
+      </g>
+
+      <!-- 9. Memory Store (Pattern Database) - Side element -->
+      <g transform="translate(50, 550)">
+        <rect x="0" y="0" width="120" height="80" rx="8" fill="#1a1d27" stroke="#2a2d3e" stroke-width="1.5" filter="url(#shadow)" />
+        <text x="60" y="30" text-anchor="middle" fill="#e0e0e0" font-size="13" font-weight="500" font-family="'Segoe UI', system-ui, sans-serif">Memory Store</text>
+        <text x="60" y="50" text-anchor="middle" fill="#8a8fa8" font-size="11" font-family="'Segoe UI', system-ui, sans-serif">(Pattern</text>
+        <text x="60" y="65" text-anchor="middle" fill="#8a8fa8" font-size="11" font-family="'Segoe UI', system-ui, sans-serif">Database)</text>
+      </g>
+
+      <!-- Dotted lines from Memory Store to Agents and Aggregator -->
+      <line x1="170" y1="585" x2="190" y2="585" stroke="#2a2d3e" stroke-width="1.5" stroke-dasharray="4,4" marker-end="url(#arrow-main)" />
+      <line x1="140" y1="550" x2="140" y2="400" stroke="#2a2d3e" stroke-width="1.5" stroke-dasharray="4,4" />
+      <line x1="140" y1="400" x2="40" y2="400" stroke="#2a2d3e" stroke-width="1.5" stroke-dasharray="4,4" marker-end="url(#arrow-main)" />
+      <line x1="140" y1="400" x2="260" y2="400" stroke="#2a2d3e" stroke-width="1.5" stroke-dasharray="4,4" marker-end="url(#arrow-main)" />
+    </svg>
+  </div>
+
+  <!-- TIME ALLOCATION -->
+  <section>
+    <div class="section-header">
+      <div class="icon purple">⏱</div>
+      <div>
+        <h2>Time Allocation</h2>
+        <small>Total: 8-12 min (leaves time for questions)</small>
+      </div>
+    </div>
+    <div class="time-bar">
+      <div class="time-segment">
+        <span class="label">A</span>
+        <span class="duration">3-4 min</span>
+      </div>
+      <div class="time-segment">
+        <span class="label">R</span>
+        <span class="duration">2-3 min</span>
+      </div>
+      <div class="time-segment">
+        <span class="label">C</span>
+        <span class="duration">2-3 min</span>
+      </div>
+      <div class="time-segment">
+        <span class="label">H</span>
+        <span class="duration">1-2 min</span>
+      </div>
+    </div>
+  </section>
+
+  <!-- ARCH BREAKDOWN -->
+  <section>
+    <div class="section-header">
+      <div class="icon blue">🏗</div>
+      <div>
+        <h2>The ARCH Framework</h2>
+        <small>Four components with specific things to mention</small>
+      </div>
+    </div>
+
+    <!-- A - Architecture -->
+    <div class="letter-block">
+      <h4><span>A</span> Architecture — Components & Data Flow</h4>
+      <p style="color:var(--muted); margin-bottom:12px;">What pieces exist and how they connect</p>
+      <table>
+        <tr>
+          <th>What to Mention</th>
+          <th>IRCTC Example</th>
+        </tr>
+        <tr>
+          <td>Components</td>
+          <td>GitHub Webhook Receiver, Intent Router, Code Review Agents (Security, Style, Performance, Documentation, Test Coverage), Conflict Resolver, Notification Service, Review Aggregator, Historical Database</td>
+        </tr>
+        <tr>
+          <td>Data Flow</td>
+          <td>PR Webhook → Router → Parallel Agents → Conflict Resolver → Aggregator → Notification/Historical DB</td>
+        </tr>
+        <tr>
+          <td>Agents</td>
+          <td>Specialized agents: Security (vulnerabilities), Style (formatting), Performance (inefficiencies), Documentation (missing docs), Test Coverage (test gaps)</td>
+        </tr>
+        <tr>
+          <td>Services</td>
+          <td>GitHub API, LLM API (for complex analysis), Vector DB (for historical patterns), Redis (for caching), PostgreSQL (for review history)</td>
+        </tr>
+        <tr>
+          <td>State Management</td>
+          <td>PR Context (in-memory during review), Agent Findings (Redis cache), Historical Decisions (PostgreSQL), Review Templates (Config)</td>
+        </tr>
+      </table>
+      <div class="snippet">
+        <strong>Key line:</strong> "We have specialized agents for Security, Style, Performance, Documentation, and Test Coverage. They run in parallel on the same PR, then a Conflict Resolver handles disagreements, and an Aggregator produces the final review."
+      </div>
+    </div>
+
+    <!-- R - Routing -->
+    <div class="letter-block">
+      <h4><span>R</span> Routing — Agent Orchestration</h4>
+      <p style="color:var(--muted); margin-bottom:12px;">How agents run and communicate</p>
+      <table>
+        <tr>
+          <th>What to Mention</th>
+          <th>IRCTC Example</th>
+        </tr>
+        <tr>
+          <td>Agent Orchestration</th>
+          <td>Parallel execution for all agents; Conflict Resolver uses weighted voting; Aggregator combines findings</td>
+        </tr>
+        <tr>
+          <td>Communication Pattern</th>
+          <td>Message queue (RabbitMQ/Kafka) for agent coordination; Shared state via Redis for findings</td>
+        </tr>
+        <tr>
+          <td>Decision Logic</th>
+          <td>Weighted voting based on agent confidence and historical accuracy; Security agent has veto power on critical issues</td>
+        </tr>
+      </table>
+      <div class="snippet">
+        <strong>Key line:</strong> "All agents run in parallel via message queue. Conflict Resolver uses weighted voting (Security agent has veto on critical issues). Aggregator combines findings into a single review with priority labels."
+      </div>
+    </div>
+
+    <!-- C - Constraints -->
+    <div class="letter-block">
+      <h4><span>C</span> Constraints — What Can Break</h4>
+      <p style="color:var(--muted); margin-bottom:12px;">Failure modes, limits, and edge cases</p>
+      <table>
+        <tr>
+          <th>What to Mention</th>
+          <th>IRCTC Example</th>
+        </tr>
+        <tr>
+          <td>Timeout on Reviews</td>
+          <td>Set SLA (e.g., 5 minutes); if agent times out, use historical average or skip with warning</td>
+        </tr>
+        <tr>
+          <td>Large PRs</td>
+          <td>Chunk by file/module; process chunks in parallel; aggregate results; notify if exceeds threshold</td>
+        </tr>
+        <tr>
+          <td>API Rate Limits</td>
+          <td>GitHub API limits: batch requests, cache results, exponential backoff, queue for retry</td>
+        </tr>
+        <tr>
+          <td>Conflicting Reviews</td>
+          <td>Security agent veto on critical vulnerabilities; else weighted average; human escalation for irreconcilable conflicts</td>
+        </tr>
+        <tr>
+          <td>LLM Failures</td>
+          <td>Fallback to rule-based analysis; continue with reduced functionality; alert on persistent failures</td>
+        </tr>
+      </table>
+      <div class="snippet">
+        <strong>Key line:</strong> "For large PRs, we chunk by file and process in parallel. Security agent has veto power on critical vulnerabilities. If all agents time out, we use historical averages and flag for manual review."
+      </div>
+    </div>
+
+    <!-- H - Heuristics -->
+    <div class="letter-block">
+      <h4><span>H</span> Heuristics — Why This Design</h4>
+      <p style="color:var(--muted); margin-bottom:12px;">Trade-offs, scaling, and decisions</p>
+      <table>
+        <tr>
+          <th>What to Mention</th>
+          <th>IRCTC Example</th>
+        </tr>
+        <tr>
+          <td>Why This Architecture?</td>
+          <td>Parallel agents for speed; specialized agents for depth; weighted voting for balanced decisions</td>
+        </tr>
+        <tr>
+          <td>Why Not X?</td>
+          <td>Single agent would be slower and miss specialized insights; pure democracy would let low-confidence agents override experts</td>
+        </tr>
+        <tr>
+          <td>Scaling Path</td>
+          <td>Kubernetes for horizontal scaling; sharding by repo/org; caching frequent patterns; async processing for non-blocking UI</td>
+        </tr>
+        <tr>
+          <td>Monitoring</td>
+          <td>Track agent accuracy vs human reviews, review latency, false positive/negative rates, escalation frequency</td>
+        </tr>
+      </table>
+      <div class="snippet">
+        <strong>Key line:</strong> "I chose weighted voting over pure democracy because Security expertise should outweigh Style preferences on critical issues. Parallel execution ensures we meet SLAs even with many agents."
+      </div>
+    </div>
+
+    <!-- E - Evaluation (NEW) -->
+    <div class="letter-block">
+      <h4><span style="background: rgba(76,175,152,0.2); color: var(--green); width: 32px; height: 32px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: 700;">E</span> Evaluation — How We Measure Success</h4>
+      <p style="color:var(--muted); margin-bottom:12px;">Offline benchmarks, online metrics, and per-agent KPIs</p>
+      <table>
+        <tr>
+          <th>Type</th>
+          <th>Metric</th>
+          <th>Target / Example</th>
+        </tr>
+        <tr>
+          <td><strong>Offline</strong></td>
+          <td>Security vulnerability detection</td>
+          <td>> 95% recall, > 90% precision on OWASP benchmark dataset</td>
+        </tr>
+        <tr>
+          <td><strong>Offline</strong></td>
+          <td>Style rule adherence</td>
+          <td>100% alignment with configured linter rules (ESLint, Black, etc.)</td>
+        </tr>
+        <tr>
+          <td><strong>Offline</strong></td>
+          <td>Regression tests</td>
+          <td>Zero regression on 100 historical PRs; no new false positives introduced</td>
+        </tr>
+        <tr>
+          <td><strong>Online</strong></td>
+          <td>Review throughput</td>
+          <td>> 100 PRs/hour; p95 review time < 5 minutes</td>
+        </tr>
+        <tr>
+          <td><strong>Online</strong></td>
+          <td>Human agreement rate</td>
+          <td>> 90% agreement with senior developer reviews</td>
+        </tr>
+        <tr>
+          <td><strong>Online</strong></td>
+          <td>False positive rate</td>
+          <td>< 5% false positives; < 2% false negatives on security issues</td>
+        </tr>
+        <tr>
+          <td><strong>Per-Agent</strong></td>
+          <td>Security Agent</td>
+          <td>True positive rate > 95%; Critical issues never missed</td>
+        </tr>
+        <tr>
+          <td><strong>Per-Agent</strong></td>
+          <td>Style Agent</td>
+          <td>100% linter alignment; Zero false positives on formatting</td>
+        </tr>
+        <tr>
+          <td><strong>Per-Agent</strong></td>
+          <td>Performance Agent</td>
+          <td>N+1 query detection > 90% accuracy; Memory leak detection > 85%</td>
+        </tr>
+        <tr>
+          <td><strong>System</strong></td>
+          <td>Developer satisfaction</td>
+          <td>4.2/5 rating; < 10% override rate (developer disagrees with AI)</td>
+        </tr>
+        <tr>
+          <td><strong>System</strong></td>
+          <td>Escalation frequency</td>
+          <td>Human escalation < 3% of all reviews; Security escalations < 0.5%</td>
+        </tr>
+      </table>
+      <div class="snippet">
+        <strong>Key line:</strong> "We benchmark offline on OWASP dataset for security (> 95% recall) and historical PRs for style (100% linter alignment). Online, we track human agreement rate (> 90%) and false positive rate (< 5%). Auto-rollback if security recall drops below 95%."
+      </div>
+    </div>
+  </section>
+
+  <!-- QUICK REFERENCE -->
+  <section>
+    <div class="section-header">
+      <div class="icon green">📋</div>
+      <div>
+        <h2>Quick Reference: ARCH Summary</h2>
+        <small>Memorize this for your answer</small>
+      </div>
+    </div>
+    <div class="card">
+      <div class="snippet" style="font-size:0.9rem; line-height:1.8;">
+        <strong>A</strong> — Architecture: Specialized agents (Security, Style, Performance, etc.) run in parallel on PRs.<br>
+        <strong>R</strong> — Routing: Parallel execution via message queue; Conflict Resolver uses weighted voting (Security veto on critical issues).<br>
+        <strong>C</strong> — Constraints: Timeout on PRs → use historical average; Large PRs → chunk by file; Conflicts → Security agent veto.<br>
+        <strong>H</strong> — Heuristics: Weighted voting over pure democracy; Kubernetes scaling; monitor accuracy vs human reviews.
+      </div>
+    </div>
+  </section>
+
+</main>
+
+</body>
+</html>

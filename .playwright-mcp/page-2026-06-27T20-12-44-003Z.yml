@@ -1,0 +1,107 @@
+- generic [ref=e1]:
+  - banner [ref=e2]:
+    - generic [ref=e3]: Foundations
+    - heading "Seq2Seq Architecture" [level=1] [ref=e4]
+    - paragraph [ref=e5]: Encoder-decoder sequence-to-sequence architecture, attention mechanism, and how it preceded the transformer — mapping variable-length inputs to variable-length outputs.
+  - main [ref=e6]:
+    - generic [ref=e7]:
+      - heading "Theory" [level=2] [ref=e8]
+      - heading "What is Seq2Seq?" [level=3] [ref=e9]
+      - paragraph [ref=e10]: Sequence-to-sequence (Seq2Seq) models, introduced by Sutskever, Vinyals & Le at Google in 2014, solve the fundamental problem of mapping an input sequence of arbitrary length to an output sequence of (potentially different) arbitrary length. Before Seq2Seq, neural networks required fixed-size inputs and outputs, which made tasks like machine translation — where source and target sentences have different lengths — extremely difficult to handle in a principled way.
+      - paragraph [ref=e11]:
+        - text: "The key insight was a two-component design: an"
+        - strong [ref=e12]: encoder
+        - text: that reads the entire input sequence and compresses it into a fixed-size vector (the context vector), and a
+        - strong [ref=e13]: decoder
+        - text: that takes that context vector and generates the output sequence one token at a time. Both components are typically Recurrent Neural Networks (RNNs), though LSTMs and GRUs quickly became standard due to their ability to capture longer-range dependencies.
+      - 'heading "Encoder: Compressing the Source" [level=3] [ref=e14]'
+      - paragraph [ref=e15]: "The encoder processes input tokens x₁, x₂, …, xₙ sequentially. At each step t, it updates a hidden state:"
+      - generic [ref=e16]:
+        - generic [ref=e17]: hₜ = f(hₜ₋₁, xₜ)
+        - generic [ref=e18]: where f is an RNN/LSTM/GRU cell, h₀ is the zero vector
+      - paragraph [ref=e19]: After processing all n tokens, the final hidden state hₙ serves as the context vector c. This vector must encode the entire semantic content of the source sequence — a major bottleneck. For long sequences (e.g., a 50-word sentence), compressing everything into a 512- or 1024-dimensional vector causes an information bottleneck that leads to forgetting early tokens.
+      - 'heading "Decoder: Generating the Target" [level=3] [ref=e20]'
+      - paragraph [ref=e21]: "The decoder generates output tokens y₁, y₂, …, yₘ autoregressively. At each step t, it takes its previous hidden state sₜ₋₁, the previously generated token yₜ₋₁, and the context vector c:"
+      - generic [ref=e22]:
+        - generic [ref=e23]: sₜ = g(sₜ₋₁, yₜ₋₁, c)
+        - generic [ref=e24]: P(yₜ | y₁…yₜ₋₁, x) = softmax(Wsₜ + b)
+        - generic [ref=e25]: g is another RNN cell; W projects hidden state to vocabulary logits
+      - paragraph [ref=e26]: "During training, teacher forcing is used: the ground-truth previous token yₜ₋₁ is fed rather than the model's own prediction. This stabilizes training but creates a train/inference mismatch (exposure bias). At inference time, the model uses its own outputs — introducing error accumulation."
+      - 'heading "The Attention Mechanism: Solving the Bottleneck" [level=3] [ref=e27]'
+      - paragraph [ref=e28]:
+        - text: The single context vector bottleneck was the key failure mode for long sequences. Bahdanau et al. (2015) introduced
+        - strong [ref=e29]: additive attention
+        - text: (also called Bahdanau attention), which fundamentally changed Seq2Seq. Instead of using a single fixed context vector, the decoder dynamically computes a weighted combination of
+        - emphasis [ref=e30]: all
+        - text: "encoder hidden states at each decoding step:"
+      - generic [ref=e31]:
+        - generic [ref=e32]: eᵢⱼ = vᵀ tanh(W₁hᵢ + W₂sⱼ₋₁) <-- alignment score
+        - generic [ref=e33]: αᵢⱼ = exp(eᵢⱼ) / Σₖ exp(eₖⱼ) <-- softmax weights
+        - generic [ref=e34]: cⱼ = Σᵢ αᵢⱼ · hᵢ <-- dynamic context
+        - generic [ref=e35]: at decoder step j, the model looks at all encoder states h₁…hₙ
+      - paragraph [ref=e36]:
+        - text: Luong attention (2015) offered a simpler
+        - strong [ref=e37]: multiplicative
+        - text: "variant:"
+        - code [ref=e38]: eᵢⱼ = sⱼᵀ · hᵢ
+        - text: ", which is computationally cheaper and scales better to larger hidden dimensions. Scaled dot-product attention in the Transformer is a parallelized version of this exact idea."
+      - heading "How Attention Weights Are Learned" [level=3] [ref=e39]
+      - paragraph [ref=e40]: "The alignment model (computing eᵢⱼ) is trained jointly with the encoder and decoder via backpropagation. No explicit supervision is needed — the model learns which source tokens to attend to based on the translation objective alone. Visualizing attention matrices in trained models reveals linguistically meaningful patterns: when translating \"bank\" (financial institution) vs \"bank\" (river bank), the model attends to different context words to disambiguate."
+      - 'heading "Seq2Seq in Production: When It Was Used" [level=3] [ref=e41]'
+      - paragraph [ref=e42]: "Google's first neural machine translation (GNMT, 2016) used an 8-layer LSTM Seq2Seq with attention and reduced translation errors by 55–85% on some language pairs vs phrase-based MT. The model had ~380M parameters, trained on 36M sentence pairs. Despite this success, three fundamental limitations remained:"
+      - list [ref=e43]:
+        - listitem [ref=e44]:
+          - strong [ref=e45]: "Sequential bottleneck:"
+          - text: RNNs process tokens one at a time — can't parallelize across the sequence. Training a 6-layer LSTM on WMT English-German took ~1 week on 8 GPUs.
+        - listitem [ref=e46]:
+          - strong [ref=e47]: "Quadratic attention cost:"
+          - text: Computing all attention weights is O(n·m) — expensive for long documents.
+        - listitem [ref=e48]:
+          - strong [ref=e49]: "Vanishing gradients:"
+          - text: Despite LSTMs helping, gradients still degrade across 100+ token sequences.
+      - paragraph [ref=e50]: "\"Attention Is All You Need\" (Vaswani et al., 2017) kept the encoder-decoder structure but replaced RNNs entirely with self-attention, enabling full parallelism. The Transformer trained in 12 hours on 8 P100 GPUs and outperformed all prior Seq2Seq models — effectively making pure RNN-based Seq2Seq architecturally obsolete for most tasks."
+      - 'heading "Legacy: Why Seq2Seq Still Matters" [level=3] [ref=e51]'
+      - paragraph [ref=e52]: "Understanding Seq2Seq is essential because: (1) Transformer encoder-decoder models (T5, BART, mBART) inherit the same high-level structure — encoder reads, decoder generates; (2) the attention mechanism it pioneered is the core of every modern LLM; (3) many deployed edge systems and lightweight translation models still run LSTM Seq2Seq due to lower inference cost; (4) seq2seq framing (read all context → generate output) is how decoder-only LLMs like GPT work conceptually, just with the \"encoder\" being the prompt and the attention being self-attention."
+    - generic [ref=e53]:
+      - heading "Visualization" [level=2] [ref=e54]
+      - generic [ref=e55]:
+        - generic [ref=e56]: "Seq2Seq Animated Flow: Encoder → Context → Decoder with Attention"
+        - generic [ref=e57]: Watch the encoder process source tokens into hidden states, the context vector form, and the decoder generate output tokens step-by-step. The attention heatmap shows which encoder states the decoder attends to at each step. Use controls to play/pause or step through manually.
+        - generic [ref=e58]:
+          - button "⏸ Pause" [active] [ref=e88] [cursor=pointer]
+          - button "Step →" [ref=e60] [cursor=pointer]
+          - button "↺ Reset" [ref=e61] [cursor=pointer]
+          - generic [ref=e62]:
+            - generic [ref=e63]: Speed
+            - slider [ref=e64]: "1.5"
+            - generic [ref=e65]: 1.5×
+          - 'button "Attention: ON" [ref=e66] [cursor=pointer]'
+        - generic [ref=e68]: Encoding token 0/4…
+    - generic [ref=e69]:
+      - heading "Key Takeaways" [level=2] [ref=e70]
+      - list [ref=e71]:
+        - listitem [ref=e72]:
+          - strong [ref=e73]: Context vector is the original bottleneck.
+          - text: A single fixed-size vector encoding an entire sequence caused catastrophic forgetting on sentences longer than ~20 tokens. Attention solved this by giving the decoder a dynamic, content-based view into
+          - emphasis [ref=e74]: all
+          - text: encoder states — not just the final one.
+        - listitem [ref=e75]:
+          - strong [ref=e76]: Teacher forcing creates exposure bias.
+          - text: Training with ground-truth previous tokens but decoding with model-predicted tokens causes distribution mismatch. In production, scheduled sampling (gradually replacing ground-truth with model outputs during training) or minimum-risk training mitigates this — but it's still a gap Transformers don't fully escape either.
+        - listitem [ref=e77]:
+          - strong [ref=e78]: Seq2Seq → Transformer is architectural, not conceptual.
+          - text: T5, BART, and mBART still use encoder-decoder design — they replaced RNN cells with self-attention layers. Tasks needing full-input comprehension before generation (e.g., translation, summarization with extractive step) still benefit from the encoder-decoder split vs decoder-only GPT-style.
+        - listitem [ref=e79]:
+          - strong [ref=e80]: Attention weights ≠ interpretability.
+          - text: Visualizing attention matrices became popular for interpretability, but Jain & Wallace (2019) showed attention weights often don't correlate with feature importance. They are alignment scores, not causal explanations. Don't over-index on them as ground truth.
+        - listitem [ref=e81]:
+          - strong [ref=e82]: GNMT showed the compounding power of engineering tricks.
+          - text: Google's production Seq2Seq (2016) used 8 LSTM layers, residual connections between layers, attention, and aggressive quantization (INT8 weights). The tricks together — not any single one — produced the 55–85% error reduction. System-level thinking beats algorithmic purity.
+        - listitem [ref=e83]:
+          - strong [ref=e84]: Beam search is the default Seq2Seq decoder.
+          - text: Greedy decoding is fast but suboptimal. Beam search (width 4–10) improves output quality at the cost of latency proportional to beam size. Modern LLMs mostly use sampling (top-p, temperature) instead — beam search often produces repetitive, safe outputs.
+  - navigation [ref=e85]:
+    - link "← 01 · Self-Supervision in LLMs" [ref=e86] [cursor=pointer]:
+      - /url: 01-self-supervision.html
+    - link "03 · Recurrent Neural Networks (RNN) →" [ref=e87] [cursor=pointer]:
+      - /url: 03-rnn.html

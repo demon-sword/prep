@@ -1,0 +1,202 @@
+- generic [active] [ref=e1]:
+  - banner [ref=e2]:
+    - generic [ref=e3]: Inference
+    - heading "Inference Optimization" [level=1] [ref=e4]
+    - paragraph [ref=e5]: Compute vs memory-bound bottlenecks, quantization, pruning, distillation, speculative decoding, continuous batching, KV cache, prompt caching, and model/tensor parallelism.
+  - main [ref=e6]:
+    - generic [ref=e7]:
+      - heading "Theory" [level=2] [ref=e8]
+      - paragraph [ref=e9]:
+        - text: Inference optimization is the discipline of making LLM serving faster, cheaper, and more memory-efficient
+        - emphasis [ref=e10]: without retraining
+        - text: . It spans algorithmic techniques (quantization, speculative decoding), systems techniques (continuous batching, KV-cache management), and hardware strategies (tensor/pipeline parallelism). Understanding it requires first diagnosing
+        - emphasis [ref=e11]: which bottleneck you actually face
+        - text: — compute-bound or memory-bandwidth-bound — because the optimal interventions are completely different.
+      - heading "1. The Two Bottlenecks" [level=3] [ref=e12]
+      - paragraph [ref=e13]:
+        - text: Modern GPUs can perform massive FLOP counts but are constrained by how fast they can move data from HBM (high-bandwidth memory) to on-chip SRAM. The
+        - strong [ref=e14]: arithmetic intensity
+        - text: of an operation — FLOP/byte — determines which resource is the bottleneck.
+      - list [ref=e15]:
+        - listitem [ref=e16]:
+          - strong [ref=e17]: Compute-bound
+          - text: ": matrix multiplications during the"
+          - emphasis [ref=e18]: prefill
+          - text: "phase (long prompts, large batch sizes). The GPU ALUs are the bottleneck. Solutions: flash attention, lower precision (fp16, bf16), tensor parallelism."
+        - listitem [ref=e19]:
+          - strong [ref=e20]: Memory-bandwidth-bound
+          - text: ": autoregressive"
+          - emphasis [ref=e21]: decode
+          - text: "with batch size = 1 (each token generation loads all model weights from HBM). Solutions: quantization (reduce bytes/weight), continuous batching (increase effective batch size), speculative decoding, KV-cache offloading."
+      - paragraph [ref=e22]: "As a rough heuristic: a 7B model in fp16 is ~14 GB; at 900 GB/s bandwidth (A100 80GB), loading all weights takes ~15 ms — that's 67 decode tokens/sec max, even with zero compute overhead. Quantizing to int4 halves the load to ~7 GB and doubles the theoretical ceiling."
+      - heading "2. Quantization" [level=3] [ref=e23]
+      - paragraph [ref=e24]: "Quantization maps high-precision weights/activations to lower-precision representations. The main options:"
+      - list [ref=e25]:
+        - listitem [ref=e26]:
+          - strong [ref=e27]: fp16 / bf16
+          - text: ": Standard inference precision. bf16 has wider dynamic range (same exponent bits as fp32), favored by modern hardware. No quality loss vs fp32 in practice."
+        - listitem [ref=e28]:
+          - strong [ref=e29]: int8 (W8A8)
+          - text: ": Weights and activations quantized to 8-bit integers. Achievable with"
+          - code [ref=e30]: bitsandbytes
+          - text: ", GPTQ, or SmoothQuant. Typical quality impact: <1% degradation on most benchmarks. ~2x memory reduction, ~1.5–2x throughput gain on supported hardware."
+        - listitem [ref=e31]:
+          - strong [ref=e32]: int4 (W4A16 / NF4)
+          - text: ": 4-bit weights, fp16 activations. Used in QLoRA ("
+          - code [ref=e33]: NF4
+          - text: format) and GPTQ. ~4x memory reduction. Works surprisingly well for decoder-only models; some tasks see 2–5% degradation.
+          - code [ref=e34]: llama.cpp
+          - text: runs Llama 3 70B in int4 on a single 48 GB GPU.
+        - listitem [ref=e35]:
+          - strong [ref=e36]: GGUF / GGML
+          - text: ": Quantization formats for CPU inference, popularized by"
+          - code [ref=e37]: llama.cpp
+          - text: . Support mixed-precision per tensor (sensitive layers kept at higher precision).
+        - listitem [ref=e38]:
+          - strong [ref=e39]: AWQ (Activation-aware Weight Quantization)
+          - text: ": Keeps 1% of weights at fp16 (those with high activation magnitudes), the rest at int4. Better quality than uniform int4 at same bit-width."
+      - paragraph [ref=e40]: Post-training quantization (PTQ) requires no retraining. Quantization-aware training (QAT) bakes quantization into training for better results but is expensive.
+      - heading "3. KV Cache Management" [level=3] [ref=e41]
+      - paragraph [ref=e42]:
+        - text: "During autoregressive decoding, each attention layer must recompute attention over all previous tokens — or cache the Key and Value tensors to avoid redundant computation. The KV cache grows as:"
+        - code [ref=e43]: 2 × num_layers × num_kv_heads × head_dim × seq_len × bytes/elem
+        - text: ". For Llama 3 70B (80 layers, 8 GQA heads, 128 head_dim, fp16): each token uses"
+        - code [ref=e44]: 2 × 80 × 8 × 128 × 2 = 327,680 bytes ≈ 320 KB
+        - text: . A 4096-token sequence fills ~1.3 GB — per request.
+      - list [ref=e45]:
+        - listitem [ref=e46]:
+          - strong [ref=e47]: PagedAttention
+          - text: "(vLLM): Stores KV cache in non-contiguous pages (like virtual memory), eliminating fragmentation. Allows near-zero wasted KV cache memory and enables sharing across requests with common prefixes."
+        - listitem [ref=e48]:
+          - strong [ref=e49]: GQA (Grouped Query Attention)
+          - text: ": Multiple query heads share a single K/V head (Llama 3, Mistral). Reduces KV cache size by"
+          - code [ref=e50]: num_q_heads / num_kv_heads
+          - text: .
+        - listitem [ref=e51]:
+          - strong [ref=e52]: MQA (Multi-Query Attention)
+          - text: ": Extreme case — all query heads share one K/V pair. Used in PaLM, Falcon."
+        - listitem [ref=e53]:
+          - strong [ref=e54]: KV cache offloading
+          - text: ": Move KV cache to CPU RAM when GPU VRAM is full. Adds latency (~50–200ms per layer on NVLink) but allows longer contexts."
+        - listitem [ref=e55]:
+          - strong [ref=e56]: Prompt caching
+          - text: ": Cache the KV state for a fixed system prompt prefix across requests. Anthropic charges 10% for cache writes, 1% for cache hits. vLLM calls this \"prefix caching.\""
+      - heading "4. Continuous Batching" [level=3] [ref=e57]
+      - paragraph [ref=e58]:
+        - text: Naïve batching waits for all requests in a batch to finish before starting new ones — causing GPU idle time when some requests complete early.
+        - strong [ref=e59]: Continuous batching
+        - text: (iteration-level scheduling, used in vLLM, TGI, TensorRT-LLM) ejects completed sequences and inserts new ones at every decode step. This dramatically improves GPU utilization — throughput gains of 2–10x on production traffic distributions, because real request lengths vary widely.
+      - heading "5. Speculative Decoding" [level=3] [ref=e60]
+      - paragraph [ref=e61]:
+        - text: A small draft model (e.g., 7B) generates K candidate tokens; the large target model verifies all K in a single forward pass (because verification is parallelizable like prefill). Accepted tokens are kept; the first rejected token is replaced with the target's sample, and drafting resumes. Achieves
+        - strong [ref=e62]: 2–3x speedup
+        - text: "with no quality loss, because the target model's distribution is preserved. The key constraint: the draft model must match the domain/tokenizer of the target, and the speedup depends on acceptance rate (how often draft tokens match target distribution)."
+      - heading "6. Pruning & Distillation" [level=3] [ref=e63]
+      - paragraph [ref=e64]:
+        - strong [ref=e65]: Structured pruning
+        - text: removes entire attention heads or FFN neurons.
+        - strong [ref=e66]: Unstructured pruning
+        - text: zeros individual weights — requires sparse hardware support (NVIDIA Ampere 2:4 sparsity) to yield real speedup.
+        - strong [ref=e67]: Knowledge distillation
+        - text: trains a smaller student model on the teacher's soft logits — Phi-3 (3.8B), Gemma-2-2B, and SmolLM are notable distillation-derived models that punch well above their weight class. Distillation is orthogonal to quantization and can be combined.
+      - heading "7. Model & Tensor Parallelism" [level=3] [ref=e68]
+      - paragraph [ref=e69]: "When a model doesn't fit on one GPU, or when you need lower latency via parallelism:"
+      - list [ref=e70]:
+        - listitem [ref=e71]:
+          - strong [ref=e72]: Tensor parallelism
+          - text: ": Split weight matrices column/row-wise across GPUs. Each GPU holds a shard; all-reduce after each layer. Requires fast interconnect (NVLink). Reduces memory per GPU and allows larger batch sizes. vLLM, Megatron-LM."
+        - listitem [ref=e73]:
+          - strong [ref=e74]: Pipeline parallelism
+          - text: ": Assign layers to GPUs sequentially. Micro-batch pipelining hides the inter-GPU bubble. Better for slow interconnects. Higher latency than tensor parallelism for single requests."
+        - listitem [ref=e75]:
+          - strong [ref=e76]: Sequence/Context parallelism
+          - text: ": Split the sequence dimension across GPUs. Enables very long contexts (1M tokens) that can't fit in one GPU's KV cache. Used in DeepSpeed Ulysses, Ring Attention."
+      - heading "8. Flash Attention" [level=3] [ref=e77]
+      - paragraph [ref=e78]:
+        - text: Standard attention requires materializing the full N×N attention matrix in HBM — O(N²) memory.
+        - strong [ref=e79]: FlashAttention
+        - text: (Dao et al., 2022) tiles the computation to keep everything in SRAM, reducing HBM reads/writes and achieving 2–4x speedup on long sequences. FlashAttention-2 and FlashAttention-3 (for Hopper GPUs) push further. It's now the default in all major frameworks (HuggingFace, PyTorch SDPA, vLLM).
+      - heading "9. Production Reality" [level=3] [ref=e80]
+      - generic [ref=e81]:
+        - generic [ref=e82]:
+          - heading "vLLM" [level=4] [ref=e83]
+          - paragraph [ref=e84]: The de-facto open-source LLM serving engine. PagedAttention, continuous batching, tensor parallelism, speculative decoding, AWQ/GPTQ/int8 quantization. Often 10–20x throughput vs HuggingFace naive inference.
+        - generic [ref=e85]:
+          - heading "TGI (Text Generation Inference)" [level=4] [ref=e86]
+          - paragraph [ref=e87]: HuggingFace's production serving stack. Continuous batching, flash attention, token streaming. Used on the Inference API.
+        - generic [ref=e88]:
+          - heading "TensorRT-LLM" [level=4] [ref=e89]
+          - paragraph [ref=e90]: NVIDIA's framework. Deepest hardware-level optimization (kernel fusion, in-flight batching). Highest throughput on A100/H100 but complex deployment.
+        - generic [ref=e91]:
+          - heading "llama.cpp" [level=4] [ref=e92]
+          - paragraph [ref=e93]: CPU + GPU inference in GGUF format. Runs Llama 3 70B on a Mac Studio or dual RTX 3090s. int4 quantization with per-layer mixed precision.
+    - generic [ref=e94]:
+      - heading "Inference Optimization Decision Tree" [level=2] [ref=e95]
+      - paragraph [ref=e96]: Answer the questions below to get ranked optimization recommendations for your specific bottleneck. Each path leads to a set of technique cards with expected impact badges.
+      - generic [ref=e97]:
+        - generic [ref=e160]:
+          - generic [ref=e161]: What is your primary inference phase bottleneck?
+          - generic [ref=e162]:
+            - button "Decode is slow (low tokens/sec per request)" [ref=e163] [cursor=pointer]
+            - button "Prefill is slow (high time-to-first-token)" [disabled] [ref=e164] [cursor=pointer]
+            - button "Memory / VRAM is exhausted" [disabled] [ref=e165] [cursor=pointer]
+            - button "Throughput at scale (many concurrent users)" [disabled] [ref=e166] [cursor=pointer]
+        - generic [ref=e167]:
+          - generic [ref=e168]: Do you have a smaller model that matches your target model's domain?
+          - generic [ref=e169]:
+            - button "Yes — I can use a draft model" [ref=e170] [cursor=pointer]
+            - button "No — single-model constraint" [ref=e171] [cursor=pointer]
+      - button "↺ Start Over" [ref=e173] [cursor=pointer]
+      - generic [ref=e105]:
+        - heading "Throughput Comparison (Llama 3 70B, A100 80GB, tokens/sec)" [level=3] [ref=e106]
+        - paragraph [ref=e107]: Approximate relative throughput for a typical chat workload. Click a bar to highlight it.
+        - generic [ref=e108]:
+          - generic [ref=e109] [cursor=pointer]:
+            - generic [ref=e110]: HuggingFace generate() (naive)
+            - generic [ref=e113]: 5 tok/s
+          - generic [ref=e114] [cursor=pointer]:
+            - generic [ref=e115]: vLLM fp16 (continuous batch)
+            - generic [ref=e118]: 80 tok/s
+          - generic [ref=e119] [cursor=pointer]:
+            - generic [ref=e120]: vLLM + int8 (W8A8)
+            - generic [ref=e123]: 130 tok/s
+          - generic [ref=e124] [cursor=pointer]:
+            - generic [ref=e125]: vLLM + AWQ int4
+            - generic [ref=e128]: 170 tok/s
+          - generic [ref=e129] [cursor=pointer]:
+            - generic [ref=e130]: vLLM + int4 + Spec. Decode
+            - generic [ref=e133]: 220 tok/s
+          - generic [ref=e134] [cursor=pointer]:
+            - generic [ref=e135]: TensorRT-LLM int4 (H100)
+            - generic [ref=e138]: 310 tok/s
+    - generic [ref=e139]:
+      - heading "Key Takeaways" [level=2] [ref=e140]
+      - list [ref=e141]:
+        - listitem [ref=e142]:
+          - strong [ref=e143]: "Diagnose before optimizing:"
+          - text: Profiling is non-negotiable. Decode is almost always memory-bandwidth-bound at batch=1; prefill is almost always compute-bound for long prompts. The interventions are different — apply the wrong fix and you gain nothing.
+        - listitem [ref=e144]:
+          - strong [ref=e145]: "Continuous batching is the highest-leverage systems win:"
+          - text: vLLM's PagedAttention + continuous batching typically yields 10–20x throughput improvement over naïve HuggingFace
+          - code [ref=e146]: generate()
+          - text: with zero model changes. Do this first.
+        - listitem [ref=e147]:
+          - strong [ref=e148]: "int4 quantization on 70B+ models is production-safe:"
+          - text: AWQ / GPTQ int4 on Llama 3 70B loses <2% quality on most evals while fitting in 40 GB VRAM instead of 140 GB. The tradeoff is worthwhile for most applications.
+        - listitem [ref=e149]:
+          - strong [ref=e150]: "Speculative decoding's speedup is acceptance-rate dependent:"
+          - text: If draft and target models are misaligned (different tokenizer, different domain), acceptance rate collapses and you spend more compute than you save. Test empirically. 2.5–3x is realistic for well-matched pairs.
+        - listitem [ref=e151]:
+          - strong [ref=e152]: "KV cache is the memory budget killer at long context:"
+          - text: A 128K-context request on Llama 3 70B occupies ~40 GB of KV cache alone. GQA reduces this by 8x vs MHA; prefix caching amortizes it across requests with shared system prompts.
+        - listitem [ref=e153]:
+          - strong [ref=e154]: "FlashAttention is free quality:"
+          - text: It produces mathematically identical outputs to standard attention — it's a pure systems optimization. If you're not using it (via
+          - code [ref=e155]: torch.nn.functional.scaled_dot_product_attention
+          - text: in PyTorch 2.0+), you're leaving 2–4x prefill speed on the table.
+  - navigation [ref=e156]:
+    - link "← 33 · Dataset Engineering for LLMs" [ref=e157] [cursor=pointer]:
+      - /url: 33-dataset-engineering.html
+    - generic [ref=e158]: 34 of 36 · Inference Optimization
+    - link "35 · Speculative Decoding →" [ref=e159] [cursor=pointer]:
+      - /url: 35-speculative-decoding.html

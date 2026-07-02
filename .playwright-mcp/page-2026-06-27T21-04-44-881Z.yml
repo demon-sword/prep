@@ -1,0 +1,187 @@
+- generic [active] [ref=e1]:
+  - banner [ref=e2]:
+    - generic [ref=e3]: Training
+    - heading "DPO — Direct Preference Optimization" [level=1] [ref=e4]
+    - paragraph [ref=e5]: How DPO eliminates the reward model and RL loop by directly optimizing on preference pairs — mathematical intuition, comparison to RLHF, and when to prefer each.
+  - main [ref=e6]:
+    - generic [ref=e7]:
+      - 'heading "Theory: Direct Preference Optimization" [level=2] [ref=e8]'
+      - paragraph [ref=e9]: "RLHF aligns language models by first training a reward model on human preference pairs, then using PPO (Proximal Policy Optimization) to fine-tune the LLM to maximize that reward while staying close to the original SFT policy. The approach works, but it is operationally expensive: you run three separate models simultaneously during PPO (actor, critic, reward, and a frozen reference policy), manage online sampling instability, and carefully tune clipping and KL penalties to prevent reward hacking."
+      - paragraph [ref=e10]: DPO (Rafailov et al., 2023) showed that this complexity is unnecessary. By recognizing that the optimal RLHF solution has a closed-form relationship to the policy, DPO reformulates the alignment objective as a simple supervised classification loss over preference pairs — no reward model, no RL loop, no online sampling.
+      - 'heading "Starting Point: The RLHF KL-Constrained Objective" [level=3] [ref=e11]'
+      - paragraph [ref=e12]: "Standard RLHF maximizes expected reward minus a KL penalty to the reference policy:"
+      - generic [ref=e13]: max_π 𝔼[x~D, y~π(·|x)] [ r(x,y) ] − β · KL[ π(y|x) ‖ π_ref(y|x) ]
+      - paragraph [ref=e14]: "The β hyperparameter controls the tradeoff: large β keeps the policy close to the SFT reference (safer, less reward hacking); small β allows larger deviations toward higher rewards (more adaptation, higher hacking risk). This objective has an analytical optimal solution:"
+      - generic [ref=e15]: π*(y|x) = π_ref(y|x) · exp( r(x,y) / β ) / Z(x) where Z(x) = Σ_y π_ref(y|x) · exp( r(x,y) / β ) [partition function]
+      - heading "The DPO Re-Parameterization" [level=3] [ref=e16]
+      - paragraph [ref=e17]: "Rearranging the optimal policy equation, we can express the reward implicitly in terms of the policy:"
+      - generic [ref=e18]: r(x,y) = β · log[ π*(y|x) / π_ref(y|x) ] + β · log Z(x)
+      - paragraph [ref=e19]: "Now substitute this into the Bradley-Terry preference model, which RLHF uses to model human preferences (the probability that response y_w is preferred over y_l):"
+      - generic [ref=e20]: P(y_w ≻ y_l | x) = σ( r(x,y_w) − r(x,y_l) )
+      - paragraph [ref=e21]:
+        - text: When you substitute the re-parameterized reward, the
+        - code [ref=e22]: β·log Z(x)
+        - text: "terms cancel (they appear in both r(x,y_w) and r(x,y_l)), leaving the DPO loss:"
+      - generic [ref=e23]: L_DPO(π_θ; π_ref) = −𝔼[(x, y_w, y_l)] [ log σ( β · log π_θ(y_w|x) / π_ref(y_w|x) − β · log π_θ(y_l|x) / π_ref(y_l|x) ) ]
+      - paragraph [ref=e24]: This is a supervised binary cross-entropy loss over preference pairs. No reward model, no RL. You just need the reference policy (frozen SFT), the trainable policy, and preference data — (prompt, chosen, rejected) triples.
+      - heading "What the Gradient Does" [level=3] [ref=e25]
+      - paragraph [ref=e26]: "Intuitively, the DPO gradient has two components acting simultaneously:"
+      - list [ref=e27]:
+        - listitem [ref=e28]:
+          - strong [ref=e29]: Increase
+          - text: the relative log-probability of the preferred (chosen) response y_w under π_θ vs π_ref
+        - listitem [ref=e30]:
+          - strong [ref=e31]: Decrease
+          - text: the relative log-probability of the rejected response y_l under π_θ vs π_ref
+      - paragraph [ref=e32]: The weighting is not uniform — gradients are scaled by how "surprising" the current preference assignment is given the model's current state. When the model already strongly prefers y_w, the gradient is small (little to learn). When the model assigns nearly equal probability to both, gradients are large — most learning happens at the decision boundary.
+      - heading "The β Parameter in Depth" [level=3] [ref=e33]
+      - paragraph [ref=e34]: "β plays the same role as in RLHF — it controls KL-divergence from the reference policy. In DPO this becomes: how strongly does the loss push the policy ratios (π_θ/π_ref) apart between chosen and rejected responses?"
+      - list [ref=e35]:
+        - listitem [ref=e36]:
+          - strong [ref=e37]: "β → 0:"
+          - text: Unconstrained. Policy can deviate arbitrarily from reference. High risk of degenerate outputs (mode collapse, repetitive text). Equivalent to "maximize reward at all costs."
+        - listitem [ref=e38]:
+          - strong [ref=e39]: "β → ∞:"
+          - text: Policy cannot deviate from reference. No learning happens. The model stays at the SFT checkpoint.
+        - listitem [ref=e40]:
+          - strong [ref=e41]: "β ≈ 0.1–0.5:"
+          - text: Typical production range. Allows meaningful preference learning while maintaining fluency and format from SFT.
+      - paragraph [ref=e42]: Unlike RLHF where β is a hyperparameter of the RL algorithm (KL penalty coefficient in PPO), DPO's β is a property of the preference data itself — it reflects how "peaked" human preferences are assumed to be.
+      - 'heading "DPO vs RLHF: Practical Tradeoffs" [level=3] [ref=e43]'
+      - paragraph [ref=e44]: "DPO is not always superior to RLHF. Key differences in production:"
+      - list [ref=e45]:
+        - listitem [ref=e46]:
+          - strong [ref=e47]: "DPO is offline:"
+          - text: It trains on a fixed dataset of (x, y_w, y_l) pairs, collected once. RLHF uses online sampling — the model generates candidates during training. Online RL can adapt to evolving policy errors; DPO cannot without re-collecting preference data.
+        - listitem [ref=e48]:
+          - strong [ref=e49]: "DPO is simpler:"
+          - text: A single model in memory (plus frozen reference). No PPO infrastructure, no reward model training, no KL-controller tuning. Typical DPO training fits in the same compute envelope as SFT.
+        - listitem [ref=e50]:
+          - strong [ref=e51]: "RLHF can be more powerful:"
+          - text: For tasks where the reward signal is clear and learnable (code correctness, math), online RL with a verifiable reward (RLVR) consistently outperforms DPO. DeepSeek-R1 and OpenAI's o-series use RLVR, not DPO.
+        - listitem [ref=e52]:
+          - strong [ref=e53]: "Preference data quality matters more for DPO:"
+          - text: Since there's no online correction, bad preference labels directly contaminate the model. RLHF can partially recover via the RL dynamics.
+        - listitem [ref=e54]:
+          - strong [ref=e55]: "DPO can degrade fluency:"
+          - text: "The rejected response probability decrease can sometimes over-suppress good generations that happen to share tokens with rejected outputs. Mitigation: DPOP (DPO with Positive Constraints), IPO, or SimPO variants."
+      - 'heading "DPO Variants: The Growing Family" [level=3] [ref=e56]'
+      - paragraph [ref=e57]: "Several extensions address DPO's failure modes:"
+      - list [ref=e58]:
+        - listitem [ref=e59]:
+          - strong [ref=e60]: "IPO (Identity Preference Optimization):"
+          - text: Replaces the log-sigmoid with a squared loss, preventing overfitting on deterministic preferences. Better when one response is overwhelmingly preferred.
+        - listitem [ref=e61]:
+          - strong [ref=e62]: "KTO (Kahneman-Tversky Optimization):"
+          - text: Doesn't require paired comparisons — learns from unpaired good/bad examples using prospect theory loss. Practical when collecting (prompt, response, good/bad label) is easier than pairwise rankings.
+        - listitem [ref=e63]:
+          - strong [ref=e64]: "SimPO (Simple Preference Optimization):"
+          - text: Removes the reference model entirely, using length-normalized reward and a margin. Faster, lower memory, competitive results on AlpacaEval.
+        - listitem [ref=e65]:
+          - strong [ref=e66]: "DPOP:"
+          - text: Adds a term penalizing the chosen response probability from dropping below the reference, fixing the "chosen degradation" failure mode.
+      - heading "Production Reality" [level=3] [ref=e67]
+      - paragraph [ref=e68]: "DPO has become the default preference alignment method for teams that can't afford RLHF infrastructure. Llama 3, Mistral Instruct, Zephyr (HuggingFace), and Starling all use DPO variants. The practical recipe is:"
+      - list [ref=e69]:
+        - listitem [ref=e70]: Start with a good SFT checkpoint (quality SFT is more important than DPO tuning)
+        - listitem [ref=e71]: Collect or reuse preference data — UltraFeedback, HelpSteer, or Anthropic's HH-RLHF are common starting points
+        - listitem [ref=e72]: Set β ≈ 0.1–0.3 for chat, higher for instruction-following tasks
+        - listitem [ref=e73]: Train for 1–3 epochs (DPO overfits quickly on small datasets)
+        - listitem [ref=e74]: Monitor chosen/rejected reward margins and KL from reference throughout training
+        - listitem [ref=e75]: "Tools: TRL (HuggingFace), LLaMA-Factory, Axolotl all have DPO implementations"
+      - paragraph [ref=e76]: "Memory requirements: DPO needs both the trainable policy and the frozen reference simultaneously — roughly 2× the inference memory, same as full SFT fine-tuning. For large models, combine with LoRA (LoRA-DPO) to reduce the trainable-parameter memory footprint to near-SFT levels."
+    - generic [ref=e77]:
+      - heading "Interactive Pipeline Comparison" [level=2] [ref=e78]
+      - paragraph [ref=e79]: Click any stage block to expand its description. Toggle the β slider to see how the KL constraint affects the DPO loss landscape — the canvas shows the preference margin distribution at different β values.
+      - generic [ref=e80]:
+        - generic [ref=e81]:
+          - heading "🔁 RLHF Pipeline" [level=3] [ref=e82]
+          - generic [ref=e84] [cursor=pointer]:
+            - generic [ref=e85]: 📝
+            - generic [ref=e86]: "Stage 1: Supervised Fine-Tuning (SFT)"
+          - generic: ↓
+          - generic [ref=e88] [cursor=pointer]:
+            - generic [ref=e89]: 🏆
+            - generic [ref=e90]: "Stage 2: Reward Model Training"
+          - generic: ↓
+          - generic [ref=e92] [cursor=pointer]:
+            - generic [ref=e93]: 🎮
+            - generic [ref=e94]: "Stage 3: PPO Optimization Loop"
+          - generic: ↓
+          - generic [ref=e96] [cursor=pointer]:
+            - generic [ref=e97]: 🚀
+            - generic [ref=e98]: "Stage 4: Aligned Model"
+        - generic [ref=e99]:
+          - heading "⚡ DPO Pipeline" [level=3] [ref=e100]
+          - generic [ref=e102] [cursor=pointer]:
+            - generic [ref=e103]: 📝
+            - generic [ref=e104]: "Stage 1: Supervised Fine-Tuning (SFT)"
+          - generic: ↓
+          - generic:
+            - generic:
+              - generic: 🏆
+              - generic:
+                - text: Reward Model Training
+                - generic: ELIMINATED
+          - generic: ↓
+          - generic:
+            - generic:
+              - generic: 🎮
+              - generic:
+                - text: PPO Optimization
+                - generic: ELIMINATED
+          - generic: ↓
+          - generic [ref=e106] [cursor=pointer]:
+            - generic [ref=e107]: 🎯
+            - generic [ref=e108]: "Stage 2: DPO Supervised Loss"
+      - generic [ref=e109]:
+        - 'heading "β Parameter: KL Constraint Strength" [level=3] [ref=e110]'
+        - paragraph [ref=e111]: Adjust β and the reward margin threshold to see how the DPO loss landscape changes. The chart shows the sigmoid preference probability as a function of the policy log-ratio difference — the "margin" the model must learn to achieve.
+        - generic [ref=e112]:
+          - generic [ref=e113]: β (KL constraint strength)
+          - slider "β (KL constraint strength)" [ref=e114] [cursor=pointer]: "0.1"
+          - generic [ref=e115]: "0.10"
+        - generic [ref=e116]:
+          - generic [ref=e117]: Log-ratio margin target
+          - slider "Log-ratio margin target" [ref=e118] [cursor=pointer]: "1.5"
+          - generic [ref=e119]: "1.50"
+        - generic [ref=e121]:
+          - generic [ref=e122]: Preferred prob P(y_w ≻ y_l)
+          - generic [ref=e124]: DPO Loss (−log σ)
+          - generic [ref=e126]: Current margin
+    - generic [ref=e128]:
+      - heading "Key Takeaways" [level=2] [ref=e129]
+      - list [ref=e130]:
+        - listitem [ref=e131]:
+          - text: ▸
+          - strong [ref=e132]: DPO is algebraically equivalent to RLHF at optimality
+          - text: "— it's not an approximation. The derivation proves that the same optimal policy solves both objectives. The difference is purely in how you get there: RL optimization vs supervised loss."
+        - listitem [ref=e133]:
+          - text: ▸
+          - strong [ref=e134]: The offline nature is DPO's biggest practical limitation.
+          - text: For tasks where ground-truth feedback can be automated (code execution, math verifier, unit tests), online RL (RLVR) consistently beats DPO. DeepSeek-R1, Qwen, and OpenAI o-series all use online RL with verifiable rewards — not DPO — for reasoning capability.
+        - listitem [ref=e135]:
+          - text: ▸
+          - strong [ref=e136]: β ≈ 0.1–0.3 is the empirical sweet spot
+          - text: for chat and instruction following. Lower β risks mode collapse and length degeneration. Higher β leaves too much RLHF performance on the table. Monitor KL from reference (should stay under ~3–5 nats) and chosen/rejected reward gap throughout training.
+        - listitem [ref=e137]:
+          - text: ▸
+          - strong [ref=e138]: SFT quality dominates DPO quality.
+          - text: "DPO can't fix a bad SFT checkpoint — it can only move relative probabilities. If the SFT model can't produce the desired behavior at all, DPO won't surface it. The 80/20 rule: invest heavily in SFT data quality before running DPO."
+        - listitem [ref=e139]:
+          - text: ▸
+          - strong [ref=e140]: The "chosen degradation" failure mode is real.
+          - text: DPO can decrease the absolute log-probability of chosen responses while increasing the relative ratio over rejected — the model gets worse at both, just less bad at chosen. DPOP adds a constraint preventing chosen probability from falling below π_ref. Monitor absolute NLL on chosen responses, not just the loss.
+        - listitem [ref=e141]:
+          - text: ▸
+          - strong [ref=e142]: KTO and SimPO are viable alternatives when paired data is scarce.
+          - text: KTO works on unpaired (response, label) data; SimPO removes the reference model entirely. Both appear in production at organizations that can't afford the annotator cost of pairwise preference collection (200–500 pairs/hour at human annotation rates).
+  - navigation [ref=e143]:
+    - link "← Previous RLHF" [ref=e144] [cursor=pointer]:
+      - /url: 11-rlhf.html
+      - generic [ref=e145]: ← Previous
+      - generic [ref=e146]: RLHF
+    - link "Next → Best-of-N / Beam Search" [ref=e147] [cursor=pointer]:
+      - /url: 13-best-of-n.html
+      - generic [ref=e148]: Next →
+      - generic [ref=e149]: Best-of-N / Beam Search

@@ -382,7 +382,7 @@
 <header>
   <div>
     <h1>🎯 Interview Prep — Sarthak Agarwal</h1>
-    <p>45-min round &nbsp;·&nbsp; 15 min project deep dive &nbsp;+&nbsp; 30 min live coding</p>
+    <p>Reliance Intelligence AI Engineer &nbsp;·&nbsp; 15 min deep dive + 30 min coding case study</p>
   </div>
   <div style="display:flex; gap:8px; flex-wrap:wrap;">
     <span class="badge yellow">Tomorrow</span>
@@ -396,6 +396,7 @@
   <a href="#deepdive">🗣 Project Deep Dive</a>
   <a href="#coding">💻 Coding Topics</a>
   <a href="#code-snippets">📝 Code to Know</a>
+  <a href="#pandas">🐼 Pandas Patterns</a>
   <a href="#scenarios">🔥 Scenario Q&A</a>
   <a href="#differentiators">⭐ Your Edge</a>
 </nav>
@@ -508,6 +509,11 @@
               <span class="check-label">Practice "confidently wrong LLM" scenario answer out loud</span>
               <span class="check-tag low">Good to have</span>
             </div>
+            <div class="check-item" onclick="toggle(this)">
+              <div class="checkbox"></div>
+              <span class="check-label">Run the 5 Pandas patterns on the mock dataset (funnel, rolling anomaly, top-K, resample, pivot)</span>
+              <span class="check-tag med">Important</span>
+            </div>
           </div>
         </div>
       </div>
@@ -568,9 +574,14 @@
     <!-- Opening line -->
     <div class="narrative">
       <div class="opener">
-        "I designed a persona-driven multi-agent system at Dream11 that lets Product, Engineering, and Business users query observability data in natural language across ClickHouse, Athena, and MySQL — without writing SQL."
+        "I built PulseAI at Dream11 — a multi-agent AI system that lets product, engineering, and UX teams ask 'why did X break?' in natural language and get back a correlated root-cause report across crashes, funnels, and session replays — without touching a dashboard."
       </div>
-      <p style="font-size:0.82rem; color:var(--muted);">That one sentence covers: <span style="color:var(--text);">scale, AI, multi-agent, real data, real users.</span> Open with it every time.</p>
+      <p style="font-size:0.82rem; color:var(--muted); margin-bottom:12px;">Open with that one sentence. Then follow with the full pitch below.</p>
+      <div style="border-top:1px solid rgba(124,106,247,0.2); padding-top:14px; display:flex; flex-direction:column; gap:10px;">
+        <div style="font-size:0.88rem; color:var(--muted);"><span style="color:var(--text); font-weight:600;">The problem:</span> Our observability stack could tell us <em>that</em> something broke — crash rates, ANRs, funnel drops — but not <em>why</em>. A PM would see payment conversion drop and have to manually chase engineering for crashes, product for funnel data, UX for session replays, and stitch it together themselves.</div>
+        <div style="font-size:0.88rem; color:var(--muted);"><span style="color:var(--text); font-weight:600;">The architecture:</span> A <strong style="color:var(--text);">Planner</strong> reads the query + pulls context from an Events RAG (our custom analytics event catalogue) → generates an ordered investigation plan → hands it to an <strong style="color:var(--text);">Executor</strong> which calls three specialist agents as tools sequentially: <strong style="color:var(--text);">EM</strong> (crashes, ANRs), <strong style="color:var(--text);">Product</strong> (funnels, journeys), <strong style="color:var(--text);">UX</strong> (heatmaps, session replays). Each agent calls curated APIs over ClickHouse — no raw SQL exposed to the LLM. Findings are written to a <strong style="color:var(--text);">shared blackboard</strong> so each step builds on the last. Finally a <strong style="color:var(--text);">Summarizer → Report agent</strong> synthesizes everything into graphs and tables in the chatbot UI.</div>
+        <div style="font-size:0.88rem; color:var(--muted);"><span style="color:var(--text); font-weight:600;">The scale:</span> ~50 APIs across 3 domains. Built and shipped in under a week using Google ADK — which gave us the agent framework, tool-calling loop, and eval harness out of the box. We also had a Google partnership at Dream11 which gave us direct engineering support.</div>
+      </div>
     </div>
 
     <!-- System design Q&A -->
@@ -578,39 +589,69 @@
       <h3>🔍 Hard Questions They'll Ask — Know These Cold</h3>
       <div class="qa-list" style="margin-top:12px;">
         <details>
-          <summary>"Why persona-based routing instead of one general agent?"</summary>
+          <summary>"Why three separate agents instead of one general agent?"</summary>
           <div class="answer">
-            Context window economics. A single agent with 47 tools + all domain context hits limits fast. Personas scope the tool surface — a <strong>Design persona doesn't need crash telemetry tools</strong>. It also lets you tune prompts per audience: Business Leaders get narrative, Engineering gets numbers, CS gets resolution paths. Routing reduces noise, improves answer quality, and keeps token cost predictable.
+            Context window and expertise scoping. A single agent with all ~50 tools would flood the context window and make the LLM's tool selection noisy. By splitting into EM, Product, and UX, each agent only sees the tools relevant to its domain — maybe 15-20 each. It also lets us tune each agent's prompt for its audience: EM agents think in stack traces and ANR rates, Product agents think in funnel steps and conversion deltas. Separation of concerns at the agent level gives cleaner, more accurate answers.
           </div>
         </details>
         <details>
-          <summary>"How does the Planner work? What if it routes to the wrong persona?"</summary>
+          <summary>"Why are the agents called sequentially as tools, not in parallel?"</summary>
           <div class="answer">
-            The Planner classifies intent + persona from the NL query using a structured prompt. For ambiguous queries that span personas (e.g. "why did conversion drop AND crashes spike?"), we use <strong>cross-persona synthesis in the Summary Agent</strong> which has access to all domain tools. Wrong routing falls back to the Summary Agent which can call across persona boundaries.
+            Because the plan is <strong>order-dependent</strong>. If a user asks "why did payment conversion drop?", the right sequence is: first ask Product <em>when exactly</em> the drop happened, then ask EM <em>whether there were crashes in that time window</em>. If you run them in parallel, EM has no time anchor — it would scan everything and return noise. The Planner deliberately sequences steps so each agent's query is informed by the previous agent's findings on the blackboard. That's the whole point of the blackboard pattern.
           </div>
         </details>
         <details>
-          <summary>"How did you handle context window limits with 47 tools?"</summary>
+          <summary>"What is the Events RAG and why does it exist?"</summary>
           <div class="answer">
-            Category-scoped tool discovery. Tools are registered per domain category, and only the relevant category's tools are exposed to the agent for a given query. This is the core design of <strong>pulse-mcp</strong> — balancing agent context limits with the full analytics surface. A Design persona query gets ~8 relevant tools, not all 47.
+            Every company has custom analytics events that mean nothing to an LLM out of the box. An event called <code>PAYMENT_INITIATION_TAPPED</code> or <code>CHECKOUT_V2_SCREEN_VIEWED</code> — the LLM has zero context for what those mean. The Events RAG is a Qdrant vector store populated with the customer's event catalogue: event names, descriptions, and properties. The Planner queries it before generating a plan so it understands what events are available and what they mean — which directly determines how accurate the plan is. Without it, the Planner would generate plans referencing events that don't exist.
           </div>
         </details>
         <details>
-          <summary>"Walk me through your dual RAG architecture."</summary>
+          <summary>"What if the Planner generates a bad plan or wrong step order?"</summary>
           <div class="answer">
-            <strong>Business-events RAG</strong> answers <em>what happened</em> — business metric context, event taxonomy, business terminology. <strong>Pulse-events RAG</strong> answers <em>how users behaved</em> — product analytics events, screen names, funnel steps. They feed the Executor with relevant context before tool calls, reducing hallucination on domain-specific terminology that the LLM wouldn't know natively.
+            The Planner is the most fragile part of the system — garbage plan in, garbage answer out. The main failure mode is wrong step ordering: asking EM about crashes before asking Product <em>when</em> the drop happened, so the EM query has no time window to anchor to. We mitigated this with explicit Planner instructions: always establish <em>when</em> before asking <em>what</em>, always establish <em>which domain</em> before drilling into sub-metrics. The Events RAG also helps — a Planner that understands the event taxonomy creates much more targeted, correctly ordered plans.
           </div>
         </details>
         <details>
-          <summary>"How did you solve hallucination in production?"</summary>
+          <summary>"Why not expose raw ClickHouse queries to the agent?"</summary>
           <div class="answer">
-            Three layers: <strong>(1) Prompt-level</strong> — anti-hallucination instructions, explicit "say I don't know if uncertain", no-fabrication ADK eval cases. <strong>(2) Output validation</strong> — deterministic overrides for safety-critical report fields (metric values pulled directly from DB, not LLM-generated). <strong>(3) Eval harness</strong> — 65+ Promptfoo cases including faithfulness checks run before every prod rollout to catch regressions.
+            Two reasons. <strong>Safety</strong> — an LLM generating raw SQL over a prod database is a security and cost risk. One bad query could table-scan billions of rows. <strong>Accuracy</strong> — our ~50 curated APIs encode domain knowledge: the right aggregations, the right filters, the right time-bucketing for each metric. A raw SQL-generating LLM would have to rediscover all of that from scratch and would frequently get it wrong. The APIs are essentially a guardrail layer — the LLM picks the right tool with the right parameters, we handle the query construction.
+          </div>
+        </details>
+        <details>
+          <summary>"How does the blackboard prevent the Report agent from hallucinating numbers?"</summary>
+          <div class="answer">
+            The Report agent doesn't generate numbers — it only reads from the blackboard. Every data point on the blackboard came directly from a ClickHouse API response, not from LLM generation. The Report agent's job is purely structural: which metric becomes a chart, which becomes a table, how to narrate the findings. This is an intentional design choice — we kept LLM generation away from the data layer entirely and only let it operate at the presentation and synthesis layer.
+          </div>
+        </details>
+        <details>
+          <summary>"How did you handle the LLM misreading API results?"</summary>
+          <div class="answer">
+            By constraining what the LLM is allowed to conclude. The Summarizer's prompt explicitly says: <em>"synthesize only what is present on the blackboard. Do not infer causation unless it was established by a plan step. Say 'the data shows X' not 'X happened because Y' unless the plan explicitly traced that causation."</em> The Events RAG also helps here — when an agent understands what a metric actually means in domain context, it's far less likely to misread a number that looks anomalous but is actually normal for that cohort.
+          </div>
+        </details>
+        <details>
+          <summary>"How did you handle the Qdrant RAG retrieving the wrong event?"</summary>
+          <div class="answer">
+            Companies often have similarly named events — <code>PAYMENT_INITIATED</code> vs <code>PAYMENT_INITIATION_SCREEN_VIEWED</code> — that mean very different things. We used <strong>metadata filtering in Qdrant</strong>: each event is tagged with its domain (payments, login, checkout) and we filter by domain before doing the similarity search. This cuts the retrieval space down and significantly reduces wrong-event retrieval. We also stored the full event description and properties in the payload so the Planner gets enough context to distinguish between similar-sounding events.
+          </div>
+        </details>
+        <details>
+          <summary>"Sequential agents must be slow — how did you handle latency?"</summary>
+          <div class="answer">
+            Sequential execution has an inherent cost — N plan steps means N LLM round trips plus N API calls in series. Our mitigation was making the Executor smart about true dependency: if two plan steps are genuinely independent (e.g. "check Product funnels AND check UX heatmaps for the payment screen"), the Executor runs those in parallel. Only steps where one result feeds the next are strictly sequential. In practice, most plans have 2-3 steps, so worst-case latency is bounded and acceptable for an async chatbot interface where the user expects a few seconds for a correlated root-cause answer.
+          </div>
+        </details>
+        <details>
+          <summary>"How do you onboard a new customer?"</summary>
+          <div class="answer">
+            Onboarding is essentially an ETL problem. The AI is useless without knowing the customer's custom event vocabulary. So we built an ingestion pipeline: the customer provides their event catalogue — event names, descriptions, properties — we chunk and embed it into Qdrant tagged with their org ID, and every Planner query is scoped to their org's events. The quality of the AI's plans is directly proportional to the quality of the event catalogue they give us — so part of onboarding is working with the customer to ensure their events are well-described.
           </div>
         </details>
         <details>
           <summary>"What would you do differently?"</summary>
           <div class="answer">
-            Invest earlier in <strong>retrieval quality eval</strong> (precision@k on the RAG layer) — we caught hallucinations late and traced many back to bad chunk retrieval, not LLM generation. Also: cleaner separation between planner logic and persona definitions to make adding a 6th persona faster. The current tight coupling made the 5th persona (Business Leaders) take longer than it should have.
+            Two things. <strong>First</strong>, invest earlier in retrieval quality eval — precision@k on the Events RAG. A bad event retrieval cascades into a bad plan which cascades into a bad answer, and that's hard to debug at the answer layer. We should have built a retrieval eval harness from day one. <strong>Second</strong>, the Planner prompt grew complex fast as we added edge cases. I'd refactor it into a more structured planning DSL — essentially a schema for what a valid plan looks like — so the LLM has a tighter output contract and bad plans are caught structurally rather than caught at execution time.
           </div>
         </details>
       </div>
@@ -621,23 +662,60 @@
       <h3>🧩 Technical Decisions — 1-Line Answers</h3>
       <div class="tier-grid" style="margin-top:12px;">
         <div class="tier-row">
-          <span class="tier-label" style="color:var(--accent2);">Why MCP?</span>
-          <span class="tier-desc">Standardized tool contracts, composable across Cursor/Claude/ADK without glue code. Schema-first lets teams publish tools without touching core orchestration.</span>
-          <span></span>
-        </div>
-        <div class="tier-row">
           <span class="tier-label" style="color:var(--accent2);">Why Google ADK?</span>
-          <span class="tier-desc">Strong tool-calling loop + eval framework built-in. ADK eval sets align directly with no-fabrication cases we needed for safety.</span>
+          <span class="tier-desc">Needed to ship in under a week. ADK gave us the agent framework, tool-calling loop, and eval harness out of the box — no glue code. Google partnership at Dream11 also gave us direct engineering support.</span>
           <span></span>
         </div>
         <div class="tier-row">
           <span class="tier-label" style="color:var(--accent2);">Why Qdrant?</span>
-          <span class="tier-desc">Fast ANN search, payload filtering for Confluence doc metadata, easy self-hosting. No managed infra dependency for internal RAG.</span>
+          <span class="tier-desc">Fast ANN search with payload filtering — critical for scoping event retrieval by org ID and domain. Easy to self-host, no managed infra dependency for internal RAG.</span>
           <span></span>
         </div>
         <div class="tier-row">
-          <span class="tier-label" style="color:var(--accent2);">Why Promptfoo?</span>
-          <span class="tier-desc">Code-native YAML cases, CI-friendly, supports custom LLM judges — lets you ship 65+ eval cases without a separate platform or infra.</span>
+          <span class="tier-label" style="color:var(--accent2);">Why curated APIs over raw SQL?</span>
+          <span class="tier-desc">Safety (no LLM-generated queries over prod ClickHouse) + accuracy (APIs encode domain knowledge — right aggregations, right filters, right time bucketing baked in).</span>
+          <span></span>
+        </div>
+        <div class="tier-row">
+          <span class="tier-label" style="color:var(--accent2);">Why a blackboard?</span>
+          <span class="tier-desc">Sequential agents need shared state. The blackboard lets each step's findings inform the next agent's query — turns 3 blind queries into one correlated investigation.</span>
+          <span></span>
+        </div>
+        <div class="tier-row">
+          <span class="tier-label" style="color:var(--accent2);">Why sequential not parallel?</span>
+          <span class="tier-desc">Plans are order-dependent — EM needs Product's time window before it can scope its crash query. Parallel execution would make each agent query blind with no anchor.</span>
+          <span></span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Reliance Intelligence Specific Mapping -->
+    <div class="card" style="margin-top:12px;">
+      <h3>🔗 Reliance Intelligence — How PulseAI Maps to Their Needs</h3>
+      <div class="tier-grid" style="margin-top:12px;">
+        <div class="tier-row">
+          <span class="tier-label" style="color:var(--accent);">Multi-persona routing</span>
+          <span class="tier-desc">Directly maps to routing JioHealthIQ (doctor), JioKrishiIQ (farmer), JioLearnIQ (student) queries to different domains. Same design, different personas.</span>
+          <span></span>
+        </div>
+        <div class="tier-row">
+          <span class="tier-label" style="color:var(--accent);">MCP tool scoping</span>
+          <span class="tier-desc">Critical for 22-language context — Hindi medical queries shouldn't see Marathi agriculture tools. Category scoping keeps prompts clean across language+domain.</span>
+          <span></span>
+        </div>
+        <div class="tier-row">
+          <span class="tier-label" style="color:var(--accent);">3-layer safety (PII)</span>
+          <span class="tier-desc">Essential for JioHealthIQ (patient data) and JioKrishiIQ (farmer land records). You proved this in production at Dream11 — this is their safety bar too.</span>
+          <span></span>
+        </div>
+        <div class="tier-row">
+          <span class="tier-label" style="color:var(--accent);">Eval harness</span>
+          <span class="tier-desc">65+ Promptfoo cases with faithfulness + no-fabrication. At Reliance's scale across 22 languages, automated eval becomes non-negotiable — you're already there.</span>
+          <span></span>
+        </div>
+        <div class="tier-row">
+          <span class="tier-label" style="color:var(--accent);">RAG pipeline</span>
+          <span class="tier-desc">The core of every language-specific service. Your cross-domain chunking, embedding, and retrieval approach scales to multilingual RAG — just swap the embedding model.</span>
           <span></span>
         </div>
       </div>
@@ -672,6 +750,11 @@
         <div class="tier-row">
           <span class="tier-label" style="color:var(--red);">Agent Tool Loop</span>
           <span class="tier-desc">while True loop: call LLM → if tool_call, execute → feed result back → repeat until final answer. Add max_iterations guard.</span>
+          <span class="tier-prob prob-high">🔴 Very Likely</span>
+        </div>
+        <div class="tier-row">
+          <span class="tier-label" style="color:var(--red);">Multilingual RAG</span>
+          <span class="tier-desc">Cross-lingual embeddings (LaBSE/MURIL/IndicBERT), script-agnostic retrieval, transliteration handling, eval on Indic benchmarks (IndicXTREME). Critical for 22-language scale.</span>
           <span class="tier-prob prob-high">🔴 Very Likely</span>
         </div>
       </div>
@@ -755,7 +838,11 @@
     <span class="kw">for</span> doc <span class="kw">in</span> documents:
         chunks = chunk(doc, size=<span class="num">512</span>, overlap=<span class="num">64</span>)   <span class="cm"># fixed or semantic</span>
         <span class="kw">for</span> chunk <span class="kw">in</span> chunks:
-            embedding = embed_fn(chunk)
+            embedding = embed_fn(chunk)   <span class="cm"># numeric vector for similarity search</span>
+            <span class="cm"># Store BOTH: vector for search + original text as metadata/payload</span>
+            <span class="cm"># Qdrant: payload={"text": chunk}</span>
+            <span class="cm"># Pinecone: metadata={"text": chunk}</span>
+            <span class="cm"># FAISS: separate docs[] array, index by position</span>
             vectordb.upsert(embedding, metadata={<span class="str">"text"</span>: chunk})
 
 <span class="kw">def</span> <span class="fn">rag_query</span>(question, embed_fn, vectordb, llm, k=<span class="num">5</span>):
@@ -763,6 +850,7 @@
     q_embedding = embed_fn(question)
 
     <span class="cm"># 2. Retrieve top-k chunks by cosine similarity</span>
+    <span class="cm"># similarity_search returns the original TEXT from metadata/payload, not raw vectors</span>
     chunks = vectordb.similarity_search(q_embedding, k=k)
 
     <span class="cm"># 3. Token-aware context packing</span>
@@ -781,7 +869,7 @@
         <span class="kw">if</span> total + t > max_tokens: <span class="kw">break</span>
         selected.append(chunk.text); total += t
     <span class="kw">return</span> <span class="str">"\n\n"</span>.join(selected)</pre>
-      <p style="font-size:0.82rem; color:var(--muted); margin-top:10px;">Key follow-ups: <strong style="color:var(--text);">How do you chunk?</strong> (fixed/512 tokens with overlap) &nbsp;·&nbsp; <strong style="color:var(--text);">How do you eval?</strong> (precision@k for retrieval, faithfulness for generation, RAGAS framework) &nbsp;·&nbsp; <strong style="color:var(--text);">BM25 vs dense?</strong> (BM25 wins on exact keyword match; dense wins on semantic similarity; hybrid usually best)</p>
+      <p style="font-size:0.82rem; color:var(--muted); margin-top:10px;">Key follow-ups: <strong style="color:var(--text);">How do you chunk?</strong> (fixed/512 tokens with overlap) &nbsp;·&nbsp; <strong style="color:var(--text);">What does similarity_search return?</strong> (original text from metadata/payload, not raw vectors — vector DBs store both: embedding for search + text in metadata to return) &nbsp;·&nbsp; <strong style="color:var(--text);">How do you eval?</strong> (precision@k for retrieval, faithfulness for generation, RAGAS framework) &nbsp;·&nbsp; <strong style="color:var(--text);">BM25 vs dense?</strong> (BM25 wins on exact keyword match; dense wins on semantic similarity; hybrid usually best)</p>
     </div>
 
     <div class="card">
@@ -839,7 +927,39 @@
     </div>
 
     <div class="card">
-      <h3>4 · Edit Distance (Levenshtein)</h3>
+      <h3>4 · Multilingual RAG (Indic Languages)</h3>
+<pre><span class="cm"># Cross-lingual RAG that works across 22 Indian languages</span>
+<span class="cm"># Indexing: store embedding (for search) + text (in metadata/payload) per chunk</span>
+
+<span class="kw">def</span> <span class="fn">multilingual_rag_query</span>(question, embed_fn, docs_db, top_k=<span class="num">5</span>):
+    <span class="cm"># 1. Embed question using multi-lingual model (MURIL, LaBSE, IndicBERT)</span>
+    q_emb = embed_fn.encode(question.strip().lower())
+
+    <span class="cm"># 2. Compute cross-lingual cosine similarity against all docs</span>
+    scores = []
+    <span class="kw">for</span> doc <span class="kw">in</span> docs_db:
+        <span class="cm"># docs can be in ANY language — the embedding model aligns them</span>
+        sim = cosine_sim(q_emb, doc[<span class="str">"embedding"</span>])
+        scores.append((sim, doc))
+
+    <span class="cm"># 3. Return top-k + script-normalized context packing</span>
+    scores.sort(reverse=<span class="kw">True</span>)
+    <span class="kw">return</span> scores[:top_k]
+
+<span class="kw">def</span> <span class="fn">cosine_sim</span>(a, b):
+    dot = sum(x*y <span class="kw">for</span> x,y <span class="kw">in</span> zip(a, b))
+    na  = sum(x**<span class="num">2</span> <span class="kw">for</span> x <span class="kw">in</span> a) ** <span class="num">0.5</span>
+    nb  = sum(x**<span class="num">2</span> <span class="kw">for</span> x <span class="kw">in</span> b) ** <span class="num">0.5</span>
+    <span class="kw">return</span> dot / (na * nb + <span class="num">1e-8</span>)
+
+<span class="cm"># Key: LaBSE/MURIL aligns Hindi-English across the same vector space</span>
+<span class="cm"># so a Hindi query can retrieve English docs and vice versa.</span>
+<span class="cm"># Cost: Distill to smaller student model + INT8 quantization for 1B+ users.</span></pre>
+      <p style="font-size:0.82rem; color:var(--muted); margin-top:10px;">Key follow-ups: <strong style="color:var(--text);">How to handle code-mix?</strong> (NFKC + script detection → segment by script before embedding) &nbsp;·&nbsp; <strong style="color:var(--text);">What does query return?</strong> (original text from metadata/payload, not raw vectors — stored alongside embedding during indexing) &nbsp;·&nbsp; <strong style="color:var(--text);">How to eval without gold sets?</strong> (LLM-as-judge, translate-in → judge → translate-out) &nbsp;·&nbsp; <strong style="color:var(--text);">Cost at 1B users?</strong> (Distill to smaller model, INT8 quant, edge caching on repeated queries, token-aware packing)</p>
+    </div>
+
+    <div class="card">
+      <h3>5 · Edit Distance (Levenshtein)</h3>
 <pre><span class="kw">def</span> <span class="fn">edit_distance</span>(s1: <span class="nb">str</span>, s2: <span class="nb">str</span>) -> <span class="nb">int</span>:
     m, n = len(s1), len(s2)
     dp = [[<span class="num">0</span>] * (n + <span class="num">1</span>) <span class="kw">for</span> _ <span class="kw">in</span> range(m + <span class="num">1</span>)]
@@ -878,6 +998,201 @@
 
 <span class="cm"># nlargest → max-heap internally. nsmallest → min-heap. heappush/heappop is O(log n).</span></pre>
     </div>
+  </section>
+
+  <!-- ══════════════════════════════════════════ -->
+  <!-- PANDAS PATTERNS -->
+  <!-- ══════════════════════════════════════════ -->
+  <section id="pandas">
+    <div class="section-header">
+      <div class="icon green">🐼</div>
+      <div>
+        <h2>Pandas / Data Patterns</h2>
+        <small>If they share a CSV — these are the 5 patterns that cover 90% of what they'll ask</small>
+      </div>
+    </div>
+
+    <!-- What they might ask -->
+    <div class="card">
+      <h3>📋 Likely CSV Problem Scenarios</h3>
+      <div class="tier-grid" style="margin-top:12px;">
+        <div class="tier-row">
+          <span class="tier-label" style="color:var(--red);">Funnel analysis</span>
+          <span class="tier-desc">CSV of events with user_id, event_name, timestamp → compute conversion rate from Step A → B → C per device/OS.</span>
+          <span class="tier-prob prob-high">🔴 Very Likely</span>
+        </div>
+        <div class="tier-row">
+          <span class="tier-label" style="color:var(--red);">Anomaly detection</span>
+          <span class="tier-desc">Time-series CSV of a metric → flag points that deviate &gt;2 std dev from a rolling mean. Framed as "find when payment conversion broke".</span>
+          <span class="tier-prob prob-high">🔴 Very Likely</span>
+        </div>
+        <div class="tier-row">
+          <span class="tier-label" style="color:var(--yellow);">Top-K by group</span>
+          <span class="tier-desc">Sessions CSV → find top 10 worst-performing sessions / devices by crash rate or latency.</span>
+          <span class="tier-prob prob-med">🟡 Possible</span>
+        </div>
+        <div class="tier-row">
+          <span class="tier-label" style="color:var(--yellow);">Time aggregation</span>
+          <span class="tier-desc">Raw events → count unique users per event per hour/day. resample() is the key function.</span>
+          <span class="tier-prob prob-med">🟡 Possible</span>
+        </div>
+        <div class="tier-row">
+          <span class="tier-label" style="color:var(--yellow);">Cohort comparison</span>
+          <span class="tier-desc">Compare conversion / crash rate across device × OS version — pivot_table is the clean answer.</span>
+          <span class="tier-prob prob-med">🟡 Possible</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Mock dataset generator -->
+    <div class="card">
+      <h3>🏗 Practice Dataset — Run This First</h3>
+      <p style="font-size:0.85rem; color:var(--muted); margin-bottom:10px;">Generates a PulseAI-style events CSV. Practice all 5 patterns on this data.</p>
+<pre><span class="kw">import</span> pandas <span class="kw">as</span> pd
+<span class="kw">import</span> numpy <span class="kw">as</span> np
+
+np.random.seed(<span class="num">42</span>)
+n = <span class="num">1000</span>
+
+df = pd.DataFrame({
+    <span class="str">'user_id'</span>:    [<span class="nb">f</span><span class="str">'u{i}'</span> <span class="kw">for</span> i <span class="kw">in</span> np.random.randint(<span class="num">1</span>, <span class="num">200</span>, n)],
+    <span class="str">'event'</span>:      np.random.choice([
+                      <span class="str">'PAYMENT_SCREEN_VIEWED'</span>,
+                      <span class="str">'PAYMENT_INITIATED'</span>,
+                      <span class="str">'PAYMENT_SUCCESS'</span>,
+                      <span class="str">'PAYMENT_FAILED'</span>
+                  ], n, p=[<span class="num">0.4</span>, <span class="num">0.3</span>, <span class="num">0.2</span>, <span class="num">0.1</span>]),
+    <span class="str">'device'</span>:     np.random.choice([<span class="str">'Android'</span>, <span class="str">'iOS'</span>], n),
+    <span class="str">'os_version'</span>: np.random.choice([<span class="str">'13'</span>, <span class="str">'14'</span>, <span class="str">'15'</span>], n),
+    <span class="str">'timestamp'</span>:  pd.date_range(<span class="str">'2024-01-01'</span>, periods=n, freq=<span class="str">'5min'</span>),
+    <span class="str">'latency_ms'</span>: np.random.normal(<span class="num">300</span>, <span class="num">80</span>, n).astype(<span class="nb">int</span>),
+    <span class="str">'crashed'</span>:    np.random.choice([<span class="num">0</span>, <span class="num">1</span>], n, p=[<span class="num">0.95</span>, <span class="num">0.05</span>]),
+})
+
+df.to_csv(<span class="str">'pulse_events.csv'</span>, index=<span class="kw">False</span>)
+<span class="cm"># Then: df = pd.read_csv('pulse_events.csv', parse_dates=['timestamp'])</span></pre>
+    </div>
+
+    <!-- Pattern 1: Funnel -->
+    <div class="card">
+      <h3>Pattern 1 · Funnel Conversion</h3>
+      <p style="font-size:0.85rem; color:var(--muted); margin-bottom:8px;"><em>Q: "What % of users who saw the payment screen actually completed payment?"</em></p>
+<pre><span class="cm"># Per-user funnel: did each user hit both steps?</span>
+<span class="kw">def</span> <span class="fn">funnel_conversion</span>(df, step_a, step_b, group_by=<span class="kw">None</span>):
+    <span class="kw">if</span> group_by:
+        <span class="kw">return</span> (
+            df[df[<span class="str">'event'</span>].isin([step_a, step_b])]
+            .groupby([<span class="str">'user_id'</span>, group_by])[<span class="str">'event'</span>]
+            .apply(<span class="kw">lambda</span> x: (step_a <span class="kw">in</span> x.values) <span class="kw">and</span> (step_b <span class="kw">in</span> x.values))
+            .reset_index()
+            .groupby(group_by)[<span class="num">0</span>]
+            .mean()
+            .rename(<span class="str">'conversion_rate'</span>)
+        )
+    seen_a  = set(df[df[<span class="str">'event'</span>] == step_a][<span class="str">'user_id'</span>])
+    seen_b  = set(df[df[<span class="str">'event'</span>] == step_b][<span class="str">'user_id'</span>])
+    <span class="kw">return</span> len(seen_a & seen_b) / len(seen_a) <span class="kw">if</span> seen_a <span class="kw">else</span> <span class="num">0</span>
+
+<span class="cm"># Overall conversion</span>
+rate = funnel_conversion(df, <span class="str">'PAYMENT_SCREEN_VIEWED'</span>, <span class="str">'PAYMENT_SUCCESS'</span>)
+
+<span class="cm"># By device</span>
+by_device = funnel_conversion(df, <span class="str">'PAYMENT_SCREEN_VIEWED'</span>, <span class="str">'PAYMENT_SUCCESS'</span>, group_by=<span class="str">'device'</span>)
+<span class="cm"># Key insight: narrate → "Android converts at X%, iOS at Y% — difference worth investigating"</span></pre>
+    </div>
+
+    <!-- Pattern 2: Rolling anomaly -->
+    <div class="card">
+      <h3>Pattern 2 · Rolling Anomaly Detection</h3>
+      <p style="font-size:0.85rem; color:var(--muted); margin-bottom:8px;"><em>Q: "Flag the hours where latency spiked abnormally."</em></p>
+<pre><span class="cm"># Resample to hourly, then flag anomalies with rolling stats</span>
+hourly = (
+    df.set_index(<span class="str">'timestamp'</span>)
+    .resample(<span class="str">'1H'</span>)[<span class="str">'latency_ms'</span>]
+    .mean()
+    .reset_index()
+)
+
+window = <span class="num">6</span>   <span class="cm"># 6-hour rolling window</span>
+hourly[<span class="str">'rolling_mean'</span>] = hourly[<span class="str">'latency_ms'</span>].rolling(window).mean()
+hourly[<span class="str">'rolling_std'</span>]  = hourly[<span class="str">'latency_ms'</span>].rolling(window).std()
+hourly[<span class="str">'is_anomaly'</span>]   = (
+    (hourly[<span class="str">'latency_ms'</span>] - hourly[<span class="str">'rolling_mean'</span>]).abs()
+    > <span class="num">2</span> * hourly[<span class="str">'rolling_std'</span>]
+)
+
+anomalies = hourly[hourly[<span class="str">'is_anomaly'</span>]]
+<span class="cm"># Key insight: "2 std dev = ~95% confidence. For stricter alerting use 3 std dev."</span>
+<span class="cm"># PulseAI framing: this is exactly how the EM agent spots crash spikes to give the Planner a time window.</span></pre>
+    </div>
+
+    <!-- Pattern 3: Top-K by group -->
+    <div class="card">
+      <h3>Pattern 3 · Top-K by Group</h3>
+      <p style="font-size:0.85rem; color:var(--muted); margin-bottom:8px;"><em>Q: "Which OS version has the worst crash rate? Show top 3."</em></p>
+<pre><span class="cm"># Crash rate per OS version — groupby + agg + nlargest</span>
+crash_by_os = (
+    df.groupby(<span class="str">'os_version'</span>)
+    .agg(
+        total_sessions  = (<span class="str">'user_id'</span>, <span class="str">'count'</span>),
+        total_crashes   = (<span class="str">'crashed'</span>, <span class="str">'sum'</span>),
+        avg_latency_ms  = (<span class="str">'latency_ms'</span>, <span class="str">'mean'</span>),
+    )
+    .assign(crash_rate = <span class="kw">lambda</span> x: x[<span class="str">'total_crashes'</span>] / x[<span class="str">'total_sessions'</span>])
+    .nlargest(<span class="num">3</span>, <span class="str">'crash_rate'</span>)
+)
+
+<span class="cm"># Heap framing: nlargest() uses a min-heap internally → O(n log k)</span>
+<span class="cm"># Same as heapq.nlargest() — same pattern, pandas wraps it for you.</span></pre>
+    </div>
+
+    <!-- Pattern 4: Time aggregation -->
+    <div class="card">
+      <h3>Pattern 4 · Time-Based Aggregation</h3>
+      <p style="font-size:0.85rem; color:var(--muted); margin-bottom:8px;"><em>Q: "Show unique users per event per hour — find the peak hour for payment drops."</em></p>
+<pre><span class="cm"># Resample: unique users per event per hour</span>
+df[<span class="str">'timestamp'</span>] = pd.to_datetime(df[<span class="str">'timestamp'</span>])
+
+hourly_events = (
+    df.set_index(<span class="str">'timestamp'</span>)
+    .groupby(<span class="str">'event'</span>)
+    .resample(<span class="str">'1H'</span>)[<span class="str">'user_id'</span>]
+    .nunique()
+    .reset_index(name=<span class="str">'unique_users'</span>)
+)
+
+<span class="cm"># Find the worst hour for a specific event</span>
+payments = hourly_events[hourly_events[<span class="str">'event'</span>] == <span class="str">'PAYMENT_FAILED'</span>]
+peak_hour = payments.loc[payments[<span class="str">'unique_users'</span>].idxmax()]
+
+<span class="cm"># Key: resample() needs a DatetimeIndex — always set_index first</span>
+<span class="cm"># PulseAI framing: this is the "when" the Planner establishes before calling EM.</span></pre>
+    </div>
+
+    <!-- Pattern 5: Cohort pivot -->
+    <div class="card">
+      <h3>Pattern 5 · Cohort Comparison (Pivot Table)</h3>
+      <p style="font-size:0.85rem; color:var(--muted); margin-bottom:8px;"><em>Q: "Show crash rate broken down by device × OS version in one table."</em></p>
+<pre><span class="cm"># pivot_table: rows = device, cols = os_version, values = crash rate</span>
+cohort = pd.pivot_table(
+    df,
+    values   = <span class="str">'crashed'</span>,
+    index    = <span class="str">'device'</span>,
+    columns  = <span class="str">'os_version'</span>,
+    aggfunc  = <span class="str">'mean'</span>,        <span class="cm"># mean of 0/1 crashed = crash rate</span>
+).round(<span class="num">3</span>)
+
+<span class="cm"># Output looks like:</span>
+<span class="cm"># os_version      13      14      15</span>
+<span class="cm"># device</span>
+<span class="cm"># Android       0.048   0.051   0.062   ← OS 15 worst on Android</span>
+<span class="cm"># iOS           0.041   0.039   0.044</span>
+
+<span class="cm"># Narrate: "This cross-tab immediately shows OS 15 on Android is an outlier."</span>
+<span class="cm"># PulseAI framing: the UX agent produces this table; Report agent renders it as a heatmap.</span></pre>
+      <p style="font-size:0.82rem; color:var(--muted); margin-top:10px;"><strong style="color:var(--text);">The meta-skill:</strong> Always narrate while you code — "I'm grouping by user first because funnel steps need to be per-user, not per-event." And always tie back to PulseAI — "this is exactly how our Product agent surfaces conversion drops."</p>
+    </div>
+
   </section>
 
   <!-- ══════════════════════════════════════════ -->
@@ -938,6 +1253,27 @@
           <strong>Retrieval quality:</strong> precision@k (are the right chunks in the top-k?), recall@k (did we find all relevant chunks?), MRR (mean reciprocal rank of the first relevant result).<br>
           <strong>Generation quality:</strong> faithfulness (does the answer only use information from the retrieved context?), answer relevance (does it actually answer the question?), context relevance (are the retrieved chunks actually relevant?). <strong>RAGAS</strong> is the standard framework — uses an LLM judge to score these without human annotation.<br>
           <strong>Production metrics:</strong> user thumbs up/down, deflection rate, p95 latency.
+        </div>
+      </details>
+      <details>
+        <summary>"How would you build RAG for 22 Indian languages with limited annotated data?"</summary>
+        <div class="answer">
+          <strong>1. Embedding model:</strong> Start with MURIL/LaBSE/IndicBERT for cross-lingual semantic search — these models align semantic spaces across languages without parallel data.<br>
+          <strong>2. Data augmentation:</strong> Back-translation, synthetic QA generation via LLM, transliteration mining (Devanagari ↔ Latin script) to increase training surface.<br>
+          <strong>3. Retrieval:</strong> Script normalization (NFKC), Aksharantar for tokenization, hybrid BM25+dense for exact keyword match in native script (Hindi-English code-mixing is common).<br>
+          <strong>4. Eval:</strong> LLM-as-judge (GPT-4o multilingual), automated faithfulness on translated gold sets, IndicXTREME/FLASK-Indic benchmarks (no human annotators for 22 languages).<br>
+          <strong>5. Cost/scale:</strong> Distill the cross-lingual encoder to a smaller student model, INT8 quantization, aggressive caching on common queries. Serve lightweight at the edge for Jio's massive user base.<br>
+          <strong>6. Fallbacks:</strong> If query in language X gets low confidence, translate to English → retrieve in English → generate in target language (translates-in, translates-out).
+        </div>
+      </details>
+      <details>
+        <summary>"How do you handle hallucination in low-resource Indian languages where there are no native eval sets?"</summary>
+        <div class="answer">
+          <strong>1. Transliterate and translate gold sets:</strong> Start from existing English eval sets (FLASK, AlpacaEval), translate to Hindi/Marathi/Telugu. Not perfect but catches baseline issues.<br>
+          <strong>2. LLM-as-judge in English:</strong> For any generated answer, translate back to English before judging faithfulness with GPT-4o. One-directional translation risk but works at scale.<br>
+          <strong>3. Binary safety rules:</strong> Instead of nuanced scoring, have hard rules — "answer must cite a source", "answer cannot invent dates/names". Deterministic, no eval annotation needed.<br>
+          <strong>4. Human-in-the-loop early:</strong> For the first 2 weeks of a new language launch, every answer gets a thumbs up/down. Build a synthetic dataset from the <em>failed</em> cases (negative samples are most valuable).<br>
+          <strong>5. Peer language transfer:</strong> Hindi safety patterns often transfer to Marathi/Urdu/Punjabi. Build eval once in a well-resourced language, adapt to siblings.
         </div>
       </details>
     </div>

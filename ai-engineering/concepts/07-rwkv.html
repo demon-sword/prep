@@ -1,0 +1,910 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1.0"/>
+  <title>RWKV Model — AI Engineering Concepts</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com"/>
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet"/>
+  <style>
+    :root {
+      --bg:        #0d0f17;
+      --surface:   #141720;
+      --card:      #1a1e2e;
+      --border:    #252a3d;
+      --accent:    #00d4ff;
+      --purple:    #7c3aed;
+      --green:     #00ff88;
+      --yellow:    #ffd700;
+      --red:       #ff4757;
+      --orange:    #ff9500;
+      --text:      #e2e8f0;
+      --text-dim:  #8892a4;
+      --mono:      'JetBrains Mono', monospace;
+      --sans:      'Inter', system-ui, sans-serif;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: var(--sans);
+      background: var(--bg);
+      color: var(--text);
+      line-height: 1.7;
+      min-height: 100vh;
+    }
+
+    /* ── Header ── */
+    header {
+      background: var(--surface);
+      border-bottom: 1px solid var(--border);
+      padding: 2rem 2rem 1.5rem;
+      max-width: 1100px;
+      margin: 0 auto;
+    }
+    .group-badge {
+      display: inline-block;
+      font-family: var(--mono);
+      font-size: 0.7rem;
+      text-transform: uppercase;
+      letter-spacing: 0.1em;
+      color: var(--purple);
+      background: rgba(124,58,237,0.12);
+      border: 1px solid rgba(124,58,237,0.3);
+      border-radius: 4px;
+      padding: 0.2rem 0.6rem;
+      margin-bottom: 0.75rem;
+    }
+    header h1 {
+      font-size: clamp(1.6rem, 3vw, 2.2rem);
+      font-weight: 700;
+      color: var(--text);
+      margin-bottom: 0.4rem;
+    }
+    header h1 span { color: var(--accent); }
+    header p {
+      color: var(--text-dim);
+      font-size: 1rem;
+      max-width: 720px;
+    }
+
+    /* ── Main layout ── */
+    main {
+      max-width: 1100px;
+      margin: 0 auto;
+      padding: 2rem;
+      display: flex;
+      flex-direction: column;
+      gap: 2.5rem;
+    }
+
+    /* ── Section cards ── */
+    section {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 2rem;
+    }
+    section > h2 {
+      font-size: 1.3rem;
+      font-weight: 600;
+      color: var(--accent);
+      border-bottom: 1px solid var(--border);
+      padding-bottom: 0.75rem;
+      margin-bottom: 1.5rem;
+    }
+    h3 {
+      font-size: 1.05rem;
+      font-weight: 600;
+      color: var(--yellow);
+      margin: 1.5rem 0 0.5rem;
+    }
+    p { color: var(--text); margin-bottom: 0.9rem; }
+    ul { padding-left: 1.4rem; margin-bottom: 0.9rem; }
+    ul li { margin-bottom: 0.4rem; color: var(--text); }
+    code {
+      font-family: var(--mono);
+      font-size: 0.85em;
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 4px;
+      padding: 0.1em 0.4em;
+      color: var(--green);
+    }
+    pre {
+      font-family: var(--mono);
+      font-size: 0.82rem;
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 1rem 1.2rem;
+      overflow-x: auto;
+      color: var(--green);
+      margin-bottom: 1rem;
+      line-height: 1.6;
+    }
+    .formula {
+      font-family: var(--mono);
+      background: var(--card);
+      border-left: 3px solid var(--accent);
+      border-radius: 4px;
+      padding: 0.8rem 1.2rem;
+      margin: 1rem 0;
+      color: var(--accent);
+      font-size: 0.9rem;
+    }
+    .highlight-box {
+      background: rgba(0, 212, 255, 0.06);
+      border: 1px solid rgba(0,212,255,0.25);
+      border-radius: 8px;
+      padding: 1rem 1.2rem;
+      margin: 1rem 0;
+    }
+
+    /* ── Visualization ── */
+    #visualization {
+      display: flex;
+      flex-direction: column;
+      gap: 1.5rem;
+    }
+    .viz-description {
+      color: var(--text-dim);
+      font-size: 0.9rem;
+    }
+    .viz-controls {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 1.2rem;
+      align-items: flex-end;
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 1.2rem;
+    }
+    .ctrl-group {
+      display: flex;
+      flex-direction: column;
+      gap: 0.35rem;
+      min-width: 160px;
+    }
+    .ctrl-group label {
+      font-size: 0.78rem;
+      font-family: var(--mono);
+      color: var(--text-dim);
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+    }
+    .ctrl-group .val {
+      color: var(--accent);
+      font-weight: 600;
+    }
+    input[type=range] {
+      -webkit-appearance: none;
+      width: 100%;
+      height: 4px;
+      border-radius: 2px;
+      background: var(--border);
+      outline: none;
+      cursor: pointer;
+    }
+    input[type=range]::-webkit-slider-thumb {
+      -webkit-appearance: none;
+      width: 14px; height: 14px;
+      border-radius: 50%;
+      background: var(--accent);
+      cursor: pointer;
+    }
+    .btn-group {
+      display: flex;
+      gap: 0.5rem;
+      flex-wrap: wrap;
+    }
+    .btn {
+      font-family: var(--mono);
+      font-size: 0.78rem;
+      padding: 0.4rem 0.9rem;
+      border-radius: 6px;
+      border: 1px solid var(--border);
+      background: var(--card);
+      color: var(--text);
+      cursor: pointer;
+      transition: all 0.15s;
+    }
+    .btn:hover { border-color: var(--accent); color: var(--accent); }
+    .btn.active { background: rgba(0,212,255,0.15); border-color: var(--accent); color: var(--accent); }
+
+    canvas { display: block; border-radius: 8px; }
+    .canvas-wrap {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 1rem;
+      overflow-x: auto;
+    }
+
+    /* complexity chart */
+    .complexity-chart {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 1rem;
+    }
+    @media (max-width: 640px) {
+      .complexity-chart { grid-template-columns: 1fr; }
+    }
+    .chart-panel {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 1rem;
+      display: flex;
+      flex-direction: column;
+      gap: 0.5rem;
+    }
+    .chart-panel h4 {
+      font-size: 0.85rem;
+      font-family: var(--mono);
+      text-align: center;
+    }
+
+    /* ── Takeaways ── */
+    #takeaways ul {
+      list-style: none;
+      padding: 0;
+      display: flex;
+      flex-direction: column;
+      gap: 0.8rem;
+    }
+    #takeaways ul li {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-left: 3px solid var(--green);
+      border-radius: 6px;
+      padding: 0.75rem 1rem;
+      font-size: 0.95rem;
+    }
+    #takeaways ul li strong { color: var(--green); }
+
+    /* ── Nav ── */
+    .concept-nav {
+      max-width: 1100px;
+      margin: 0 auto;
+      padding: 1.5rem 2rem 2.5rem;
+      display: flex;
+      justify-content: space-between;
+      gap: 1rem;
+    }
+    .concept-nav a {
+      display: flex;
+      flex-direction: column;
+      gap: 0.2rem;
+      text-decoration: none;
+      color: var(--text-dim);
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 0.75rem 1.2rem;
+      font-size: 0.85rem;
+      transition: border-color 0.15s, color 0.15s;
+      max-width: 48%;
+    }
+    .concept-nav a:hover { border-color: var(--accent); color: var(--accent); }
+    .concept-nav a span { font-family: var(--mono); font-size: 0.75rem; color: var(--text-dim); }
+    .concept-nav a.disabled { opacity: 0.35; pointer-events: none; }
+    .nav-next { text-align: right; margin-left: auto; }
+
+    @media (max-width: 640px) {
+      main { padding: 1rem; }
+      header { padding: 1.2rem; }
+      .concept-nav { padding: 1rem; flex-direction: column; }
+      .concept-nav a { max-width: 100%; }
+      .nav-next { margin-left: 0; }
+    }
+  </style>
+</head>
+<body>
+
+<header>
+  <div class="group-badge">foundations</div>
+  <h1><span>RWKV</span> Model</h1>
+  <p>The RNN-Transformer hybrid that achieves linear O(n) inference complexity with transformer-quality results — receptance, weight, key, value formulation and how it eliminates quadratic attention.</p>
+</header>
+
+<main>
+
+<!-- ═══════════════════════════════════════════════════════ THEORY -->
+<section id="theory">
+  <h2>Theory</h2>
+
+  <h3>The Quadratic Attention Problem</h3>
+  <p>
+    Standard transformer self-attention computes a full N×N attention matrix for a sequence of N tokens.
+    This is O(n²) in both compute and memory, which means doubling sequence length quadruples cost.
+    For a sequence of 8,192 tokens with 96 attention heads and d_model=12288 (GPT-4 scale),
+    the attention matrix alone requires ~25 GB of memory per forward pass. This is the central scalability
+    wall of transformers for long contexts.
+  </p>
+  <p>
+    RWKV (Receptance Weighted Key Value), introduced by Bo Peng in 2023, attacks this problem by replacing
+    the quadratic attention mechanism with a linear recurrence formulation — while retaining the representational
+    power of transformers through clever architecture choices. RWKV models can be trained in parallel like
+    transformers (no sequential dependency during training) but run inference in O(1) memory and O(n) compute
+    — exactly like an RNN.
+  </p>
+
+  <h3>The Four Components: R, W, K, V</h3>
+  <p>
+    RWKV's time-mixing layer computes four quantities at each position t, each a learned linear projection
+    of the current token and the prior hidden state:
+  </p>
+  <ul>
+    <li><strong>R (Receptance):</strong> a gating signal — determines how much of the past information to "receive". Passed through sigmoid to produce values in (0, 1).</li>
+    <li><strong>W (Weight decay):</strong> a learned per-channel time-decay factor. Controls how fast past contributions fade. Typically a negative learned scalar per channel.</li>
+    <li><strong>K (Key):</strong> analogous to attention keys — what the current position emits to the future.</li>
+    <li><strong>V (Value):</strong> the actual content to be aggregated, weighted by K and decayed by W.</li>
+  </ul>
+
+  <div class="formula">
+    wkv_t = (Σ_{i&lt;t} e^{-(t-1-i)·w + k_i} · v_i  +  e^{u + k_t} · v_t)
+            ─────────────────────────────────────────────────────────────
+            (Σ_{i&lt;t} e^{-(t-1-i)·w + k_i}  +  e^{u + k_t})
+
+    output_t = sigmoid(r_t) ⊙ wkv_t
+  </div>
+
+  <p>
+    Here <code>u</code> is a learned "first-token bonus" scalar that gives the current token extra weight
+    (preventing complete dilution from the accumulated past). <code>w</code> is the per-channel time-decay
+    vector. The key insight: this weighted sum can be computed recursively — O(1) per step at inference.
+  </p>
+
+  <h3>Parallel Training, Sequential Inference</h3>
+  <p>
+    This dual nature is RWKV's most important engineering property. During training, you can unroll all N
+    positions simultaneously (like a transformer) because you have the full sequence available — the recurrence
+    can be parallelized across the time dimension using a prefix-sum / "parallel scan" algorithm. At inference,
+    you maintain a running state vector and update it token-by-token in O(1) — exactly like an LSTM, with no
+    KV cache required.
+  </p>
+  <div class="highlight-box">
+    <strong>No KV cache.</strong> Transformers must store K and V for every past token — for a 128K context
+    window with 80 layers and d=8192, this is ~160 GB of KV cache (fp16). RWKV's state is a fixed-size
+    vector regardless of sequence length. This makes long-context inference dramatically cheaper: constant
+    memory per sequence, zero cache eviction pressure.
+  </div>
+
+  <h3>Channel Mixing (FFN Replacement)</h3>
+  <p>
+    RWKV also replaces the FFN sublayer with a "channel mixing" layer, which similarly uses a learned gating
+    mechanism (receptance) applied to a linear projection of the current and previous token's features.
+    This keeps the full layer consistent in spirit: gated linear transformations everywhere, no quadratic ops.
+  </p>
+
+  <h3>RWKV Architecture Versions</h3>
+  <p>
+    RWKV has gone through multiple architectural revisions:
+  </p>
+  <ul>
+    <li><strong>RWKV-4:</strong> First widely-used version. Proved competitive with GPT-2/GPT-Neo at similar parameter counts. Introduced the WKV operator.</li>
+    <li><strong>RWKV-5 (Eagle):</strong> Multi-head WKV, improving expressiveness. Introduced "group-norm" style normalization within time-mixing.</li>
+    <li><strong>RWKV-6 (Finch):</strong> Added data-dependent time-decay (W becomes a function of the input, not just a learned constant). Significantly improved in-context learning. Available up to 7B and 14B parameters.</li>
+    <li><strong>RWKV-7 (Goose):</strong> Further architectural improvements, competitive with Mistral 7B on many benchmarks at the same parameter count.</li>
+  </ul>
+
+  <h3>Where RWKV Underperforms Transformers</h3>
+  <p>
+    RWKV is not a free lunch. The recurrent formulation introduces an inductive bias that transformers don't have:
+    <strong>information bottleneck across long range</strong>. Transformers can attend to any past token with
+    full precision; RWKV's exponential decay means tokens far in the past receive exponentially less weight.
+    This shows up in:
+  </p>
+  <ul>
+    <li>Tasks requiring exact recall of information from many tokens ago (needle-in-haystack fails more often)</li>
+    <li>In-context learning on long prompts (though RWKV-6/7 improved significantly here)</li>
+    <li>Complex multi-hop reasoning over widely-spaced facts</li>
+  </ul>
+  <p>
+    In practice, for most language modeling tasks under ~4K tokens, RWKV-6/7 performs comparably to
+    transformers of the same parameter count. For streaming inference, edge deployment, or ultra-long
+    sequences where KV cache is prohibitive, RWKV is genuinely superior.
+  </p>
+
+  <h3>Production Reality</h3>
+  <p>
+    RWKV has a growing ecosystem: the <code>rwkv.cpp</code> library enables CPU inference at competitive
+    speeds, and official PyTorch implementations support CUDA kernels for the WKV operator. RWKV-6 models
+    at 7B and 14B parameters are available on HuggingFace. The fixed-state inference makes RWKV ideal for:
+  </p>
+  <ul>
+    <li><strong>On-device / edge:</strong> No KV cache means low and predictable memory — a 1.6B RWKV model can run on a phone.</li>
+    <li><strong>Streaming applications:</strong> Constant-time token processing enables real-time text streaming without latency spikes.</li>
+    <li><strong>Long-document processing:</strong> 100K+ token context with O(1) memory — transformers need O(n) KV cache.</li>
+    <li><strong>Continuous conversations:</strong> State can be saved/restored — a conversation history can be checkpointed as a fixed-size vector and resumed later without re-processing the full context.</li>
+  </ul>
+</section>
+
+<!-- ═══════════════════════════════════════════════════════ VISUALIZATION -->
+<section id="visualization">
+  <h2>Visualization: Complexity Scaling — RWKV vs Transformer</h2>
+  <p class="viz-description">
+    Compare how compute and memory scale with sequence length for RWKV (linear O(n)) vs transformer attention (quadratic O(n²)).
+    Adjust sequence length and model size to see how costs diverge. Toggle between compute and memory views.
+    The right panel shows the RWKV recurrent state update animating token-by-token.
+  </p>
+
+  <div class="viz-controls">
+    <div class="ctrl-group">
+      <label>Max Sequence Length: <span class="val" id="seq-val">4096</span></label>
+      <input type="range" id="seq-slider" min="512" max="32768" step="512" value="4096"/>
+    </div>
+    <div class="ctrl-group">
+      <label>d_model: <span class="val" id="dmodel-val">2048</span></label>
+      <input type="range" id="dmodel-slider" min="512" max="8192" step="256" value="2048"/>
+    </div>
+    <div class="ctrl-group">
+      <label>Metric</label>
+      <div class="btn-group">
+        <button class="btn active" id="btn-compute">Compute (FLOPs)</button>
+        <button class="btn" id="btn-memory">Memory (GB)</button>
+      </div>
+    </div>
+    <div class="ctrl-group">
+      <label>Animation</label>
+      <div class="btn-group">
+        <button class="btn active" id="btn-play">&#9646;&#9646; Pause</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="complexity-chart">
+    <div class="chart-panel">
+      <h4 style="color:var(--accent)">Scaling Curve</h4>
+      <canvas id="scaling-canvas" width="480" height="320"></canvas>
+    </div>
+    <div class="chart-panel">
+      <h4 style="color:var(--green)">RWKV Recurrent State Update</h4>
+      <canvas id="state-canvas" width="480" height="320"></canvas>
+    </div>
+  </div>
+
+  <div class="canvas-wrap" style="margin-top:0.5rem">
+    <canvas id="ratio-canvas" width="960" height="90"></canvas>
+  </div>
+</section>
+
+<!-- ═══════════════════════════════════════════════════════ TAKEAWAYS -->
+<section id="takeaways">
+  <h2>Key Takeaways</h2>
+  <ul>
+    <li><strong>Dual-mode architecture:</strong> RWKV trains as a transformer (parallel across time) but infers as an RNN (O(1) per token). This is not a compromise — it's a deliberate design that gets the best of both worlds for most practical workloads.</li>
+    <li><strong>KV cache elimination is the killer feature:</strong> At 128K context, a 7B transformer needs ~80 GB of KV cache; RWKV needs a fixed ~few MB of state. This changes the economics of long-context inference fundamentally.</li>
+    <li><strong>The information bottleneck is real:</strong> Exponential decay means RWKV can "forget" distant tokens — needle-in-haystack tasks and exact retrieval over very long ranges degrade more than with transformers. RWKV-6's data-dependent W mitigates but doesn't eliminate this.</li>
+    <li><strong>Production readiness:</strong> RWKV-6 at 7B/14B is genuinely competitive on standard NLP benchmarks (MMLU, HellaSwag, ARC). The <code>rwkv.cpp</code> and Hugging Face integrations are mature enough for production edge deployment today.</li>
+    <li><strong>State serialization unlocks new UX:</strong> You can serialize the RWKV hidden state to disk after processing a long prompt, then restore it later — giving "free" conversation memory without re-processing history. Transformers can't do this without storing the full KV cache.</li>
+    <li><strong>Hybrid future:</strong> The trend is toward hybrid architectures (Mamba, Griffin, Jamba) that interleave linear-recurrence layers with occasional full attention layers — giving O(n) cost for most positions while retaining perfect recall at sparse checkpoints.</li>
+  </ul>
+</section>
+
+</main>
+
+<!-- ═══════════════════════════════════════════════════════ NAV -->
+<nav class="concept-nav">
+  <a href="06-qkv-attention.html">
+    <span>← Previous</span>
+    Query, Key, Value Attention
+  </a>
+  <a href="08-chinchilla.html" class="nav-next">
+    <span>Next →</span>
+    Chinchilla Scaling Law
+  </a>
+</nav>
+
+<script>
+(function() {
+  'use strict';
+
+  // ── State ──────────────────────────────────────────────
+  let metric = 'compute'; // 'compute' | 'memory'
+  let maxSeq = 4096;
+  let dModel = 2048;
+  let animating = true;
+  let animFrame = 0;
+  let rafId = null;
+
+  // ── DOM refs ───────────────────────────────────────────
+  const seqSlider    = document.getElementById('seq-slider');
+  const dmodelSlider = document.getElementById('dmodel-slider');
+  const seqVal       = document.getElementById('seq-val');
+  const dmodelVal    = document.getElementById('dmodel-val');
+  const btnCompute   = document.getElementById('btn-compute');
+  const btnMemory    = document.getElementById('btn-memory');
+  const btnPlay      = document.getElementById('btn-play');
+  const scalingC     = document.getElementById('scaling-canvas');
+  const stateC       = document.getElementById('state-canvas');
+  const ratioC       = document.getElementById('ratio-canvas');
+
+  // ── Initialize canvas dimensions ONCE ─────────────────
+  // Use fixed logical sizes from HTML attributes; do NOT resize on each frame.
+  const SCALING_W = 480, SCALING_H = 320;
+  const STATE_W   = 480, STATE_H   = 320;
+  const RATIO_W   = 960, RATIO_H  = 90;
+
+  function initCanvas(canvas, lw, lh) {
+    const dpr = window.devicePixelRatio || 1;
+    canvas.width  = lw * dpr;
+    canvas.height = lh * dpr;
+    canvas.style.width  = lw + 'px';
+    canvas.style.height = lh + 'px';
+    const ctx = canvas.getContext('2d');
+    ctx.scale(dpr, dpr);
+    return ctx;
+  }
+
+  const scalingCtx = initCanvas(scalingC, SCALING_W, SCALING_H);
+  const stateCtx   = initCanvas(stateC,   STATE_W,   STATE_H);
+  const ratioCtx   = initCanvas(ratioC,   RATIO_W,   RATIO_H);
+
+  // ── Color palette ──────────────────────────────────────
+  const CLR = {
+    bg:      '#0d0f17',
+    card:    '#1a1e2e',
+    border:  '#252a3d',
+    accent:  '#00d4ff',
+    purple:  '#7c3aed',
+    green:   '#00ff88',
+    yellow:  '#ffd700',
+    red:     '#ff4757',
+    orange:  '#ff9500',
+    text:    '#e2e8f0',
+    dimText: '#8892a4',
+  };
+
+  // ── Complexity functions ───────────────────────────────
+  function transformerCompute(n, d) { return 4 * n * n * d; }
+  function rwkvCompute(n, d)        { return 4 * n * d; }
+  function transformerMemory(n, d, layers) {
+    return (2 * n * d * 2 * layers) / (1024 ** 3);
+  }
+  function rwkvMemory(n, d, layers) {
+    return (2 * d * 2 * layers) / (1024 ** 3);
+  }
+
+  // ── Draw Scaling Chart ────────────────────────────────
+  function drawScaling() {
+    const w = SCALING_W, h = SCALING_H;
+    const ctx = scalingCtx;
+    const pad = { top: 24, right: 20, bottom: 44, left: 58 };
+    const plotW = w - pad.left - pad.right;
+    const plotH = h - pad.top - pad.bottom;
+    const layers = 32;
+
+    // Background
+    ctx.fillStyle = CLR.card;
+    ctx.fillRect(0, 0, w, h);
+
+    // Build data
+    const steps = 60;
+    const seqPoints = Array.from({length: steps + 1}, (_, i) => Math.round((i / steps) * maxSeq));
+
+    let tfData, rwData, yLabel;
+    if (metric === 'compute') {
+      tfData  = seqPoints.map(n => n === 0 ? 0 : transformerCompute(n, dModel) / 1e12);
+      rwData  = seqPoints.map(n => rwkvCompute(n, dModel) / 1e12);
+      yLabel  = 'TFLOPs (per layer)';
+    } else {
+      tfData  = seqPoints.map(n => transformerMemory(n, dModel, layers));
+      rwData  = seqPoints.map(n => rwkvMemory(n, dModel, layers));
+      yLabel  = 'KV Memory (GB, 32 layers)';
+    }
+
+    const maxY = Math.max(...tfData, ...rwData) * 1.1 || 1;
+
+    function toX(n)    { return pad.left + (n / maxSeq) * plotW; }
+    function toY(val)  { return pad.top  + plotH - (val / maxY) * plotH; }
+
+    // Grid lines
+    ctx.strokeStyle = CLR.border;
+    ctx.lineWidth = 1;
+    for (let i = 0; i <= 4; i++) {
+      const y = pad.top + (i / 4) * plotH;
+      ctx.beginPath(); ctx.moveTo(pad.left, y); ctx.lineTo(pad.left + plotW, y); ctx.stroke();
+      const val = (maxY * (4 - i) / 4);
+      ctx.fillStyle = CLR.dimText;
+      ctx.font = '10px JetBrains Mono, monospace';
+      ctx.textAlign = 'right';
+      ctx.fillText(val.toFixed(2), pad.left - 6, y + 4);
+    }
+    for (let i = 0; i <= 4; i++) {
+      const x = pad.left + (i / 4) * plotW;
+      ctx.beginPath(); ctx.moveTo(x, pad.top); ctx.lineTo(x, pad.top + plotH); ctx.stroke();
+      ctx.fillStyle = CLR.dimText;
+      ctx.textAlign = 'center';
+      ctx.fillText(Math.round((maxSeq * i / 4)).toLocaleString(), x, pad.top + plotH + 16);
+    }
+
+    // Axes labels
+    ctx.fillStyle = CLR.dimText;
+    ctx.font = '11px Inter, system-ui';
+    ctx.textAlign = 'center';
+    ctx.fillText('Sequence Length (tokens)', pad.left + plotW / 2, h - 6);
+
+    ctx.save();
+    ctx.translate(14, pad.top + plotH / 2);
+    ctx.rotate(-Math.PI / 2);
+    ctx.textAlign = 'center';
+    ctx.fillText(yLabel, 0, 0);
+    ctx.restore();
+
+    // Transformer line (quadratic - red/orange)
+    ctx.strokeStyle = CLR.orange;
+    ctx.lineWidth = 2.5;
+    ctx.beginPath();
+    seqPoints.forEach((n, i) => {
+      const x = toX(n), y = toY(tfData[i]);
+      i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
+    });
+    ctx.stroke();
+
+    // RWKV line (linear - green)
+    ctx.strokeStyle = CLR.green;
+    ctx.lineWidth = 2.5;
+    ctx.beginPath();
+    seqPoints.forEach((n, i) => {
+      const x = toX(n), y = toY(rwData[i]);
+      i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
+    });
+    ctx.stroke();
+
+    // Current sequence marker
+    ctx.strokeStyle = CLR.accent;
+    ctx.lineWidth = 1.5;
+    ctx.setLineDash([4, 4]);
+    const xMark = toX(maxSeq);
+    ctx.beginPath(); ctx.moveTo(xMark, pad.top); ctx.lineTo(xMark, pad.top + plotH); ctx.stroke();
+    ctx.setLineDash([]);
+
+    // Legend
+    const legX = pad.left + 10, legY = pad.top + 10;
+    ctx.font = '11px Inter, system-ui';
+    ctx.fillStyle = CLR.orange;
+    ctx.fillRect(legX, legY, 16, 3);
+    ctx.fillText('Transformer O(n²)', legX + 22, legY + 6);
+    ctx.fillStyle = CLR.green;
+    ctx.fillRect(legX, legY + 16, 16, 3);
+    ctx.fillText('RWKV O(n)', legX + 22, legY + 22);
+
+    // Title
+    ctx.fillStyle = CLR.text;
+    ctx.font = 'bold 12px Inter, system-ui';
+    ctx.textAlign = 'center';
+    ctx.fillText(metric === 'compute' ? 'FLOPs vs Sequence Length' : 'Memory vs Sequence Length', w / 2, pad.top - 8);
+  }
+
+  // ── Draw State Animation ───────────────────────────────
+  // Shows RWKV's fixed-size state being updated token by token
+  function drawStateAnim(frame) {
+    const w = STATE_W, h = STATE_H;
+    const ctx = stateCtx;
+    ctx.fillStyle = CLR.card;
+    ctx.fillRect(0, 0, w, h);
+
+    const numChannels = 16;
+    const maxTokens = 18;
+    const tokenIdx = Math.floor(frame / 2) % (maxTokens + 4);
+    const activeToken = Math.min(tokenIdx, maxTokens - 1);
+
+    const cellW = Math.floor((w - 60) / numChannels);
+    const cellH = 22;
+    const startX = 30;
+    const stateY = 50;
+    const tokY = 140;
+    const outY = 220;
+
+    // Title labels
+    ctx.fillStyle = CLR.dimText;
+    ctx.font = '10px JetBrains Mono, monospace';
+    ctx.textAlign = 'left';
+    ctx.fillText('Hidden State h_t  (fixed size, d channels)', startX, stateY - 10);
+    ctx.fillText('Token t=' + (activeToken + 1) + '  (current input)', startX, tokY - 10);
+    ctx.fillText('Output o_t  (receptance-gated)', startX, outY - 10);
+
+    // Draw state cells
+    for (let c = 0; c < numChannels; c++) {
+      const x = startX + c * cellW;
+      // State value — slowly drifting sine wave per channel
+      const decay = Math.exp(-0.1 * (activeToken));
+      const val = Math.sin(c * 0.7 + frame * 0.04) * 0.5 + 0.5;
+      const intensity = val * (0.4 + 0.6 * (1 - decay));
+
+      const r = Math.round(intensity * 0   + (1 - intensity) * 26);
+      const g = Math.round(intensity * 255 + (1 - intensity) * 30);
+      const b = Math.round(intensity * 136 + (1 - intensity) * 46);
+
+      ctx.fillStyle = `rgb(${r},${g},${b})`;
+      ctx.fillRect(x + 1, stateY, cellW - 2, cellH);
+      ctx.strokeStyle = CLR.border;
+      ctx.lineWidth = 1;
+      ctx.strokeRect(x + 1, stateY, cellW - 2, cellH);
+    }
+
+    // Animate update arrow from token → state
+    const progress = (frame % 20) / 20;
+    const arrowProgress = Math.min(progress * 2, 1);
+
+    // Token cells (input)
+    for (let c = 0; c < numChannels; c++) {
+      const x = startX + c * cellW;
+      const v = Math.sin(c * 1.3 + activeToken * 0.9) * 0.5 + 0.5;
+      ctx.fillStyle = `rgba(0, 212, 255, ${0.2 + v * 0.5})`;
+      ctx.fillRect(x + 1, tokY, cellW - 2, cellH);
+      ctx.strokeStyle = 'rgba(0, 212, 255, 0.3)';
+      ctx.strokeRect(x + 1, tokY, cellW - 2, cellH);
+    }
+
+    // Arrow (token → state)
+    const midX = w / 2;
+    ctx.strokeStyle = CLR.accent;
+    ctx.lineWidth = 1.5;
+    ctx.setLineDash([4, 4]);
+    ctx.globalAlpha = 0.5 + 0.5 * Math.sin(frame * 0.15);
+    ctx.beginPath();
+    ctx.moveTo(midX, tokY);
+    ctx.lineTo(midX, tokY - (tokY - stateY - cellH) * arrowProgress);
+    ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.globalAlpha = 1;
+
+    // Output cells
+    for (let c = 0; c < numChannels; c++) {
+      const x = startX + c * cellW;
+      const gate = Math.sigmoid ? Math.sigmoid(Math.sin(c * 0.5 + frame * 0.03)) : 1 / (1 + Math.exp(-(Math.sin(c * 0.5 + frame * 0.03))));
+      ctx.fillStyle = `rgba(124, 58, 237, ${0.15 + gate * 0.5})`;
+      ctx.fillRect(x + 1, outY, cellW - 2, cellH);
+      ctx.strokeStyle = 'rgba(124, 58, 237, 0.4)';
+      ctx.strokeRect(x + 1, outY, cellW - 2, cellH);
+    }
+
+    // Labels
+    ctx.fillStyle = CLR.green;
+    ctx.font = 'bold 10px JetBrains Mono, monospace';
+    ctx.textAlign = 'right';
+    ctx.fillText('h_t', startX - 4, stateY + 15);
+    ctx.fillStyle = CLR.accent;
+    ctx.fillText('x_t', startX - 4, tokY + 15);
+    ctx.fillStyle = CLR.purple;
+    ctx.fillText('o_t', startX - 4, outY + 15);
+
+    // WKV operator label
+    ctx.fillStyle = CLR.yellow;
+    ctx.font = '10px JetBrains Mono, monospace';
+    ctx.textAlign = 'center';
+    ctx.fillText('⊗ WKV operator (O(1) per step)', w / 2, tokY + cellH + 18);
+
+    // Token counter
+    ctx.fillStyle = CLR.dimText;
+    ctx.font = '11px Inter, system-ui';
+    ctx.textAlign = 'right';
+    ctx.fillText(`token ${activeToken + 1} / ${maxTokens}`, w - 10, h - 10);
+
+    // Info line: Memory constant
+    ctx.fillStyle = CLR.green;
+    ctx.font = '10px JetBrains Mono, monospace';
+    ctx.textAlign = 'left';
+    ctx.fillText('State size: constant (d channels) regardless of sequence length', startX, h - 10);
+  }
+
+  // ── Draw Ratio Bar ────────────────────────────────────
+  function drawRatio() {
+    const w = RATIO_W, h = RATIO_H;
+    const ctx = ratioCtx;
+    ctx.fillStyle = CLR.card;
+    ctx.fillRect(0, 0, w, h);
+
+    const layers = 32;
+    let tfVal, rwVal, unit;
+    if (metric === 'compute') {
+      tfVal = transformerCompute(maxSeq, dModel) / 1e12;
+      rwVal = rwkvCompute(maxSeq, dModel) / 1e12;
+      unit = 'TFLOPs/layer';
+    } else {
+      tfVal = transformerMemory(maxSeq, dModel, layers);
+      rwVal = rwkvMemory(maxSeq, dModel, layers);
+      unit = 'GB';
+    }
+
+    const ratio = tfVal > 0 ? (tfVal / Math.max(rwVal, 0.0001)).toFixed(1) : '∞';
+    const maxVal = Math.max(tfVal, rwVal);
+
+    const pad = 12;
+    const barH = 20;
+    const labelW = 110;
+    const barW = w - labelW * 2 - pad * 2;
+
+    // Transformer bar
+    const tfBarW = maxVal > 0 ? (tfVal / maxVal) * barW : 0;
+    ctx.fillStyle = CLR.orange;
+    ctx.fillRect(pad + labelW, pad, tfBarW, barH);
+    ctx.fillStyle = CLR.text;
+    ctx.font = '11px Inter, system-ui';
+    ctx.textAlign = 'right';
+    ctx.fillText('Transformer', pad + labelW - 6, pad + 14);
+    ctx.textAlign = 'left';
+    ctx.fillText(tfVal.toFixed(3) + ' ' + unit, pad + labelW + tfBarW + 6, pad + 14);
+
+    // RWKV bar
+    const rwBarW = maxVal > 0 ? (rwVal / maxVal) * barW : 0;
+    ctx.fillStyle = CLR.green;
+    ctx.fillRect(pad + labelW, pad + barH + 8, Math.max(rwBarW, 2), barH);
+    ctx.fillStyle = CLR.text;
+    ctx.textAlign = 'right';
+    ctx.fillText('RWKV', pad + labelW - 6, pad + barH + 8 + 14);
+    ctx.textAlign = 'left';
+    ctx.fillText(rwVal.toFixed(3) + ' ' + unit, pad + labelW + Math.max(rwBarW, 2) + 6, pad + barH + 8 + 14);
+
+    // Ratio badge
+    ctx.fillStyle = CLR.yellow;
+    ctx.font = 'bold 13px JetBrains Mono, monospace';
+    ctx.textAlign = 'right';
+    ctx.fillText(`Transformer is ${ratio}× more expensive`, w - pad, h / 2 + 5);
+  }
+
+  // ── Main render loop ──────────────────────────────────
+  function render() {
+    drawScaling();
+    drawStateAnim(animFrame);
+    drawRatio();
+    if (animating) {
+      animFrame++;
+      rafId = requestAnimationFrame(render);
+    }
+  }
+
+  function startAnim() {
+    if (!rafId) rafId = requestAnimationFrame(render);
+  }
+
+  // ── Event listeners ───────────────────────────────────
+  seqSlider.addEventListener('input', () => {
+    maxSeq = parseInt(seqSlider.value);
+    seqVal.textContent = maxSeq.toLocaleString();
+    if (!animating) render();
+  });
+
+  dmodelSlider.addEventListener('input', () => {
+    dModel = parseInt(dmodelSlider.value);
+    dmodelVal.textContent = dModel.toLocaleString();
+    if (!animating) render();
+  });
+
+  btnCompute.addEventListener('click', () => {
+    metric = 'compute';
+    btnCompute.classList.add('active');
+    btnMemory.classList.remove('active');
+    if (!animating) render();
+  });
+
+  btnMemory.addEventListener('click', () => {
+    metric = 'memory';
+    btnMemory.classList.add('active');
+    btnCompute.classList.remove('active');
+    if (!animating) render();
+  });
+
+  btnPlay.addEventListener('click', () => {
+    animating = !animating;
+    btnPlay.textContent = animating ? '⏸ Pause' : '▶ Play';
+    if (animating) {
+      rafId = null;
+      startAnim();
+    } else {
+      if (rafId) { cancelAnimationFrame(rafId); rafId = null; }
+    }
+  });
+
+  // ── Init ──────────────────────────────────────────────
+  startAnim();
+
+})();
+</script>
+</body>
+</html>

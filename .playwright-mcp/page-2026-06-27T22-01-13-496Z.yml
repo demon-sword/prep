@@ -1,0 +1,225 @@
+- generic [active] [ref=e1]:
+  - banner [ref=e2]:
+    - generic [ref=e3]: Evaluation
+    - heading "Evaluation Pipeline Design" [level=1] [ref=e4]
+    - paragraph [ref=e5]: Turn-based vs task-based evaluation, evaluating the evaluator, and designing a full harness that produces reliable, cost-effective signal about your model's behavior.
+  - main [ref=e6]:
+    - generic [ref=e7]:
+      - heading "Theory" [level=2] [ref=e8]
+      - paragraph [ref=e9]: Evaluation is the highest-leverage activity in an LLM system. A bad model with good eval catches and fixes regressions. A great model with bad eval ships silent bugs to production. The difference between teams that move fast and teams that thrash is almost always eval pipeline quality — not model capability.
+      - heading "Why evaluation is hard for LLMs" [level=3] [ref=e10]
+      - paragraph [ref=e11]: "Traditional ML evaluation is straightforward: run held-out test set, compute accuracy or F1, done. LLMs break this for several reasons. First, the output space is vast — there are thousands of valid phrasings of a correct answer, and thousands of invalid-but-plausible phrasings of a wrong one. Second, the objective is often subjective — \"helpful, harmless, and honest\" cannot be reduced to a single number. Third, evaluation must generalize across tasks that weren't anticipated at training time."
+      - paragraph [ref=e12]:
+        - text: This forces us to think carefully about
+        - emphasis [ref=e13]: what we're actually measuring
+        - text: and whether our measurement correlates with the real outcome we care about.
+      - heading "Turn-based vs Task-based Evaluation" [level=3] [ref=e14]
+      - paragraph [ref=e15]: "There are two fundamental scopes for LLM evaluation:"
+      - generic [ref=e16]:
+        - generic [ref=e17]:
+          - heading "Turn-based" [level=4] [ref=e18]
+          - paragraph [ref=e19]: Evaluate a single model turn in isolation. Metrics like BLEU, ROUGE, cosine similarity, or LLM-as-judge score applied to one (input, output) pair. Fast and cheap — can cover thousands of examples in minutes. Good for regression testing and format adherence. Poor signal for multi-step reasoning, coherence over a conversation, or tool-use accuracy.
+        - generic [ref=e20]:
+          - heading "Task-based" [level=4] [ref=e21]
+          - paragraph [ref=e22]: "Evaluate the outcome of a full task: did the agent book the right flight? Did the code pass the unit tests? Did the summarized document preserve all key facts? Requires a concrete, binary-or-ranked success criterion that can be checked programmatically or via human review. Expensive but high-signal — it directly measures what the user actually cares about."
+      - paragraph [ref=e23]: "In practice, you need both: turn-based evals for cheap, fast regression coverage (CI/CD), and task-based evals for high-stakes decisions (which model to promote to production)."
+      - heading "The 5-Stage Evaluation Workflow" [level=3] [ref=e24]
+      - paragraph [ref=e25]: "Evaluation isn't a single metric — it's a pipeline with distinct stages, each with different cost-quality tradeoffs:"
+      - list [ref=e26]:
+        - listitem [ref=e27]:
+          - text: ▸
+          - strong [ref=e28]: "Stage 1 — Filter:"
+          - text: Safety checks, format validation, rule-based refusals. Cheap, deterministic. Run on 100% of outputs.
+        - listitem [ref=e29]:
+          - text: ▸
+          - strong [ref=e30]: "Stage 2 — Benchmark:"
+          - text: Automated metrics (exact match, code execution, ROUGE) across a curated eval set. 1,000–10,000 examples. Runs in minutes with a scoring function.
+        - listitem [ref=e31]:
+          - text: ▸
+          - strong [ref=e32]: "Stage 3 — Experiment:"
+          - text: A/B comparisons, LLM-as-judge scoring, preference tournaments between model versions. Run on representative subsets when you're considering deploying a new checkpoint.
+        - listitem [ref=e33]:
+          - text: ▸
+          - strong [ref=e34]: "Stage 4 — Human:"
+          - text: Expert annotation on the hardest cases your automated eval flagged or failed on. Expensive ($50–$500/hour for domain experts), but necessary for calibration and for rare-but-important failure modes.
+        - listitem [ref=e35]:
+          - text: ▸
+          - strong [ref=e36]: "Stage 5 — Monitor:"
+          - text: Production feedback loops. Log outputs, sample for quality review, track user thumb-down rates, implicit signals like conversation abandonment. Closes the loop from deployment back to the eval set.
+      - heading "Evaluating the Evaluator" [level=3] [ref=e37]
+      - paragraph [ref=e38]: "This is the most important and most overlooked part of evaluation design. Your eval pipeline is itself a system that can fail — and a bad evaluator gives you false confidence. There are four properties to verify in your evaluator:"
+      - list [ref=e39]:
+        - listitem [ref=e40]:
+          - text: ▸
+          - strong [ref=e41]: "Signal quality:"
+          - text: Does the evaluator's score correlate with human judgment on the same examples? Compute Spearman/Kendall correlation between evaluator scores and expert human labels on a validation set. A good automated eval should have correlation ≥ 0.7 with human judgment.
+        - listitem [ref=e42]:
+          - text: ▸
+          - strong [ref=e43]: "Metric-outcome correlation:"
+          - text: Does scoring better on this metric actually lead to better user outcomes? This requires you to track downstream metrics (retention, task completion, user satisfaction) and see if your eval scores predict them. Many BLEU/ROUGE improvements fail this test.
+        - listitem [ref=e44]:
+          - text: ▸
+          - strong [ref=e45]: "Consistency:"
+          - text: Does the evaluator give the same score when the same example is evaluated twice? LLM-as-judge evaluators have 5–15% flip rate on re-evaluation — this noise floor caps how much you can distinguish between close models.
+        - listitem [ref=e46]:
+          - text: ▸
+          - strong [ref=e47]: "Cost:"
+          - text: What is the total cost (latency × price × human hours) to run the full eval pipeline? An eval that costs $500/run won't get run before every deployment. Design for runnable eval — cheap enough that teams use it on every PR, not just on model launch days.
+      - generic [ref=e48]:
+        - strong [ref=e49]: "The Meta-Evaluation Principle:"
+        - text: Every evaluator you deploy should have its own "meta-eval" — a fixed set of human-labeled examples where you know the ground truth, so you can measure evaluator accuracy. Without this, you're flying blind about your blind spots.
+      - 'heading "LLM-as-Judge: Biases and Mitigations" [level=3] [ref=e50]'
+      - paragraph [ref=e51]: "Using a larger model (GPT-4, Claude Opus) to judge smaller model outputs is now standard practice, but introduces well-documented biases:"
+      - list [ref=e52]:
+        - listitem [ref=e53]:
+          - text: ▸
+          - strong [ref=e54]: "Self-enhancement bias:"
+          - text: GPT-4 rates GPT-4 outputs ~10% higher than equivalent outputs from other models. Always use a different judge than the candidate model.
+        - listitem [ref=e55]:
+          - text: ▸
+          - strong [ref=e56]: "Position bias:"
+          - text: In A/B evaluation, the first option shown gets consistently higher ratings regardless of quality. Mitigate with randomized presentation order and symmetrized scoring (score both orderings, average).
+        - listitem [ref=e57]:
+          - text: ▸
+          - strong [ref=e58]: "Verbosity bias:"
+          - text: Longer answers are rated higher even when they contain no additional useful information. Use length-normalized scoring or explicitly instruct the judge to penalize padding.
+        - listitem [ref=e59]:
+          - text: ▸
+          - strong [ref=e60]: "Sycophancy:"
+          - text: If the judge is given hints about expected answer, it aligns with those hints. Keep the judge blind to which model produced which output.
+      - generic [ref=e61]:
+        - strong [ref=e62]: "Practical setup:"
+        - text: Use 3–5 judge models and average scores. Log judge disagreements (high variance = uncertain example). On examples where judges disagree by >2 points (on a 1–5 scale), route to human annotation.
+      - heading "Production Reality" [level=3] [ref=e63]
+      - paragraph [ref=e64]: "At scale, evaluation looks like this: GPT-4 class models cost ~$0.01–0.03 per judgment. A 10,000-example eval set with LLM-as-judge costs $100–300 per run. For teams deploying weekly, that's $5K–15K/year just for eval compute — before human labeler costs. This is why teams invest heavily in:"
+      - list [ref=e65]:
+        - listitem [ref=e66]:
+          - text: ▸
+          - strong [ref=e67]: "Representative sampling:"
+          - text: 500 well-chosen examples beat 10,000 randomly selected ones. Use stratified sampling across task types, difficulty levels, and known failure modes.
+        - listitem [ref=e68]:
+          - text: ▸
+          - strong [ref=e69]: "Automated canaries:"
+          - text: 50–100 golden examples with deterministic expected outputs that run on every PR in under 2 minutes. These catch regressions without requiring expensive LLM judges.
+        - listitem [ref=e70]:
+          - text: ▸
+          - strong [ref=e71]: "Tiered evaluation:"
+          - text: Run cheap evals on all changes, medium evals on release candidates, expensive evals only on major version changes.
+      - generic [ref=e72]:
+        - strong [ref=e73]: "Tools in production:"
+        - text: RAGAS (RAG-specific eval), EleutherAI lm-evaluation-harness (benchmark suites), LangSmith / Braintrust (eval tracking), Weights & Biases (experiment logging), Prometheus-Eval (open-weight judge model), MT-Bench and AlpacaEval (conversation quality benchmarks).
+    - generic [ref=e74]:
+      - heading "Interactive Visualization" [level=2] [ref=e75]
+      - paragraph [ref=e77]: Click each pipeline stage to explore what can go wrong at that stage and how to detect it. Then use the evaluator quality meter to understand how each dimension affects overall eval reliability.
+      - generic [ref=e78]:
+        - generic [ref=e79]:
+          - generic [ref=e80] [cursor=pointer]:
+            - generic [ref=e81]: 📥
+            - generic [ref=e82]: Input Construction
+          - generic [ref=e83]: →
+          - generic [ref=e84] [cursor=pointer]:
+            - generic [ref=e85]: 🤖
+            - generic [ref=e86]: Model Inference
+          - generic [ref=e87]: →
+          - generic [ref=e88] [cursor=pointer]:
+            - generic [ref=e89]: 📊
+            - generic [ref=e90]: Scoring / Judging
+          - generic [ref=e91]: →
+          - generic [ref=e92] [cursor=pointer]:
+            - generic [ref=e93]: 🔢
+            - generic [ref=e94]: Aggregation
+          - generic [ref=e95]: →
+          - generic [ref=e96] [cursor=pointer]:
+            - generic [ref=e97]: 📡
+            - generic [ref=e98]: Production Monitoring
+        - generic [ref=e99]:
+          - heading "🤖 Model Inference Medium Risk" [level=3] [ref=e171]:
+            - text: 🤖 Model Inference
+            - generic [ref=e172]: Medium Risk
+          - paragraph [ref=e173]: "Running the model with the eval inputs: sampling parameters, batching, determinism."
+          - generic [ref=e174]:
+            - generic [ref=e175]:
+              - heading "🔴 Failure Modes" [level=4] [ref=e176]
+              - list [ref=e177]:
+                - listitem [ref=e178]:
+                  - text: ✗
+                  - strong [ref=e179]: Sampling non-determinism
+                  - text: Temperature > 0 means different runs give different answers. A model can "improve" by 2% just from a lucky random seed. Always eval at temperature=0 or average over ≥5 samples.
+                - listitem [ref=e180]:
+                  - text: ✗
+                  - strong [ref=e181]: Context window truncation
+                  - text: Long eval examples silently truncate — the model answers an easier truncated version. Always log actual input token counts and flag truncations.
+                - listitem [ref=e182]:
+                  - text: ✗
+                  - strong [ref=e183]: Batching artifacts
+                  - text: Padding and attention masking bugs in batched inference can produce different results than single-example inference. Validate batch vs single-example output parity.
+            - generic [ref=e184]:
+              - heading "🟢 Detection Strategies" [level=4] [ref=e185]
+              - list [ref=e186]:
+                - listitem [ref=e187]:
+                  - text: ✓
+                  - strong [ref=e188]: Greedy decoding for benchmarks
+                  - text: Use temperature=0 (greedy) for benchmark evals. Only use sampling if you're specifically measuring diversity or creativity.
+                - listitem [ref=e189]:
+                  - text: ✓
+                  - strong [ref=e190]: Log token counts
+                  - text: Track input/output token lengths. Alert when any example exceeds model context window × 0.9.
+        - generic [ref=e120]:
+          - heading "Evaluator Quality Meter" [level=3] [ref=e121]
+          - paragraph [ref=e122]: Adjust each quality dimension to see how it affects overall evaluator reliability score.
+          - generic [ref=e123]:
+            - generic [ref=e124]:
+              - generic [ref=e125]: Signal quality (correlation w/ human)
+              - slider [ref=e126] [cursor=pointer]: "70"
+              - generic [ref=e127]: 70%
+            - generic [ref=e128]:
+              - generic [ref=e129]: Consistency (low flip rate)
+              - slider [ref=e130] [cursor=pointer]: "60"
+              - generic [ref=e131]: 60%
+            - generic [ref=e132]:
+              - generic [ref=e133]: Example coverage (# & diversity)
+              - slider [ref=e134] [cursor=pointer]: "50"
+              - generic [ref=e135]: 50%
+            - generic [ref=e136]:
+              - generic [ref=e137]: Cost efficiency (runnable on every PR)
+              - slider [ref=e138] [cursor=pointer]: "80"
+              - generic [ref=e139]: 80%
+            - generic [ref=e140]:
+              - generic [ref=e141]: Outcome correlation (metric → real value)
+              - slider [ref=e142] [cursor=pointer]: "55"
+              - generic [ref=e143]: 55%
+          - generic [ref=e144]:
+            - generic [ref=e145]: 63%
+            - generic [ref=e146]: Evaluator is unreliable — use for directional trends only, not absolute decisions
+    - generic [ref=e149]:
+      - heading "Key Takeaways" [level=2] [ref=e150]
+      - list [ref=e151]:
+        - listitem [ref=e152]:
+          - strong [ref=e153]: Evaluate the evaluator first.
+          - text: A bad automated judge gives false confidence and masks regressions. Before trusting any metric, measure its Spearman correlation with human judgment — target ≥ 0.7. Log disagreement rates between multiple judges; high variance = low signal.
+        - listitem [ref=e154]:
+          - strong [ref=e155]: LLM-as-judge has a 5–15% flip rate on re-evaluation.
+          - text: This noise floor means you cannot reliably distinguish two models that differ by less than ~2 points on a 10-point scale. Use at least 200+ examples to have statistical power to detect meaningful differences.
+        - listitem [ref=e156]:
+          - strong [ref=e157]: Design for runnable eval, not ideal eval.
+          - text: "An eval that costs $1,000/run and takes 3 hours won't get used before every deployment. Tiered pipelines: 50 canary examples (2 min, free) on every PR; 500-example automated benchmark on release candidates; full human eval on major versions only."
+        - listitem [ref=e158]:
+          - strong [ref=e159]: Task-based > turn-based for real decisions.
+          - text: A model can score better on BLEU/ROUGE while being worse on actual task completion. Always have at least one end-to-end task-based eval tied to a production-relevant outcome before making a deployment decision.
+        - listitem [ref=e160]:
+          - strong [ref=e161]: Position and verbosity bias corrupt A/B evals.
+          - text: Randomize presentation order. Run symmetrized comparisons (A vs B and B vs A). Explicitly penalize verbosity in judge prompts. Blind the judge to model provenance. These mitigations reduce bias by 60–80% in practice.
+        - listitem [ref=e162]:
+          - strong [ref=e163]: Production monitoring closes the loop.
+          - text: Offline eval is a snapshot. User thumb-down rates, abandonment after model turn, retry rates — these surface failure modes your eval set never imagined. RAGAS and LangSmith can pipeline production traces directly back into the eval harness as new golden examples.
+  - navigation [ref=e164]:
+    - link "← Previous LLM Evaluation Metrics" [ref=e165] [cursor=pointer]:
+      - /url: 22-evaluation-metrics.html
+      - generic [ref=e166]:
+        - generic [ref=e167]: ← Previous
+        - text: LLM Evaluation Metrics
+    - 'link "Next → Loss Functions: Cross-Entropy & Perplexity" [ref=e168] [cursor=pointer]':
+      - /url: 24-loss-functions.html
+      - generic [ref=e169]:
+        - generic [ref=e170]: Next →
+        - text: "Loss Functions: Cross-Entropy & Perplexity"

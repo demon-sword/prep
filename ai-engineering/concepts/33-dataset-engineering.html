@@ -1,0 +1,1077 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1.0"/>
+  <title>Dataset Engineering for LLMs — AI Engineering Concepts</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com"/>
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet"/>
+  <style>
+    :root {
+      --bg: #0d0f17;
+      --surface: #141720;
+      --card: #1a1e2e;
+      --border: #252a3d;
+      --accent: #00d4ff;
+      --purple: #7c3aed;
+      --green: #00ff88;
+      --yellow: #ffd700;
+      --red: #ff4757;
+      --orange: #ff9500;
+      --text: #e2e8f0;
+      --text-dim: #8892a4;
+      --mono: 'JetBrains Mono', monospace;
+      --sans: 'Inter', system-ui, sans-serif;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: var(--sans);
+      line-height: 1.7;
+      min-height: 100vh;
+    }
+
+    header {
+      background: var(--surface);
+      border-bottom: 1px solid var(--border);
+      padding: 2rem 2rem 1.5rem;
+      max-width: 1100px;
+      margin: 0 auto;
+    }
+
+    .group-badge {
+      display: inline-block;
+      background: rgba(124, 58, 237, 0.18);
+      color: var(--purple);
+      border: 1px solid rgba(124, 58, 237, 0.35);
+      border-radius: 20px;
+      font-size: 0.72rem;
+      font-weight: 600;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      padding: 0.22rem 0.75rem;
+      margin-bottom: 0.75rem;
+    }
+
+    header h1 {
+      font-size: clamp(1.6rem, 4vw, 2.4rem);
+      font-weight: 700;
+      letter-spacing: -0.02em;
+      color: var(--text);
+      margin-bottom: 0.4rem;
+    }
+
+    header p.desc {
+      color: var(--text-dim);
+      font-size: 1.05rem;
+      max-width: 700px;
+    }
+
+    main {
+      max-width: 1100px;
+      margin: 0 auto;
+      padding: 0 2rem 3rem;
+    }
+
+    section {
+      margin-top: 3rem;
+    }
+
+    section > h2.section-title {
+      font-size: 1.4rem;
+      font-weight: 700;
+      color: var(--accent);
+      border-bottom: 1px solid var(--border);
+      padding-bottom: 0.5rem;
+      margin-bottom: 1.5rem;
+      letter-spacing: -0.01em;
+    }
+
+    h3 {
+      font-size: 1.1rem;
+      font-weight: 600;
+      color: var(--yellow);
+      margin: 1.6rem 0 0.6rem;
+    }
+
+    p { color: var(--text); margin-bottom: 0.9rem; }
+
+    ul, ol { margin: 0.5rem 0 1rem 1.4rem; }
+    li { margin-bottom: 0.4rem; color: var(--text); }
+
+    code {
+      font-family: var(--mono);
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 4px;
+      padding: 0.1em 0.4em;
+      font-size: 0.88em;
+      color: var(--green);
+    }
+
+    pre {
+      font-family: var(--mono);
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 1rem 1.2rem;
+      overflow-x: auto;
+      font-size: 0.85rem;
+      line-height: 1.6;
+      color: var(--green);
+      margin: 1rem 0;
+    }
+
+    .highlight { color: var(--accent); font-weight: 600; }
+    .highlight-y { color: var(--yellow); font-weight: 600; }
+    .highlight-g { color: var(--green); font-weight: 600; }
+    .highlight-r { color: var(--red); font-weight: 600; }
+    .highlight-o { color: var(--orange); font-weight: 600; }
+
+    /* Format cards grid */
+    .format-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+      gap: 1rem;
+      margin: 1.2rem 0;
+    }
+
+    .format-card {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 1rem 1.2rem;
+    }
+
+    .format-card .fc-title {
+      font-size: 0.82rem;
+      font-weight: 700;
+      letter-spacing: 0.07em;
+      text-transform: uppercase;
+      margin-bottom: 0.5rem;
+    }
+
+    .format-card .fc-schema {
+      font-family: var(--mono);
+      font-size: 0.78rem;
+      color: var(--accent);
+      background: rgba(0,212,255,0.06);
+      border-radius: 5px;
+      padding: 0.5rem 0.6rem;
+      margin-bottom: 0.5rem;
+      white-space: pre;
+    }
+
+    .format-card p {
+      font-size: 0.85rem;
+      color: var(--text-dim);
+      margin: 0;
+    }
+
+    /* Pipeline steps */
+    .pipeline {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0;
+      align-items: stretch;
+      margin: 1.2rem 0;
+    }
+
+    .pipeline-step {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 0;
+      padding: 0.7rem 1rem;
+      flex: 1;
+      min-width: 120px;
+      position: relative;
+    }
+
+    .pipeline-step:first-child { border-radius: 8px 0 0 8px; }
+    .pipeline-step:last-child { border-radius: 0 8px 8px 0; }
+
+    .pipeline-step::after {
+      content: '→';
+      position: absolute;
+      right: -12px;
+      top: 50%;
+      transform: translateY(-50%);
+      color: var(--accent);
+      font-size: 1.1rem;
+      z-index: 2;
+    }
+    .pipeline-step:last-child::after { display: none; }
+
+    .pipeline-step .ps-label {
+      font-size: 0.72rem;
+      font-weight: 700;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: var(--accent);
+      margin-bottom: 0.25rem;
+    }
+
+    .pipeline-step .ps-desc {
+      font-size: 0.8rem;
+      color: var(--text-dim);
+      line-height: 1.4;
+    }
+
+    /* Info table */
+    .info-table {
+      width: 100%;
+      border-collapse: collapse;
+      margin: 1rem 0;
+      font-size: 0.9rem;
+    }
+
+    .info-table th {
+      background: var(--surface);
+      color: var(--accent);
+      font-weight: 600;
+      font-size: 0.8rem;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+      padding: 0.6rem 0.8rem;
+      border: 1px solid var(--border);
+      text-align: left;
+    }
+
+    .info-table td {
+      padding: 0.55rem 0.8rem;
+      border: 1px solid var(--border);
+      color: var(--text);
+      vertical-align: top;
+    }
+
+    .info-table tr:nth-child(even) td { background: rgba(255,255,255,0.02); }
+
+    /* Visualization section */
+    #visualization {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 2rem;
+    }
+
+    .viz-intro {
+      color: var(--text-dim);
+      font-size: 0.95rem;
+      margin-bottom: 1.5rem;
+    }
+
+    .viz-layout {
+      display: grid;
+      grid-template-columns: 1fr 320px;
+      gap: 2rem;
+      align-items: start;
+    }
+
+    @media (max-width: 750px) {
+      .viz-layout { grid-template-columns: 1fr; }
+    }
+
+    canvas#radarCanvas {
+      display: block;
+      border-radius: 8px;
+    }
+
+    .viz-controls {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 1.2rem;
+    }
+
+    .viz-controls h3 {
+      font-size: 0.85rem;
+      font-weight: 700;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: var(--accent);
+      margin: 0 0 1rem;
+    }
+
+    .dim-slider {
+      margin-bottom: 1rem;
+    }
+
+    .dim-label {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 0.3rem;
+    }
+
+    .dim-name {
+      font-size: 0.85rem;
+      font-weight: 600;
+      color: var(--text);
+    }
+
+    .dim-value {
+      font-family: var(--mono);
+      font-size: 0.82rem;
+      font-weight: 700;
+      min-width: 30px;
+      text-align: right;
+    }
+
+    .dim-slider input[type=range] {
+      -webkit-appearance: none;
+      width: 100%;
+      height: 5px;
+      border-radius: 3px;
+      outline: none;
+      cursor: pointer;
+    }
+
+    .dim-slider input[type=range]::-webkit-slider-thumb {
+      -webkit-appearance: none;
+      width: 14px;
+      height: 14px;
+      border-radius: 50%;
+      cursor: pointer;
+      border: 2px solid var(--bg);
+    }
+
+    .impact-score-box {
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 1rem;
+      margin-top: 1rem;
+      text-align: center;
+    }
+
+    .impact-label {
+      font-size: 0.72rem;
+      font-weight: 700;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      color: var(--text-dim);
+      margin-bottom: 0.4rem;
+    }
+
+    .impact-score {
+      font-family: var(--mono);
+      font-size: 2.2rem;
+      font-weight: 700;
+    }
+
+    .impact-grade {
+      font-size: 0.85rem;
+      font-weight: 600;
+      margin-top: 0.2rem;
+    }
+
+    .weak-dims {
+      margin-top: 0.7rem;
+      font-size: 0.78rem;
+      color: var(--text-dim);
+      text-align: left;
+      min-height: 1.2rem;
+    }
+
+    .preset-btns {
+      display: flex;
+      gap: 0.5rem;
+      flex-wrap: wrap;
+      margin-top: 1rem;
+    }
+
+    .preset-btn {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      color: var(--text-dim);
+      font-family: var(--sans);
+      font-size: 0.75rem;
+      padding: 0.3rem 0.65rem;
+      border-radius: 6px;
+      cursor: pointer;
+      transition: all 0.15s;
+    }
+
+    .preset-btn:hover {
+      border-color: var(--accent);
+      color: var(--accent);
+    }
+
+    .reset-btn {
+      width: 100%;
+      margin-top: 0.5rem;
+      background: rgba(0,212,255,0.07);
+      border: 1px solid rgba(0,212,255,0.25);
+      color: var(--accent);
+      font-family: var(--sans);
+      font-size: 0.82rem;
+      font-weight: 600;
+      padding: 0.45rem 0.8rem;
+      border-radius: 6px;
+      cursor: pointer;
+      transition: all 0.15s;
+    }
+
+    .reset-btn:hover {
+      background: rgba(0,212,255,0.14);
+    }
+
+    /* Takeaways */
+    #takeaways ul {
+      list-style: none;
+      margin: 0;
+      padding: 0;
+      display: flex;
+      flex-direction: column;
+      gap: 0.75rem;
+    }
+
+    #takeaways li {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-left: 3px solid var(--accent);
+      border-radius: 0 8px 8px 0;
+      padding: 0.75rem 1rem;
+      font-size: 0.95rem;
+      color: var(--text);
+      line-height: 1.5;
+    }
+
+    /* Nav */
+    .concept-nav {
+      max-width: 1100px;
+      margin: 2.5rem auto 0;
+      padding: 1.2rem 2rem;
+      border-top: 1px solid var(--border);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 1rem;
+    }
+
+    .concept-nav a {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      color: var(--accent);
+      text-decoration: none;
+      font-size: 0.9rem;
+      font-weight: 500;
+      padding: 0.5rem 0.9rem;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      background: var(--card);
+      transition: all 0.15s;
+    }
+
+    .concept-nav a:hover {
+      border-color: var(--accent);
+      background: rgba(0,212,255,0.07);
+    }
+
+    .concept-nav a.disabled {
+      color: var(--text-dim);
+      pointer-events: none;
+      opacity: 0.4;
+    }
+
+    .concept-nav .nav-label {
+      font-size: 0.72rem;
+      color: var(--text-dim);
+      text-transform: uppercase;
+      letter-spacing: 0.07em;
+      display: block;
+    }
+
+    .concept-nav .nav-title {
+      font-size: 0.88rem;
+      color: var(--accent);
+    }
+
+    @media (max-width: 600px) {
+      header, main { padding-left: 1rem; padding-right: 1rem; }
+      .concept-nav { padding: 1rem; }
+      .viz-layout { grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+<body>
+
+<header>
+  <div class="group-badge">Training</div>
+  <h1>Dataset Engineering for LLMs</h1>
+  <p class="desc">Data formats per task type, quality dimensions, volume estimation, annotation pipelines, augmentation, synthesis, and the full data processing workflow.</p>
+</header>
+
+<main>
+
+  <!-- ===================== THEORY ===================== -->
+  <section id="theory">
+    <h2 class="section-title">Theory</h2>
+
+    <p>
+      <span class="highlight">Data is the actual substrate of intelligence in LLMs.</span> Model architecture is largely commoditized — GPT-4, Claude, and Gemini share the transformer skeleton. What differentiates them at the margin is data: its quantity, quality, composition, and the engineering discipline applied to assembling it. A senior AI engineer spends far more time on data pipelines than on model architecture decisions.
+    </p>
+
+    <h3>1. Data Formats Per Training Objective</h3>
+
+    <p>
+      Every training objective has a canonical data format. Getting the format wrong — even with the right content — produces silent degradation in the model's ability to generalize. There are four primary formats:
+    </p>
+
+    <div class="format-grid">
+      <div class="format-card">
+        <div class="fc-title" style="color: var(--accent);">Self-Supervised</div>
+        <div class="fc-schema">{ "text": "raw document..." }</div>
+        <p>Pure next-token prediction on unlabeled text. Used for pretraining. No annotation required — the label is the next token in the sequence. WebText, The Pile, C4, RedPajama, DCLM are standard corpora.</p>
+      </div>
+      <div class="format-card">
+        <div class="fc-title" style="color: var(--green);">Instruction</div>
+        <div class="fc-schema">{ "instruction": "...",
+  "input": "...",
+  "output": "..." }</div>
+        <p>SFT format. The model learns to follow instructions. Alpaca, FLAN, Dolly, OpenAssistant, and ShareGPT are canonical sources. Quality beats quantity — 1K high-quality examples often beat 100K noisy ones.</p>
+      </div>
+      <div class="format-card">
+        <div class="fc-title" style="color: var(--yellow);">Preference</div>
+        <div class="fc-schema">{ "prompt": "...",
+  "chosen": "...",
+  "rejected": "..." }</div>
+        <p>Used for DPO/RLHF. A prompt paired with two responses — a preferred and a rejected one. The model learns to produce chosen-like outputs. Anthropic's HH dataset and UltraFeedback are widely used.</p>
+      </div>
+      <div class="format-card">
+        <div class="fc-title" style="color: var(--orange);">Reward / Scalar</div>
+        <div class="fc-schema">{ "prompt": "...",
+  "response": "...",
+  "score": 4.2 }</div>
+        <p>Used to train reward models in the RLHF pipeline. A scalar score per (prompt, response) pair, usually 1–5 or 1–10. Requires careful calibration across annotators to prevent reward model miscalibration.</p>
+      </div>
+    </div>
+
+    <h3>2. The Six Quality Dimensions</h3>
+
+    <p>
+      Quantity scaling has diminishing returns without quality control. The Chinchilla paper showed that data quality matters as much as scale. There are six key dimensions to assess:
+    </p>
+
+    <table class="info-table">
+      <thead>
+        <tr>
+          <th>Dimension</th>
+          <th>What It Measures</th>
+          <th>Common Failure Mode</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><span class="highlight-a">Relevance</span></td>
+          <td>Does the data match the target task distribution?</td>
+          <td>Generic web text fine-tuned for medical coding</td>
+        </tr>
+        <tr>
+          <td><span class="highlight-y">Consistency</span></td>
+          <td>Are annotations coherent across samples and annotators?</td>
+          <td>Inter-annotator agreement &lt; 0.7 Cohen's κ</td>
+        </tr>
+        <tr>
+          <td><span class="highlight-g">Format</span></td>
+          <td>Does the schema match training expectations exactly?</td>
+          <td>Wrong chat template format breaks SFT silently</td>
+        </tr>
+        <tr>
+          <td><span class="highlight-o">Uniqueness</span></td>
+          <td>Low duplication rate — no repeated n-grams at scale</td>
+          <td>MinHash dedup missed near-duplicates in C4</td>
+        </tr>
+        <tr>
+          <td><span class="highlight-r">Compliance</span></td>
+          <td>PII-free, license-compatible, no harmful content</td>
+          <td>SSNs in fine-tuning data get memorized</td>
+        </tr>
+        <tr>
+          <td><span class="highlight">Coverage</span></td>
+          <td>Task, domain, format, and difficulty distribution</td>
+          <td>Code SFT data with 80% Python, 0% SQL</td>
+        </tr>
+      </tbody>
+    </table>
+
+    <h3>3. Volume Estimation</h3>
+
+    <p>
+      How much data do you need? The answer varies by objective:
+    </p>
+
+    <ul>
+      <li><strong>Pretraining:</strong> Chinchilla-optimal is ~20 tokens per parameter. A 7B model needs ~140B tokens; a 70B model needs ~1.4T. Modern practice overtrains on compute-to-tokens ratio (LLaMA 3 used ~15T tokens for 8B params) for better inference-time efficiency.</li>
+      <li><strong>SFT:</strong> As few as <span class="highlight-g">1,000–10,000 high-quality examples</span> can shift behavior substantially. LIMA showed 1,000 curated examples beat 52K noisy ones. More isn't better if quality is low.</li>
+      <li><strong>DPO/preference:</strong> Typically 10K–100K preference pairs. UltraFeedback used 64K; Anthropic's HH used ~160K. The chosen/rejected gap matters more than count — hard negatives drive better learning than easy pairs.</li>
+      <li><strong>Reward model:</strong> 50K–500K scalar-scored pairs. Reward model quality is the limiting factor of the entire RLHF pipeline; underinvesting here breaks everything downstream.</li>
+    </ul>
+
+    <h3>4. Data Sourcing: Collection, Annotation, Augmentation, Synthesis</h3>
+
+    <p>
+      Real-world dataset engineering uses four sourcing strategies:
+    </p>
+
+    <p>
+      <strong>Human Annotation:</strong> The gold standard for quality but expensive — $0.50–$5.00 per annotated sample for complex tasks. Crowdsourcing (MTurk, Scale AI, Surge AI) is common. Requires annotator guidelines, calibration runs, gold sets to catch cheating, and IAA monitoring. Expert annotation (lawyers, doctors, coders) costs 5–20× more but is essential for specialized tasks.
+    </p>
+
+    <p>
+      <strong>Web Scraping &amp; Filtering:</strong> Common Crawl provides ~70PB of raw web data, processed into C4, The Pile, DCLM. Processing steps include: language identification (fastText langdetect), quality filtering (perplexity-based, C4 heuristics), deduplication (MinHash LSH for near-dups, exact SHA hashing for exact dups), and PII removal. The DCLM benchmark showed that filtering strategy matters enormously — carefully filtered 3B tokens outperformed noisier 300B tokens datasets on downstream benchmarks.
+    </p>
+
+    <p>
+      <strong>Augmentation:</strong> For low-resource tasks, augment existing data: paraphrase via back-translation or stronger LLMs, swap entity names, introduce noise (typos, casing), or generate counterfactuals. The risk is introducing distribution artifacts the model learns instead of the underlying task.
+    </p>
+
+    <p>
+      <strong>Synthetic Data Generation:</strong> Use a large model to generate training data for a smaller model. Alpaca used GPT-3.5 to generate 52K instruction-following examples from 175 seed examples. This is now standard practice for SFT at scale. Critical caveats: (1) synthetic data amplifies teacher model biases, (2) training on synthetic outputs from the same model family risks capability collapse (model collapse problem), (3) "teacher ceiling" — student cannot exceed teacher quality without ground-truth grounding.
+    </p>
+
+    <h3>5. Data Processing Pipeline</h3>
+
+    <div class="pipeline">
+      <div class="pipeline-step">
+        <div class="ps-label">Collect</div>
+        <div class="ps-desc">Web scrape, annotation, synthetic gen, existing datasets</div>
+      </div>
+      <div class="pipeline-step">
+        <div class="ps-label">Clean</div>
+        <div class="ps-desc">HTML strip, PII removal, language detection, encoding fix</div>
+      </div>
+      <div class="pipeline-step">
+        <div class="ps-label">Dedup</div>
+        <div class="ps-desc">MinHash LSH for near-dups, SHA for exact dups, semantic dedup</div>
+      </div>
+      <div class="pipeline-step">
+        <div class="ps-label">Filter</div>
+        <div class="ps-desc">Quality classifiers, heuristic rules, perplexity scoring</div>
+      </div>
+      <div class="pipeline-step">
+        <div class="ps-label">Format</div>
+        <div class="ps-desc">Tokenize, apply chat template, pack sequences, shard</div>
+      </div>
+      <div class="pipeline-step">
+        <div class="ps-label">Validate</div>
+        <div class="ps-desc">Schema checks, distribution stats, ablation pilots</div>
+      </div>
+    </div>
+
+    <h3>6. Deduplication — The Most Underrated Step</h3>
+
+    <p>
+      Duplicate data causes <span class="highlight-r">memorization</span>, not generalization. A document repeated 100 times gets memorized verbatim — the model will regurgitate it at inference rather than synthesize new outputs. Lee et al. (2022) showed that deduplication with MinHash LSH reduced the training set of C4 by 30% while <em>improving</em> downstream quality across all benchmarks tested. Semantic deduplication (embedding-based) is more expensive but catches paraphrase-level duplicates that MinHash misses.
+    </p>
+
+    <h3>7. Chat Templates and Prompt Loss Masking</h3>
+
+    <p>
+      For instruction tuning, format matters mechanically. Every model family has a specific chat template that the tokenizer uses to delimit system, user, and assistant turns. Using the wrong template during SFT will train the model to produce incorrect delimiters at inference. Common templates: <code>[INST] ... [/INST]</code> (Llama 2), <code>&lt;|im_start|&gt;user\n...&lt;|im_end|&gt;</code> (ChatML / Llama 3+).
+    </p>
+
+    <p>
+      <strong>Prompt loss masking</strong> is equally critical: during SFT, mask the loss on the instruction/system tokens and only backpropagate on the completion tokens. Training the model to "predict" its own system prompt is waste and can cause mode collapse on instruction tokens.
+    </p>
+
+    <h3>Production Reality</h3>
+
+    <p>
+      Tools: <span class="highlight-g">Hugging Face datasets</span> for hosting and streaming, <span class="highlight-g">DataTrove</span> and <span class="highlight-g">dolma</span> for large-scale processing pipelines, <span class="highlight-g">Argilla</span> for annotation UI, <span class="highlight-g">Label Studio</span> for multi-modal annotation, <span class="highlight-g">Cleanlab</span> for automated data quality auditing, <span class="highlight-g">RAGAS</span> for RAG-specific dataset evaluation.
+    </p>
+
+    <p>
+      At production scale, dataset engineering is a continuous pipeline, not a one-time task. You monitor data drift, track annotator performance degradation over time, and run data ablations before each model update. The <span class="highlight">80/20 rule</span> applies inversely: 80% of engineering effort goes into data, 20% into model code — but most teams staff it the other way around.
+    </p>
+
+  </section>
+
+  <!-- ===================== VISUALIZATION ===================== -->
+  <section id="visualization">
+    <h2 class="section-title">Interactive Visualization</h2>
+    <p class="viz-intro">
+      Adjust the six data quality dimensions below to see how they affect the radar chart and overall dataset impact score. Try the preset scenarios to understand what different dataset profiles look like in practice.
+    </p>
+
+    <div class="viz-layout">
+      <div>
+        <canvas id="radarCanvas" width="420" height="420"></canvas>
+      </div>
+
+      <div class="viz-controls">
+        <h3>Quality Dimensions</h3>
+
+        <div class="dim-slider" data-dim="0">
+          <div class="dim-label">
+            <span class="dim-name">Relevance</span>
+            <span class="dim-value" style="color: #00d4ff;">7</span>
+          </div>
+          <input type="range" min="1" max="10" value="7" style="background: linear-gradient(to right, #00d4ff 70%, #252a3d 70%);"/>
+        </div>
+
+        <div class="dim-slider" data-dim="1">
+          <div class="dim-label">
+            <span class="dim-name">Consistency</span>
+            <span class="dim-value" style="color: #00ff88;">7</span>
+          </div>
+          <input type="range" min="1" max="10" value="7" style="background: linear-gradient(to right, #00ff88 70%, #252a3d 70%);"/>
+        </div>
+
+        <div class="dim-slider" data-dim="2">
+          <div class="dim-label">
+            <span class="dim-name">Format</span>
+            <span class="dim-value" style="color: #ffd700;">7</span>
+          </div>
+          <input type="range" min="1" max="10" value="7" style="background: linear-gradient(to right, #ffd700 70%, #252a3d 70%);"/>
+        </div>
+
+        <div class="dim-slider" data-dim="3">
+          <div class="dim-label">
+            <span class="dim-name">Uniqueness</span>
+            <span class="dim-value" style="color: #ff9500;">7</span>
+          </div>
+          <input type="range" min="1" max="10" value="7" style="background: linear-gradient(to right, #ff9500 70%, #252a3d 70%);"/>
+        </div>
+
+        <div class="dim-slider" data-dim="4">
+          <div class="dim-label">
+            <span class="dim-name">Compliance</span>
+            <span class="dim-value" style="color: #ff4757;">7</span>
+          </div>
+          <input type="range" min="1" max="10" value="7" style="background: linear-gradient(to right, #ff4757 70%, #252a3d 70%);"/>
+        </div>
+
+        <div class="dim-slider" data-dim="5">
+          <div class="dim-label">
+            <span class="dim-name">Coverage</span>
+            <span class="dim-value" style="color: #7c3aed;">7</span>
+          </div>
+          <input type="range" min="1" max="10" value="7" style="background: linear-gradient(to right, #7c3aed 70%, #252a3d 70%);"/>
+        </div>
+
+        <div class="impact-score-box">
+          <div class="impact-label">Dataset Impact Score</div>
+          <div class="impact-score" id="impactScore">70</div>
+          <div class="impact-grade" id="impactGrade">Good</div>
+          <div class="weak-dims" id="weakDims"></div>
+        </div>
+
+        <div class="preset-btns">
+          <button class="preset-btn" data-preset="raw">Raw Web</button>
+          <button class="preset-btn" data-preset="sft">SFT Gold</button>
+          <button class="preset-btn" data-preset="synthetic">Synthetic</button>
+          <button class="preset-btn" data-preset="prod">Production</button>
+        </div>
+
+        <button class="reset-btn" id="resetBtn">Reset to Default</button>
+      </div>
+    </div>
+  </section>
+
+  <!-- ===================== TAKEAWAYS ===================== -->
+  <section id="takeaways">
+    <h2 class="section-title">Key Takeaways</h2>
+    <ul>
+      <li>
+        <strong>Quality beats quantity for SFT:</strong> LIMA (2023) showed 1,000 curated instruction examples outperform 52K noisy ones. Invest in data quality pipelines (Cleanlab, Argilla) before scaling annotation budget.
+      </li>
+      <li>
+        <strong>Deduplication is non-optional:</strong> Duplicate data causes verbatim memorization, not generalization. MinHash LSH dedup on C4 reduced dataset size by 30% while <em>improving</em> all benchmark scores (Lee et al., 2022). Run exact + near-duplicate removal before any training run.
+      </li>
+      <li>
+        <strong>Synthetic data has a teacher ceiling:</strong> LLM-generated SFT data (à la Alpaca) cannot exceed teacher model quality without ground truth grounding. Repeated distillation from the same model family leads to capability collapse — always mix with human-curated or real-world data.
+      </li>
+      <li>
+        <strong>Prompt loss masking is a hard requirement for SFT:</strong> Backpropagating through instruction tokens (not just completions) wastes gradient signal and causes models to overfit to system prompt structure. Use per-token loss masking in your training harness (supported natively in TRL/Axolotl).
+      </li>
+      <li>
+        <strong>The weakest quality dimension sets the ceiling:</strong> A dataset with 9/10 on five dimensions and 2/10 on compliance (e.g., PII in training data) will fail production — regulators and model audits will find it. Treat all six dimensions as blockers, not averages.
+      </li>
+      <li>
+        <strong>Chat template mismatch silently breaks models:</strong> A Llama-3-format SFT dataset applied to a Mistral tokenizer produces token-level misalignment that the loss function cannot distinguish from real signal. Always validate chat template application with a decoded sample before training.
+      </li>
+    </ul>
+  </section>
+
+</main>
+
+<nav class="concept-nav">
+  <a href="32-agent-memory.html">
+    <span>←</span>
+    <span>
+      <span class="nav-label">Previous</span>
+      <span class="nav-title">Agent Memory Systems</span>
+    </span>
+  </a>
+  <a href="34-inference-optimization.html">
+    <span>
+      <span class="nav-label">Next</span>
+      <span class="nav-title">Inference Optimization</span>
+    </span>
+    <span>→</span>
+  </a>
+</nav>
+
+<script>
+(function() {
+  const DIMS = ['Relevance','Consistency','Format','Uniqueness','Compliance','Coverage'];
+  const COLORS = ['#00d4ff','#00ff88','#ffd700','#ff9500','#ff4757','#7c3aed'];
+
+  const PRESETS = {
+    raw:       [5, 3, 4, 4, 3, 6],
+    sft:       [9, 9, 9, 8, 9, 7],
+    synthetic: [8, 6, 8, 5, 7, 5],
+    prod:      [8, 8, 9, 8, 9, 8]
+  };
+
+  let values = [7,7,7,7,7,7];
+
+  const canvas = document.getElementById('radarCanvas');
+  const ctx = canvas.getContext('2d');
+
+  // Resize canvas to match display size
+  function resizeCanvas() {
+    const container = canvas.parentElement;
+    const size = Math.min(container.clientWidth, 440);
+    canvas.width = size;
+    canvas.height = size;
+    drawRadar();
+  }
+
+  function drawRadar() {
+    const W = canvas.width;
+    const H = canvas.height;
+    const cx = W / 2;
+    const cy = H / 2;
+    const R = Math.min(W, H) * 0.38;
+    const n = DIMS.length;
+
+    ctx.clearRect(0, 0, W, H);
+
+    // Background
+    ctx.fillStyle = '#1a1e2e';
+    ctx.fillRect(0, 0, W, H);
+
+    // Grid rings
+    for (let ring = 1; ring <= 5; ring++) {
+      const r = R * (ring / 5);
+      ctx.beginPath();
+      for (let i = 0; i < n; i++) {
+        const angle = (Math.PI * 2 * i / n) - Math.PI / 2;
+        const x = cx + r * Math.cos(angle);
+        const y = cy + r * Math.sin(angle);
+        if (i === 0) ctx.moveTo(x, y);
+        else ctx.lineTo(x, y);
+      }
+      ctx.closePath();
+      ctx.strokeStyle = ring === 5 ? '#3a4060' : '#252a3d';
+      ctx.lineWidth = ring === 5 ? 1.5 : 1;
+      ctx.stroke();
+    }
+
+    // Axis lines
+    for (let i = 0; i < n; i++) {
+      const angle = (Math.PI * 2 * i / n) - Math.PI / 2;
+      ctx.beginPath();
+      ctx.moveTo(cx, cy);
+      ctx.lineTo(cx + R * Math.cos(angle), cy + R * Math.sin(angle));
+      ctx.strokeStyle = '#252a3d';
+      ctx.lineWidth = 1;
+      ctx.stroke();
+    }
+
+    // Ring labels (2, 4, 6, 8, 10)
+    ctx.fillStyle = '#4a5568';
+    ctx.font = `${Math.max(9, W * 0.022)}px JetBrains Mono, monospace`;
+    ctx.textAlign = 'center';
+    for (let ring = 1; ring <= 5; ring++) {
+      const r = R * (ring / 5);
+      ctx.fillText(ring * 2, cx + 5, cy - r + 3);
+    }
+
+    // Data polygon with per-vertex gradient
+    ctx.beginPath();
+    for (let i = 0; i < n; i++) {
+      const angle = (Math.PI * 2 * i / n) - Math.PI / 2;
+      const r = R * (values[i] / 10);
+      const x = cx + r * Math.cos(angle);
+      const y = cy + r * Math.sin(angle);
+      if (i === 0) ctx.moveTo(x, y);
+      else ctx.lineTo(x, y);
+    }
+    ctx.closePath();
+
+    // Compute impact for fill colour
+    const score = computeScore();
+    const fillColor = score >= 80 ? 'rgba(0,255,136,0.12)'
+                    : score >= 60 ? 'rgba(0,212,255,0.12)'
+                    : score >= 40 ? 'rgba(255,149,0,0.12)'
+                    : 'rgba(255,71,87,0.12)';
+    const strokeColor = score >= 80 ? '#00ff88'
+                      : score >= 60 ? '#00d4ff'
+                      : score >= 40 ? '#ff9500'
+                      : '#ff4757';
+
+    ctx.fillStyle = fillColor;
+    ctx.fill();
+    ctx.strokeStyle = strokeColor;
+    ctx.lineWidth = 2;
+    ctx.stroke();
+
+    // Vertex dots and axis labels
+    const fontSize = Math.max(10, W * 0.028);
+    ctx.font = `600 ${fontSize}px Inter, sans-serif`;
+
+    for (let i = 0; i < n; i++) {
+      const angle = (Math.PI * 2 * i / n) - Math.PI / 2;
+      const r = R * (values[i] / 10);
+      const x = cx + r * Math.cos(angle);
+      const y = cy + r * Math.sin(angle);
+
+      // Glow dot
+      ctx.beginPath();
+      ctx.arc(x, y, 5, 0, Math.PI * 2);
+      ctx.fillStyle = COLORS[i];
+      ctx.fill();
+      ctx.strokeStyle = '#0d0f17';
+      ctx.lineWidth = 1.5;
+      ctx.stroke();
+
+      // Axis label
+      const labelR = R + Math.max(24, W * 0.06);
+      const lx = cx + labelR * Math.cos(angle);
+      const ly = cy + labelR * Math.sin(angle);
+
+      ctx.fillStyle = COLORS[i];
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+
+      // Slight offset for readability
+      let lxAdj = lx;
+      let lyAdj = ly;
+      if (Math.abs(Math.cos(angle)) > 0.8) lxAdj += Math.sign(Math.cos(angle)) * 2;
+      if (Math.abs(Math.sin(angle)) > 0.8) lyAdj += Math.sign(Math.sin(angle)) * 2;
+
+      ctx.fillText(DIMS[i], lxAdj, lyAdj);
+    }
+
+    // Centre score
+    const bigFontSize = Math.max(20, W * 0.07);
+    ctx.fillStyle = strokeColor;
+    ctx.font = `700 ${bigFontSize}px JetBrains Mono, monospace`;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(score, cx, cy - bigFontSize * 0.3);
+
+    ctx.fillStyle = '#8892a4';
+    ctx.font = `500 ${Math.max(9, W * 0.025)}px Inter, sans-serif`;
+    ctx.fillText('impact', cx, cy + bigFontSize * 0.45);
+  }
+
+  function computeScore() {
+    // Harmonic-weighted score: weakest dimension penalises more
+    const min = Math.min(...values);
+    const avg = values.reduce((a,b) => a+b, 0) / values.length;
+    // Geometric mean approach
+    const geoMean = Math.pow(values.reduce((a,b) => a * b, 1), 1/values.length);
+    // Blend: 60% geometric mean, 40% arithmetic mean — punishes outliers
+    const raw = 0.6 * geoMean + 0.4 * avg;
+    return Math.round(raw * 10);
+  }
+
+  function updateUI() {
+    const score = computeScore();
+    document.getElementById('impactScore').textContent = score;
+
+    let grade, gradeColor;
+    if (score >= 85) { grade = 'Excellent'; gradeColor = '#00ff88'; }
+    else if (score >= 70) { grade = 'Good'; gradeColor = '#00d4ff'; }
+    else if (score >= 55) { grade = 'Moderate'; gradeColor = '#ffd700'; }
+    else if (score >= 40) { grade = 'Poor'; gradeColor = '#ff9500'; }
+    else { grade = 'Unsafe'; gradeColor = '#ff4757'; }
+
+    const gradeEl = document.getElementById('impactGrade');
+    gradeEl.textContent = grade;
+    gradeEl.style.color = gradeColor;
+    document.getElementById('impactScore').style.color = gradeColor;
+
+    // Weak dimensions
+    const weak = DIMS.filter((d, i) => values[i] <= 4);
+    const weakEl = document.getElementById('weakDims');
+    if (weak.length > 0) {
+      weakEl.innerHTML = `<span style="color:#ff4757">⚠ Weak:</span> <span style="color:#ff9500">${weak.join(', ')}</span>`;
+    } else {
+      weakEl.innerHTML = '<span style="color:#00ff88">✓ No critical weaknesses</span>';
+    }
+
+    drawRadar();
+  }
+
+  function syncSliders() {
+    const sliders = document.querySelectorAll('.dim-slider');
+    sliders.forEach((block, i) => {
+      const input = block.querySelector('input');
+      const valEl = block.querySelector('.dim-value');
+      const color = COLORS[i];
+      const v = values[i];
+      input.value = v;
+      valEl.textContent = v;
+      const pct = ((v - 1) / 9) * 100;
+      input.style.background = `linear-gradient(to right, ${color} ${pct}%, #252a3d ${pct}%)`;
+    });
+    updateUI();
+  }
+
+  // Attach slider events
+  document.querySelectorAll('.dim-slider').forEach((block, i) => {
+    const input = block.querySelector('input');
+    const valEl = block.querySelector('.dim-value');
+
+    input.addEventListener('input', () => {
+      values[i] = parseInt(input.value);
+      const pct = ((values[i] - 1) / 9) * 100;
+      input.style.background = `linear-gradient(to right, ${COLORS[i]} ${pct}%, #252a3d ${pct}%)`;
+      valEl.textContent = values[i];
+      updateUI();
+    });
+
+    // Thumb colour
+    const style = document.createElement('style');
+    style.textContent = `.dim-slider[data-dim="${i}"] input[type=range]::-webkit-slider-thumb { background: ${COLORS[i]}; }`;
+    document.head.appendChild(style);
+  });
+
+  // Preset buttons
+  document.querySelectorAll('.preset-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const preset = btn.dataset.preset;
+      if (PRESETS[preset]) {
+        values = [...PRESETS[preset]];
+        syncSliders();
+      }
+    });
+  });
+
+  // Reset button
+  document.getElementById('resetBtn').addEventListener('click', () => {
+    values = [7,7,7,7,7,7];
+    syncSliders();
+  });
+
+  // Handle window resize
+  window.addEventListener('resize', resizeCanvas);
+
+  // Initial render
+  resizeCanvas();
+  syncSliders();
+})();
+</script>
+
+</body>
+</html>

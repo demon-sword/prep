@@ -1,0 +1,215 @@
+- generic [active] [ref=e1]:
+  - banner [ref=e2]:
+    - generic [ref=e3]: Training
+    - heading "Dataset Engineering for LLMs" [level=1] [ref=e4]
+    - paragraph [ref=e5]: Data formats per task type, quality dimensions, volume estimation, annotation pipelines, augmentation, synthesis, and the full data processing workflow.
+  - main [ref=e6]:
+    - generic [ref=e7]:
+      - heading "Theory" [level=2] [ref=e8]
+      - paragraph [ref=e9]: "Data is the actual substrate of intelligence in LLMs. Model architecture is largely commoditized — GPT-4, Claude, and Gemini share the transformer skeleton. What differentiates them at the margin is data: its quantity, quality, composition, and the engineering discipline applied to assembling it. A senior AI engineer spends far more time on data pipelines than on model architecture decisions."
+      - heading "1. Data Formats Per Training Objective" [level=3] [ref=e10]
+      - paragraph [ref=e11]: "Every training objective has a canonical data format. Getting the format wrong — even with the right content — produces silent degradation in the model's ability to generalize. There are four primary formats:"
+      - generic [ref=e12]:
+        - generic [ref=e13]:
+          - generic [ref=e14]: Self-Supervised
+          - generic [ref=e15]: "{ \"text\": \"raw document...\" }"
+          - paragraph [ref=e16]: Pure next-token prediction on unlabeled text. Used for pretraining. No annotation required — the label is the next token in the sequence. WebText, The Pile, C4, RedPajama, DCLM are standard corpora.
+        - generic [ref=e17]:
+          - generic [ref=e18]: Instruction
+          - generic [ref=e19]: "{ \"instruction\": \"...\", \"input\": \"...\", \"output\": \"...\" }"
+          - paragraph [ref=e20]: SFT format. The model learns to follow instructions. Alpaca, FLAN, Dolly, OpenAssistant, and ShareGPT are canonical sources. Quality beats quantity — 1K high-quality examples often beat 100K noisy ones.
+        - generic [ref=e21]:
+          - generic [ref=e22]: Preference
+          - generic [ref=e23]: "{ \"prompt\": \"...\", \"chosen\": \"...\", \"rejected\": \"...\" }"
+          - paragraph [ref=e24]: Used for DPO/RLHF. A prompt paired with two responses — a preferred and a rejected one. The model learns to produce chosen-like outputs. Anthropic's HH dataset and UltraFeedback are widely used.
+        - generic [ref=e25]:
+          - generic [ref=e26]: Reward / Scalar
+          - generic [ref=e27]: "{ \"prompt\": \"...\", \"response\": \"...\", \"score\": 4.2 }"
+          - paragraph [ref=e28]: Used to train reward models in the RLHF pipeline. A scalar score per (prompt, response) pair, usually 1–5 or 1–10. Requires careful calibration across annotators to prevent reward model miscalibration.
+      - heading "2. The Six Quality Dimensions" [level=3] [ref=e29]
+      - paragraph [ref=e30]: "Quantity scaling has diminishing returns without quality control. The Chinchilla paper showed that data quality matters as much as scale. There are six key dimensions to assess:"
+      - table [ref=e31]:
+        - rowgroup [ref=e32]:
+          - row "Dimension What It Measures Common Failure Mode" [ref=e33]:
+            - columnheader "Dimension" [ref=e34]
+            - columnheader "What It Measures" [ref=e35]
+            - columnheader "Common Failure Mode" [ref=e36]
+        - rowgroup [ref=e37]:
+          - row "Relevance Does the data match the target task distribution? Generic web text fine-tuned for medical coding" [ref=e38]:
+            - cell "Relevance" [ref=e39]
+            - cell "Does the data match the target task distribution?" [ref=e40]
+            - cell "Generic web text fine-tuned for medical coding" [ref=e41]
+          - row "Consistency Are annotations coherent across samples and annotators? Inter-annotator agreement < 0.7 Cohen's κ" [ref=e42]:
+            - cell "Consistency" [ref=e43]
+            - cell "Are annotations coherent across samples and annotators?" [ref=e44]
+            - cell "Inter-annotator agreement < 0.7 Cohen's κ" [ref=e45]
+          - row "Format Does the schema match training expectations exactly? Wrong chat template format breaks SFT silently" [ref=e46]:
+            - cell "Format" [ref=e47]
+            - cell "Does the schema match training expectations exactly?" [ref=e48]
+            - cell "Wrong chat template format breaks SFT silently" [ref=e49]
+          - row "Uniqueness Low duplication rate — no repeated n-grams at scale MinHash dedup missed near-duplicates in C4" [ref=e50]:
+            - cell "Uniqueness" [ref=e51]
+            - cell "Low duplication rate — no repeated n-grams at scale" [ref=e52]
+            - cell "MinHash dedup missed near-duplicates in C4" [ref=e53]
+          - row "Compliance PII-free, license-compatible, no harmful content SSNs in fine-tuning data get memorized" [ref=e54]:
+            - cell "Compliance" [ref=e55]
+            - cell "PII-free, license-compatible, no harmful content" [ref=e56]
+            - cell "SSNs in fine-tuning data get memorized" [ref=e57]
+          - row "Coverage Task, domain, format, and difficulty distribution Code SFT data with 80% Python, 0% SQL" [ref=e58]:
+            - cell "Coverage" [ref=e59]
+            - cell "Task, domain, format, and difficulty distribution" [ref=e60]
+            - cell "Code SFT data with 80% Python, 0% SQL" [ref=e61]
+      - heading "3. Volume Estimation" [level=3] [ref=e62]
+      - paragraph [ref=e63]: "How much data do you need? The answer varies by objective:"
+      - list [ref=e64]:
+        - listitem [ref=e65]:
+          - strong [ref=e66]: "Pretraining:"
+          - text: Chinchilla-optimal is ~20 tokens per parameter. A 7B model needs ~140B tokens; a 70B model needs ~1.4T. Modern practice overtrains on compute-to-tokens ratio (LLaMA 3 used ~15T tokens for 8B params) for better inference-time efficiency.
+        - listitem [ref=e67]:
+          - strong [ref=e68]: "SFT:"
+          - text: As few as 1,000–10,000 high-quality examples can shift behavior substantially. LIMA showed 1,000 curated examples beat 52K noisy ones. More isn't better if quality is low.
+        - listitem [ref=e69]:
+          - strong [ref=e70]: "DPO/preference:"
+          - text: Typically 10K–100K preference pairs. UltraFeedback used 64K; Anthropic's HH used ~160K. The chosen/rejected gap matters more than count — hard negatives drive better learning than easy pairs.
+        - listitem [ref=e71]:
+          - strong [ref=e72]: "Reward model:"
+          - text: 50K–500K scalar-scored pairs. Reward model quality is the limiting factor of the entire RLHF pipeline; underinvesting here breaks everything downstream.
+      - 'heading "4. Data Sourcing: Collection, Annotation, Augmentation, Synthesis" [level=3] [ref=e73]'
+      - paragraph [ref=e74]: "Real-world dataset engineering uses four sourcing strategies:"
+      - paragraph [ref=e75]:
+        - strong [ref=e76]: "Human Annotation:"
+        - text: The gold standard for quality but expensive — $0.50–$5.00 per annotated sample for complex tasks. Crowdsourcing (MTurk, Scale AI, Surge AI) is common. Requires annotator guidelines, calibration runs, gold sets to catch cheating, and IAA monitoring. Expert annotation (lawyers, doctors, coders) costs 5–20× more but is essential for specialized tasks.
+      - paragraph [ref=e77]:
+        - strong [ref=e78]: "Web Scraping & Filtering:"
+        - text: "Common Crawl provides ~70PB of raw web data, processed into C4, The Pile, DCLM. Processing steps include: language identification (fastText langdetect), quality filtering (perplexity-based, C4 heuristics), deduplication (MinHash LSH for near-dups, exact SHA hashing for exact dups), and PII removal. The DCLM benchmark showed that filtering strategy matters enormously — carefully filtered 3B tokens outperformed noisier 300B tokens datasets on downstream benchmarks."
+      - paragraph [ref=e79]:
+        - strong [ref=e80]: "Augmentation:"
+        - text: "For low-resource tasks, augment existing data: paraphrase via back-translation or stronger LLMs, swap entity names, introduce noise (typos, casing), or generate counterfactuals. The risk is introducing distribution artifacts the model learns instead of the underlying task."
+      - paragraph [ref=e81]:
+        - strong [ref=e82]: "Synthetic Data Generation:"
+        - text: "Use a large model to generate training data for a smaller model. Alpaca used GPT-3.5 to generate 52K instruction-following examples from 175 seed examples. This is now standard practice for SFT at scale. Critical caveats: (1) synthetic data amplifies teacher model biases, (2) training on synthetic outputs from the same model family risks capability collapse (model collapse problem), (3) \"teacher ceiling\" — student cannot exceed teacher quality without ground-truth grounding."
+      - heading "5. Data Processing Pipeline" [level=3] [ref=e83]
+      - generic [ref=e84]:
+        - generic [ref=e85]:
+          - generic [ref=e86]: Collect
+          - generic [ref=e87]: Web scrape, annotation, synthetic gen, existing datasets
+          - text: →
+        - generic [ref=e88]:
+          - generic [ref=e89]: Clean
+          - generic [ref=e90]: HTML strip, PII removal, language detection, encoding fix
+          - text: →
+        - generic [ref=e91]:
+          - generic [ref=e92]: Dedup
+          - generic [ref=e93]: MinHash LSH for near-dups, SHA for exact dups, semantic dedup
+          - text: →
+        - generic [ref=e94]:
+          - generic [ref=e95]: Filter
+          - generic [ref=e96]: Quality classifiers, heuristic rules, perplexity scoring
+          - text: →
+        - generic [ref=e97]:
+          - generic [ref=e98]: Format
+          - generic [ref=e99]: Tokenize, apply chat template, pack sequences, shard
+          - text: →
+        - generic [ref=e100]:
+          - generic [ref=e101]: Validate
+          - generic [ref=e102]: Schema checks, distribution stats, ablation pilots
+      - heading "6. Deduplication — The Most Underrated Step" [level=3] [ref=e103]
+      - paragraph [ref=e104]:
+        - text: Duplicate data causes memorization, not generalization. A document repeated 100 times gets memorized verbatim — the model will regurgitate it at inference rather than synthesize new outputs. Lee et al. (2022) showed that deduplication with MinHash LSH reduced the training set of C4 by 30% while
+        - emphasis [ref=e105]: improving
+        - text: downstream quality across all benchmarks tested. Semantic deduplication (embedding-based) is more expensive but catches paraphrase-level duplicates that MinHash misses.
+      - heading "7. Chat Templates and Prompt Loss Masking" [level=3] [ref=e106]
+      - paragraph [ref=e107]:
+        - text: "For instruction tuning, format matters mechanically. Every model family has a specific chat template that the tokenizer uses to delimit system, user, and assistant turns. Using the wrong template during SFT will train the model to produce incorrect delimiters at inference. Common templates:"
+        - code [ref=e108]: "[INST] ... [/INST]"
+        - text: (Llama 2),
+        - code [ref=e109]: <|im_start|>user\n...<|im_end|>
+        - text: (ChatML / Llama 3+).
+      - paragraph [ref=e110]:
+        - strong [ref=e111]: Prompt loss masking
+        - text: "is equally critical: during SFT, mask the loss on the instruction/system tokens and only backpropagate on the completion tokens. Training the model to \"predict\" its own system prompt is waste and can cause mode collapse on instruction tokens."
+      - heading "Production Reality" [level=3] [ref=e112]
+      - paragraph [ref=e113]: "Tools: Hugging Face datasets for hosting and streaming, DataTrove and dolma for large-scale processing pipelines, Argilla for annotation UI, Label Studio for multi-modal annotation, Cleanlab for automated data quality auditing, RAGAS for RAG-specific dataset evaluation."
+      - paragraph [ref=e114]: "At production scale, dataset engineering is a continuous pipeline, not a one-time task. You monitor data drift, track annotator performance degradation over time, and run data ablations before each model update. The 80/20 rule applies inversely: 80% of engineering effort goes into data, 20% into model code — but most teams staff it the other way around."
+    - generic [ref=e115]:
+      - heading "Interactive Visualization" [level=2] [ref=e116]
+      - paragraph [ref=e117]: Adjust the six data quality dimensions below to see how they affect the radar chart and overall dataset impact score. Try the preset scenarios to understand what different dataset profiles look like in practice.
+      - generic [ref=e121]:
+        - heading "Quality Dimensions" [level=3] [ref=e122]
+        - generic [ref=e123]:
+          - generic [ref=e124]:
+            - generic [ref=e125]: Relevance
+            - generic [ref=e126]: "7"
+          - slider [ref=e127] [cursor=pointer]: "7"
+        - generic [ref=e128]:
+          - generic [ref=e129]:
+            - generic [ref=e130]: Consistency
+            - generic [ref=e131]: "7"
+          - slider [ref=e132] [cursor=pointer]: "7"
+        - generic [ref=e133]:
+          - generic [ref=e134]:
+            - generic [ref=e135]: Format
+            - generic [ref=e136]: "7"
+          - slider [ref=e137] [cursor=pointer]: "7"
+        - generic [ref=e138]:
+          - generic [ref=e139]:
+            - generic [ref=e140]: Uniqueness
+            - generic [ref=e141]: "7"
+          - slider [ref=e142] [cursor=pointer]: "7"
+        - generic [ref=e143]:
+          - generic [ref=e144]:
+            - generic [ref=e145]: Compliance
+            - generic [ref=e146]: "7"
+          - slider [ref=e147] [cursor=pointer]: "7"
+        - generic [ref=e148]:
+          - generic [ref=e149]:
+            - generic [ref=e150]: Coverage
+            - generic [ref=e151]: "7"
+          - slider [ref=e152] [cursor=pointer]: "7"
+        - generic [ref=e153]:
+          - generic [ref=e154]: Dataset Impact Score
+          - generic [ref=e155]: "70"
+          - generic [ref=e156]: Good
+          - generic [ref=e157]: ✓ No critical weaknesses
+        - generic [ref=e158]:
+          - button "Raw Web" [ref=e159] [cursor=pointer]
+          - button "SFT Gold" [ref=e160] [cursor=pointer]
+          - button "Synthetic" [ref=e161] [cursor=pointer]
+          - button "Production" [ref=e162] [cursor=pointer]
+        - button "Reset to Default" [ref=e163] [cursor=pointer]
+    - generic [ref=e164]:
+      - heading "Key Takeaways" [level=2] [ref=e165]
+      - list [ref=e166]:
+        - listitem [ref=e167]:
+          - strong [ref=e168]: "Quality beats quantity for SFT:"
+          - text: LIMA (2023) showed 1,000 curated instruction examples outperform 52K noisy ones. Invest in data quality pipelines (Cleanlab, Argilla) before scaling annotation budget.
+        - listitem [ref=e169]:
+          - strong [ref=e170]: "Deduplication is non-optional:"
+          - text: Duplicate data causes verbatim memorization, not generalization. MinHash LSH dedup on C4 reduced dataset size by 30% while
+          - emphasis [ref=e171]: improving
+          - text: all benchmark scores (Lee et al., 2022). Run exact + near-duplicate removal before any training run.
+        - listitem [ref=e172]:
+          - strong [ref=e173]: "Synthetic data has a teacher ceiling:"
+          - text: LLM-generated SFT data (à la Alpaca) cannot exceed teacher model quality without ground truth grounding. Repeated distillation from the same model family leads to capability collapse — always mix with human-curated or real-world data.
+        - listitem [ref=e174]:
+          - strong [ref=e175]: "Prompt loss masking is a hard requirement for SFT:"
+          - text: Backpropagating through instruction tokens (not just completions) wastes gradient signal and causes models to overfit to system prompt structure. Use per-token loss masking in your training harness (supported natively in TRL/Axolotl).
+        - listitem [ref=e176]:
+          - strong [ref=e177]: "The weakest quality dimension sets the ceiling:"
+          - text: A dataset with 9/10 on five dimensions and 2/10 on compliance (e.g., PII in training data) will fail production — regulators and model audits will find it. Treat all six dimensions as blockers, not averages.
+        - listitem [ref=e178]:
+          - strong [ref=e179]: "Chat template mismatch silently breaks models:"
+          - text: A Llama-3-format SFT dataset applied to a Mistral tokenizer produces token-level misalignment that the loss function cannot distinguish from real signal. Always validate chat template application with a decoded sample before training.
+  - navigation [ref=e180]:
+    - link "← Previous Agent Memory Systems" [ref=e181] [cursor=pointer]:
+      - /url: 32-agent-memory.html
+      - generic [ref=e182]: ←
+      - generic [ref=e183]:
+        - generic [ref=e184]: Previous
+        - text: Agent Memory Systems
+    - link "Next Inference Optimization →" [ref=e185] [cursor=pointer]:
+      - /url: 34-inference-optimization.html
+      - generic [ref=e186]:
+        - generic [ref=e187]: Next
+        - text: Inference Optimization
+      - generic [ref=e188]: →

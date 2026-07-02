@@ -1,0 +1,178 @@
+- generic [active] [ref=e1]:
+  - banner [ref=e2]:
+    - generic [ref=e3]: "Inference · #27"
+    - heading "Prompt Engineering Strategies" [level=1] [ref=e4]
+    - paragraph [ref=e5]: Zero/few/one-shot prompting, chain-of-thought, system vs user prompts, persona, output format, self-critique — and how to compose them for reliable outputs.
+  - main [ref=e6]:
+    - generic [ref=e7]:
+      - heading "Theory" [level=2] [ref=e8]
+      - paragraph [ref=e9]: "Prompt engineering is the practice of structuring the text input to an LLM so that it reliably produces the desired output. While it can look like \"trying different phrasings,\" the best engineers treat it as a systems design problem: what information does the model need, in what format, and in what order to minimise the probability mass on unwanted completions?"
+      - heading "Why Prompts Matter so Profoundly" [level=3] [ref=e10]
+      - paragraph [ref=e11]: LLMs are next-token predictors. The model's behavior at inference time is determined entirely by the input token sequence — there is no other lever except sampling parameters. A 7B-parameter model can outperform GPT-4 on a specific task when given a well-designed prompt, or GPT-4 can fail spectacularly on a trivial task when the prompt is ambiguous. The prompt is the sole interface between your intent and the model's learned distribution.
+      - paragraph [ref=e12]: "The mechanism: every token in the context shifts the attention-weighted representation of downstream tokens. A poorly placed instruction gets \"washed out\" by subsequent tokens; a precisely placed system instruction sets the prior over the entire distribution that follows. Anthropic's research shows that models like Claude pay heavily disproportionate attention to early tokens in the context — front-loading your task definition matters."
+      - 'heading "Shot-Based Prompting: Zero, One, Few" [level=3] [ref=e13]'
+      - paragraph [ref=e14]:
+        - strong [ref=e15]: Zero-shot
+        - text: prompting relies entirely on the model's pretrained priors. You describe the task and expect the model to generalise. Works well for tasks the model has seen in abundance during pretraining (summarisation, translation, QA). Fails on tasks with ambiguous output schema, unfamiliar domains, or required formats the model has no strong prior for.
+      - paragraph [ref=e16]:
+        - strong [ref=e17]: One-shot
+        - text: provides a single input/output example that demonstrates the desired format. The model conditions its completion on that one example. Useful when format matters but you can't afford many tokens.
+      - paragraph [ref=e18]:
+        - strong [ref=e19]: Few-shot
+        - text: "provides N examples (typically 3–10). Each example acts as an in-context gradient update — not a real gradient, but an extremely strong conditioning signal. GPT-3's original paper (Brown et al., 2020) demonstrated that few-shot prompting can match fine-tuned models on many benchmarks with zero weight updates. The order of examples matters: models exhibit"
+        - emphasis [ref=e20]: recency bias
+        - text: ", weighting the last example most heavily. Randomly shuffling examples before each call can reduce this effect."
+      - generic [ref=e21]:
+        - generic [ref=e22]:
+          - generic [ref=e23]: Zero-Shot
+          - generic [ref=e24]: Relies on pretrained priors. No examples. Maximum generality, least control.
+        - generic [ref=e25]:
+          - generic [ref=e26]: One-Shot
+          - generic [ref=e27]: One input/output pair. Anchors format and style with minimal token cost.
+        - generic [ref=e28]:
+          - generic [ref=e29]: Few-Shot
+          - generic [ref=e30]: 3–10 examples. Strong conditioning. Order matters due to recency bias.
+      - heading "Chain-of-Thought (CoT) Prompting" [level=3] [ref=e31]
+      - paragraph [ref=e32]:
+        - text: Wei et al. (2022) showed that appending "Let's think step by step" to a prompt (or demonstrating reasoning in few-shot examples) causes the model to emit a reasoning trace before its final answer. This is not a cognitive trick — it works because the intermediate tokens
+        - strong [ref=e33]: become part of the input context for subsequent tokens
+        - text: . The model is literally reading its own intermediate reasoning when producing the final answer, which gives it more "compute" to solve the problem.
+      - paragraph [ref=e34]: "CoT primarily helps on tasks that decompose: multi-step arithmetic, symbolic reasoning, causal inference. It adds latency and token cost (output tokens at inference are expensive). For classification tasks with single-token outputs, CoT often hurts — it forces the model down a reasoning path that can veer from the answer. Zero-shot CoT (\"think step by step\") is often as good as few-shot CoT in practice, especially for models above ~100B parameters."
+      - heading "System vs User Prompt Architecture" [level=3] [ref=e35]
+      - paragraph [ref=e36]:
+        - text: Modern models (GPT-4, Claude, Llama 3 instruction) expose separate system and user message slots. The
+        - strong [ref=e37]: system prompt
+        - text: "is processed with a different positional encoding and typically receives higher implicit weight in the model's attention. It should contain: task definition, persona, output format requirements, constraints, and safety rules. The user message is the per-request variable content."
+      - paragraph [ref=e38]:
+        - text: In production, the system prompt is where you encode your company's brand voice, output schema, and negative examples. Because it's reused across calls, it also benefits from
+        - strong [ref=e39]: prompt caching
+        - text: (Anthropic, OpenAI both offer this) — the KV cache for system prompt tokens is precomputed and reused, reducing prefill cost by 80–90% on repeated calls. A 4096-token system prompt amortised over thousands of user calls becomes nearly free.
+      - heading "Persona and Role Assignment" [level=3] [ref=e40]
+      - paragraph [ref=e41]: "Instructing the model to \"act as an expert X\" works because the model's training data contains an enormous volume of text written by subject matter experts, and role assignment biases the sampling distribution toward that subspace. It is not a trick — it changes which probability mass the model draws from. Effective personas are: specific rather than generic (\"senior infrastructure engineer at a Series B SaaS company\" vs \"expert engineer\"), domain-appropriate, and consistent with the task."
+      - heading "Output Format Control" [level=3] [ref=e42]
+      - paragraph [ref=e43]:
+        - text: Specifying the exact output format (JSON schema, markdown table, numbered list, specific headers) is one of the highest-ROI prompt changes. Without explicit format instruction, the model samples from a distribution over all formats it has seen — high entropy. With a schema example or explicit format instruction, that entropy collapses. For structured output, providing a JSON schema via the API's
+        - code [ref=e44]: response_format
+        - text: parameter (OpenAI, Anthropic) is preferable to asking for JSON in the prompt — it adds a grammar constraint at the decoding layer, guaranteeing valid JSON.
+      - heading "Self-Critique and Iterative Refinement" [level=3] [ref=e45]
+      - paragraph [ref=e46]: "Self-critique prompts ask the model to evaluate its own output and then improve it. The implementation: generate a draft → prompt the model to identify weaknesses → prompt again to produce a revised version incorporating the critique. This pattern exploits the model's capability gap between generation and evaluation — models are generally better critics than generators. Studies show self-consistency (sampling multiple outputs and taking a majority vote) improves accuracy on reasoning tasks by 5–15% without any fine-tuning."
+      - heading "Production Reality" [level=3] [ref=e47]
+      - paragraph [ref=e48]:
+        - text: "In production, prompt engineering is never \"set and forget.\" Model providers update models (silent version updates are common — GPT-4-turbo in Jan 2024 behaved differently from Nov 2023). What works for one model generation may regress on the next. Best practice: maintain a prompt test suite with expected outputs, run it against every model update, and pin to a specific model version (e.g."
+        - code [ref=e49]: gpt-4-0125-preview
+        - text: ) in production until you have validated the successor. Token cost is real — a 2000-token system prompt at GPT-4 pricing costs ~$0.04 per 100 calls when not cached, which adds up at scale.
+      - heading "Prompting Anti-Patterns to Avoid" [level=3] [ref=e51]
+      - list [ref=e52]:
+        - listitem [ref=e53]:
+          - strong [ref=e54]: Vague task description
+          - text: — "Improve this text" vs "Rewrite this product description to emphasize the speed benefit, in 2 sentences, in a friendly tone"
+        - listitem [ref=e55]:
+          - strong [ref=e56]: Contradictory instructions
+          - text: "— System: \"Be concise.\" User: \"Provide a detailed analysis.\" Model must guess the priority."
+        - listitem [ref=e57]:
+          - strong [ref=e58]: No negative examples
+          - text: — Models learn from examples of what NOT to do as much as what to do. Include 1–2 bad-output examples labeled as such in few-shot sets.
+        - listitem [ref=e59]:
+          - strong [ref=e60]: CoT on classification
+          - text: — Adding CoT reasoning before a binary classification answer can cause the model to "argue itself" into the wrong answer.
+        - listitem [ref=e61]:
+          - strong [ref=e62]: Instruction at the end
+          - text: — Models have a recency bias; the task instruction gets maximum weight when placed after examples, not before them. But the system prompt instruction should still come first — the sandwich structure (instruction → examples → instruction restatement) is a known pattern that helps.
+    - generic [ref=e63]:
+      - heading "Interactive Prompt Builder" [level=2] [ref=e64]
+      - paragraph [ref=e65]: Toggle prompt components on/off and select a technique (Zero-Shot, Few-Shot, CoT, Self-Critique). Watch the assembled prompt update in real time, and see quality metrics for precision, cost, and latency shift.
+      - generic [ref=e66]:
+        - generic [ref=e67]:
+          - heading "Prompting Technique" [level=3] [ref=e68]
+          - generic [ref=e69]:
+            - generic [ref=e70] [cursor=pointer]: Zero-Shot
+            - generic [ref=e71] [cursor=pointer]: One-Shot
+            - generic [ref=e72] [cursor=pointer]: Few-Shot
+            - generic [ref=e73] [cursor=pointer]: CoT
+          - heading "Prompt Components" [level=3] [ref=e74]
+          - generic [ref=e75]:
+            - generic [ref=e76] [cursor=pointer]:
+              - generic [ref=e77]: System Prompt
+              - generic [ref=e78]: "ON"
+            - generic [ref=e79]: Sets global task context and model behavior. Benefits from KV cache in production.
+          - generic [ref=e80]:
+            - generic [ref=e81] [cursor=pointer]:
+              - generic [ref=e82]: Persona / Role
+              - generic [ref=e83]: "OFF"
+            - generic [ref=e84]: Biases sampling toward expert-domain text. Most effective for technical tasks.
+          - generic [ref=e85]:
+            - generic [ref=e86] [cursor=pointer]:
+              - generic [ref=e87]: Task Description
+              - generic [ref=e88]: "ON"
+            - generic [ref=e89]: Explicit instruction about what to produce. Should come before or after examples.
+          - generic [ref=e90]:
+            - generic [ref=e91] [cursor=pointer]:
+              - generic [ref=e92]: Examples (N-shot)
+              - generic [ref=e93]: "OFF"
+            - generic [ref=e94]: In-context demonstrations. Order matters — model exhibits recency bias toward last example.
+          - generic [ref=e95]:
+            - generic [ref=e96] [cursor=pointer]:
+              - generic [ref=e97]: Output Format
+              - generic [ref=e98]: "OFF"
+            - generic [ref=e99]: Specify exact schema (JSON, list, table). Highest-ROI change for structured output.
+          - generic [ref=e100]:
+            - generic [ref=e101] [cursor=pointer]:
+              - generic [ref=e102]: Chain-of-Thought
+              - generic [ref=e103]: "OFF"
+            - generic [ref=e104]: "\"Think step by step.\" Adds intermediate reasoning tokens. Helps multi-step tasks, hurts simple classification."
+          - generic [ref=e105]:
+            - generic [ref=e106] [cursor=pointer]:
+              - generic [ref=e107]: Self-Critique
+              - generic [ref=e108]: "OFF"
+            - generic [ref=e109]: Asks model to critique its own draft then revise. Adds 2× latency but improves quality on complex tasks.
+        - generic [ref=e110]:
+          - generic [ref=e111]:
+            - generic [ref=e112]: Assembled Prompt
+            - generic [ref=e113]: ~74 tokens
+          - generic [ref=e114]:
+            - generic [ref=e115]:
+              - generic [ref=e116]: SYSTEM
+              - generic [ref=e117]: You are a helpful AI assistant. Follow instructions precisely and produce accurate, concise outputs.
+            - generic [ref=e118]:
+              - generic [ref=e119]: TASK
+              - generic [ref=e120]: Classify the sentiment of the following product review as POSITIVE, NEGATIVE, or NEUTRAL. Return only the label.
+            - generic [ref=e121]:
+              - generic [ref=e122]: USER INPUT
+              - generic [ref=e123]: "Review: \"It arrived two days late but the product itself is fantastic. Would buy again.\""
+          - generic [ref=e124]:
+            - generic [ref=e125]:
+              - generic [ref=e126]: Precision
+              - generic [ref=e129]: 75%
+            - generic [ref=e130]:
+              - generic [ref=e131]: Cost
+              - generic [ref=e134]: 25%
+            - generic [ref=e135]:
+              - generic [ref=e136]: Latency
+              - generic [ref=e139]: 15%
+            - generic [ref=e140]:
+              - generic [ref=e141]: Reliability
+              - generic [ref=e144]: 55%
+    - generic [ref=e145]:
+      - heading "Key Takeaways" [level=2] [ref=e146]
+      - list [ref=e147]:
+        - listitem [ref=e148]:
+          - text: "▸ Few-shot ordering is a silent accuracy killer: recency bias means placing your best/most representative example"
+          - strong [ref=e149]: last
+          - text: in the list. Shuffling examples before each API call reduces positional dependence and variance across calls by 10–20%.
+        - listitem [ref=e150]: ▸ Chain-of-Thought is not universally better — it helps on multi-step decomposable tasks (math, logic) but hurts on single-token classification tasks where the reasoning trace can "argue" the model to a wrong answer. Gate CoT behind task type in production.
+        - listitem [ref=e151]: "▸ System prompt caching is a major cost lever at scale: a 4000-token cached system prompt costs 90% less per call on Anthropic (cache read vs full prefill pricing). Structure your prompts to maximise the stable prefix and put variable content at the end."
+        - listitem [ref=e152]: "▸ Self-consistency (sample K outputs, majority vote) is often cheaper than a larger model: 3× GPT-3.5 calls with majority voting often matches or beats a single GPT-4 call on reasoning tasks, at a fraction of the cost. Use it before upgrading model tier."
+        - listitem [ref=e153]: ▸ Maintain a regression test suite for your prompts — silent model version updates (common on OpenAI and Anthropic hosted endpoints) can shift output distribution significantly. Pin model versions in production and validate before migrating.
+        - listitem [ref=e154]:
+          - text: "▸ Prompt injection is a real attack surface: user-controlled inputs placed inside a system prompt can override instructions. Defense: clearly delimit user content with XML tags or sentinel strings ("
+          - code [ref=e155]: <user_input>...</user_input>
+          - text: ) and run a secondary classifier on the assembled prompt before execution.
+  - navigation [ref=e156]:
+    - link "← Open Weight vs Open Source Models" [ref=e157] [cursor=pointer]:
+      - /url: 26-open-weight-vs-opensource.html
+      - generic [ref=e158]: ←
+      - generic [ref=e159]: Open Weight vs Open Source Models
+    - link "Prompt Attacks & Defenses →" [ref=e160] [cursor=pointer]:
+      - /url: 28-prompt-attacks.html
+      - generic [ref=e161]: Prompt Attacks & Defenses
+      - generic [ref=e162]: →

@@ -1,0 +1,239 @@
+- generic [active] [ref=e1]:
+  - banner [ref=e2]:
+    - generic [ref=e3]: transformers
+    - heading "Transformer Architecture Overview" [level=1] [ref=e4]
+    - paragraph [ref=e5]: "Full transformer stack: embedding, positional encoding, multi-head attention, feed-forward networks, residual connections, layer norm, and output projection — click each layer to explore."
+  - main [ref=e6]:
+    - generic [ref=e7]:
+      - generic [ref=e8]: Theory
+      - heading "The Transformer Stack" [level=2] [ref=e9]
+      - paragraph [ref=e10]:
+        - text: The Transformer, introduced in
+        - strong [ref=e11]: "\"Attention Is All You Need\" (Vaswani et al., 2017)"
+        - text: ", replaced the sequential processing of RNNs with fully parallel, attention-based computation. Every modern LLM — GPT, Llama, Mistral, Gemini — is built on this foundation or a close descendant. Understanding it deeply is table stakes for AI engineering."
+      - heading "1. Token Embedding" [level=3] [ref=e12]
+      - paragraph [ref=e13]:
+        - text: The model's input is a sequence of integer token IDs. Each ID is looked up in a learned embedding table of shape
+        - code [ref=e14]: "[vocab_size × d_model]"
+        - text: . For GPT-3,
+        - code [ref=e15]: vocab_size = 50,257
+        - text: (BPE),
+        - code [ref=e16]: d_model = 12,288
+        - text: . The embedding layer alone is ~600M parameters — a substantial fraction of smaller models. Crucially, embedding weights are often
+        - strong [ref=e17]: tied
+        - text: with the output projection at the end, halving parameter count without quality loss.
+      - heading "2. Positional Encoding" [level=3] [ref=e18]
+      - paragraph [ref=e19]:
+        - text: Self-attention is
+        - strong [ref=e20]: permutation-invariant by design
+        - text: — without explicit position information, the model cannot distinguish "dog bites man" from "man bites dog." Positional encodings (PEs) inject sequence order.
+      - list [ref=e21]:
+        - listitem [ref=e22]:
+          - strong [ref=e23]: "Sinusoidal (original paper):"
+          - text: Fixed, not learned.
+          - code [ref=e24]: PE(pos,2i) = sin(pos / 10000^(2i/d_model))
+          - text: . Generalizes to longer sequences than seen during training.
+        - listitem [ref=e25]:
+          - strong [ref=e26]: "Learned Absolute (BERT, GPT-2):"
+          - text: A trainable embedding table indexed by position. Simpler but fails to extrapolate beyond the training context length.
+        - listitem [ref=e27]:
+          - strong [ref=e28]: "Rotary (RoPE — Llama, Mistral, GPT-NeoX):"
+          - text: Encodes position by rotating Q and K vectors before dot product. Encodes
+          - emphasis [ref=e29]: relative
+          - text: position implicitly. Superior length generalization with YaRN or rope scaling.
+        - listitem [ref=e30]:
+          - strong [ref=e31]: "ALiBi:"
+          - text: Adds a linear attention bias based on distance. No position embeddings at all; inference-time extrapolation built-in.
+      - heading "3. Multi-Head Self-Attention (MHSA)" [level=3] [ref=e32]
+      - paragraph [ref=e33]:
+        - text: This is the heart of the transformer. For each layer, every token produces three projections —
+        - strong [ref=e34]: Query (Q)
+        - text: ","
+        - strong [ref=e35]: Key (K)
+        - text: ", and"
+        - strong [ref=e36]: Value (V)
+        - text: — from learned weight matrices
+        - code [ref=e37]: W_Q, W_K, W_V ∈ ℝ^(d_model × d_head)
+        - text: ". The attention score between position i and j is:"
+      - generic [ref=e38]: Attention(Q, K, V) = softmax( Q·Kᵀ / √d_k ) · V
+      - paragraph [ref=e39]:
+        - text: The
+        - code [ref=e40]: √d_k
+        - text: scaling prevents dot products from growing too large (which would push softmax into saturation). Multi-head attention splits
+        - code [ref=e41]: d_model
+        - text: across
+        - code [ref=e42]: h
+        - text: heads (typically
+        - code [ref=e43]: d_head = d_model / h = 64
+        - text: ), letting each head attend to different relational patterns. GPT-3 uses
+        - code [ref=e44]: h = 96
+        - text: heads across
+        - code [ref=e45]: d_model = 12,288
+        - text: .
+      - paragraph [ref=e46]:
+        - strong [ref=e47]: Causal masking
+        - text: sets all upper-triangular attention scores to
+        - code [ref=e48]: "-∞"
+        - text: before softmax, ensuring token i can only attend to positions ≤ i. This is what makes decoder-only models (GPT family) work — they never see future tokens during training.
+      - paragraph [ref=e49]:
+        - strong [ref=e50]: Grouped-Query Attention (GQA)
+        - text: — used in Llama 3, Mistral — groups multiple Q heads to share a single K/V head. Reduces KV cache memory by 4–8× without meaningfully hurting quality. At the extreme,
+        - strong [ref=e51]: Multi-Query Attention (MQA)
+        - text: has a single shared K/V pair for all Q heads.
+      - heading "4. Feed-Forward Network (FFN)" [level=3] [ref=e52]
+      - paragraph [ref=e53]: "After attention, each token is processed independently through a 2-layer MLP. The standard formulation:"
+      - generic [ref=e54]: FFN(x) = max(0, xW₁ + b₁)W₂ + b₂
+      - paragraph [ref=e55]:
+        - text: The hidden dimension is typically
+        - strong [ref=e56]: 4× d_model
+        - text: (so 16,384 for d_model=4,096). Modern LLMs use
+        - strong [ref=e57]: SwiGLU
+        - text: "instead of ReLU:"
+      - generic [ref=e58]: FFN_SwiGLU(x) = (SiLU(xW₁) ⊙ xW₃) · W₂
+      - paragraph [ref=e59]:
+        - text: SwiGLU was found to outperform ReLU and GeLU empirically (PaLM, Llama). It uses 3 projection matrices instead of 2, but the inner dimension is typically scaled to
+        - code [ref=e60]: 2/3 × 4d
+        - text: to keep parameter count equivalent.
+      - heading "5. Residual Connections & Layer Normalization" [level=3] [ref=e61]
+      - paragraph [ref=e62]:
+        - text: "Each sub-layer (attention, FFN) is wrapped in a residual connection:"
+        - code [ref=e63]: output = LayerNorm(x + sublayer(x))
+        - text: . Residuals enable stable training of deep networks by providing gradient highways that bypass sub-layers.
+      - paragraph [ref=e64]:
+        - text: The original paper uses
+        - strong [ref=e65]: Post-LN
+        - text: (norm after residual addition). Most modern LLMs use
+        - strong [ref=e66]: Pre-LN
+        - text: (norm before each sub-layer), which trains more stably without requiring careful learning rate warmup. Llama uses
+        - strong [ref=e67]: RMSNorm
+        - text: instead of LayerNorm — it omits the mean-centering step, saving ~40% of the norm computation with no quality regression.
+      - heading "6. Stacking N Layers" [level=3] [ref=e68]
+      - paragraph [ref=e69]:
+        - text: "A complete transformer decoder is N identical blocks, each containing: Pre-LN → MHSA → residual → Pre-LN → FFN → residual. Depth (N) and width (d_model) are the primary scaling dimensions. GPT-2 Small has"
+        - strong [ref=e70]: 12 layers / d=768
+        - text: ; GPT-3 has
+        - strong [ref=e71]: 96 layers / d=12,288
+        - text: ; Llama 3 70B has
+        - strong [ref=e72]: 80 layers / d=8,192
+        - text: .
+      - heading "7. Output Projection (LM Head)" [level=3] [ref=e73]
+      - paragraph [ref=e74]:
+        - text: The final hidden state of each position is projected back to
+        - code [ref=e75]: vocab_size
+        - text: logits via a linear layer (often weight-tied with the embedding table). A
+        - code [ref=e76]: softmax
+        - text: converts logits to probabilities for sampling or loss computation.
+      - 'heading "Production Reality: Parameter Counts & Compute" [level=3] [ref=e77]'
+      - paragraph [ref=e78]:
+        - text: "For a decoder-only transformer: total parameters ≈"
+        - code [ref=e79]: 12 × N × d² + vocab × d
+        - text: . This scales quadratically with width. Compute for one forward pass ≈
+        - code [ref=e80]: 2P
+        - text: FLOPs (where P is parameter count). A 70B model requires ~140B FLOPs per forward pass token — at A100 peak (312 TFLOPS), one token takes ~0.45ms on a single GPU, requiring 4× A100 to hit 140B/s sustained throughput at a practical batch size.
+      - paragraph [ref=e81]:
+        - text: The
+        - strong [ref=e82]: attention complexity
+        - text: is O(n²·d) per layer for sequence length n. For context windows beyond 32K, this becomes the limiting factor. Flash Attention (Dao et al., 2022) fuses operations in SRAM to reduce memory I/O from O(n²) to O(n), making 128K+ context practical.
+    - generic [ref=e83]:
+      - generic [ref=e84]: Interactive Visualization
+      - heading "Transformer Block Explorer" [level=2] [ref=e85]
+      - paragraph [ref=e86]: Click any layer in the diagram to see a detailed explanation of its role, formula, and key engineering decisions. The flow animation shows how a token embedding travels through the stack.
+      - generic [ref=e87]:
+        - generic [ref=e88]:
+          - generic [ref=e89] [cursor=pointer]:
+            - generic [ref=e91]: Token Embedding
+            - generic [ref=e92]: input
+          - generic [ref=e93]: ↓
+          - generic [ref=e94] [cursor=pointer]:
+            - generic [ref=e96]: Positional Encoding
+            - generic [ref=e97]: position
+          - generic [ref=e98]: ↓
+          - generic [ref=e99]: × N layers (e.g. N=96 for GPT-3)
+          - generic [ref=e100] [cursor=pointer]:
+            - generic [ref=e102]: LayerNorm (Pre)
+            - generic [ref=e103]: norm
+          - generic [ref=e104]: ↓
+          - generic [ref=e105] [cursor=pointer]:
+            - generic [ref=e107]: Multi-Head Self-Attention
+            - generic [ref=e108]: core
+          - generic [ref=e109]: ↓
+          - generic [ref=e110] [cursor=pointer]:
+            - generic [ref=e112]: Residual Connection
+            - generic [ref=e113]: residual
+          - generic [ref=e114]: ↓
+          - generic [ref=e115] [cursor=pointer]:
+            - generic [ref=e117]: LayerNorm (Pre)
+            - generic [ref=e118]: norm
+          - generic [ref=e119]: ↓
+          - generic [ref=e120] [cursor=pointer]:
+            - generic [ref=e122]: Feed-Forward Network (FFN)
+            - generic [ref=e123]: core
+          - generic [ref=e124]: ↓
+          - generic [ref=e125] [cursor=pointer]:
+            - generic [ref=e127]: Residual Connection
+            - generic [ref=e128]: residual
+          - generic [ref=e129]: ↑ one transformer block ↑
+          - generic [ref=e130]: ↓
+          - generic [ref=e131] [cursor=pointer]:
+            - generic [ref=e133]: LM Head (Output Projection)
+            - generic [ref=e134]: output
+        - generic [ref=e135]:
+          - heading "Token Embedding Layer" [level=3] [ref=e136]
+          - generic [ref=e137]: Learnable Table
+          - paragraph [ref=e138]: Converts integer token IDs to dense vectors. A lookup table of shape [vocab_size × d_model] maps each token to a high-dimensional representation.
+          - generic [ref=e139]: "E = token_ids → W_emb[token_ids] # shape: [seq_len, d_model]"
+          - generic [ref=e140]:
+            - generic [ref=e141]:
+              - generic [ref=e142]: GPT-3
+              - generic [ref=e143]: 50,257 tokens × d=12,288
+            - generic [ref=e144]:
+              - generic [ref=e145]: Llama 3
+              - generic [ref=e146]: 128,256 tokens × d=4,096
+            - generic [ref=e147]:
+              - generic [ref=e148]: Tied weights
+              - generic [ref=e149]: Often shared with LM head
+            - generic [ref=e150]:
+              - generic [ref=e151]: Init
+              - generic [ref=e152]: N(0, 0.02) typically
+          - list [ref=e153]:
+            - listitem [ref=e154]:
+              - strong [ref=e155]: "Weight tying:"
+              - text: Sharing embedding and output projection matrices reduces parameters by ~600M for GPT-3 scale while adding a regularization benefit.
+            - listitem [ref=e156]:
+              - strong [ref=e157]: "Subword vocabulary:"
+              - text: BPE/SentencePiece tokenization means embeddings represent subwords, not whole words — "running" might be one token or two.
+            - listitem [ref=e158]:
+              - strong [ref=e159]: "Scaling:"
+              - text: Embedding size is the bottleneck — all later layers must process d_model-dim vectors, so this sets the memory pressure per-token throughout the stack.
+    - generic [ref=e162]:
+      - generic [ref=e163]: Key Takeaways
+      - heading "What Senior Engineers Know" [level=2] [ref=e164]
+      - list [ref=e165]:
+        - listitem [ref=e166]:
+          - strong [ref=e167]: "Pre-LN vs Post-LN matters at scale:"
+          - text: Post-LN (original paper) causes gradient explosion in very deep networks without careful warmup. Modern LLMs universally use Pre-LN or RMSNorm + Pre-LN, making training stable from the first step.
+        - listitem [ref=e168]:
+          - strong [ref=e169]: "The FFN dominates parameter count:"
+          - text: In a standard 4× FFN, two-thirds of all non-embedding parameters live in the FFN layers. Reducing FFN width (e.g., from 4d to 2.67d with SwiGLU) cuts parameters significantly while maintaining quality — which is why Llama does it.
+        - listitem [ref=e170]:
+          - strong [ref=e171]: "Attention is O(n²) but Flash Attention hides the constant:"
+          - text: Flash Attention 2 achieves ~50% of A100 peak FLOPs by keeping tiles in SRAM. This is why 128K context windows are now practical; without it, the memory writes to HBM would dominate.
+        - listitem [ref=e172]:
+          - strong [ref=e173]: "GQA is the free lunch for inference:"
+          - text: Grouped-Query Attention (used in Llama 3, Mistral) reduces KV cache from O(N·h·n·d) to O(N·(h/g)·n·d) where g is the group size. For 8B models at batch=1 with 8K context, this saves ~2 GB of KV cache — often the difference between fitting on one GPU or two.
+        - listitem [ref=e174]:
+          - strong [ref=e175]: "Weight tying is non-obvious but universal:"
+          - text: Tying embedding and LM head weights (vocab × d_model) saves 0.3–1.5B parameters for large-vocab models and slightly regularizes training by enforcing semantic alignment between input and output spaces.
+        - listitem [ref=e176]:
+          - strong [ref=e177]: "RoPE's real advantage is YaRN-style context extension:"
+          - text: Learned absolute PEs hard-cap the context window. RoPE + YaRN (or linear scaling) lets you extend a 4K-context model to 128K post-hoc with minimal fine-tuning — the key technique behind Llama's context extension from 4K to 128K in Llama 3.
+  - navigation [ref=e178]:
+    - link "← 03 Recurrent Neural Networks" [ref=e179] [cursor=pointer]:
+      - /url: 03-rnn.html
+      - text: ←
+      - generic [ref=e180]: "03"
+      - text: Recurrent Neural Networks
+    - link "05 Prefill & Decode Phases →" [ref=e181] [cursor=pointer]:
+      - /url: 05-prefill-decode.html
+      - generic [ref=e182]: "05"
+      - text: Prefill & Decode Phases →

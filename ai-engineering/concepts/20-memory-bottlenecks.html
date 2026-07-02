@@ -1,0 +1,904 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1.0"/>
+  <title>Memory Bottlenecks in Fine-Tuning — AI Engineering Concepts</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com"/>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet"/>
+  <style>
+    :root {
+      --bg: #0d0f17;
+      --surface: #141720;
+      --card: #1a1e2e;
+      --border: #252a3d;
+      --accent: #00d4ff;
+      --purple: #7c3aed;
+      --green: #00ff88;
+      --yellow: #ffd700;
+      --red: #ff4757;
+      --orange: #ff9500;
+      --text: #e2e8f0;
+      --text-dim: #8892a4;
+      --mono: 'JetBrains Mono', monospace;
+      --sans: 'Inter', system-ui, sans-serif;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: var(--sans);
+      line-height: 1.7;
+      min-height: 100vh;
+    }
+
+    header {
+      background: var(--surface);
+      border-bottom: 1px solid var(--border);
+      padding: 2rem;
+      text-align: center;
+    }
+
+    .group-badge {
+      display: inline-block;
+      background: rgba(124,58,237,0.2);
+      color: var(--purple);
+      border: 1px solid rgba(124,58,237,0.4);
+      border-radius: 20px;
+      padding: 0.2rem 0.9rem;
+      font-size: 0.75rem;
+      font-weight: 600;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      margin-bottom: 0.8rem;
+    }
+
+    header h1 {
+      font-size: clamp(1.6rem, 4vw, 2.4rem);
+      font-weight: 700;
+      color: var(--text);
+      margin-bottom: 0.5rem;
+    }
+
+    header p {
+      color: var(--text-dim);
+      font-size: 1rem;
+      max-width: 640px;
+      margin: 0 auto;
+    }
+
+    main {
+      max-width: 1100px;
+      margin: 0 auto;
+      padding: 2rem 1.5rem;
+    }
+
+    section {
+      margin-bottom: 3rem;
+    }
+
+    .section-title {
+      font-size: 1.5rem;
+      font-weight: 700;
+      color: var(--accent);
+      border-bottom: 1px solid var(--border);
+      padding-bottom: 0.6rem;
+      margin-bottom: 1.5rem;
+    }
+
+    h3 {
+      font-size: 1.1rem;
+      font-weight: 600;
+      color: var(--yellow);
+      margin: 1.6rem 0 0.6rem;
+    }
+
+    p { margin-bottom: 1rem; color: var(--text); }
+
+    ul { padding-left: 1.4rem; margin-bottom: 1rem; }
+    ul li { margin-bottom: 0.45rem; }
+
+    code {
+      font-family: var(--mono);
+      background: var(--card);
+      border: 1px solid var(--border);
+      padding: 0.15em 0.45em;
+      border-radius: 4px;
+      font-size: 0.88em;
+      color: var(--green);
+    }
+
+    pre {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 1.2rem;
+      overflow-x: auto;
+      font-family: var(--mono);
+      font-size: 0.84rem;
+      color: var(--green);
+      margin-bottom: 1rem;
+    }
+
+    .formula-box {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-left: 3px solid var(--accent);
+      border-radius: 8px;
+      padding: 1rem 1.2rem;
+      margin: 1rem 0;
+      font-family: var(--mono);
+      font-size: 0.9rem;
+      color: var(--accent);
+    }
+
+    .callout {
+      background: rgba(0,212,255,0.06);
+      border: 1px solid rgba(0,212,255,0.25);
+      border-radius: 8px;
+      padding: 1rem 1.2rem;
+      margin: 1rem 0;
+      color: var(--text);
+    }
+
+    /* ── Visualization ── */
+    #visualization {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 2rem;
+    }
+
+    .viz-intro {
+      color: var(--text-dim);
+      font-size: 0.93rem;
+      margin-bottom: 1.5rem;
+    }
+
+    .viz-controls {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 1rem;
+      margin-bottom: 1.8rem;
+      align-items: center;
+    }
+
+    .mode-btn {
+      background: var(--card);
+      border: 1px solid var(--border);
+      color: var(--text-dim);
+      padding: 0.45rem 1.1rem;
+      border-radius: 6px;
+      cursor: pointer;
+      font-size: 0.88rem;
+      font-family: var(--sans);
+      transition: all 0.2s;
+    }
+
+    .mode-btn.active {
+      background: rgba(0,212,255,0.12);
+      border-color: var(--accent);
+      color: var(--accent);
+      font-weight: 600;
+    }
+
+    .mode-btn:hover:not(.active) {
+      border-color: var(--text-dim);
+      color: var(--text);
+    }
+
+    .control-group {
+      display: flex;
+      align-items: center;
+      gap: 0.6rem;
+      margin-left: auto;
+    }
+
+    .control-group label {
+      font-size: 0.85rem;
+      color: var(--text-dim);
+    }
+
+    select {
+      background: var(--card);
+      border: 1px solid var(--border);
+      color: var(--text);
+      padding: 0.4rem 0.7rem;
+      border-radius: 6px;
+      font-size: 0.85rem;
+      font-family: var(--sans);
+      cursor: pointer;
+    }
+
+    .bars-container {
+      display: flex;
+      flex-direction: column;
+      gap: 1.4rem;
+    }
+
+    .bar-row {
+      display: flex;
+      flex-direction: column;
+      gap: 0.4rem;
+    }
+
+    .bar-label-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: baseline;
+    }
+
+    .bar-label {
+      font-size: 0.9rem;
+      font-weight: 600;
+      color: var(--text);
+    }
+
+    .bar-total {
+      font-size: 0.82rem;
+      font-family: var(--mono);
+      color: var(--text-dim);
+    }
+
+    .bar-track {
+      width: 100%;
+      height: 36px;
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      overflow: hidden;
+      display: flex;
+    }
+
+    .bar-segment {
+      height: 100%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 0.72rem;
+      font-family: var(--mono);
+      font-weight: 500;
+      white-space: nowrap;
+      overflow: hidden;
+      transition: width 0.5s cubic-bezier(0.4,0,0.2,1);
+      cursor: pointer;
+      position: relative;
+    }
+
+    .bar-segment span {
+      padding: 0 0.3rem;
+      pointer-events: none;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+      max-width: 100%;
+    }
+
+    .legend {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.8rem 1.4rem;
+      margin-top: 1.4rem;
+    }
+
+    .legend-item {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      font-size: 0.82rem;
+      color: var(--text-dim);
+    }
+
+    .legend-dot {
+      width: 12px;
+      height: 12px;
+      border-radius: 3px;
+      flex-shrink: 0;
+    }
+
+    .tooltip-box {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 0.8rem 1rem;
+      margin-top: 1.4rem;
+      font-size: 0.86rem;
+      color: var(--text);
+      min-height: 60px;
+      transition: all 0.2s;
+    }
+
+    .tooltip-box strong { color: var(--accent); }
+
+    .memory-stats {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+      gap: 0.8rem;
+      margin-top: 1.4rem;
+    }
+
+    .stat-card {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 0.8rem 1rem;
+      text-align: center;
+    }
+
+    .stat-value {
+      font-size: 1.4rem;
+      font-weight: 700;
+      font-family: var(--mono);
+      color: var(--accent);
+    }
+
+    .stat-label {
+      font-size: 0.75rem;
+      color: var(--text-dim);
+      margin-top: 0.25rem;
+    }
+
+    /* ── Takeaways ── */
+    #takeaways .takeaway-list {
+      list-style: none;
+      padding: 0;
+      display: flex;
+      flex-direction: column;
+      gap: 0.8rem;
+    }
+
+    #takeaways .takeaway-list li {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 0.9rem 1.1rem;
+      padding-left: 1rem;
+      border-left: 3px solid var(--green);
+      color: var(--text);
+      font-size: 0.95rem;
+    }
+
+    #takeaways .takeaway-list li strong {
+      color: var(--green);
+    }
+
+    /* ── Nav ── */
+    .concept-nav {
+      border-top: 1px solid var(--border);
+      background: var(--surface);
+      padding: 1.2rem 2rem;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 1rem;
+    }
+
+    .nav-link {
+      display: flex;
+      flex-direction: column;
+      text-decoration: none;
+      color: var(--text-dim);
+      transition: color 0.2s;
+      max-width: 280px;
+    }
+
+    .nav-link:hover { color: var(--accent); }
+
+    .nav-direction {
+      font-size: 0.72rem;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      margin-bottom: 0.2rem;
+      color: var(--text-dim);
+    }
+
+    .nav-title {
+      font-size: 0.92rem;
+      font-weight: 600;
+    }
+
+    .nav-link.disabled {
+      opacity: 0.35;
+      pointer-events: none;
+    }
+  </style>
+</head>
+<body>
+
+<header>
+  <div class="group-badge">Training</div>
+  <h1>Memory Bottlenecks in Fine-Tuning</h1>
+  <p>Why fine-tuning consumes far more GPU memory than inference — forward pass, backward pass, optimizer states, activations, and how techniques like gradient checkpointing and quantization reclaim headroom.</p>
+</header>
+
+<main>
+  <!-- ══════════════════════════════════════════════════════ THEORY -->
+  <section id="theory">
+    <h2 class="section-title">Theory</h2>
+
+    <p>
+      Inference and fine-tuning feel similar on the surface — both load a model into GPU memory and run data through it. But fine-tuning can require <strong>10-20× more VRAM</strong> than inference for the same model. Understanding exactly where that memory goes is prerequisite knowledge for choosing the right training strategy and hardware.
+    </p>
+
+    <h3>1. The Four Memory Consumers</h3>
+    <p>GPU memory during training is partitioned into four major categories:</p>
+
+    <ul>
+      <li><strong>Model weights</strong> — the raw parameters in whatever numerical precision you're using</li>
+      <li><strong>Optimizer states</strong> — auxiliary tensors maintained by the optimizer per parameter</li>
+      <li><strong>Gradients</strong> — one gradient tensor per parameter computed during backprop</li>
+      <li><strong>Activations</strong> — intermediate values stored during the forward pass and needed for the backward pass</li>
+    </ul>
+
+    <h3>2. Numerical Precision and the 2-4-8 Rule</h3>
+    <p>
+      Every parameter in memory occupies bytes based on its dtype. A 7B parameter model at full FP32 uses <strong>28 GB</strong> for weights alone (7×10⁹ × 4 bytes). At BF16/FP16 (2 bytes each), weights shrink to <strong>14 GB</strong>. At INT8, down to <strong>7 GB</strong>, and INT4 to <strong>3.5 GB</strong>.
+    </p>
+
+    <div class="formula-box">
+      Weight memory (GB) = params × bytes_per_param / 1e9<br/>
+      e.g. 7B params × 2 bytes (BF16) = 14 GB
+    </div>
+
+    <h3>3. Optimizer States: The Hidden 8× Multiplier</h3>
+    <p>
+      Adam — the near-universal optimizer for LLM fine-tuning — maintains <strong>two extra tensors per parameter</strong>: the first moment (mean of gradients, m) and the second moment (uncentered variance, v). Both are stored in FP32 for numerical stability, even when weights are in BF16. This creates an 8-byte-per-parameter overhead:
+    </p>
+
+    <div class="formula-box">
+      Full Adam overhead per param = 4B (weight) + 4B (grad) + 4B (m) + 4B (v) = 16 bytes<br/>
+      Mixed-precision Adam = 2B (BF16 weight) + 2B (BF16 grad) + 4B (FP32 weight copy) + 4B (m) + 4B (v) = 16 bytes<br/>
+      ∴ Same total! Mixed precision saves compute cycles, not optimizer state memory.
+    </div>
+
+    <p>
+      For a 7B model with Adam: 7×10⁹ × 16 bytes ≈ <strong>112 GB</strong> just for weights + optimizer states + gradients. A single A100 (80 GB) cannot fit this — hence why distributed training or PEFT is necessary.
+    </p>
+
+    <h3>4. Activations: The Batch-Size Scaling Problem</h3>
+    <p>
+      Activations are the intermediate tensors produced at each layer during the forward pass. They must be <strong>retained in memory</strong> until the corresponding backward pass layer computes its gradient. Unlike weights, which are fixed in size, activation memory scales with batch size and sequence length:
+    </p>
+
+    <div class="formula-box">
+      Activation memory ∝ batch_size × seq_len × model_dim × num_layers
+    </div>
+
+    <p>
+      For a 7B model with 4K sequence length and batch size 8, activations can easily reach <strong>30-60 GB</strong>. This is why training batch sizes are often kept as small as 1-4 and gradient accumulation is used to simulate larger effective batches.
+    </p>
+
+    <h3>5. Gradient Checkpointing (Activation Recomputation)</h3>
+    <p>
+      Gradient checkpointing is the primary technique to reclaim activation memory. Instead of storing all activations during the forward pass, only checkpoints at select layers are retained. During the backward pass, activations between checkpoints are <strong>recomputed</strong> on-the-fly from the nearest checkpoint.
+    </p>
+    <p>
+      The tradeoff: checkpointing reduces activation memory by roughly <strong>10-20×</strong> at the cost of ~33% more compute (one extra forward pass per segment). For memory-constrained environments this is almost always worth it.
+    </p>
+    <p>
+      In PyTorch: <code>torch.utils.checkpoint.checkpoint()</code>. In Hugging Face Transformers: <code>model.gradient_checkpointing_enable()</code>.
+    </p>
+
+    <h3>6. Mixed Precision Training (BF16/FP16)</h3>
+    <p>
+      Mixed precision training keeps weights in BF16/FP16 for the forward pass to reduce memory bandwidth, but maintains a full FP32 master copy of weights and optimizer states to prevent gradient underflow. The <strong>practical win</strong> is mostly in throughput (2-4× faster matrix multiplications on modern GPUs) rather than memory savings, since the FP32 copies must still exist.
+    </p>
+    <p>
+      BF16 is preferred over FP16 for LLMs: it has the same dynamic range as FP32 (8-bit exponent vs 5-bit) and avoids the overflow/underflow issues that required loss scaling in FP16 training. All A100, H100, and modern GPUs support BF16 efficiently.
+    </p>
+
+    <h3>7. Quantization: INT8, INT4, NF4</h3>
+    <p>
+      QLoRA (Dettmers et al., 2023) demonstrated that you can fine-tune large models on consumer hardware by loading the base model in <strong>4-bit NF4 quantization</strong> (Normal Float 4) and adding full-precision LoRA adapters. The base weights use ~3.5 GB per 7B params, and only the small adapter matrices are trained in full precision.
+    </p>
+    <p>
+      Key insight: quantized base weights still need dequantization to BF16 before compute, so they don't directly reduce compute overhead — but they massively reduce the resting memory footprint. A 70B model that normally needs ~140 GB in BF16 fits in ~35-40 GB with 4-bit quantization.
+    </p>
+
+    <h3>8. Memory-Efficient Optimizers</h3>
+    <p>Several optimizer alternatives reduce the optimizer state overhead:</p>
+    <ul>
+      <li><strong>Adafactor</strong> — stores second moment as a rank-1 approximation. Near-zero optimizer state overhead. Slightly less stable but works for most fine-tuning.</li>
+      <li><strong>8-bit Adam (bitsandbytes)</strong> — quantizes optimizer states to INT8. Roughly 4× reduction in optimizer state memory vs standard Adam, with minimal quality loss.</li>
+      <li><strong>SGD with momentum</strong> — only one extra tensor per param instead of two. Dramatically less memory, but convergence is slower without adaptive learning rates.</li>
+      <li><strong>Lion optimizer</strong> — only maintains the sign of the gradient update. One FP32 tensor per param instead of two. Less stable but memory efficient.</li>
+    </ul>
+
+    <h3>9. Full Fine-Tuning vs. LoRA Memory Profile</h3>
+    <p>
+      LoRA's primary appeal is its drastic reduction of <strong>trainable parameter count</strong>. With rank=16 and alpha=32 on a 7B model, only ~80M parameters (1.1%) are trainable — but the base model's 7B weights still occupy memory for the forward pass. The gradient and optimizer state savings come only from the small adapter matrices.
+    </p>
+    <p>
+      In practice: Full fine-tuning of a 7B model requires ~112 GB (2×A100 or more). LoRA with 8-bit Adam on the same model fits in a <strong>single 24 GB RTX 3090</strong>.
+    </p>
+
+    <div class="callout">
+      <strong>Production Reality:</strong> At Mistral/Meta scale, full fine-tuning a 70B model requires 16–64 A100 (80GB) GPUs — costing $100–500/hr on cloud providers. LoRA + QLoRA democratized fine-tuning to run on 2×A100 or even a single A100 for 7–13B models. The DeepSpeed ZeRO optimizer further shards optimizer states across GPUs to enable even larger models on given hardware.
+    </div>
+  </section>
+
+  <!-- ══════════════════════════════════════════════════════ VISUALIZATION -->
+  <section id="visualization">
+    <h2 class="section-title">Interactive Visualization</h2>
+    <p class="viz-intro">
+      GPU memory breakdown for inference vs. different fine-tuning strategies. Select a model size and training mode, then click any memory segment to learn what it represents and how to reduce it.
+    </p>
+
+    <div class="viz-controls">
+      <button class="mode-btn active" data-mode="inference">Inference</button>
+      <button class="mode-btn" data-mode="full">Full Fine-Tune</button>
+      <button class="mode-btn" data-mode="lora">LoRA (BF16)</button>
+      <button class="mode-btn" data-mode="qlora">QLoRA (4-bit)</button>
+
+      <div class="control-group">
+        <label for="model-select">Model size:</label>
+        <select id="model-select">
+          <option value="7">7B params</option>
+          <option value="13">13B params</option>
+          <option value="70">70B params</option>
+        </select>
+      </div>
+    </div>
+
+    <div class="bars-container" id="barsContainer"></div>
+
+    <div class="legend" id="legend"></div>
+
+    <div class="tooltip-box" id="tooltipBox">
+      Click any memory segment above to learn what it is and how to reduce it.
+    </div>
+
+    <div class="memory-stats" id="memoryStats"></div>
+  </section>
+
+  <!-- ══════════════════════════════════════════════════════ TAKEAWAYS -->
+  <section id="takeaways">
+    <h2 class="section-title">Key Takeaways</h2>
+    <ul class="takeaway-list">
+      <li>
+        <strong>Optimizer states dwarf weights.</strong> Adam's m and v tensors (both FP32) add 8 bytes per parameter on top of the 4-byte FP32 weight — meaning optimizer states alone are 2× the weight memory. For 7B params: weights ~14 GB, optimizer states ~56 GB.
+      </li>
+      <li>
+        <strong>Mixed precision doesn't eliminate FP32 copies.</strong> BF16 training still requires a full FP32 master weight copy for optimizer updates. The GPU memory savings from mixed precision come from reduced bandwidth during forward/backward, not smaller optimizer state footprint.
+      </li>
+      <li>
+        <strong>Activation memory is the sneaky killer.</strong> With batch_size=8 and 4K seq_len, activations can exceed 60 GB for a 7B model — dwarfing weight memory. Enable <code>gradient_checkpointing</code> in HuggingFace Transformers by default for any non-trivial training run; the 33% compute overhead is always worth the 10-20× memory reduction.
+      </li>
+      <li>
+        <strong>QLoRA is the practical baseline.</strong> 4-bit NF4 quantization (bitsandbytes) + LoRA enables 7B fine-tuning on a single 24 GB GPU and 70B fine-tuning on 2×A100. The quality gap vs. full BF16 is minimal for most fine-tuning tasks (Dettmers et al., 2023 showed within 1-2% of full fine-tuning).
+      </li>
+      <li>
+        <strong>8-bit Adam (bitsandbytes) is a free lunch.</strong> Quantizing optimizer states to INT8 cuts Adam's optimizer overhead by ~4× with negligible training quality impact. For full fine-tuning where you can't use LoRA, this is the first optimization to reach for.
+      </li>
+      <li>
+        <strong>Batch size and gradient accumulation decouple compute from memory.</strong> Effective batch size = per-GPU batch × gradient accumulation steps. Training with batch=1 and accumulation=8 matches the gradient statistics of batch=8 while using 8× less activation memory per step.
+      </li>
+    </ul>
+  </section>
+</main>
+
+<nav class="concept-nav">
+  <a href="19-finetuning-hyperparams.html" class="nav-link">
+    <span class="nav-direction">← Previous</span>
+    <span class="nav-title">Fine-Tuning Hyperparameters</span>
+  </a>
+  <a href="21-token-sampling.html" class="nav-link">
+    <span class="nav-direction">Next →</span>
+    <span class="nav-title">Token Sampling: Temperature, Top-K, Top-P</span>
+  </a>
+</nav>
+
+<script>
+(function() {
+  // ── Segment colors
+  const COLORS = {
+    weights:    '#00d4ff',
+    fp32copy:   '#7c3aed',
+    gradients:  '#ff9500',
+    momentum:   '#ffd700',
+    variance:   '#ff4757',
+    activations:'#00ff88',
+    adapters:   '#f472b6',
+    lora_states:'#c084fc',
+  };
+
+  // ── Segment info for tooltips
+  const SEGMENT_INFO = {
+    weights: {
+      name: 'Model Weights',
+      color: COLORS.weights,
+      desc: 'The raw model parameters in their working precision. In BF16 this is 2 bytes/param; FP32 is 4 bytes/param. For a 7B model at BF16: ~14 GB. At INT4 (QLoRA): ~3.5 GB.',
+      reduce: 'Use BF16 or quantization (INT8/INT4 via bitsandbytes NF4) to reduce. 4-bit quantization achieves ~4× compression vs BF16.'
+    },
+    fp32copy: {
+      name: 'FP32 Master Weight Copy',
+      color: COLORS.fp32copy,
+      desc: 'Mixed-precision training requires a full FP32 copy of all weights alongside the BF16 working copy. Needed so optimizer updates maintain numerical precision. Adds 4 bytes/param even when training in BF16.',
+      reduce: 'Not reducible without accepting gradient precision loss. Absent in inference. This is why mixed precision saves compute, not optimizer state memory.'
+    },
+    gradients: {
+      name: 'Gradients',
+      color: COLORS.gradients,
+      desc: 'One gradient tensor per trainable parameter, computed during backpropagation. Typically stored in FP32 (4 bytes/param). For 7B params: ~28 GB.',
+      reduce: 'LoRA reduces trainable params to 1-5% of total, shrinking gradient memory proportionally. Gradient accumulation lets you accumulate over micro-batches rather than full batches.'
+    },
+    momentum: {
+      name: 'Adam m (1st Moment)',
+      color: COLORS.momentum,
+      desc: 'Adam\'s exponential moving average of past gradients. Stored in FP32 for stability (4 bytes/param). For 7B params: ~28 GB.',
+      reduce: 'Use 8-bit Adam (bitsandbytes) to store in INT8 — cuts this from 4 bytes to 1 byte/param. Use Adafactor for rank-1 approximation with near-zero overhead.'
+    },
+    variance: {
+      name: 'Adam v (2nd Moment)',
+      color: COLORS.variance,
+      desc: 'Adam\'s exponential moving average of squared gradients. Also stored in FP32 (4 bytes/param). Together with m, these two states are what make Adam a "memory hog".',
+      reduce: 'Use 8-bit Adam or Adafactor. Lion optimizer replaces both m and v with a single sign-based update vector.'
+    },
+    activations: {
+      name: 'Activations (Forward Pass Cache)',
+      color: COLORS.activations,
+      desc: 'Intermediate tensors from the forward pass that must be retained for use during backpropagation. Scales with batch_size × seq_len × d_model × num_layers. The most variable memory component.',
+      reduce: 'Enable gradient_checkpointing — reduces activation memory 10-20× at 33% extra compute cost. Reduce batch size or sequence length. Use FlashAttention which recomputes attention rather than storing it.'
+    },
+    adapters: {
+      name: 'LoRA Adapter Weights',
+      color: COLORS.adapters,
+      desc: 'The low-rank A and B matrices added to frozen base model weight matrices. With rank=16 on a 7B model, only ~80M parameters total — typically <0.5 GB in BF16.',
+      reduce: 'Reduce LoRA rank (r). Common: r=4 to r=64. Lower rank = less memory + parameters but potentially less expressiveness.'
+    },
+    lora_states: {
+      name: 'LoRA Optimizer States',
+      color: COLORS.lora_states,
+      desc: 'Optimizer states (m, v) only for LoRA adapter parameters. Since adapters are ~80M params vs 7B base, these states are ~1-2 GB vs ~56 GB for full fine-tuning.',
+      reduce: 'Already very small compared to full fine-tune. Still benefit from 8-bit Adam if other bottlenecks are resolved.'
+    },
+  };
+
+  // ── Memory model (GB) for each scenario
+  // params in billions
+  function computeMemory(params, mode) {
+    const p = params * 1e9;
+    const GB = 1e9;
+
+    // Base weight sizes
+    const w_bf16 = (p * 2) / GB;           // BF16 weights
+    const w_fp32 = (p * 4) / GB;           // FP32 weights
+    const w_int4 = (p * 0.5) / GB;         // 4-bit quantized
+
+    // Optimizer states (FP32)
+    const m_full  = (p * 4) / GB;          // Adam m for all params
+    const v_full  = (p * 4) / GB;          // Adam v for all params
+    const grad_full = (p * 4) / GB;        // gradients for all params
+    const fp32copy = (p * 4) / GB;         // FP32 master copy
+
+    // LoRA: ~0.5% of params trainable (rank=16)
+    const lora_frac = 0.005;
+    const lp = p * lora_frac;
+    const lora_adapters = (lp * 2) / GB;   // BF16 adapters
+    const m_lora  = (lp * 4) / GB;
+    const v_lora  = (lp * 4) / GB;
+    const grad_lora = (lp * 4) / GB;
+    const fp32copy_lora = (lp * 4) / GB;
+
+    // Activations (heuristic: ~4 GB per B params for batch=4, seq=2048, with GC off)
+    // scales roughly linearly with params for a fixed seq/batch
+    const act_base = params * 4;   // GB, rough estimate
+    const act_gc   = params * 0.6; // with gradient checkpointing
+
+    switch (mode) {
+      case 'inference':
+        return [
+          { key: 'weights', label: 'Weights (BF16)', gb: w_bf16 },
+        ];
+
+      case 'full':
+        return [
+          { key: 'weights',    label: 'Weights (BF16)',    gb: w_bf16 },
+          { key: 'fp32copy',   label: 'FP32 Weight Copy',  gb: fp32copy },
+          { key: 'gradients',  label: 'Gradients',         gb: grad_full },
+          { key: 'momentum',   label: 'Adam m',            gb: m_full },
+          { key: 'variance',   label: 'Adam v',            gb: v_full },
+          { key: 'activations',label: 'Activations',       gb: act_gc },
+        ];
+
+      case 'lora':
+        return [
+          { key: 'weights',    label: 'Weights (BF16, frozen)', gb: w_bf16 },
+          { key: 'adapters',   label: 'LoRA Adapters',         gb: lora_adapters },
+          { key: 'fp32copy',   label: 'FP32 Adapter Copy',     gb: fp32copy_lora },
+          { key: 'gradients',  label: 'Adapter Gradients',     gb: grad_lora },
+          { key: 'lora_states',label: 'Adam m+v (Adapters)',   gb: m_lora + v_lora },
+          { key: 'activations',label: 'Activations (+GC)',     gb: act_gc },
+        ];
+
+      case 'qlora':
+        return [
+          { key: 'weights',    label: 'Weights (4-bit NF4)',   gb: w_int4 },
+          { key: 'adapters',   label: 'LoRA Adapters (BF16)',  gb: lora_adapters },
+          { key: 'fp32copy',   label: 'FP32 Adapter Copy',     gb: fp32copy_lora },
+          { key: 'gradients',  label: 'Adapter Gradients',     gb: grad_lora },
+          { key: 'lora_states',label: 'Adam m+v (Adapters)',   gb: m_lora + v_lora },
+          { key: 'activations',label: 'Activations (+GC)',     gb: act_gc * 0.7 },
+        ];
+    }
+  }
+
+  // ── Mode labels for bar rows
+  const ALL_MODES = ['inference', 'full', 'lora', 'qlora'];
+  const MODE_LABELS = {
+    inference: 'Inference (BF16)',
+    full:      'Full Fine-Tune (BF16 + Adam)',
+    lora:      'LoRA Fine-Tune (BF16 + rank=16)',
+    qlora:     'QLoRA Fine-Tune (4-bit + rank=16)',
+  };
+
+  let activeMode = 'inference';
+  let activeParams = 7;
+
+  function render() {
+    const container = document.getElementById('barsContainer');
+    const legend = document.getElementById('legend');
+    const stats = document.getElementById('memoryStats');
+    container.innerHTML = '';
+    legend.innerHTML = '';
+    stats.innerHTML = '';
+
+    // Compute max across all modes for scaling
+    let maxGB = 0;
+    const allData = {};
+    ALL_MODES.forEach(m => {
+      const d = computeMemory(activeParams, m);
+      allData[m] = d;
+      const total = d.reduce((s, x) => s + x.gb, 0);
+      if (total > maxGB) maxGB = total;
+    });
+
+    // Build bar for each mode
+    ALL_MODES.forEach(mode => {
+      const segments = allData[mode];
+      const total = segments.reduce((s, x) => s + x.gb, 0);
+      const isActive = mode === activeMode;
+
+      const row = document.createElement('div');
+      row.className = 'bar-row';
+      row.style.opacity = isActive ? '1' : '0.45';
+      row.style.transition = 'opacity 0.25s';
+
+      const labelRow = document.createElement('div');
+      labelRow.className = 'bar-label-row';
+
+      const lbl = document.createElement('span');
+      lbl.className = 'bar-label';
+      lbl.textContent = MODE_LABELS[mode];
+      lbl.style.color = isActive ? 'var(--text)' : 'var(--text-dim)';
+
+      const totEl = document.createElement('span');
+      totEl.className = 'bar-total';
+      totEl.textContent = total.toFixed(1) + ' GB';
+      totEl.style.color = isActive ? 'var(--accent)' : 'var(--text-dim)';
+
+      labelRow.appendChild(lbl);
+      labelRow.appendChild(totEl);
+
+      const track = document.createElement('div');
+      track.className = 'bar-track';
+
+      segments.forEach(seg => {
+        const pct = (seg.gb / maxGB) * 100;
+        const segEl = document.createElement('div');
+        segEl.className = 'bar-segment';
+        segEl.style.width = pct + '%';
+        segEl.style.background = COLORS[seg.key] || '#555';
+        segEl.style.color = '#000';
+
+        const span = document.createElement('span');
+        if (pct > 4) {
+          span.textContent = seg.gb.toFixed(1) + 'G';
+        }
+        segEl.appendChild(span);
+
+        segEl.addEventListener('click', () => {
+          showTooltip(seg.key, seg.gb);
+        });
+        segEl.addEventListener('mouseenter', () => {
+          segEl.style.opacity = '0.85';
+          segEl.style.outline = '2px solid #fff';
+        });
+        segEl.addEventListener('mouseleave', () => {
+          segEl.style.opacity = '1';
+          segEl.style.outline = 'none';
+        });
+
+        track.appendChild(segEl);
+      });
+
+      row.appendChild(labelRow);
+      row.appendChild(track);
+      container.appendChild(row);
+    });
+
+    // Build legend (unique keys)
+    const seen = new Set();
+    const activeSeg = allData[activeMode];
+    activeSeg.forEach(seg => {
+      if (!seen.has(seg.key)) {
+        seen.add(seg.key);
+        const item = document.createElement('div');
+        item.className = 'legend-item';
+        const dot = document.createElement('div');
+        dot.className = 'legend-dot';
+        dot.style.background = COLORS[seg.key] || '#555';
+        const text = document.createElement('span');
+        text.textContent = SEGMENT_INFO[seg.key]?.name || seg.key;
+        item.appendChild(dot);
+        item.appendChild(text);
+        legend.appendChild(item);
+      }
+    });
+
+    // Stats
+    const activeSegs = allData[activeMode];
+    const total = activeSegs.reduce((s, x) => s + x.gb, 0);
+    const infTotal = allData['inference'].reduce((s, x) => s + x.gb, 0);
+    const ratio = (total / infTotal).toFixed(1);
+
+    const statItems = [
+      { value: total.toFixed(1) + ' GB', label: 'Total GPU Memory' },
+      { value: ratio + '×', label: 'vs Inference' },
+      { value: activeParams + 'B', label: 'Parameters' },
+    ];
+
+    // Add GPU count hint
+    const gpuVRAM = 80; // A100 80GB
+    const gpusNeeded = Math.ceil(total / gpuVRAM);
+    statItems.push({ value: gpusNeeded + '×', label: 'A100 (80GB) needed' });
+
+    statItems.forEach(item => {
+      const card = document.createElement('div');
+      card.className = 'stat-card';
+      const val = document.createElement('div');
+      val.className = 'stat-value';
+      val.textContent = item.value;
+      const lbl = document.createElement('div');
+      lbl.className = 'stat-label';
+      lbl.textContent = item.label;
+      card.appendChild(val);
+      card.appendChild(lbl);
+      stats.appendChild(card);
+    });
+  }
+
+  function showTooltip(key, gb) {
+    const info = SEGMENT_INFO[key];
+    if (!info) return;
+    const box = document.getElementById('tooltipBox');
+    box.innerHTML = `
+      <strong>${info.name}</strong> — <span style="color:var(--text-dim);font-family:var(--mono)">${gb.toFixed(2)} GB</span><br/>
+      <span style="color:var(--text);font-size:0.84rem">${info.desc}</span><br/>
+      <span style="color:var(--green);font-size:0.82rem;margin-top:0.4rem;display:block"><strong>How to reduce:</strong> ${info.reduce}</span>
+    `;
+  }
+
+  // ── Event listeners
+  document.querySelectorAll('.mode-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      document.querySelectorAll('.mode-btn').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      activeMode = btn.dataset.mode;
+      render();
+    });
+  });
+
+  document.getElementById('model-select').addEventListener('change', function() {
+    activeParams = parseInt(this.value);
+    render();
+  });
+
+  render();
+})();
+</script>
+</body>
+</html>

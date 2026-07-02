@@ -1,0 +1,888 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1.0"/>
+  <title>Token Sampling: Temperature, Top-K, Top-P — AI Engineering Concepts</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com"/>
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet"/>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg:       #0d0f17;
+      --surface:  #141720;
+      --card:     #1a1e2e;
+      --border:   #252a3d;
+      --accent:   #00d4ff;
+      --purple:   #7c3aed;
+      --green:    #00ff88;
+      --yellow:   #ffd700;
+      --red:      #ff4757;
+      --orange:   #ff9500;
+      --text:     #e2e8f0;
+      --text-dim: #8892a4;
+      --mono:     'JetBrains Mono', monospace;
+      --sans:     'Inter', system-ui, sans-serif;
+    }
+
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: var(--sans);
+      line-height: 1.7;
+      font-size: 16px;
+    }
+
+    /* ─── HEADER ─── */
+    header {
+      background: var(--surface);
+      border-bottom: 1px solid var(--border);
+      padding: 2rem 2rem 1.5rem;
+      text-align: center;
+    }
+    .group-badge {
+      display: inline-block;
+      background: var(--purple);
+      color: #fff;
+      font-size: 0.7rem;
+      font-weight: 600;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      padding: 0.25rem 0.75rem;
+      border-radius: 999px;
+      margin-bottom: 0.75rem;
+    }
+    header h1 {
+      font-size: clamp(1.6rem, 4vw, 2.4rem);
+      font-weight: 700;
+      color: var(--accent);
+      margin-bottom: 0.5rem;
+    }
+    header p {
+      color: var(--text-dim);
+      max-width: 680px;
+      margin: 0 auto;
+      font-size: 1.05rem;
+    }
+
+    /* ─── MAIN ─── */
+    main {
+      max-width: 1100px;
+      margin: 0 auto;
+      padding: 2rem 1.5rem;
+    }
+
+    section {
+      margin-bottom: 3rem;
+    }
+
+    section > h2 {
+      font-size: 1.5rem;
+      font-weight: 700;
+      color: var(--accent);
+      border-bottom: 1px solid var(--border);
+      padding-bottom: 0.5rem;
+      margin-bottom: 1.5rem;
+    }
+
+    h3 {
+      font-size: 1.1rem;
+      font-weight: 600;
+      color: var(--yellow);
+      margin: 1.5rem 0 0.6rem;
+    }
+
+    p { margin-bottom: 1rem; color: var(--text); }
+
+    ul, ol {
+      margin: 0.5rem 0 1rem 1.5rem;
+    }
+    li { margin-bottom: 0.4rem; }
+
+    code {
+      font-family: var(--mono);
+      background: var(--card);
+      color: var(--green);
+      padding: 0.15em 0.4em;
+      border-radius: 4px;
+      font-size: 0.88em;
+    }
+
+    pre {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 1rem 1.2rem;
+      overflow-x: auto;
+      font-family: var(--mono);
+      font-size: 0.85rem;
+      color: var(--green);
+      margin: 0.5rem 0 1rem;
+    }
+
+    .callout {
+      background: var(--card);
+      border-left: 3px solid var(--accent);
+      border-radius: 0 8px 8px 0;
+      padding: 0.9rem 1.2rem;
+      margin: 1rem 0;
+      font-size: 0.95rem;
+    }
+    .callout.warn { border-left-color: var(--orange); }
+    .callout.danger { border-left-color: var(--red); }
+
+    /* ─── VISUALIZATION ─── */
+    #visualization {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 1.5rem;
+    }
+
+    #visualization h2 {
+      border-bottom-color: var(--border);
+    }
+
+    .viz-description {
+      color: var(--text-dim);
+      margin-bottom: 1.5rem;
+      font-size: 0.95rem;
+    }
+
+    .viz-layout {
+      display: grid;
+      grid-template-columns: 260px 1fr;
+      gap: 1.5rem;
+    }
+
+    @media (max-width: 768px) {
+      .viz-layout { grid-template-columns: 1fr; }
+    }
+
+    /* Controls panel */
+    .controls-panel {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 1.2rem;
+      display: flex;
+      flex-direction: column;
+      gap: 1.2rem;
+    }
+
+    .control-group label {
+      display: flex;
+      justify-content: space-between;
+      font-size: 0.85rem;
+      font-weight: 600;
+      color: var(--text-dim);
+      margin-bottom: 0.4rem;
+    }
+
+    .control-group label span {
+      font-family: var(--mono);
+      color: var(--accent);
+    }
+
+    input[type="range"] {
+      width: 100%;
+      -webkit-appearance: none;
+      height: 6px;
+      background: var(--border);
+      border-radius: 4px;
+      outline: none;
+      cursor: pointer;
+    }
+    input[type="range"]::-webkit-slider-thumb {
+      -webkit-appearance: none;
+      width: 16px;
+      height: 16px;
+      border-radius: 50%;
+      background: var(--accent);
+      cursor: pointer;
+      border: 2px solid var(--bg);
+    }
+
+    .toggle-row {
+      display: flex;
+      flex-direction: column;
+      gap: 0.5rem;
+    }
+
+    .toggle-btn {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      color: var(--text-dim);
+      font-family: var(--sans);
+      font-size: 0.82rem;
+      font-weight: 500;
+      padding: 0.45rem 0.75rem;
+      cursor: pointer;
+      text-align: left;
+      transition: background 0.15s, color 0.15s, border-color 0.15s;
+    }
+    .toggle-btn.active {
+      background: var(--accent);
+      color: var(--bg);
+      border-color: var(--accent);
+      font-weight: 700;
+    }
+
+    /* Vocab canvas wrapper */
+    .canvas-area {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 1rem;
+      display: flex;
+      flex-direction: column;
+      gap: 0.5rem;
+    }
+
+    .canvas-label {
+      font-size: 0.8rem;
+      font-weight: 600;
+      color: var(--text-dim);
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+    }
+
+    canvas {
+      display: block;
+      width: 100%;
+      border-radius: 6px;
+    }
+
+    .legend-row {
+      display: flex;
+      gap: 1rem;
+      flex-wrap: wrap;
+      margin-top: 0.5rem;
+    }
+
+    .legend-item {
+      display: flex;
+      align-items: center;
+      gap: 0.4rem;
+      font-size: 0.78rem;
+      color: var(--text-dim);
+    }
+
+    .legend-dot {
+      width: 10px;
+      height: 10px;
+      border-radius: 2px;
+    }
+
+    /* Sampled token display */
+    .sampled-display {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 1rem 1.2rem;
+      margin-top: 1rem;
+    }
+
+    .sampled-label {
+      font-size: 0.78rem;
+      color: var(--text-dim);
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      margin-bottom: 0.5rem;
+    }
+
+    .sampled-tokens {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.4rem;
+    }
+
+    .token-chip {
+      font-family: var(--mono);
+      font-size: 0.82rem;
+      padding: 0.2rem 0.6rem;
+      border-radius: 4px;
+      border: 1px solid var(--border);
+      background: var(--surface);
+      color: var(--text);
+      transition: transform 0.1s;
+    }
+    .token-chip.sampled {
+      background: var(--green);
+      color: var(--bg);
+      border-color: var(--green);
+      font-weight: 700;
+    }
+
+    .sample-btn {
+      background: var(--purple);
+      color: #fff;
+      border: none;
+      border-radius: 6px;
+      padding: 0.5rem 1.1rem;
+      font-family: var(--sans);
+      font-size: 0.85rem;
+      font-weight: 600;
+      cursor: pointer;
+      margin-top: 0.8rem;
+      transition: opacity 0.15s;
+    }
+    .sample-btn:hover { opacity: 0.85; }
+
+    /* ─── TAKEAWAYS ─── */
+    #takeaways {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 1.5rem 2rem;
+    }
+
+    #takeaways ul {
+      list-style: none;
+      margin: 0;
+    }
+
+    #takeaways li {
+      padding: 0.65rem 0;
+      border-bottom: 1px solid var(--border);
+      padding-left: 1.5rem;
+      position: relative;
+      color: var(--text);
+    }
+    #takeaways li::before {
+      content: '▸';
+      position: absolute;
+      left: 0;
+      color: var(--accent);
+      font-size: 0.9rem;
+    }
+    #takeaways li:last-child { border-bottom: none; }
+
+    /* ─── NAV ─── */
+    .concept-nav {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      max-width: 1100px;
+      margin: 0 auto 3rem;
+      padding: 0 1.5rem;
+      gap: 1rem;
+    }
+
+    .nav-link {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      text-decoration: none;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 0.65rem 1.1rem;
+      color: var(--text-dim);
+      font-size: 0.88rem;
+      font-weight: 500;
+      transition: border-color 0.15s, color 0.15s;
+    }
+    .nav-link:hover { border-color: var(--accent); color: var(--accent); }
+    .nav-link.disabled { pointer-events: none; opacity: 0.3; }
+    .nav-link .arrow { font-size: 1rem; }
+
+    /* Highlight color helpers */
+    .hl-accent { color: var(--accent); font-weight: 600; }
+    .hl-green  { color: var(--green); font-weight: 600; }
+    .hl-yellow { color: var(--yellow); font-weight: 600; }
+    .hl-orange { color: var(--orange); font-weight: 600; }
+    .hl-red    { color: var(--red); font-weight: 600; }
+    .hl-purple { color: var(--purple); font-weight: 600; }
+  </style>
+</head>
+<body>
+
+<header>
+  <div class="group-badge">Inference</div>
+  <h1>Token Sampling: Temperature, Top-K, Top-P</h1>
+  <p>How LLMs select the next token — temperature scaling, top-K filtering, and nucleus (top-P) sampling — and how each reshapes the distribution between diversity and coherence.</p>
+</header>
+
+<main>
+
+<!-- ═══════════════════════════════════════════════
+     THEORY
+═══════════════════════════════════════════════ -->
+<section id="theory">
+  <h2>Theory</h2>
+
+  <h3>The Fundamental Problem: Turning Logits into a Token</h3>
+  <p>
+    An LLM's final layer produces a vector of <em>logits</em> — one raw score per vocabulary token (GPT-4 vocabulary: ~100K tokens, Llama-3: 128K, BERT: 30K). These raw scores are unbounded real numbers. To sample a next token, we must convert them to a valid probability distribution. The process: <code>logits → softmax → probability distribution → sample one token</code>. The design choices made between "softmax" and "sample" define the entire character of the model's output.
+  </p>
+
+  <h3>Softmax and the Logit Landscape</h3>
+  <p>
+    Standard softmax: <code>P(i) = exp(z_i) / Σ exp(z_j)</code>. The exponential function naturally concentrates probability mass — a logit difference of just 5 translates to roughly 150× higher probability. This means a model's raw output is already quite "peaky" around high-confidence tokens. The sampling strategies below all operate on this post-softmax distribution (or on logits before the division, in the case of temperature).
+  </p>
+
+  <h3>Temperature Scaling</h3>
+  <p>
+    Temperature (<code>T</code>) is applied <em>before</em> softmax by dividing all logits by T:
+  </p>
+  <pre>P(i) = exp(z_i / T) / Σ exp(z_j / T)</pre>
+  <p>
+    <strong class="hl-accent">T &lt; 1.0 (cold):</strong> dividing by a small number amplifies logit differences — the distribution sharpens and becomes more deterministic. At T → 0, sampling becomes greedy argmax (always pick the highest-probability token). Models become repetitive, factual-but-boring.<br/>
+    <strong class="hl-green">T = 1.0:</strong> the raw model distribution — whatever the model actually learned.<br/>
+    <strong class="hl-orange">T &gt; 1.0 (hot):</strong> dividing by a large number compresses logit differences — the distribution flattens. Tokens that were nearly impossible now have non-trivial probability. Output becomes more creative, surprising, and eventually incoherent.
+  </p>
+  <p>
+    Typical production values: <code>T = 0.0–0.3</code> for factual/code tasks; <code>T = 0.7–1.0</code> for creative writing; <code>T = 1.2–2.0</code> for brainstorming or diversity sampling. OpenAI API default: 1.0. Many practitioners set T = 0 for evals and classification.
+  </p>
+
+  <h3>Top-K Sampling</h3>
+  <p>
+    Top-K truncates the distribution to only the <code>K</code> highest-probability tokens, then renormalizes:
+  </p>
+  <pre>Vocabulary ─► keep top K tokens ─► zero out the rest ─► renormalize ─► sample</pre>
+  <p>
+    <strong>Why it helps:</strong> prevents the model from ever selecting incoherent low-probability tokens, even at high temperature. <strong>Key problem:</strong> K is fixed regardless of the distribution shape. When the model is very confident (one token at 95% probability), K=50 still allows 49 nearly-zero-probability alternatives. When the model is genuinely uncertain (50 tokens each at 2%), K=10 eliminates most viable alternatives. The fixed K ignores the natural shape of the distribution.
+  </p>
+  <p>
+    Typical values: <code>K = 10–50</code> for most tasks. GPT-2 defaults: K = 50. K = 1 is greedy decoding.
+  </p>
+
+  <h3>Top-P / Nucleus Sampling</h3>
+  <p>
+    Nucleus sampling (Holtzman et al., 2020) fixes Top-K's shape-blindness by selecting a dynamic K: keep the smallest set of tokens whose cumulative probability exceeds threshold P:
+  </p>
+  <pre>Sort tokens by probability descending → accumulate → stop when cumsum ≥ P → renormalize</pre>
+  <p>
+    <strong>When the model is confident:</strong> cumsum hits P = 0.9 after just 1–3 tokens → small nucleus → conservative sampling. <strong>When uncertain:</strong> cumsum hits P = 0.9 after 50+ tokens → large nucleus → more exploratory sampling. The nucleus adapts to the model's certainty at each step.
+  </p>
+  <p>
+    <strong>Typical values:</strong> <code>P = 0.9–0.95</code> for most creative tasks; <code>P = 1.0</code> disables filtering entirely. Anthropic Claude API default: top_p = 1.0 (off). OpenAI default: 1.0 but recommends not combining with temperature.
+  </p>
+
+  <h3>Combining Strategies</h3>
+  <p>
+    The practical order of operations: <code>logits / T → softmax → top-K filter → top-P filter → renormalize → multinomial sample</code>. Most frameworks apply them in this order. The OpenAI and Anthropic APIs warn against setting both temperature and top_p away from their defaults simultaneously — the interaction can produce unexpected sharpness or flatness. A common production recipe: either use temperature alone, or top-P alone, with temperature set to 1.0.
+  </p>
+
+  <h3>Min-P Sampling (Emerging)</h3>
+  <p>
+    A newer approach (used by LM Studio, llama.cpp): filter out any token whose probability is below <code>min_p × max_probability</code>. This is scale-invariant — the threshold moves with the distribution peak. min_p = 0.05 means "never pick a token less than 5% as likely as the best token." This avoids both Top-K's fixed-K problem and Top-P's behavior at extreme confidence levels.
+  </p>
+
+  <h3>Greedy vs Beam vs Sampling</h3>
+  <p>
+    <strong class="hl-accent">Greedy decoding</strong> (T=0, K=1) is deterministic and fast but notoriously degenerate — prone to repetition loops and locally optimal but globally bad sequences. <strong class="hl-green">Beam search</strong> maintains N best partial sequences simultaneously, exploring more of the probability space but with O(N) cost and a bias toward short, generic outputs. <strong class="hl-yellow">Sampling</strong> (temperature + top-K/P) adds randomness that paradoxically produces more diverse and often higher-quality outputs for open-ended generation. For constrained tasks (translation, summarization), beam search can outperform sampling.
+  </p>
+
+  <h3>Production Reality: Why This Matters</h3>
+  <p>
+    <strong>Evaluation reproducibility:</strong> any temperature above 0 makes evals non-deterministic. Always set T = 0 for benchmarks, or run multiple samples and aggregate. <strong>Cost at scale:</strong> Best-of-N sampling (generate N completions, pick the best) multiplies cost by N — at T=0 this collapses to N identical outputs, wasting compute. <strong>Latency:</strong> sampling strategy itself adds negligible latency; the token generation loop dominates. <strong>Batch diversity:</strong> at T=0, you can batch identical prompts and all get identical outputs — cache them. At T>0, each is unique.
+  </p>
+  <p>
+    Tools like <strong>vLLM</strong>, <strong>TGI (Text Generation Inference)</strong>, and <strong>llama.cpp</strong> all implement these sampling strategies in CUDA kernels for efficiency. vLLM's PagedAttention paper notes that at T=1 with top-P=0.9, GPU throughput is nearly identical to T=0 — the sampling step is not the bottleneck.
+  </p>
+
+  <div class="callout warn">
+    <strong>Gotcha:</strong> Temperature affects perplexity calculations. When computing perplexity for evaluation, always use T=1.0 (raw model distribution). Sampling temperature should never be applied to loss/perplexity metrics.
+  </div>
+
+  <div class="callout">
+    <strong>The repetition problem:</strong> even with temperature, models can enter repetition traps. Modern systems add <em>repetition penalty</em> (divide logits of recently used tokens by a penalty factor) or <em>frequency penalty</em> (subtract a penalty proportional to how often the token has appeared). These are applied before temperature scaling.
+  </div>
+</section>
+
+<!-- ═══════════════════════════════════════════════
+     VISUALIZATION
+═══════════════════════════════════════════════ -->
+<section id="visualization">
+  <h2>Interactive Visualization</h2>
+  <p class="viz-description">
+    Adjust temperature, top-K, and top-P sliders to see how they reshape the probability distribution over a vocabulary of 30 tokens. The bar chart shows raw probabilities (gray) and the filtered/renormalized distribution (colored). Click <strong>Sample Token</strong> to draw a token from the current distribution and watch it get highlighted.
+  </p>
+
+  <div class="viz-layout">
+    <!-- Controls -->
+    <div class="controls-panel">
+      <div class="control-group">
+        <label>Temperature (T) <span id="tempVal">1.0</span></label>
+        <input type="range" id="tempSlider" min="0.1" max="2.5" step="0.05" value="1.0"/>
+      </div>
+
+      <div class="control-group">
+        <label>Top-K <span id="topkVal">50</span></label>
+        <input type="range" id="topkSlider" min="1" max="30" step="1" value="30"/>
+      </div>
+
+      <div class="control-group">
+        <label>Top-P (nucleus) <span id="toppVal">1.00</span></label>
+        <input type="range" id="toppSlider" min="0.1" max="1.0" step="0.01" value="1.0"/>
+      </div>
+
+      <div>
+        <div class="canvas-label" style="margin-bottom:0.5rem;">Active filters</div>
+        <div class="toggle-row">
+          <button class="toggle-btn" id="toggleTemp">🌡 Temperature</button>
+          <button class="toggle-btn active" id="toggleTopK">🔢 Top-K</button>
+          <button class="toggle-btn active" id="toggleTopP">🎯 Top-P</button>
+        </div>
+        <p style="font-size:0.75rem;color:var(--text-dim);margin-top:0.5rem;">Toggle to enable/disable each filter independently</p>
+      </div>
+
+      <div style="background:var(--surface);border-radius:8px;padding:0.8rem;font-size:0.8rem;">
+        <div style="color:var(--text-dim);font-weight:600;margin-bottom:0.4rem;">Distribution stats</div>
+        <div id="statsBox" style="font-family:var(--mono);line-height:1.8;color:var(--text);"></div>
+      </div>
+    </div>
+
+    <!-- Canvas area -->
+    <div style="display:flex;flex-direction:column;gap:1rem;">
+      <div class="canvas-area">
+        <div class="canvas-label">Token Probability Distribution</div>
+        <canvas id="distCanvas" height="300"></canvas>
+        <div class="legend-row">
+          <div class="legend-item">
+            <div class="legend-dot" style="background:#252a3d;"></div>
+            <span>Filtered out</span>
+          </div>
+          <div class="legend-item">
+            <div class="legend-dot" style="background:#00d4ff;"></div>
+            <span>In nucleus (renormalized)</span>
+          </div>
+          <div class="legend-item">
+            <div class="legend-dot" style="background:#7c3aed;border:1px dashed #fff2;"></div>
+            <span>Sampled token</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="sampled-display">
+        <div class="sampled-label">Sampled tokens (last 12)</div>
+        <div class="sampled-tokens" id="sampledTokens">
+          <span style="color:var(--text-dim);font-size:0.85rem;">Click "Sample Token" to start</span>
+        </div>
+        <button class="sample-btn" id="sampleBtn">Sample Token</button>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ═══════════════════════════════════════════════
+     TAKEAWAYS
+═══════════════════════════════════════════════ -->
+<section id="takeaways">
+  <h2>Key Takeaways</h2>
+  <ul>
+    <li><strong>Temperature is a multiplier on uncertainty, not quality.</strong> T &lt; 1 makes the model sycophantic toward its own priors — great for factual retrieval, terrible for diversity. T &gt; 1 doesn't add knowledge; it just spreads mass to tokens the model weakly considered, which often produces hallucinations in factual domains.</li>
+    <li><strong>Top-P is almost always better than Top-K for open-ended generation.</strong> Top-K's fixed cutoff doesn't adapt to distribution shape — at high-confidence steps it still wastes budget on near-zero tokens. Top-P (nucleus) contracts naturally. The original "The Curious Case of Neural Text Degeneration" (Holtzman 2020) empirically shows nucleus sampling produces more human-like text.</li>
+    <li><strong>For evals, always use T = 0 or run multiple samples.</strong> Any T &gt; 0 makes results non-deterministic. A 1-point benchmark difference might vanish across seeds. Major leaderboards (MMLU, HumanEval) typically eval at T = 0.</li>
+    <li><strong>vLLM, TGI, and llama.cpp implement sampling in CUDA — it's essentially free latency.</strong> The bottleneck in decode phase is always memory bandwidth for KV cache, not the softmax+sample step. Don't optimize sampling for speed; optimize it for output quality.</li>
+    <li><strong>Repetition penalty is underrated.</strong> Even with nucleus sampling, models can degenerate in long generations. llama.cpp's <code>--repeat-penalty 1.1</code> with a context window of 64 past tokens is a practical default that prevents most looping without hurting output quality measurably.</li>
+    <li><strong>Don't combine temperature and top-P simultaneously unless you understand the interaction.</strong> Most API providers document this warning. Use one primary lever: either tune temperature (with top-P = 1.0) or tune top-P (with temperature = 1.0). Mixing both creates non-obvious distribution shapes that are hard to reason about.</li>
+  </ul>
+</section>
+
+</main>
+
+<!-- ═══════════════════════════════════════════════
+     NAV
+═══════════════════════════════════════════════ -->
+<nav class="concept-nav">
+  <a href="20-memory-bottlenecks.html" class="nav-link">
+    <span class="arrow">←</span>
+    <span>20 — Memory Bottlenecks in Fine-Tuning</span>
+  </a>
+  <a href="22-evaluation-metrics.html" class="nav-link">
+    <span>22 — LLM Evaluation Metrics</span>
+    <span class="arrow">→</span>
+  </a>
+</nav>
+
+<script>
+(function() {
+  // ── Vocabulary setup ──────────────────────────────────────────────
+  const VOCAB = [
+    "the","is","a","cat","sat","on","mat","dog","ran","fast",
+    "blue","sky","cloud","rain","sun","moon","star","tree","leaf","wind",
+    "he","she","they","we","you","I","it","and","but","or"
+  ];
+  const N = VOCAB.length; // 30
+
+  // Stable raw logits (pre-temperature) — simulate a realistic distribution
+  // with a few high-probability tokens and a long tail
+  const RAW_LOGITS = [
+    4.2, 3.8, 3.5, 2.9, 2.5, 2.3, 2.1, 1.9, 1.7, 1.5,
+    1.3, 1.1, 0.9, 0.7, 0.5, 0.3, 0.1,-0.1,-0.3,-0.5,
+   -0.7,-0.9,-1.1,-1.3,-1.5,-1.7,-1.9,-2.1,-2.4,-2.8
+  ];
+
+  // ── State ────────────────────────────────────────────────────────
+  let temperature = 1.0;
+  let topK = 30;
+  let topP = 1.0;
+  let useTopK = true;
+  let useTopP = true;
+  let sampledIdx = -1;
+  let history = [];
+
+  // ── DOM refs ─────────────────────────────────────────────────────
+  const canvas = document.getElementById('distCanvas');
+  const ctx = canvas.getContext('2d');
+  const tempSlider = document.getElementById('tempSlider');
+  const topkSlider = document.getElementById('topkSlider');
+  const toppSlider = document.getElementById('toppSlider');
+  const tempVal = document.getElementById('tempVal');
+  const topkVal = document.getElementById('topkVal');
+  const toppVal = document.getElementById('toppVal');
+  const toggleTopK = document.getElementById('toggleTopK');
+  const toggleTopP = document.getElementById('toggleTopP');
+  const toggleTemp = document.getElementById('toggleTemp');
+  const statsBox = document.getElementById('statsBox');
+  const sampledTokensEl = document.getElementById('sampledTokens');
+  const sampleBtn = document.getElementById('sampleBtn');
+
+  // ── Math helpers ─────────────────────────────────────────────────
+  function softmax(logits, T) {
+    const scaled = logits.map(x => x / T);
+    const maxV = Math.max(...scaled);
+    const exps = scaled.map(x => Math.exp(x - maxV));
+    const sum = exps.reduce((a,b) => a+b, 0);
+    return exps.map(x => x / sum);
+  }
+
+  function applyTopK(probs, k) {
+    // Get sorted indices descending
+    const indexed = probs.map((p, i) => ({p, i}));
+    indexed.sort((a,b) => b.p - a.p);
+    const kept = new Set(indexed.slice(0, k).map(x => x.i));
+    const filtered = probs.map((p, i) => kept.has(i) ? p : 0);
+    const sum = filtered.reduce((a,b) => a+b, 0);
+    return filtered.map(p => p / sum);
+  }
+
+  function applyTopP(probs, p) {
+    const indexed = probs.map((prob, i) => ({prob, i}));
+    indexed.sort((a,b) => b.prob - a.prob);
+    let cumsum = 0;
+    const kept = new Set();
+    for (const {prob, i} of indexed) {
+      kept.add(i);
+      cumsum += prob;
+      if (cumsum >= p) break;
+    }
+    const filtered = probs.map((prob, i) => kept.has(i) ? prob : 0);
+    const sum = filtered.reduce((a,b) => a+b, 0);
+    return filtered.map(p => p / sum);
+  }
+
+  function computeDistribution() {
+    let T = temperature;
+    const rawProbs = softmax(RAW_LOGITS, T);
+    let filtered = [...rawProbs];
+    if (useTopK) filtered = applyTopK(filtered, topK);
+    if (useTopP) filtered = applyTopP(filtered, topP);
+    return { rawProbs, filtered };
+  }
+
+  function entropy(probs) {
+    let h = 0;
+    for (const p of probs) {
+      if (p > 1e-10) h -= p * Math.log2(p);
+    }
+    return h;
+  }
+
+  function sampleFromDist(probs) {
+    const r = Math.random();
+    let cumsum = 0;
+    for (let i = 0; i < probs.length; i++) {
+      cumsum += probs[i];
+      if (r <= cumsum) return i;
+    }
+    return probs.length - 1;
+  }
+
+  // ── Canvas drawing ───────────────────────────────────────────────
+  function draw() {
+    const { rawProbs, filtered } = computeDistribution();
+
+    const dpr = window.devicePixelRatio || 1;
+    const W = canvas.offsetWidth;
+    const H = 300;
+    canvas.width = W * dpr;
+    canvas.height = H * dpr;
+    ctx.scale(dpr, dpr);
+
+    ctx.clearRect(0, 0, W, H);
+
+    const padL = 40, padR = 10, padT = 20, padB = 35;
+    const chartW = W - padL - padR;
+    const chartH = H - padT - padB;
+
+    // Background
+    ctx.fillStyle = '#1a1e2e';
+    ctx.fillRect(0, 0, W, H);
+
+    const maxRaw = Math.max(...rawProbs);
+    const barW = chartW / N;
+
+    // Draw gridlines
+    ctx.strokeStyle = '#252a3d';
+    ctx.lineWidth = 1;
+    for (let g = 0; g <= 4; g++) {
+      const y = padT + chartH - (g / 4) * chartH;
+      ctx.beginPath();
+      ctx.moveTo(padL, y);
+      ctx.lineTo(padL + chartW, y);
+      ctx.stroke();
+      ctx.fillStyle = '#8892a4';
+      ctx.font = '10px JetBrains Mono, monospace';
+      ctx.textAlign = 'right';
+      ctx.fillText(((g / 4) * maxRaw * 100).toFixed(0) + '%', padL - 4, y + 3);
+    }
+
+    // Axes
+    ctx.strokeStyle = '#252a3d';
+    ctx.lineWidth = 1.5;
+    ctx.beginPath();
+    ctx.moveTo(padL, padT);
+    ctx.lineTo(padL, padT + chartH);
+    ctx.lineTo(padL + chartW, padT + chartH);
+    ctx.stroke();
+
+    // Bars
+    for (let i = 0; i < N; i++) {
+      const x = padL + i * barW;
+      const rawH = (rawProbs[i] / maxRaw) * chartH;
+      const filtH = (filtered[i] / maxRaw) * chartH;
+
+      // Raw background bar (dim)
+      ctx.fillStyle = '#252a3d';
+      ctx.fillRect(x + 1, padT + chartH - rawH, barW - 3, rawH);
+
+      // Filtered bar
+      if (filtered[i] > 1e-8) {
+        const isSelected = (i === sampledIdx);
+        let barColor;
+        if (isSelected) {
+          barColor = '#7c3aed';
+        } else {
+          // Color gradient: hot tokens cyan → cooler orange
+          const t = i / N;
+          if (t < 0.33) barColor = '#00d4ff';
+          else if (t < 0.66) barColor = '#00ff88';
+          else barColor = '#ff9500';
+        }
+        ctx.fillStyle = barColor;
+        ctx.fillRect(x + 1, padT + chartH - filtH, barW - 3, filtH);
+
+        if (isSelected) {
+          ctx.fillStyle = '#ffffff33';
+          ctx.fillRect(x + 1, padT, barW - 3, chartH);
+        }
+      }
+
+      // Token label
+      if (barW >= 16) {
+        ctx.fillStyle = filtered[i] > 1e-8 ? '#8892a4' : '#252a3d';
+        ctx.font = '9px JetBrains Mono, monospace';
+        ctx.textAlign = 'center';
+        ctx.fillText(VOCAB[i].slice(0, 4), x + barW/2, padT + chartH + 14);
+      }
+    }
+
+    // Update stats
+    const activeCount = filtered.filter(p => p > 1e-8).length;
+    const topToken = VOCAB[filtered.indexOf(Math.max(...filtered))];
+    const topProb = Math.max(...filtered);
+    const h = entropy(filtered);
+    statsBox.innerHTML =
+      `Tokens in nucleus: <span style="color:var(--accent)">${activeCount}</span><br>` +
+      `Top token: <span style="color:var(--green)">"${topToken}"</span><br>` +
+      `Top prob: <span style="color:var(--yellow)">${(topProb*100).toFixed(1)}%</span><br>` +
+      `Entropy: <span style="color:var(--orange)">${h.toFixed(2)} bits</span>`;
+  }
+
+  // ── Event handlers ───────────────────────────────────────────────
+  tempSlider.addEventListener('input', () => {
+    temperature = parseFloat(tempSlider.value);
+    tempVal.textContent = temperature.toFixed(2);
+    sampledIdx = -1;
+    draw();
+  });
+
+  topkSlider.addEventListener('input', () => {
+    topK = parseInt(topkSlider.value);
+    topkVal.textContent = topK === N ? `${topK} (all)` : topK;
+    sampledIdx = -1;
+    draw();
+  });
+
+  toppSlider.addEventListener('input', () => {
+    topP = parseFloat(toppSlider.value);
+    toppVal.textContent = topP.toFixed(2);
+    sampledIdx = -1;
+    draw();
+  });
+
+  toggleTopK.addEventListener('click', () => {
+    useTopK = !useTopK;
+    toggleTopK.classList.toggle('active', useTopK);
+    sampledIdx = -1;
+    draw();
+  });
+
+  toggleTopP.addEventListener('click', () => {
+    useTopP = !useTopP;
+    toggleTopP.classList.toggle('active', useTopP);
+    sampledIdx = -1;
+    draw();
+  });
+
+  toggleTemp.addEventListener('click', () => {
+    // Toggle temp between 1.0 and current slider value
+    if (temperature !== 1.0) {
+      temperature = 1.0;
+      tempSlider.value = 1.0;
+      tempVal.textContent = '1.00';
+      toggleTemp.classList.remove('active');
+    } else {
+      temperature = parseFloat(tempSlider.value) || 1.0;
+      toggleTemp.classList.add('active');
+    }
+    sampledIdx = -1;
+    draw();
+  });
+
+  sampleBtn.addEventListener('click', () => {
+    const { filtered } = computeDistribution();
+    sampledIdx = sampleFromDist(filtered);
+
+    // Update history
+    history.unshift(VOCAB[sampledIdx]);
+    if (history.length > 12) history = history.slice(0, 12);
+
+    // Render chips
+    sampledTokensEl.innerHTML = history.map((t, i) =>
+      `<span class="token-chip${i === 0 ? ' sampled' : ''}">${t}</span>`
+    ).join('');
+
+    draw();
+  });
+
+  // ── Resize observer ──────────────────────────────────────────────
+  const ro = new ResizeObserver(() => draw());
+  ro.observe(canvas.parentElement);
+
+  // ── Init ─────────────────────────────────────────────────────────
+  topkVal.textContent = `${topK} (all)`;
+  draw();
+})();
+</script>
+
+</body>
+</html>

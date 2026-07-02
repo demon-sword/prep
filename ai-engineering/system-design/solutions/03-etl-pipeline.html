@@ -1,0 +1,605 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Agentic Data Pipeline for ETL — System Design</title>
+  <style>
+    :root {
+      --bg: #0f1117;
+      --card: #1a1d27;
+      --card2: #1e2130;
+      --border: #2a2d3e;
+      --accent: #7c6af7;
+      --accent2: #4fc3f7;
+      --green: #4caf98;
+      --yellow: #f0c040;
+      --red: #e06c75;
+      --text: #e0e0e0;
+      --muted: #8a8fa8;
+      --tag-bg: #2a2d3e;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: 'Segoe UI', system-ui, sans-serif;
+      font-size: 15px;
+      line-height: 1.6;
+    }
+    header {
+      background: linear-gradient(135deg, #1a1d27 0%, #1e1b3a 100%);
+      border-bottom: 1px solid var(--border);
+      padding: 28px 40px;
+      text-align: center;
+    }
+    header h1 { font-size: 1.8rem; color: #fff; letter-spacing: 0.3px; }
+    header p { color: var(--muted); font-size: 0.9rem; margin-top: 6px; }
+    main { max-width: 900px; margin: 0 auto; padding: 36px 24px 60px; }
+    .section-header {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      border-bottom: 1px solid var(--border);
+      padding-bottom: 12px;
+      margin-bottom: 24px;
+    }
+    .section-header .icon {
+      width: 36px; height: 36px;
+      border-radius: 8px;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 1.1rem;
+      flex-shrink: 0;
+    }
+    .icon.purple { background: rgba(124,106,247,0.15); }
+    .section-header h2 { font-size: 1.1rem; color: #fff; }
+    .section-header small { color: var(--muted); font-size: 0.82rem; display: block; margin-top: 1px; }
+    .letter-block {
+      background: var(--card2);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 16px;
+      margin-bottom: 12px;
+    }
+    .letter-block h4 {
+      font-size: 1.1rem;
+      color: var(--accent);
+      margin-bottom: 8px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .letter-block h4 span {
+      background: rgba(124,106,247,0.2);
+      color: var(--accent);
+      width: 32px;
+      height: 32px;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-weight: 700;
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: 10px;
+      font-size: 0.85rem;
+    }
+    th, td {
+      padding: 10px 12px;
+      text-align: left;
+      border-bottom: 1px solid var(--border);
+    }
+    th {
+      color: var(--accent2);
+      font-weight: 600;
+      background: rgba(79,195,247,0.05);
+    }
+    td { color: var(--text); }
+    .snippet {
+      background: #12141f;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 14px 16px;
+      font-family: 'Fira Code', 'Cascadia Code', monospace;
+      font-size: 0.82rem;
+      line-height: 1.55;
+      margin-top: 10px;
+      color: var(--muted);
+    }
+    .snippet strong { color: #fff; }
+    .opener {
+      background: linear-gradient(135deg, rgba(124,106,247,0.08), rgba(79,195,247,0.05));
+      border: 1px solid rgba(124,106,247,0.3);
+      border-radius: 12px;
+      padding: 20px 22px;
+      font-style: italic;
+      border-left: 3px solid var(--accent);
+      line-height: 1.7;
+      margin-bottom: 14px;
+    }
+    .time-bar {
+      display: flex;
+      gap: 4px;
+      margin-top: 10px;
+    }
+    .time-segment {
+      flex: 1;
+      padding: 8px 12px;
+      background: var(--card2);
+      border-radius: 6px;
+      text-align: center;
+      font-size: 0.85rem;
+    }
+    .time-segment .label { display: block; color: var(--accent); font-weight: 600; }
+    .time-segment .duration { display: block; color: var(--muted); font-size: 0.75rem; }
+    .two-col { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+    @media (max-width: 640px) { .two-col { grid-template-columns: 1fr; } }
+.architecture-diagram-container {
+    max-width: 700px;
+    width: 100%;
+    margin: 0 auto 24px;
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    background: var(--card2);
+    padding: 20px;
+    overflow: visible;
+}
+.architecture-diagram-container svg {
+    display: block;
+    width: 100%;
+    height: auto;
+    overflow: visible;
+}
+    .back-btn {
+      display: inline-block;
+      padding: 12px 24px;
+      background: var(--card2);
+      color: var(--text);
+      text-decoration: none;
+      border-radius: 6px;
+      margin-top: 20px;
+      border: 1px solid var(--border);
+      transition: all 0.2s;
+    }
+    .back-btn:hover {
+      background: var(--accent);
+      color: #fff;
+    }
+  </style>
+</head>
+<body>
+
+<header>
+  <div>
+    <h1>🛠 Agentic Data Pipeline for ETL</h1>
+    <p>System Design Solution using ARCH Framework</p>
+  </div>
+</header>
+
+<main>
+  <!-- Back Button -->
+  <a href="../index.html" class="back-btn">← Back to Problems</a>
+
+  <!-- Opening Line -->
+  <div class="opener">
+    "I'll design this using the ARCH framework: Architecture — the components and agents; Routing — how they communicate; Constraints — what can break and how we handle it; and Heuristics — why I chose this design."
+  </div>
+
+  <!-- Opening Line -->
+  <div class="opener">
+    "I'll design this using the ARCH framework: Architecture — the components and agents; Routing — how they communicate; Constraints — what can break and how we handle it; and Heuristics — why I chose this design."
+  </div>
+
+  <!-- Architecture Diagram -->
+  <div class="architecture-diagram-container">
+    <svg viewBox="0 0 800 1000" xmlns="http://www.w3.org/2000/svg">
+      <defs>
+        <!-- Arrowhead marker for main flow -->
+        <marker id="arrow-main" markerWidth="8" markerHeight="6" refX="8" refY="3" orient="auto" markerUnits="strokeWidth">
+          <path d="M0,0 L8,3 L0,6 Z" fill="#7c6af7" />
+        </marker>
+        <!-- Arrowhead marker for alerts -->
+        <marker id="arrow-alert" markerWidth="8" markerHeight="6" refX="8" refY="3" orient="auto" markerUnits="strokeWidth">
+          <path d="M0,0 L8,3 L0,6 Z" fill="#e06c75" />
+        </marker>
+        <!-- Arrowhead marker for load -->
+        <marker id="arrow-load" markerWidth="8" markerHeight="6" refX="8" refY="3" orient="auto" markerUnits="strokeWidth">
+          <path d="M0,0 L8,3 L0,6 Z" fill="#4caf98" />
+        </marker>
+        <!-- Shadow filter -->
+        <filter id="shadow" x="-5%" y="-5%" width="110%" height="120%">
+          <feDropShadow dx="0" dy="3" stdDeviation="3" flood-color="#000000" flood-opacity="0.25" />
+        </filter>
+      </defs>
+
+      <!-- Background -->
+      <rect x="0" y="0" width="800" height="1000" rx="8" fill="#0f1117" />
+
+      <!-- Title -->
+      <text x="400" y="40" text-anchor="middle" fill="#ffffff" font-size="22" font-weight="600" font-family="'Segoe UI', system-ui, sans-serif">Agentic ETL Pipeline</text>
+
+      <!-- User Input -->
+      <g filter="url(#shadow)">
+        <rect x="300" y="70" width="200" height="50" rx="8" fill="#1a1d27" stroke="#2a2d3e" stroke-width="1.5" />
+        <text x="400" y="100" text-anchor="middle" fill="#ffffff" font-size="14" font-weight="500" font-family="'Segoe UI', system-ui, sans-serif">User Inputs Extract Request</text>
+      </g>
+
+      <!-- Arrow: User -> Extract -->
+      <line x1="400" y1="120" x2="400" y2="150" stroke="#7c6af7" stroke-width="2" marker-end="url(#arrow-main)" />
+
+      <!-- Extract Stage -->
+      <g filter="url(#shadow)">
+        <rect x="100" y="150" width="600" height="160" rx="10" fill="#1a1d27" stroke="#2a2d3e" stroke-width="1.5" stroke-dasharray="5,5" />
+        <text x="400" y="175" text-anchor="middle" fill="#7c6af7" font-size="16" font-weight="600" font-family="'Segoe UI', system-ui, sans-serif">EXTRACT</text>
+        <!-- Extract Agent -->
+        <rect x="320" y="190" width="160" height="40" rx="8" fill="#1a1d27" stroke="#7c6af7" stroke-width="1.5" />
+        <text x="400" y="215" text-anchor="middle" fill="#ffffff" font-size="13" font-weight="500" font-family="'Segoe UI', system-ui, sans-serif">Extract Agent</text>
+        <!-- Source A -->
+        <rect x="120" y="260" width="120" height="35" rx="8" fill="#1a1d27" stroke="#2a2d3e" stroke-width="1.5" />
+        <text x="180" y="282" text-anchor="middle" fill="#e0e0e0" font-size="12" font-family="'Segoe UI', system-ui, sans-serif">Source A (API)</text>
+        <!-- Source B -->
+        <rect x="340" y="260" width="120" height="35" rx="8" fill="#1a1d27" stroke="#2a2d3e" stroke-width="1.5" />
+        <text x="400" y="282" text-anchor="middle" fill="#e0e0e0" font-size="12" font-family="'Segoe UI', system-ui, sans-serif">Source B (DB)</text>
+        <!-- Source C -->
+        <rect x="560" y="260" width="120" height="35" rx="8" fill="#1a1d27" stroke="#2a2d3e" stroke-width="1.5" />
+        <text x="620" y="282" text-anchor="middle" fill="#e0e0e0" font-size="12" font-family="'Segoe UI', system-ui, sans-serif">Source C (Files)</text>
+        <!-- Arrows: Extract Agent -> Sources -->
+        <line x1="380" y1="230" x2="240" y2="260" stroke="#7c6af7" stroke-width="1.5" marker-end="url(#arrow-main)" />
+        <line x1="400" y1="230" x2="400" y2="260" stroke="#7c6af7" stroke-width="1.5" marker-end="url(#arrow-main)" />
+        <line x1="420" y1="230" x2="560" y2="260" stroke="#7c6af7" stroke-width="1.5" marker-end="url(#arrow-main)" />
+      </g>
+
+      <!-- Arrow: Extract -> Transform -->
+      <line x1="400" y1="310" x2="400" y2="340" stroke="#7c6af7" stroke-width="2" marker-end="url(#arrow-main)" />
+
+      <!-- Transform Stage -->
+      <g filter="url(#shadow)">
+        <rect x="100" y="340" width="600" height="220" rx="10" fill="#1a1d27" stroke="#2a2d3e" stroke-width="1.5" stroke-dasharray="5,5" />
+        <text x="400" y="365" text-anchor="middle" fill="#7c6af7" font-size="16" font-weight="600" font-family="'Segoe UI', system-ui, sans-serif">TRANSFORM</text>
+        <!-- Transform Agent -->
+        <rect x="320" y="385" width="160" height="40" rx="8" fill="#1a1d27" stroke="#7c6af7" stroke-width="1.5" />
+        <text x="400" y="410" text-anchor="middle" fill="#ffffff" font-size="13" font-weight="500" font-family="'Segoe UI', system-ui, sans-serif">Transform Agent</text>
+        <!-- Schema Normalizer -->
+        <rect x="140" y="470" width="140" height="35" rx="8" fill="#1a1d27" stroke="#2a2d3e" stroke-width="1.5" />
+        <text x="210" y="492" text-anchor="middle" fill="#e0e0e0" font-size="12" font-family="'Segoe UI', system-ui, sans-serif">Schema Normalizer</text>
+        <!-- Data Cleaner -->
+        <rect x="340" y="470" width="120" height="35" rx="8" fill="#1a1d27" stroke="#2a2d3e" stroke-width="1.5" />
+        <text x="400" y="492" text-anchor="middle" fill="#e0e0e0" font-size="12" font-family="'Segoe UI', system-ui, sans-serif">Data Cleaner</text>
+        <!-- Data Enricher -->
+        <rect x="540" y="470" width="120" height="35" rx="8" fill="#1a1d27" stroke="#2a2d3e" stroke-width="1.5" />
+        <text x="600" y="492" text-anchor="middle" fill="#e0e0e0" font-size="12" font-family="'Segoe UI', system-ui, sans-serif">Data Enricher</text>
+        <!-- Arrows: Transform Agent -> Processors -->
+        <line x1="380" y1="425" x2="260" y2="470" stroke="#7c6af7" stroke-width="1.5" marker-end="url(#arrow-main)" />
+        <line x1="400" y1="425" x2="400" y2="470" stroke="#7c6af7" stroke-width="1.5" marker-end="url(#arrow-main)" />
+        <line x1="420" y1="425" x2="540" y2="470" stroke="#7c6af7" stroke-width="1.5" marker-end="url(#arrow-main)" />
+        <!-- Parallel indicators -->
+        <text x="260" y="460" text-anchor="middle" fill="#8a8fa8" font-size="10" font-family="'Segoe UI', system-ui, sans-serif">(parallel)</text>
+        <text x="400" y="460" text-anchor="middle" fill="#8a8fa8" font-size="10" font-family="'Segoe UI', system-ui, sans-serif">(parallel)</text>
+        <text x="600" y="460" text-anchor="middle" fill="#8a8fa8" font-size="10" font-family="'Segoe UI', system-ui, sans-serif">(parallel)</text>
+      </g>
+
+      <!-- Arrow: Transform -> Quality Gate -->
+      <line x1="400" y1="560" x2="400" y2="590" stroke="#7c6af7" stroke-width="2" marker-end="url(#arrow-main)" />
+
+      <!-- Quality Gate -->
+      <g filter="url(#shadow)">
+        <rect x="230" y="590" width="340" height="50" rx="8" fill="#1a1d27" stroke="#f0c040" stroke-width="2" stroke-dasharray="4,4" />
+        <text x="400" y="620" text-anchor="middle" fill="#f0c040" font-size="14" font-weight="600" font-family="'Segoe UI', system-ui, sans-serif">Quality Gate</text>
+      </g>
+
+      <!-- Arrow: Quality Gate -> Load -->
+      <line x1="400" y1="640" x2="400" y2="670" stroke="#7c6af7" stroke-width="2" marker-end="url(#arrow-main)" />
+
+      <!-- Load Stage -->
+      <g filter="url(#shadow)">
+        <rect x="100" y="670" width="600" height="140" rx="10" fill="#1a1d27" stroke="#2a2d3e" stroke-width="1.5" stroke-dasharray="5,5" />
+        <text x="400" y="695" text-anchor="middle" fill="#4caf98" font-size="16" font-weight="600" font-family="'Segoe UI', system-ui, sans-serif">LOAD</text>
+        <!-- Load Agent -->
+        <rect x="320" y="710" width="160" height="40" rx="8" fill="#1a1d27" stroke="#4caf98" stroke-width="1.5" />
+        <text x="400" y="735" text-anchor="middle" fill="#ffffff" font-size="13" font-weight="500" font-family="'Segoe UI', system-ui, sans-serif">Load Agent</text>
+        <!-- Data Warehouse -->
+        <rect x="230" y="770" width="340" height="35" rx="8" fill="#1a1d27" stroke="#2a2d3e" stroke-width="1.5" />
+        <text x="400" y="792" text-anchor="middle" fill="#e0e0e0" font-size="12" font-family="'Segoe UI', system-ui, sans-serif">Data Warehouse (Redshift, Snowflake, BigQuery)</text>
+        <!-- Arrow: Load Agent -> DW -->
+        <line x1="400" y1="750" x2="400" y2="770" stroke="#4caf98" stroke-width="2" marker-end="url(#arrow-load)" />
+      </g>
+
+      <!-- Quality Guardian (Monitoring) -->
+      <g filter="url(#shadow)">
+        <rect x="20" y="340" width="70" height="200" rx="10" fill="#1a1d27" stroke="#e06c75" stroke-width="2" stroke-dasharray="4,4" />
+        <text x="55" y="360" text-anchor="middle" fill="#e06c75" font-size="11" font-weight="600" font-family="'Segoe UI', system-ui, sans-serif" transform="rotate(-90, 55, 420)">Quality Guardian Agent</text>
+        <!-- Dashed lines to stages -->
+        <line x1="90" y1="380" x2="100" y2="380" stroke="#e06c75" stroke-width="1.5" stroke-dasharray="3,3" />
+        <line x1="90" y1="420" x2="100" y2="420" stroke="#e06c75" stroke-width="1.5" stroke-dasharray="3,3" />
+        <line x1="90" y1="460" x2="100" y2="460" stroke="#e06c75" stroke-width="1.5" stroke-dasharray="3,3" />
+        <line x1="90" y1="500" x2="100" y2="500" stroke="#e06c75" stroke-width="1.5" stroke-dasharray="3,3" />
+      </g>
+
+      <!-- Alert Systems -->
+      <g filter="url(#shadow)">
+        <!-- Alert lines from Guardian -->
+        <line x1="20" y1="420" x2="0" y2="420" stroke="#e06c75" stroke-width="1.5" stroke-dasharray="3,3" />
+        <path d="M0,420 L-20,390" stroke="none" fill="none" />
+        
+        <!-- Email -->
+        <rect x="-60" y="380" width="50" height="30" rx="6" fill="#1a1d27" stroke="#2a2d3e" stroke-width="1.5" />
+        <text x="-35" y="398" text-anchor="middle" fill="#e0e0e0" font-size="10" font-family="'Segoe UI', system-ui, sans-serif">Email</text>
+        <line x1="0" y1="395" x2="-10" y2="395" stroke="#e06c75" stroke-width="1.5" marker-end="url(#arrow-alert)" />
+
+        <!-- Slack -->
+        <rect x="-60" y="420" width="50" height="30" rx="6" fill="#1a1d27" stroke="#2a2d3e" stroke-width="1.5" />
+        <text x="-35" y="438" text-anchor="middle" fill="#e0e0e0" font-size="10" font-family="'Segoe UI', system-ui, sans-serif">Slack</text>
+        <line x1="0" y1="435" x2="-10" y2="435" stroke="#e06c75" stroke-width="1.5" marker-end="url(#arrow-alert)" />
+
+        <!-- Dashboard -->
+        <rect x="-70" y="460" width="70" height="30" rx="6" fill="#1a1d27" stroke="#2a2d3e" stroke-width="1.5" />
+        <text x="-35" y="478" text-anchor="middle" fill="#e0e0e0" font-size="10" font-family="'Segoe UI', system-ui, sans-serif">Dashboard</text>
+        <line x1="0" y1="475" x2="-10" y2="475" stroke="#e06c75" stroke-width="1.5" marker-end="url(#arrow-alert)" />
+      </g>
+    </svg>
+  </div>
+
+  <!-- TIME ALLOCATION -->
+  <section>
+    <div class="section-header">
+      <div class="icon purple">⏱</div>
+      <div>
+        <h2>Time Allocation</h2>
+        <small>Total: 8-12 min (leaves time for questions)</small>
+      </div>
+    </div>
+    <div class="time-bar">
+      <div class="time-segment">
+        <span class="label">A</span>
+        <span class="duration">3-4 min</span>
+      </div>
+      <div class="time-segment">
+        <span class="label">R</span>
+        <span class="duration">2-3 min</span>
+      </div>
+      <div class="time-segment">
+        <span class="label">C</span>
+        <span class="duration">2-3 min</span>
+      </div>
+      <div class="time-segment">
+        <span class="label">H</span>
+        <span class="duration">1-2 min</span>
+      </div>
+    </div>
+  </section>
+
+  <!-- ARCH BREAKDOWN -->
+  <section>
+    <div class="section-header">
+      <div class="icon blue">🏗</div>
+      <div>
+        <h2>The ARCH Framework</h2>
+        <small>Four components with specific things to mention</small>
+      </div>
+    </div>
+
+    <!-- A - Architecture -->
+    <div class="letter-block">
+      <h4><span>A</span> Architecture — Components & Data Flow</h4>
+      <p style="color:var(--muted); margin-bottom:12px;">What pieces exist and how they connect</p>
+      <table>
+        <tr>
+          <th>What to Mention</th>
+          <th>IRCTC Example</th>
+        </tr>
+        <tr>
+          <td>Components</td>
+          <td>Ingestion Agent, Validation Agent, Transformation Agent, Lineage Agent, Orchestrator, Dead Letter Queue, Monitoring Service</td>
+        </tr>
+        <tr>
+          <td>Data Flow</td>
+          <td>Source Systems → Ingestion → Validation → Transformation → Lineage → Target (with DLQ for failures)</td>
+        </tr>
+        <tr>
+          <td>Agents</td>
+          <td>Specialized agents: Ingestion (fetches data), Validation (schema/quality), Transformation (cleaning/feature eng), Lineage (tracks provenance)</td>
+        </tr>
+        <tr>
+          <td>Services</td>
+          <td>Message Queue (Kafka/RabbitMQ), Data Lake (S3/ADLS), Warehouse (Snowflake/BigQuery), Orchestrator (Airflow/Prefect), Monitoring (Prometheus/Grafana)</td>
+        </tr>
+        <tr>
+          <td>State Management</td>
+          <td>In-flight data (message queue), Schema versions (schema registry), Processing checkpoints (checkpoint store), Error counts (DLQ metrics)</td>
+        </tr>
+      </table>
+      <div class="snippet">
+        <strong>Key line:</strong> "We have four specialized agents: Ingestion (fetches from sources), Validation (schema/quality checks), Transformation (cleaning/feature engineering), and Lineage (tracks data provenance). They process data sequentially via message queue."
+      </div>
+    </div>
+
+    <!-- R - Routing -->
+    <div class="letter-block">
+      <h4><span>R</span> Routing — Agent Orchestration</h4>
+      <p style="color:var(--muted); margin-bottom:12px;">How agents run and communicate</p>
+      <table>
+        <tr>
+          <th>What to Mention</th>
+          <th>IRCTC Example</th>
+        </tr>
+        <tr>
+          <td>Agent Orchestration</th>
+          <td>Sequential processing via message queue; backpressure handling; dead letter queue for failures</td>
+        </tr>
+        <tr>
+          <td>Communication Pattern</th>
+          <td>Message-based (Kafka topics): raw-validated, validated-transformed, transformed-lineaged</td>
+        </tr>
+        <tr>
+          <td>Decision Logic</th>
+          <td>Orchestrator manages flow; agents nack on failure → DLQ; backpressure when consumer lags producer</td>
+        </tr>
+      </table>
+      <div class="snippet">
+        <strong>Key line:</strong> "Data flows sequentially through agents via Kafka topics: raw→validated→transformed→lineaged. Backpressure handled by consumer lag monitoring; failed messages go to Dead Letter Queue for replay."
+      </div>
+    </div>
+
+    <!-- C - Constraints -->
+    <div class="letter-block">
+      <h4><span>C</span> Constraints — What Can Break</h4>
+      <p style="color:var(--muted); margin-bottom:12px;">Failure modes, limits, and edge cases</p>
+      <table>
+        <tr>
+          <th>What to Mention</th>
+          <th>IRCTC Example</th>
+        </tr>
+        <tr>
+          <td>Schema Evolution</td>
+          <td>Schema registry with backward/forward compatibility; versioned schemas; gradual migration strategy</td>
+        </tr>
+        <tr>
+          <td>Backpressure</td>
+          <td>Monitor consumer lag; auto-scale transformation agents; temporary buffering; alert on sustained lag</td>
+        </tr>
+        <tr>
+          <td>Data Quality Issues</td>
+          <td>Quarantine bad records; alert on quality degradation; auto-retry transient errors; schema evolution handling</td>
+        </tr>
+        <tr>
+          <td>Agent Failures</td>
+          <td>Retry with exponential backoff; DLQ after max attempts; circuit breaker for persistent failures</td>
+        </tr>
+        <tr>
+          <td>Volume Spikes</td>
+          <td>Auto-scaling groups; buffer in message queue; prioritize by SLA; shed load if necessary</td>
+        </tr>
+      </table>
+      <div class="snippet">
+        <strong>Key line:</strong> "We use schema registry for evolution handling. Backpressure is managed by monitoring consumer lag and auto-scaling. Failed records go to Dead Letter Queue for later inspection and replay."
+      </div>
+    </div>
+
+    <!-- H - Heuristics -->
+    <div class="letter-block">
+      <h4><span>H</span> Heuristics — Why This Design</h4>
+      <p style="color:var(--muted); margin-bottom:12px;">Trade-offs, scaling, and decisions</p>
+      <table>
+        <tr>
+          <th>What to Mention</th>
+          <th>IRCTC Example</th>
+        </tr>
+        <tr>
+          <td>Why This Architecture?</td>
+          <td>Sequential agents ensure data integrity; specialized agents allow independent scaling; message queue provides buffering</td>
+        </tr>
+        <tr>
+          <td>Why Not X?</td>
+          <td>Single monolithic ETL would be harder to scale and debug; batch-only would increase latency; no DLQ would lose data on failures</td>
+        </tr>
+        <tr>
+          <td>Scaling Path</td>
+          <td>Horizontal scaling of agents; partitioning by data source; stream processing (Flink/Spark) for real-time; data lakehouse for cost optimization</td>
+        </tr>
+        <tr>
+          <td>Monitoring</td>
+          <td>Track end-to-end latency, throughput, error rates, data quality metrics, schema version distribution, DLQ size</td>
+        </tr>
+      </table>
+      <div class="snippet">
+        <strong>Key line:</strong> "I chose sequential processing via message queue to ensure data integrity and enable independent scaling of each agent. Backpressure handling prevents system overload during volume spikes."
+      </div>
+    </div>
+
+    <!-- E - Evaluation (NEW) -->
+    <div class="letter-block">
+      <h4><span style="background: rgba(76,175,152,0.2); color: var(--green); width: 32px; height: 32px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: 700;">E</span> Evaluation — How We Measure Success</h4>
+      <p style="color:var(--muted); margin-bottom:12px;">Offline benchmarks, online metrics, and per-agent KPIs</p>
+      <table>
+        <tr>
+          <th>Type</th>
+          <th>Metric</th>
+          <th>Target / Example</th>
+        </tr>
+        <tr>
+          <td><strong>Offline</strong></td>
+          <td>Data quality validation</td>
+          <td>> 99.9% records pass schema validation; zero data loss in test runs</td>
+        </tr>
+        <tr>
+          <td><strong>Offline</strong></td>
+          <td>Schema compatibility</td>
+          <td>100% backward/forward compatible schema changes; no breaking changes without migration</td>
+        </tr>
+        <tr>
+          <td><strong>Offline</strong></td>
+          <td>Regression tests</td>
+          <td>Zero regression on 30 days of historical data; no data quality degradation</td>
+        </tr>
+        <tr>
+          <td><strong>Online</strong></td>
+          <td>End-to-end latency</td>
+          <td>p95 < 5 minutes from ingestion to availability; p99 < 10 minutes</td>
+        </tr>
+        <tr>
+          <td><strong>Online</strong></td>
+          <td>Throughput</td>
+          <td>> 100K records/second; scale to 10x without manual intervention</td>
+        </tr>
+        <tr>
+          <td><strong>Online</strong></td>
+          <td>Data quality score</td>
+          <td>> 99% completeness; > 95% accuracy; < 0.1% duplicates</td>
+        </tr>
+        <tr>
+          <td><strong>Per-Agent</strong></td>
+          <td>Ingestion Agent</td>
+          <td>> 99.99% uptime; zero data loss; handle 10x volume spikes</td>
+        </tr>
+        <tr>
+          <td><strong>Per-Agent</strong></td>
+          <td>Validation Agent</td>
+          <td>< 1% false rejections; 100% schema violation detection</td>
+        </tr>
+        <tr>
+          <td><strong>Per-Agent</strong></td>
+          <td>Transformation Agent</td>
+          <td>100% data fidelity; zero loss during transformations</td>
+        </tr>
+        <tr>
+          <td><strong>System</strong></td>
+          <td>SLA compliance</td>
+          <td>> 99.9% availability; < 0.01% data loss; meet RPO/RTO targets</td>
+        </tr>
+        <tr>
+          <td><strong>System</strong></td>
+          <td>Cost efficiency</td>
+          <td>< $0.001 per 1K records processed; auto-scaling for cost optimization</td>
+        </tr>
+      </table>
+      <div class="snippet">
+        <strong>Key line:</strong> "We benchmark offline on 30 days of historical data with zero regression. Online, we track end-to-end latency (p95 < 5 min), throughput (> 100K records/sec), and data quality score (> 99%). Auto-rollback if data quality drops below 98%."
+      </div>
+    </div>
+  </section>
+
+  <!-- QUICK REFERENCE -->
+  <section>
+    <div class="section-header">
+      <div class="icon green">📋</div>
+      <div>
+        <h2>Quick Reference: ARCH Summary</h2>
+        <small>Memorize this for your answer</small>
+      </div>
+    </div>
+    <div class="card">
+      <div class="snippet" style="font-size:0.9rem; line-height:1.8;">
+        <strong>A</strong> — Architecture: Four specialized agents (Ingestion, Validation, Transformation, Lineage) process data sequentially via message queue.<br>
+        <strong>R</strong> — Routing: Sequential flow through Kafka topics; backpressure handled by consumer lag monitoring; Dead Letter Queue for failures.<br>
+        <strong>C</strong> — Constraints: Schema evolution via schema registry; Backpressure → auto-scaling; Failures → retry then DLQ.<br>
+        <strong>H</strong> — Heuristics: Sequential for integrity and independent scaling; Message queue for buffering and decoupling.
+      </div>
+    </div>
+  </section>
+
+</main>
+
+</body>
+</html>

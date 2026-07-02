@@ -1,0 +1,1177 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1.0"/>
+  <title>Self-Supervision in LLMs — AI Engineering Concepts</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com"/>
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet"/>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg:        #0d0f17;
+      --surface:   #141720;
+      --card:      #1a1e2e;
+      --border:    #252a3d;
+      --accent:    #00d4ff;
+      --purple:    #7c3aed;
+      --green:     #00ff88;
+      --yellow:    #ffd700;
+      --red:       #ff4757;
+      --orange:    #ff9500;
+      --text:      #e2e8f0;
+      --text-dim:  #8892a4;
+      --mono:      'JetBrains Mono', monospace;
+      --sans:      'Inter', system-ui, sans-serif;
+    }
+
+    html { scroll-behavior: smooth; }
+
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: var(--sans);
+      font-size: 16px;
+      line-height: 1.7;
+      min-height: 100vh;
+    }
+
+    /* ── Header ── */
+    header {
+      background: var(--surface);
+      border-bottom: 1px solid var(--border);
+      padding: 2rem 2rem 1.5rem;
+      max-width: 1100px;
+      margin: 0 auto;
+    }
+
+    .group-badge {
+      display: inline-block;
+      font-family: var(--mono);
+      font-size: 0.7rem;
+      font-weight: 700;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      color: var(--accent);
+      background: rgba(0, 212, 255, 0.1);
+      border: 1px solid rgba(0, 212, 255, 0.3);
+      padding: 0.2em 0.7em;
+      border-radius: 4px;
+      margin-bottom: 0.75rem;
+    }
+
+    header h1 {
+      font-size: clamp(1.6rem, 4vw, 2.4rem);
+      font-weight: 700;
+      color: var(--text);
+      line-height: 1.2;
+      margin-bottom: 0.5rem;
+    }
+
+    header h1 span.id {
+      color: var(--text-dim);
+      font-size: 0.55em;
+      font-family: var(--mono);
+      margin-right: 0.5rem;
+      vertical-align: middle;
+    }
+
+    header p.desc {
+      color: var(--text-dim);
+      font-size: 1.05rem;
+      max-width: 700px;
+    }
+
+    /* ── Main layout ── */
+    main {
+      max-width: 1100px;
+      margin: 0 auto;
+      padding: 0 2rem 4rem;
+    }
+
+    section {
+      margin-top: 3rem;
+    }
+
+    section > h2 {
+      font-size: 1.4rem;
+      font-weight: 700;
+      color: var(--accent);
+      border-bottom: 1px solid var(--border);
+      padding-bottom: 0.5rem;
+      margin-bottom: 1.5rem;
+    }
+
+    h3 {
+      font-size: 1.1rem;
+      font-weight: 600;
+      color: var(--yellow);
+      margin: 1.5rem 0 0.6rem;
+    }
+
+    p { margin-bottom: 1rem; color: var(--text); }
+
+    ul, ol {
+      padding-left: 1.5rem;
+      margin-bottom: 1rem;
+    }
+
+    li { margin-bottom: 0.4rem; }
+
+    code {
+      font-family: var(--mono);
+      font-size: 0.85em;
+      background: rgba(0, 212, 255, 0.08);
+      color: var(--accent);
+      padding: 0.1em 0.35em;
+      border-radius: 3px;
+    }
+
+    pre {
+      font-family: var(--mono);
+      font-size: 0.82rem;
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 1rem 1.2rem;
+      overflow-x: auto;
+      margin-bottom: 1rem;
+      color: var(--green);
+      line-height: 1.6;
+    }
+
+    .formula-block {
+      background: var(--card);
+      border-left: 3px solid var(--purple);
+      border-radius: 0 8px 8px 0;
+      padding: 0.8rem 1.2rem;
+      margin: 1rem 0;
+      font-family: var(--mono);
+      font-size: 0.9rem;
+      color: var(--text);
+    }
+
+    .callout {
+      background: rgba(124, 58, 237, 0.08);
+      border: 1px solid rgba(124, 58, 237, 0.3);
+      border-radius: 8px;
+      padding: 1rem 1.2rem;
+      margin: 1rem 0;
+    }
+
+    .callout strong { color: var(--purple); }
+
+    /* ── Visualization ── */
+    #visualization .viz-card {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 1.5rem;
+      margin-bottom: 1.5rem;
+    }
+
+    .viz-title {
+      font-weight: 600;
+      font-size: 1rem;
+      color: var(--text);
+      margin-bottom: 0.3rem;
+    }
+
+    .viz-desc {
+      font-size: 0.88rem;
+      color: var(--text-dim);
+      margin-bottom: 1.2rem;
+    }
+
+    /* Mode selector */
+    .mode-tabs {
+      display: flex;
+      gap: 0.5rem;
+      margin-bottom: 1.5rem;
+      flex-wrap: wrap;
+    }
+
+    .mode-tab {
+      font-family: var(--mono);
+      font-size: 0.78rem;
+      padding: 0.4em 1em;
+      border-radius: 6px;
+      border: 1px solid var(--border);
+      background: var(--surface);
+      color: var(--text-dim);
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+
+    .mode-tab.active {
+      background: rgba(0, 212, 255, 0.12);
+      border-color: var(--accent);
+      color: var(--accent);
+    }
+
+    .mode-tab:hover:not(.active) {
+      border-color: var(--text-dim);
+      color: var(--text);
+    }
+
+    /* Token sequence */
+    #seq-container {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+      margin-bottom: 1.5rem;
+      min-height: 60px;
+      align-items: center;
+    }
+
+    .token {
+      font-family: var(--mono);
+      font-size: 0.85rem;
+      padding: 0.4em 0.75em;
+      border-radius: 6px;
+      border: 1px solid var(--border);
+      background: var(--surface);
+      color: var(--text);
+      position: relative;
+      transition: all 0.3s;
+      cursor: default;
+      user-select: none;
+    }
+
+    .token.masked {
+      background: rgba(255, 71, 87, 0.15);
+      border-color: var(--red);
+      color: var(--red);
+    }
+
+    .token.predicted {
+      background: rgba(0, 255, 136, 0.15);
+      border-color: var(--green);
+      color: var(--green);
+    }
+
+    .token.context {
+      background: rgba(0, 212, 255, 0.08);
+      border-color: var(--accent);
+      color: var(--accent);
+    }
+
+    .token.next-predict {
+      background: rgba(255, 215, 0, 0.12);
+      border-color: var(--yellow);
+      color: var(--yellow);
+      animation: pulse-token 1.2s ease-in-out infinite;
+    }
+
+    @keyframes pulse-token {
+      0%, 100% { box-shadow: 0 0 0 0 rgba(255, 215, 0, 0.4); }
+      50% { box-shadow: 0 0 0 6px rgba(255, 215, 0, 0); }
+    }
+
+    .token.fade {
+      opacity: 0.35;
+    }
+
+    /* Controls */
+    .controls {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 1rem;
+      align-items: center;
+      margin-bottom: 1.2rem;
+    }
+
+    .ctrl-btn {
+      font-family: var(--mono);
+      font-size: 0.8rem;
+      padding: 0.45em 1.1em;
+      border-radius: 6px;
+      border: 1px solid var(--accent);
+      background: rgba(0, 212, 255, 0.08);
+      color: var(--accent);
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+
+    .ctrl-btn:hover {
+      background: rgba(0, 212, 255, 0.2);
+    }
+
+    .ctrl-btn:active {
+      transform: scale(0.97);
+    }
+
+    .ctrl-btn.playing {
+      border-color: var(--green);
+      color: var(--green);
+      background: rgba(0, 255, 136, 0.08);
+    }
+
+    /* Mask ratio slider */
+    .slider-row {
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+    }
+
+    .slider-row label {
+      font-size: 0.82rem;
+      color: var(--text-dim);
+      white-space: nowrap;
+    }
+
+    .slider-row input[type="range"] {
+      accent-color: var(--purple);
+      width: 120px;
+    }
+
+    .slider-val {
+      font-family: var(--mono);
+      font-size: 0.82rem;
+      color: var(--purple);
+      min-width: 2.5rem;
+    }
+
+    /* Prediction panel */
+    #pred-panel {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 1rem 1.2rem;
+      min-height: 100px;
+    }
+
+    .pred-label {
+      font-size: 0.78rem;
+      font-family: var(--mono);
+      color: var(--text-dim);
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      margin-bottom: 0.6rem;
+    }
+
+    .pred-bars {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+
+    .pred-bar-row {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .pred-bar-label {
+      font-family: var(--mono);
+      font-size: 0.78rem;
+      color: var(--text);
+      width: 80px;
+      flex-shrink: 0;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .pred-bar-track {
+      flex: 1;
+      height: 18px;
+      background: var(--bg);
+      border-radius: 3px;
+      overflow: hidden;
+    }
+
+    .pred-bar-fill {
+      height: 100%;
+      border-radius: 3px;
+      transition: width 0.5s ease;
+    }
+
+    .pred-bar-pct {
+      font-family: var(--mono);
+      font-size: 0.75rem;
+      color: var(--text-dim);
+      width: 38px;
+      text-align: right;
+    }
+
+    /* Loss canvas area */
+    #loss-canvas-wrap {
+      position: relative;
+    }
+
+    canvas {
+      display: block;
+      border-radius: 8px;
+      background: var(--surface);
+    }
+
+    /* Legend */
+    .legend {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 1rem;
+      margin-top: 0.8rem;
+    }
+
+    .legend-item {
+      display: flex;
+      align-items: center;
+      gap: 0.4rem;
+      font-size: 0.8rem;
+      color: var(--text-dim);
+    }
+
+    .legend-dot {
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+    }
+
+    /* Step indicator */
+    .step-info {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 0.75rem 1rem;
+      font-size: 0.85rem;
+      color: var(--text-dim);
+      margin-top: 0.8rem;
+    }
+
+    .step-info strong { color: var(--text); }
+
+    /* ── Takeaways ── */
+    #takeaways ul {
+      list-style: none;
+      padding: 0;
+    }
+
+    #takeaways li {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 1rem 1.2rem;
+      margin-bottom: 0.75rem;
+      padding-left: 3rem;
+      position: relative;
+    }
+
+    #takeaways li::before {
+      content: '→';
+      position: absolute;
+      left: 1rem;
+      color: var(--accent);
+      font-weight: 700;
+    }
+
+    /* ── Nav ── */
+    .concept-nav {
+      max-width: 1100px;
+      margin: 0 auto;
+      padding: 1.5rem 2rem 3rem;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      border-top: 1px solid var(--border);
+    }
+
+    .nav-link {
+      display: flex;
+      flex-direction: column;
+      gap: 0.2rem;
+      text-decoration: none;
+      padding: 0.6rem 1rem;
+      border-radius: 8px;
+      border: 1px solid var(--border);
+      background: var(--surface);
+      transition: all 0.2s;
+      max-width: 220px;
+    }
+
+    .nav-link:hover {
+      border-color: var(--accent);
+      background: rgba(0, 212, 255, 0.06);
+    }
+
+    .nav-link.disabled {
+      opacity: 0.3;
+      pointer-events: none;
+    }
+
+    .nav-dir {
+      font-size: 0.7rem;
+      font-family: var(--mono);
+      color: var(--text-dim);
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+    }
+
+    .nav-title {
+      font-size: 0.88rem;
+      color: var(--text);
+      font-weight: 500;
+    }
+
+    /* Responsive */
+    @media (max-width: 640px) {
+      header, main { padding-left: 1rem; padding-right: 1rem; }
+      .concept-nav { padding-left: 1rem; padding-right: 1rem; flex-direction: column; gap: 0.75rem; }
+      .nav-link { max-width: 100%; width: 100%; }
+    }
+  </style>
+</head>
+<body>
+
+<header>
+  <div class="group-badge">Foundations</div>
+  <h1><span class="id">01</span>Self-Supervision in LLMs</h1>
+  <p class="desc">How LLMs learn from unlabeled text via next-token prediction, masked language modeling, and the pretraining objective — the engine behind modern foundation models.</p>
+</header>
+
+<main>
+
+  <!-- ── THEORY ── -->
+  <section id="theory">
+    <h2>Theory</h2>
+
+    <h3>The Core Insight: Supervision Hidden in Sequences</h3>
+    <p>
+      Self-supervised learning solves a fundamental problem: we have vastly more unlabeled text than human-labeled data. The key insight is that <strong>language itself provides the labels</strong>. Given a sequence of tokens, the model can be trained to predict any token from the others — no human annotation required. This transforms an unsupervised abundance (internet text) into a supervised training signal.
+    </p>
+    <p>
+      Two dominant pretraining objectives emerged:
+    </p>
+    <ul>
+      <li><strong>Causal Language Modeling (CLM)</strong> — predict the <em>next</em> token given all previous tokens. Used by GPT, LLaMA, PaLM, and virtually every modern autoregressive LLM.</li>
+      <li><strong>Masked Language Modeling (MLM)</strong> — mask ~15% of tokens and predict them from bidirectional context. Used by BERT, RoBERTa, and encoder-focused models.</li>
+    </ul>
+
+    <h3>Causal Language Modeling: The Math</h3>
+    <p>
+      For a sequence of tokens <code>x₁, x₂, ..., xₙ</code>, CLM maximizes the likelihood of each token given its prefix:
+    </p>
+    <div class="formula-block">
+      L(θ) = Σᵢ log P(xᵢ | x₁, ..., xᵢ₋₁; θ)
+    </div>
+    <p>
+      This factorization is exact — the chain rule of probability guarantees the product of these conditionals equals the joint probability of the full sequence. No approximation. The model is trained to minimize cross-entropy loss at every position simultaneously, so a sequence of length <em>n</em> provides <em>n−1</em> training signals per forward pass. This is extraordinarily data-efficient compared to supervised approaches where one label is provided per example.
+    </p>
+    <p>
+      At training time, <strong>causal (triangular) masking</strong> in the attention mechanism enforces that position <em>i</em> can only attend to positions 1…i. This means every token in the sequence can be a prediction target in a single forward pass — full parallelism during training, despite the task being inherently sequential.
+    </p>
+
+    <h3>Masked Language Modeling: Bidirectional Context</h3>
+    <p>
+      MLM, introduced by Devlin et al. (2018) in BERT, uses a different strategy. Rather than predicting the next token, it randomly masks a subset of tokens (typically 15%) and trains the model to reconstruct them using both left and right context. Of the masked positions: 80% are replaced with <code>[MASK]</code>, 10% with a random token, and 10% kept unchanged — a recipe designed to prevent the model from learning trivial shortcuts.
+    </p>
+    <p>
+      MLM produces richer bidirectional representations, making it powerful for classification and extraction tasks. However, it cannot be used autoregressively for generation, and the train/inference distribution mismatch (due to <code>[MASK]</code> tokens only appearing during training) is a known limitation. XLNet addressed this with permutation language modeling.
+    </p>
+
+    <h3>What the Model Actually Learns</h3>
+    <p>
+      A model that achieves low CLM loss must have learned far more than surface-level pattern matching:
+    </p>
+    <ul>
+      <li><strong>Syntax</strong>: subject-verb agreement, pronoun resolution, nested clause structure</li>
+      <li><strong>Semantics</strong>: word meaning, compositional phrase meaning, analogical reasoning</li>
+      <li><strong>World knowledge</strong>: facts about entities, events, relationships</li>
+      <li><strong>Pragmatics</strong>: discourse coherence, implication, conversational structure</li>
+      <li><strong>Code structure</strong>: indentation rules, API signatures, algorithmic patterns (if trained on code)</li>
+    </ul>
+    <p>
+      These capabilities emerge because predicting next tokens well requires correctly modeling the full generative process that produced the text. This is why scaling works: a bigger model can capture more of this structure.
+    </p>
+
+    <h3>The Scale That Makes It Work</h3>
+    <p>
+      Self-supervision is only viable at scale. BERT was trained on 3.3B tokens. GPT-2 on 40B. GPT-3 on ~300B. LLaMA-3.1 405B used approximately 15T tokens. The Chinchilla paper (2022) established that for compute-optimal training, you need roughly 20× more tokens than parameters — so a 7B parameter model wants ~140B tokens minimum, and inference-optimized models (trained past Chinchilla optimum) use far more.
+    </p>
+    <div class="callout">
+      <strong>Why "compute-optimal" ≠ "inference-optimal":</strong> Chinchilla optimizes for loss at a fixed compute budget. But in production, you want a model that performs well <em>at a given size</em> — which means training smaller models on more tokens than Chinchilla recommends, yielding cheaper inference for the same quality. LLaMA adopted this strategy explicitly.
+    </div>
+
+    <h3>From Self-Supervision to Useful Models</h3>
+    <p>
+      Raw CLM pretraining produces a model that excels at continuing text — not following instructions, not refusing harmful requests, not staying helpful. This is why post-training (SFT + RLHF or DPO) is required. Self-supervision gives the model <em>capability</em>; post-training shapes its <em>behavior</em>. The division is fundamental to the modern LLM development pipeline.
+    </p>
+    <p>
+      Pretraining cost dominates total training cost: GPT-4's pretraining reportedly cost >$100M. Post-training is ~1–5% of that. But post-training typically requires labeled data (instruction-response pairs, preference pairs), making quality control far more expensive per token. The asymmetry — cheap self-supervised pretraining, expensive post-training — drives the field toward better pretraining that requires less alignment work.
+    </p>
+
+    <h3>Practical Implications</h3>
+    <p>
+      Understanding self-supervision matters for production AI engineering in several ways:
+    </p>
+    <ul>
+      <li><strong>Tokenization affects everything</strong>: the model predicts tokens, not characters. BPE/WordPiece/SentencePiece tokenizers affect what constitutes a "hard" prediction, how many tokens code vs prose uses, and what the model's effective context window covers in real content.</li>
+      <li><strong>Perplexity is the training signal</strong>: lower perplexity = better fit. Perplexity on a held-out set (eval loss) is the primary signal during pretraining to detect overfitting or divergence.</li>
+      <li><strong>Domain mismatch is real</strong>: a model pretrained on English web text will have high perplexity on legal German documents. Continued pretraining on domain-specific data (domain-adaptive pretraining) before fine-tuning is a well-established recipe.</li>
+      <li><strong>Data quality beats quantity</strong>: FineWeb, RedPajama, and Dolma all found that aggressive deduplication and quality filtering (removing boilerplate, spam, near-duplicates) dramatically improves downstream performance even at the same token count.</li>
+    </ul>
+  </section>
+
+  <!-- ── VISUALIZATION ── -->
+  <section id="visualization">
+    <h2>Interactive Visualization</h2>
+
+    <div class="viz-card">
+      <div class="viz-title">Token Prediction Flow</div>
+      <div class="viz-desc">
+        Toggle between <strong>Next-Token (CLM)</strong> and <strong>Masked LM</strong> modes.
+        In CLM mode, press Play to watch the model step through each position predicting the next token.
+        In MLM mode, adjust mask ratio and click Randomize to mask tokens — then click a masked token to see candidate predictions.
+      </div>
+
+      <!-- Mode tabs -->
+      <div class="mode-tabs">
+        <button class="mode-tab active" id="tab-clm" onclick="setMode('clm')">Next-Token (CLM)</button>
+        <button class="mode-tab" id="tab-mlm" onclick="setMode('mlm')">Masked LM (MLM)</button>
+      </div>
+
+      <!-- Controls -->
+      <div class="controls" id="controls-clm">
+        <button class="ctrl-btn" id="btn-play" onclick="togglePlay()">▶ Play</button>
+        <button class="ctrl-btn" onclick="resetAnimation()">↺ Reset</button>
+        <div class="slider-row">
+          <label>Speed</label>
+          <input type="range" id="speed-slider" min="300" max="2000" step="100" value="900" oninput="updateSpeed()"/>
+          <span class="slider-val" id="speed-val">900ms</span>
+        </div>
+      </div>
+
+      <div class="controls" id="controls-mlm" style="display:none">
+        <button class="ctrl-btn" onclick="randomizeMasks()">⬡ Randomize Masks</button>
+        <div class="slider-row">
+          <label>Mask ratio</label>
+          <input type="range" id="mask-slider" min="10" max="50" step="5" value="15" oninput="updateMaskRatio()"/>
+          <span class="slider-val" id="mask-val">15%</span>
+        </div>
+      </div>
+
+      <!-- Token sequence -->
+      <div id="seq-container"></div>
+
+      <!-- Prediction panel -->
+      <div id="pred-panel">
+        <div class="pred-label" id="pred-label">Select a position to see predictions</div>
+        <div class="pred-bars" id="pred-bars"></div>
+      </div>
+
+      <div class="step-info" id="step-info">
+        <strong>Position:</strong> <span id="step-pos">—</span> &nbsp;|&nbsp;
+        <strong>Context window:</strong> <span id="step-ctx">—</span> &nbsp;|&nbsp;
+        <strong>Task:</strong> <span id="step-task">Press Play to begin (CLM mode)</span>
+      </div>
+
+      <div class="legend">
+        <div class="legend-item"><div class="legend-dot" style="background:var(--accent)"></div>Context tokens</div>
+        <div class="legend-item"><div class="legend-dot" style="background:var(--yellow)"></div>Current target (CLM)</div>
+        <div class="legend-item"><div class="legend-dot" style="background:var(--red)"></div>Masked token (MLM)</div>
+        <div class="legend-item"><div class="legend-dot" style="background:var(--green)"></div>Predicted / revealed</div>
+      </div>
+    </div>
+
+    <!-- Loss curve card -->
+    <div class="viz-card">
+      <div class="viz-title">Training Loss Curve (Simulated)</div>
+      <div class="viz-desc">
+        Simulated CLM training loss over steps for models of different sizes.
+        Use the slider to explore how scale affects loss convergence. Real GPT-3 final eval loss ≈ 1.73 nats.
+      </div>
+      <div class="controls">
+        <div class="slider-row">
+          <label>Model params</label>
+          <input type="range" id="param-slider" min="0" max="4" step="1" value="2" oninput="drawLossCurves()"/>
+          <span class="slider-val" id="param-val">7B</span>
+        </div>
+        <button class="ctrl-btn" onclick="animateLoss()">▶ Animate</button>
+      </div>
+      <div id="loss-canvas-wrap">
+        <canvas id="loss-canvas" width="900" height="280"></canvas>
+      </div>
+    </div>
+
+  </section>
+
+  <!-- ── TAKEAWAYS ── -->
+  <section id="takeaways">
+    <h2>Key Takeaways</h2>
+    <ul>
+      <li>
+        <strong>CLM provides n−1 training signals per forward pass</strong> — every token in a sequence is simultaneously a context element for future tokens and a prediction target for past positions. This data efficiency is why pretraining can scale to trillions of tokens without running out of labels.
+      </li>
+      <li>
+        <strong>Causal masking (not model size) is what makes CLM autoregressive</strong> — the triangular attention mask prevents position i from attending to i+1…n, enforcing the left-to-right generative factorization. Remove the mask and you get bidirectional context (like BERT), which is great for understanding but cannot generate.
+      </li>
+      <li>
+        <strong>Pretraining domain determines what the model "knows"</strong> — models trained on code+text outperform text-only models on coding tasks, not due to fine-tuning but because self-supervised next-token prediction over code teaches the model Python syntax, library APIs, and algorithmic reasoning. Domain-adaptive pretraining (DAP) on domain-specific corpora before SFT is a well-validated recipe.
+      </li>
+      <li>
+        <strong>Inference-optimal ≠ Chinchilla-optimal</strong> — Chinchilla (2022) says to scale parameters and tokens proportionally. But LLaMA showed training a <em>smaller</em> model on <em>more</em> tokens yields the same quality at a fraction of the inference cost. For production deployments where you serve millions of requests, inference cost dwarfs training cost.
+      </li>
+      <li>
+        <strong>Data quality filters matter more than raw token count</strong> — FineWeb's ablations showed that quality filtering (removing near-duplicates, boilerplate, low-quality web text) with MinHash + perplexity filtering improved benchmark performance by 2–4% even at the same token count. At scale, garbage data doesn't just add noise — it actively degrades capability.
+      </li>
+      <li>
+        <strong>Self-supervision gives capability; post-training gives alignment</strong> — the pretrained model is a next-token predictor, not an assistant. It will complete prompts in character voices, continue harmful text, and hallucinate freely. RLHF/DPO and SFT are required to steer behavior — but they work only because the pretrained model already has the underlying capability. Post-training cannot install capability that wasn't learned during pretraining.
+      </li>
+    </ul>
+  </section>
+
+</main>
+
+<!-- ── NAV ── -->
+<nav class="concept-nav">
+  <a class="nav-link disabled" href="#">
+    <span class="nav-dir">← Previous</span>
+    <span class="nav-title">—</span>
+  </a>
+  <a class="nav-link" href="./02-seq2seq.html">
+    <span class="nav-dir">Next →</span>
+    <span class="nav-title">Seq2Seq Architecture</span>
+  </a>
+</nav>
+
+<script>
+// ─── Data ───────────────────────────────────────────────────────────────────
+
+const SENTENCES = {
+  clm: ["The", "transformer", "model", "learns", "to", "predict", "the", "next", "token", "from", "context"],
+  mlm: ["Language", "models", "are", "trained", "on", "massive", "unlabeled", "text", "corpora", "using", "self-supervision"]
+};
+
+// Simulated top-5 next-token predictions for each CLM position
+const CLM_PREDS = {
+  0: [{tok:"transformer",p:0.42},{tok:"language",p:0.18},{tok:"neural",p:0.12},{tok:"large",p:0.08},{tok:"sequence",p:0.06}],
+  1: [{tok:"model",p:0.55},{tok:"architecture",p:0.20},{tok:"network",p:0.10},{tok:"layer",p:0.07},{tok:"block",p:0.04}],
+  2: [{tok:"learns",p:0.48},{tok:"processes",p:0.22},{tok:"is",p:0.10},{tok:"uses",p:0.09},{tok:"can",p:0.05}],
+  3: [{tok:"to",p:0.72},{tok:"how",p:0.10},{tok:"patterns",p:0.07},{tok:"representations",p:0.05},{tok:"language",p:0.03}],
+  4: [{tok:"predict",p:0.65},{tok:"generate",p:0.14},{tok:"process",p:0.08},{tok:"encode",p:0.07},{tok:"decode",p:0.03}],
+  5: [{tok:"the",p:0.58},{tok:"each",p:0.15},{tok:"next",p:0.11},{tok:"a",p:0.08},{tok:"token",p:0.04}],
+  6: [{tok:"next",p:0.62},{tok:"current",p:0.14},{tok:"correct",p:0.09},{tok:"following",p:0.08},{tok:"best",p:0.04}],
+  7: [{tok:"token",p:0.78},{tok:"word",p:0.12},{tok:"character",p:0.05},{tok:"symbol",p:0.03},{tok:"step",p:0.01}],
+  8: [{tok:"from",p:0.44},{tok:"using",p:0.20},{tok:"in",p:0.12},{tok:"given",p:0.10},{tok:"based",p:0.06}],
+  9: [{tok:"context",p:0.52},{tok:"previous",p:0.18},{tok:"all",p:0.10},{tok:"the",p:0.08},{tok:"input",p:0.06}],
+  10: [{tok:"windows",p:0.28},{tok:"representations",p:0.20},{tok:"only",p:0.14},{tok:"alone",p:0.10},{tok:"tokens",p:0.09}]
+};
+
+// Simulated top-5 MLM predictions for each token when masked
+const MLM_PREDS_BY_TOK = {
+  "Language":     [{tok:"Language",p:0.62},{tok:"Neural",p:0.15},{tok:"These",p:0.08},{tok:"Sequence",p:0.06},{tok:"Large",p:0.04}],
+  "models":       [{tok:"models",p:0.71},{tok:"systems",p:0.12},{tok:"networks",p:0.08},{tok:"architectures",p:0.05},{tok:"agents",p:0.03}],
+  "are":          [{tok:"are",p:0.68},{tok:"were",p:0.15},{tok:"can",p:0.07},{tok:"have",p:0.05},{tok:"get",p:0.03}],
+  "trained":      [{tok:"trained",p:0.58},{tok:"fine-tuned",p:0.18},{tok:"pretrained",p:0.12},{tok:"optimized",p:0.06},{tok:"evaluated",p:0.03}],
+  "on":           [{tok:"on",p:0.72},{tok:"with",p:0.12},{tok:"using",p:0.08},{tok:"from",p:0.05},{tok:"across",p:0.02}],
+  "massive":      [{tok:"massive",p:0.40},{tok:"large",p:0.25},{tok:"vast",p:0.15},{tok:"enormous",p:0.10},{tok:"huge",p:0.07}],
+  "unlabeled":    [{tok:"unlabeled",p:0.50},{tok:"raw",p:0.22},{tok:"unannotated",p:0.12},{tok:"web",p:0.08},{tok:"scraped",p:0.05}],
+  "text":         [{tok:"text",p:0.60},{tok:"data",p:0.20},{tok:"corpora",p:0.08},{tok:"documents",p:0.06},{tok:"content",p:0.04}],
+  "corpora":      [{tok:"corpora",p:0.45},{tok:"datasets",p:0.28},{tok:"data",p:0.12},{tok:"collections",p:0.08},{tok:"archives",p:0.04}],
+  "using":        [{tok:"using",p:0.55},{tok:"via",p:0.18},{tok:"through",p:0.12},{tok:"with",p:0.08},{tok:"by",p:0.05}],
+  "self-supervision":[{tok:"self-supervision",p:0.48},{tok:"unsupervised",p:0.22},{tok:"contrastive",p:0.10},{tok:"pretraining",p:0.10},{tok:"SSL",p:0.06}]
+};
+
+// ─── State ──────────────────────────────────────────────────────────────────
+
+let mode = 'clm';
+let clmStep = -1;
+let isPlaying = false;
+let playTimer = null;
+let playSpeed = 900;
+let maskRatio = 0.15;
+let maskedIndices = new Set();
+let activeMlmIdx = -1;
+
+// ─── Init ───────────────────────────────────────────────────────────────────
+
+function setMode(m) {
+  mode = m;
+  document.getElementById('tab-clm').classList.toggle('active', m === 'clm');
+  document.getElementById('tab-mlm').classList.toggle('active', m === 'mlm');
+  document.getElementById('controls-clm').style.display = m === 'clm' ? 'flex' : 'none';
+  document.getElementById('controls-mlm').style.display = m === 'mlm' ? 'flex' : 'none';
+
+  if (m === 'clm') {
+    stopPlay();
+    resetAnimation();
+  } else {
+    stopPlay();
+    clmStep = -1;
+    maskedIndices.clear();
+    activeMlmIdx = -1;
+    renderTokens();
+    clearPredPanel('Click a [MASK] token to see top-5 predictions');
+    updateStepInfo(-1);
+  }
+}
+
+function renderTokens() {
+  const tokens = SENTENCES[mode];
+  const container = document.getElementById('seq-container');
+  container.innerHTML = '';
+
+  tokens.forEach((tok, i) => {
+    const div = document.createElement('div');
+    div.className = 'token';
+    div.setAttribute('data-idx', i);
+
+    if (mode === 'clm') {
+      if (i < clmStep) {
+        div.classList.add('context');
+        div.textContent = tok;
+      } else if (i === clmStep) {
+        div.classList.add('next-predict');
+        div.textContent = '?';
+      } else {
+        div.classList.add('fade');
+        div.textContent = tok;
+      }
+    } else {
+      // MLM mode
+      if (maskedIndices.has(i)) {
+        div.classList.add(i === activeMlmIdx ? 'predicted' : 'masked');
+        div.textContent = i === activeMlmIdx ? tok : '[MASK]';
+        div.title = 'Click to see predictions';
+        div.style.cursor = 'pointer';
+        div.onclick = () => selectMlmToken(i);
+      } else {
+        div.classList.add('context');
+        div.textContent = tok;
+      }
+    }
+
+    container.appendChild(div);
+  });
+}
+
+// ─── CLM mode ───────────────────────────────────────────────────────────────
+
+function togglePlay() {
+  if (isPlaying) {
+    stopPlay();
+  } else {
+    startPlay();
+  }
+}
+
+function startPlay() {
+  isPlaying = true;
+  document.getElementById('btn-play').textContent = '⏸ Pause';
+  document.getElementById('btn-play').classList.add('playing');
+  advanceStep();
+}
+
+function stopPlay() {
+  isPlaying = false;
+  clearTimeout(playTimer);
+  document.getElementById('btn-play').textContent = '▶ Play';
+  document.getElementById('btn-play').classList.remove('playing');
+}
+
+function advanceStep() {
+  const tokens = SENTENCES.clm;
+  clmStep++;
+  if (clmStep >= tokens.length) {
+    clmStep = tokens.length - 1;
+    stopPlay();
+    updateStepInfo(clmStep);
+    renderTokens();
+    return;
+  }
+  renderTokens();
+  showClmPred(clmStep > 0 ? clmStep - 1 : 0);
+  updateStepInfo(clmStep);
+  if (isPlaying) {
+    playTimer = setTimeout(advanceStep, playSpeed);
+  }
+}
+
+function showClmPred(pos) {
+  const preds = CLM_PREDS[pos] || [];
+  const tokens = SENTENCES.clm;
+  document.getElementById('pred-label').textContent =
+    `Predicting token at position ${pos+1} — given "${tokens.slice(0,pos).join(' ') || '∅'}"`;
+  renderPredBars(preds, 'clm');
+}
+
+function resetAnimation() {
+  stopPlay();
+  clmStep = -1;
+  renderTokens();
+  clearPredPanel('Press Play to start stepping through positions');
+  updateStepInfo(-1);
+}
+
+function updateSpeed() {
+  playSpeed = parseInt(document.getElementById('speed-slider').value);
+  document.getElementById('speed-val').textContent = playSpeed + 'ms';
+}
+
+function updateStepInfo(step) {
+  const tokens = SENTENCES.clm;
+  if (step < 0) {
+    document.getElementById('step-pos').textContent = '—';
+    document.getElementById('step-ctx').textContent = '—';
+    document.getElementById('step-task').textContent = mode === 'clm' ? 'Press Play to begin (CLM mode)' : 'Click a [MASK] token';
+    return;
+  }
+  document.getElementById('step-pos').textContent = `${step + 1} / ${tokens.length}`;
+  document.getElementById('step-ctx').textContent = `${step} tokens`;
+  document.getElementById('step-task').textContent =
+    step < tokens.length ? `Predict "${tokens[step]}"` : 'Sequence complete';
+}
+
+// ─── MLM mode ───────────────────────────────────────────────────────────────
+
+function randomizeMasks() {
+  const tokens = SENTENCES.mlm;
+  maskedIndices.clear();
+  activeMlmIdx = -1;
+  tokens.forEach((_, i) => {
+    if (Math.random() < maskRatio) maskedIndices.add(i);
+  });
+  // Ensure at least 1 masked
+  if (maskedIndices.size === 0) maskedIndices.add(Math.floor(Math.random() * tokens.length));
+  renderTokens();
+  clearPredPanel(`${maskedIndices.size} tokens masked — click any [MASK] to see predictions`);
+  document.getElementById('step-pos').textContent = `${maskedIndices.size} masked`;
+  document.getElementById('step-ctx').textContent = `${tokens.length - maskedIndices.size} context tokens`;
+  document.getElementById('step-task').textContent = 'Click a [MASK] token';
+}
+
+function selectMlmToken(idx) {
+  activeMlmIdx = idx;
+  const token = SENTENCES.mlm[idx];
+  const preds = MLM_PREDS_BY_TOK[token] || [];
+  document.getElementById('pred-label').textContent =
+    `MLM predictions for masked token at position ${idx + 1} (true: "${token}")`;
+  renderPredBars(preds, 'mlm');
+  renderTokens();
+}
+
+function updateMaskRatio() {
+  maskRatio = parseInt(document.getElementById('mask-slider').value) / 100;
+  document.getElementById('mask-val').textContent = (maskRatio * 100).toFixed(0) + '%';
+}
+
+// ─── Shared pred panel ───────────────────────────────────────────────────────
+
+function clearPredPanel(msg) {
+  document.getElementById('pred-label').textContent = msg;
+  document.getElementById('pred-bars').innerHTML = '';
+}
+
+const BAR_COLORS = ['#00d4ff','#7c3aed','#00ff88','#ffd700','#ff9500'];
+
+function renderPredBars(preds, modeType) {
+  const container = document.getElementById('pred-bars');
+  container.innerHTML = '';
+  preds.forEach((p, i) => {
+    const row = document.createElement('div');
+    row.className = 'pred-bar-row';
+
+    const lbl = document.createElement('div');
+    lbl.className = 'pred-bar-label';
+    lbl.textContent = p.tok;
+    lbl.title = p.tok;
+
+    const track = document.createElement('div');
+    track.className = 'pred-bar-track';
+
+    const fill = document.createElement('div');
+    fill.className = 'pred-bar-fill';
+    fill.style.background = BAR_COLORS[i] || '#8892a4';
+    fill.style.width = '0%';
+
+    const pct = document.createElement('div');
+    pct.className = 'pred-bar-pct';
+    pct.textContent = (p.p * 100).toFixed(0) + '%';
+
+    track.appendChild(fill);
+    row.appendChild(lbl);
+    row.appendChild(track);
+    row.appendChild(pct);
+    container.appendChild(row);
+
+    // Animate bar fill
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => {
+        fill.style.width = (p.p * 100) + '%';
+      });
+    });
+  });
+}
+
+// ─── Loss curve ──────────────────────────────────────────────────────────────
+
+const PARAM_LABELS = ['125M', '1.3B', '7B', '70B', '175B'];
+const PARAM_FINAL_LOSS = [3.20, 2.55, 2.10, 1.85, 1.73];
+const LOSS_COLORS = ['#ff4757', '#ff9500', '#00d4ff', '#7c3aed', '#00ff88'];
+
+let lossAnimFrame = null;
+let lossProgress = 1.0; // 0..1
+let selectedParamIdx = 2;
+
+function drawLossCurves() {
+  selectedParamIdx = parseInt(document.getElementById('param-slider').value);
+  document.getElementById('param-val').textContent = PARAM_LABELS[selectedParamIdx];
+
+  const canvas = document.getElementById('loss-canvas');
+  const dpr = window.devicePixelRatio || 1;
+  const displayW = canvas.parentElement.clientWidth || 860;
+  const displayH = 280;
+  canvas.style.width = displayW + 'px';
+  canvas.style.height = displayH + 'px';
+  canvas.width = displayW * dpr;
+  canvas.height = displayH * dpr;
+
+  const ctx = canvas.getContext('2d');
+  ctx.scale(dpr, dpr);
+
+  const W = displayW, H = displayH;
+  const pad = { top: 20, right: 20, bottom: 40, left: 52 };
+  const plotW = W - pad.left - pad.right;
+  const plotH = H - pad.top - pad.bottom;
+
+  // Background
+  ctx.fillStyle = '#141720';
+  ctx.fillRect(0, 0, W, H);
+
+  // Grid
+  ctx.strokeStyle = '#252a3d';
+  ctx.lineWidth = 1;
+  const yMin = 1.5, yMax = 4.0;
+  const yTicks = [1.5, 2.0, 2.5, 3.0, 3.5, 4.0];
+  const steps = 500;
+
+  yTicks.forEach(y => {
+    const yPx = pad.top + plotH - ((y - yMin) / (yMax - yMin)) * plotH;
+    ctx.beginPath();
+    ctx.moveTo(pad.left, yPx);
+    ctx.lineTo(pad.left + plotW, yPx);
+    ctx.stroke();
+    ctx.fillStyle = '#8892a4';
+    ctx.font = `11px 'JetBrains Mono', monospace`;
+    ctx.textAlign = 'right';
+    ctx.fillText(y.toFixed(1), pad.left - 8, yPx + 4);
+  });
+
+  // X ticks
+  const xTicks = [0, 100, 200, 300, 400, 500];
+  xTicks.forEach(x => {
+    const xPx = pad.left + (x / steps) * plotW;
+    ctx.fillStyle = '#8892a4';
+    ctx.font = `11px 'JetBrains Mono', monospace`;
+    ctx.textAlign = 'center';
+    ctx.fillText((x / 10) + 'B', xPx, H - pad.bottom + 18);
+    ctx.beginPath();
+    ctx.moveTo(xPx, pad.top);
+    ctx.lineTo(xPx, pad.top + plotH);
+    ctx.strokeStyle = '#252a3d';
+    ctx.stroke();
+  });
+
+  // Axis labels
+  ctx.fillStyle = '#8892a4';
+  ctx.font = `11px 'Inter', sans-serif`;
+  ctx.textAlign = 'center';
+  ctx.fillText('Training Tokens', pad.left + plotW / 2, H - 2);
+  ctx.save();
+  ctx.translate(14, pad.top + plotH / 2);
+  ctx.rotate(-Math.PI / 2);
+  ctx.fillText('Loss (nats)', 0, 0);
+  ctx.restore();
+
+  // Draw curves — up to lossProgress fraction
+  const endStep = Math.floor(lossProgress * steps);
+
+  for (let pi = 0; pi < PARAM_LABELS.length; pi++) {
+    const isFocus = pi === selectedParamIdx;
+    const finalLoss = PARAM_FINAL_LOSS[pi];
+    const initLoss = 4.0 - pi * 0.08; // slightly different starts
+
+    ctx.beginPath();
+    ctx.strokeStyle = LOSS_COLORS[pi];
+    ctx.lineWidth = isFocus ? 2.5 : 1;
+    ctx.globalAlpha = isFocus ? 1.0 : 0.35;
+
+    for (let s = 0; s <= endStep; s++) {
+      const t = s / steps;
+      // Exponential decay + noise term
+      const decay = Math.exp(-t * (5 + pi * 0.5));
+      const noise = (isFocus ? 0 : 0.015) * Math.sin(s * 0.3 + pi);
+      const loss = finalLoss + (initLoss - finalLoss) * decay + noise;
+      const xPx = pad.left + (s / steps) * plotW;
+      const yPx = pad.top + plotH - ((loss - yMin) / (yMax - yMin)) * plotH;
+      if (s === 0) ctx.moveTo(xPx, yPx);
+      else ctx.lineTo(xPx, yPx);
+    }
+    ctx.stroke();
+
+    // Label at end
+    if (endStep >= steps - 1) {
+      const xPx = pad.left + plotW - 2;
+      const finalY = pad.top + plotH - ((finalLoss - yMin) / (yMax - yMin)) * plotH;
+      ctx.globalAlpha = isFocus ? 1.0 : 0.5;
+      ctx.fillStyle = LOSS_COLORS[pi];
+      ctx.font = `${isFocus ? '11px' : '10px'} 'JetBrains Mono', monospace`;
+      ctx.textAlign = 'right';
+      ctx.fillText(PARAM_LABELS[pi], xPx - 4, finalY - 4);
+    }
+
+    ctx.globalAlpha = 1.0;
+  }
+
+  // Chinchilla optimal marker
+  if (endStep > 100) {
+    const optX = pad.left + (200 / steps) * plotW;
+    ctx.setLineDash([4, 4]);
+    ctx.strokeStyle = '#ffd700';
+    ctx.lineWidth = 1;
+    ctx.globalAlpha = 0.7;
+    ctx.beginPath();
+    ctx.moveTo(optX, pad.top);
+    ctx.lineTo(optX, pad.top + plotH);
+    ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.globalAlpha = 1.0;
+    ctx.fillStyle = '#ffd700';
+    ctx.font = `10px 'JetBrains Mono', monospace`;
+    ctx.textAlign = 'center';
+    ctx.fillText('Chinchilla optimal', optX, pad.top + 12);
+  }
+}
+
+function animateLoss() {
+  cancelAnimationFrame(lossAnimFrame);
+  lossProgress = 0;
+  function step() {
+    lossProgress = Math.min(1.0, lossProgress + 0.006);
+    drawLossCurves();
+    if (lossProgress < 1.0) lossAnimFrame = requestAnimationFrame(step);
+  }
+  step();
+}
+
+// ─── Startup ─────────────────────────────────────────────────────────────────
+
+setMode('clm');
+resetAnimation();
+randomizeMasks(); // pre-populate MLM masks in background state
+maskedIndices.clear();
+setMode('clm'); // reset back to CLM
+
+// Draw loss curves after fonts load
+document.fonts.ready.then(() => {
+  drawLossCurves();
+});
+
+window.addEventListener('resize', () => {
+  drawLossCurves();
+});
+</script>
+</body>
+</html>

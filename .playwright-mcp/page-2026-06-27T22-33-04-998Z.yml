@@ -1,0 +1,262 @@
+- generic [active] [ref=e1]:
+  - banner [ref=e2]:
+    - generic [ref=e3]:
+      - generic [ref=e4]: RAG
+      - heading "#30 — Vector Search & KNN" [level=1] [ref=e5]
+      - paragraph [ref=e6]: Embedding-based retrieval, approximate nearest neighbor algorithms (HNSW, IVF, FAISS), exact vs approximate tradeoffs, and two-stage retrieval architecture.
+  - main [ref=e7]:
+    - generic [ref=e8]:
+      - heading "Theory" [level=2] [ref=e9]
+      - heading "What Is Vector Search?" [level=3] [ref=e10]
+      - paragraph [ref=e11]:
+        - text: "Vector search (also called semantic search or embedding-based retrieval) answers the question:"
+        - emphasis [ref=e12]: given a query embedding vector, which stored vectors are most similar?
+        - text: This is the retrieval backbone of every RAG system, recommender engine, and semantic deduplication pipeline in production. The core operation is computing a
+        - strong [ref=e13]: similarity metric
+        - text: between the query vector and a corpus of candidate vectors, then returning the top-K most similar ones.
+      - paragraph [ref=e14]:
+        - text: The dominant similarity metric is
+        - strong [ref=e15]: cosine similarity
+        - text: ": cos(θ) = (A · B) / (‖A‖ · ‖B‖), which measures the angle between two vectors regardless of magnitude. For unit-normalized vectors (which most embedding models emit), cosine similarity reduces to a simple dot product A · B, making it extremely fast to compute. L2 (Euclidean) distance is also used, especially in image embeddings. Inner product (unormalized dot product) is used in matryoshka representation learning contexts."
+      - heading "The Dimensionality Problem" [level=3] [ref=e16]
+      - paragraph [ref=e17]:
+        - text: Modern embedding models produce vectors of 768–4096 dimensions (e.g., OpenAI
+        - code [ref=e18]: text-embedding-3-large
+        - text: ": 3072d; sentence-transformers: 384–1024d; Cohere"
+        - code [ref=e19]: embed-v3
+        - text: ": 1024d). A brute-force exact KNN search over 1M vectors at 1024d requires ~4GB of float32 memory and ~10⁹ multiply-accumulate operations per query — feasible at small scale, but at 100M vectors the brute-force approach becomes prohibitively slow (>1 second latency)."
+      - paragraph [ref=e20]:
+        - text: This motivates
+        - strong [ref=e21]: Approximate Nearest Neighbor (ANN)
+        - text: "algorithms: trade a small, bounded recall penalty for orders-of-magnitude speedup. In practice, the best ANN algorithms achieve >95% recall at 10–100× the throughput of exact search."
+      - heading "Key ANN Algorithms" [level=3] [ref=e22]
+      - heading "HNSW — Hierarchical Navigable Small World" [level=3] [ref=e23]
+      - paragraph [ref=e24]: HNSW (Malkov & Yashunin, 2018) is the gold-standard ANN index for in-memory retrieval. It builds a multi-layer graph where each node (vector) connects to its nearest neighbors. During search, the algorithm begins at the top (sparse) layer — which acts like a highway network — and greedy-descends to the dense bottom layer, narrowing the candidate set with each step. The navigable small-world structure guarantees that any node can be reached in O(log N) hops.
+      - paragraph [ref=e25]:
+        - text: "Key parameters:"
+        - code [ref=e26]: M
+        - text: (max neighbors per node, typically 16–64) controls index size and recall;
+        - code [ref=e27]: efConstruction
+        - text: (build-time beam width, 100–500) controls index quality vs build time;
+        - code [ref=e28]: ef
+        - text: (query-time beam width) is tunable at runtime — higher ef = higher recall, higher latency.
+      - generic [ref=e29]: "Build time: O(N · M · log N) | Query time: O(log N) | Memory: ~(M + N·dim)·4 bytes"
+      - paragraph [ref=e30]:
+        - text: HNSW is the default index in
+        - strong [ref=e31]: pgvector
+        - text: (PostgreSQL),
+        - strong [ref=e32]: Weaviate
+        - text: ","
+        - strong [ref=e33]: Qdrant
+        - text: ", and"
+        - strong [ref=e34]: Chroma
+        - text: . It supports single-pass query without a two-stage pipeline and handles dynamic insertions without full rebuild.
+      - heading "IVF — Inverted File Index" [level=3] [ref=e35]
+      - paragraph [ref=e36]:
+        - text: IVF (used extensively in FAISS) partitions the vector space into
+        - emphasis [ref=e37]: nlist
+        - text: Voronoi cells via k-means clustering. At query time, only the
+        - emphasis [ref=e38]: nprobe
+        - text: nearest cluster centroids are searched exhaustively. This dramatically reduces the candidate set. IVF scales to billion-scale corpora because the index can be stored on disk, unlike HNSW which must reside in RAM.
+      - paragraph [ref=e39]:
+        - strong [ref=e40]: IVF + PQ (Product Quantization)
+        - text: ": Sub-divides each vector into subvectors, then quantizes each to a codebook entry (typically 8 bits). This compresses a 1024d float32 vector (4096 bytes) to ~128 bytes — a 32× compression — at the cost of some recall. Facebook's FAISS library implements"
+        - code [ref=e41]: IndexIVFPQ
+        - text: which makes billion-scale retrieval feasible on a single machine.
+      - generic [ref=e42]: "Memory (IVF+PQ): N · (m · log₂(k)/8) bytes | where m = subquantizers, k = codebook size (often 256)"
+      - heading "FAISS — Facebook AI Similarity Search" [level=3] [ref=e43]
+      - paragraph [ref=e44]:
+        - text: "FAISS is the workhorse library behind most vector search at scale. It implements dozens of index types:"
+        - code [ref=e45]: IndexFlatL2
+        - text: (exact brute-force),
+        - code [ref=e46]: IndexHNSWFlat
+        - text: ","
+        - code [ref=e47]: IndexIVFFlat
+        - text: ","
+        - code [ref=e48]: IndexIVFPQ
+        - text: ","
+        - code [ref=e49]: IndexIVFSQ
+        - text: "(scalar quantization). It supports GPU acceleration (10–100× speedup on A100 GPUs), multi-GPU sharding, and can operate in batch mode for offline retrieval. The factory string API (`faiss.index_factory(\"1024,IVF4096,PQ64\"`) lets you compose index types declaratively."
+      - 'heading "Two-Stage Retrieval: Retriever + Reranker" [level=3] [ref=e50]'
+      - paragraph [ref=e51]:
+        - text: Production RAG systems almost universally use
+        - strong [ref=e52]: two-stage retrieval
+        - text: ":"
+      - list [ref=e53]:
+        - listitem [ref=e54]:
+          - strong [ref=e55]: "Stage 1 — Fast retriever:"
+          - text: ANN index returns top-100 candidates in <10ms. Optimized for recall, not precision.
+        - listitem [ref=e56]:
+          - strong [ref=e57]: "Stage 2 — Expensive reranker:"
+          - text: A cross-encoder model (e.g. Cohere Rerank, BGE Reranker, Jina Reranker) scores each of the 100 candidates against the full query. Cross-encoders see query+document jointly and are much more accurate than bi-encoders, but too slow to run over the full corpus.
+      - paragraph [ref=e58]:
+        - text: Cross-encoders like
+        - code [ref=e59]: cross-encoder/ms-marco-MiniLM-L-6-v2
+        - text: run in ~5ms per pair on CPU, so reranking 100 candidates adds ~500ms. Using GPU brings this to ~20ms for 100 candidates. The latency budget determines how many candidates Stage 1 retrieves.
+      - 'heading "Hybrid Retrieval: Dense + Sparse" [level=3] [ref=e60]'
+      - paragraph [ref=e61]:
+        - text: Embedding-based (dense) retrieval excels at semantic similarity but struggles with
+        - strong [ref=e62]: exact keyword matching
+        - text: ", rare proper nouns, and out-of-distribution terminology. BM25 (sparse term-based retrieval) handles these cases well but has no semantic generalization."
+      - paragraph [ref=e63]:
+        - strong [ref=e64]: Hybrid retrieval
+        - text: "runs both in parallel and fuses scores via Reciprocal Rank Fusion (RRF) or a learned linear combination:"
+        - code [ref=e65]: score = α · dense_score + (1-α) · sparse_score
+        - text: ". RRF is formula-based and parameter-free:"
+        - code [ref=e66]: RRF(d) = Σ 1/(k + rank_i(d))
+        - text: where k=60 is standard. Elasticsearch, OpenSearch, and Weaviate all support hybrid retrieval natively.
+      - heading "Chunking Strategy" [level=3] [ref=e67]
+      - paragraph [ref=e68]: "Before indexing, documents must be split into chunks that fit within the embedding model's context window (typically 512–8192 tokens). Key chunking decisions:"
+      - list [ref=e69]:
+        - listitem [ref=e70]:
+          - strong [ref=e71]: "Chunk size:"
+          - text: Smaller chunks (128–256 tokens) have higher precision but lower context. Larger chunks (512–1024 tokens) give more context but noisier embeddings.
+        - listitem [ref=e72]:
+          - strong [ref=e73]: "Overlap:"
+          - text: 20–50 token overlap between chunks preserves cross-boundary context.
+        - listitem [ref=e74]:
+          - strong [ref=e75]: "Semantic chunking:"
+          - text: Split at sentence/paragraph boundaries rather than character count. Better coherence.
+        - listitem [ref=e76]:
+          - strong [ref=e77]: "Late chunking (JinaAI, 2024):"
+          - text: Embed full document, then split the token embeddings — avoids loss of document-level context in each chunk.
+      - heading "Production Numbers & Tools" [level=3] [ref=e78]
+      - paragraph [ref=e79]:
+        - text: "At 10M vectors (1024d, float32): HNSW index ~40GB RAM, build time ~30min on 32 CPUs. IVF+PQ (m=64): ~640MB RAM, >98% recall@10 achievable. Query latency: HNSW ~1ms, IVF+PQ ~5ms. Managed solutions:"
+        - strong [ref=e80]: Pinecone
+        - text: (serverless, ~$0.04/1M queries),
+        - strong [ref=e81]: Weaviate Cloud
+        - text: ","
+        - strong [ref=e82]: Qdrant Cloud
+        - text: ". Self-hosted: pgvector (PostgreSQL extension, HNSW support added v0.5), Qdrant (Rust, HNSW + scalar quantization), Milvus (scale-out, Kafka-backed)."
+      - generic [ref=e83]:
+        - strong [ref=e84]: "Production Gotcha:"
+        - text: Embedding model upgrades require full corpus re-embedding — you cannot mix vectors from different models in the same index. Plan for re-indexing pipelines (typically 24–72hrs for 10M docs) and blue/green index swaps to avoid downtime.
+      - table [ref=e85]:
+        - rowgroup [ref=e86]:
+          - row "Algorithm Memory Build Time Query Latency Recall@10 Best For" [ref=e87]:
+            - columnheader "Algorithm" [ref=e88]
+            - columnheader "Memory" [ref=e89]
+            - columnheader "Build Time" [ref=e90]
+            - columnheader "Query Latency" [ref=e91]
+            - columnheader "Recall@10" [ref=e92]
+            - columnheader "Best For" [ref=e93]
+        - rowgroup [ref=e94]:
+          - row "Flat (exact) N·dim·4B O(N) O(N·dim) 100% <100K vectors" [ref=e95]:
+            - cell "Flat (exact)" [ref=e96]
+            - cell "N·dim·4B" [ref=e97]
+            - cell "O(N)" [ref=e98]
+            - cell "O(N·dim)" [ref=e99]
+            - cell "100%" [ref=e100]
+            - cell "<100K vectors" [ref=e101]
+          - row "HNSW ~10× flat O(N log N) O(log N) 95–99% In-memory, low latency" [ref=e102]:
+            - cell "HNSW" [ref=e103]
+            - cell "~10× flat" [ref=e104]
+            - cell "O(N log N)" [ref=e105]
+            - cell "O(log N)" [ref=e106]
+            - cell "95–99%" [ref=e107]
+            - cell "In-memory, low latency" [ref=e108]
+          - row "IVF ~flat + centroids O(N) O(√N) 90–97% Disk-based, billion scale" [ref=e109]:
+            - cell "IVF" [ref=e110]
+            - cell "~flat + centroids" [ref=e111]
+            - cell "O(N)" [ref=e112]
+            - cell "O(√N)" [ref=e113]
+            - cell "90–97%" [ref=e114]
+            - cell "Disk-based, billion scale" [ref=e115]
+          - row "IVF+PQ 32–64× smaller O(N) O(√N) 85–95% Billion scale, RAM-constrained" [ref=e116]:
+            - cell "IVF+PQ" [ref=e117]
+            - cell "32–64× smaller" [ref=e118]
+            - cell "O(N)" [ref=e119]
+            - cell "O(√N)" [ref=e120]
+            - cell "85–95%" [ref=e121]
+            - cell "Billion scale, RAM-constrained" [ref=e122]
+    - generic [ref=e123]:
+      - heading "Interactive Visualization" [level=2] [ref=e124]
+      - paragraph [ref=e125]:
+        - strong [ref=e126]: Click anywhere
+        - text: on the canvas to place a query point. Toggle between
+        - strong [ref=e127]: Exact KNN
+        - text: (brute-force, checks all points) and
+        - strong [ref=e128]: Approximate (HNSW)
+        - text: (navigates the graph, checks fewer candidates). Adjust
+        - strong [ref=e129]: K
+        - text: to retrieve more neighbors. Use
+        - strong [ref=e130]: Add Points
+        - text: to populate the space.
+        - strong [ref=e131]: Drag
+        - text: the query point to see results update live. Watch how approximate search checks far fewer nodes while still finding the right neighbors.
+      - generic [ref=e132]:
+        - button "Exact KNN" [ref=e133] [cursor=pointer]
+        - button "Approximate (HNSW)" [ref=e134] [cursor=pointer]
+        - button "Hybrid View" [ref=e135] [cursor=pointer]
+      - generic [ref=e136]:
+        - generic [ref=e137]:
+          - generic [ref=e138]: "K (neighbors):"
+          - slider [ref=e139] [cursor=pointer]: "5"
+          - generic [ref=e140]: "5"
+        - generic [ref=e141]:
+          - generic [ref=e142]: "Points:"
+          - slider [ref=e143] [cursor=pointer]: "80"
+          - generic [ref=e144]: "80"
+        - generic [ref=e145]:
+          - generic [ref=e146]: "ef (HNSW beam):"
+          - slider [ref=e147] [cursor=pointer]: "20"
+          - generic [ref=e148]: "20"
+        - generic [ref=e149]:
+          - button "Regenerate Points" [ref=e150] [cursor=pointer]
+          - button "Clear Query" [ref=e151] [cursor=pointer]
+      - generic [ref=e154]:
+        - generic [ref=e155]: Corpus point
+        - generic [ref=e157]: Query point
+        - generic [ref=e159]: KNN result (top-K)
+        - generic [ref=e161]: "Approx: visited (not returned)"
+        - generic [ref=e163]: HNSW edge
+      - generic [ref=e165]:
+        - generic [ref=e166]:
+          - generic [ref=e167]: Points checked (exact)
+          - generic [ref=e168]: "80"
+        - generic [ref=e169]:
+          - generic [ref=e170]: Points checked (approx)
+          - generic [ref=e171]: "48"
+        - generic [ref=e172]:
+          - generic [ref=e173]: Recall accuracy
+          - generic [ref=e174]: 80%
+        - generic [ref=e175]:
+          - generic [ref=e176]: Speedup
+          - generic [ref=e177]: 1.7×
+    - generic [ref=e178]:
+      - heading "Key Takeaways" [level=2] [ref=e179]
+      - list [ref=e180]:
+        - listitem [ref=e181]:
+          - strong [ref=e182]: HNSW dominates for low-latency in-memory retrieval.
+          - text: At <50M vectors with >8GB RAM headroom, HNSW +
+          - code [ref=e183]: ef=50
+          - text: delivers <5ms P99 at >98% recall@10 — the default choice for Qdrant, Weaviate, and pgvector. For billion-scale, IVF+PQ is unavoidable.
+        - listitem [ref=e184]:
+          - strong [ref=e185]: Two-stage retrieval is non-negotiable at production scale.
+          - text: Bi-encoder ANN retrieval finds candidates cheap and fast; cross-encoder reranking adds 30–60% nDCG lift at the cost of 200–500ms. Always budget latency for reranking in your SLA.
+        - listitem [ref=e186]:
+          - strong [ref=e187]: Embedding model choice locks your index.
+          - text: Switching from
+          - code [ref=e188]: text-embedding-ada-002
+          - text: to
+          - code [ref=e189]: text-embedding-3-large
+          - text: requires full re-embedding and re-indexing. Plan for version-tagged indices and parallel rollout pipelines from day one.
+        - listitem [ref=e190]:
+          - strong [ref=e191]: Hybrid retrieval (dense + BM25) beats pure dense on most BEIR benchmarks.
+          - text: Dense search misses exact keyword matches (product IDs, version numbers, rare proper nouns). RRF fusion is free and adds 5–15% recall on heterogeneous corpora. Always enable it unless your corpus is purely conceptual.
+        - listitem [ref=e192]:
+          - strong [ref=e193]: Quantization is the lever for memory cost, not recall.
+          - text: IVF+PQ compresses 4GB → 128MB (32×) with ~5% recall penalty. Scalar quantization (INT8) halves memory with <1% recall penalty. In RAM-constrained deployments, quantize first before adding more nodes.
+        - listitem [ref=e194]:
+          - strong [ref=e195]: Chunking strategy is upstream of everything.
+          - text: A poorly chunked corpus defeats good indexing. 256-token chunks with 32-token overlap and sentence-boundary splitting outperform naive fixed-size splits by 10–20% in downstream RAG answer quality (measured with RAGAS). Late chunking is state-of-the-art for long-document corpora.
+  - navigation [ref=e196]:
+    - 'link "← Previous #29 — RAG: Retrieval-Augmented Generation" [ref=e197] [cursor=pointer]':
+      - /url: 29-rag-overview.html
+      - generic [ref=e198]: ← Previous
+      - generic [ref=e199]: "#29 — RAG: Retrieval-Augmented Generation"
+    - 'link "Next → #31 — AI Agents: Observe → Decide → Act → Learn" [ref=e200] [cursor=pointer]':
+      - /url: 31-agents-overview.html
+      - generic [ref=e201]: Next →
+      - generic [ref=e202]: "#31 — AI Agents: Observe → Decide → Act → Learn"

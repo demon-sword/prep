@@ -1,0 +1,225 @@
+- generic [active] [ref=e1]:
+  - banner [ref=e2]:
+    - generic [ref=e3]: finetuning
+    - heading "LoRA — Low-Rank Adaptation" [level=1] [ref=e4]
+    - paragraph [ref=e5]: Freeze original weights, inject trainable low-rank matrices A and B — adapt large models with ~0.1% of parameters and no inference latency penalty when merged.
+  - main [ref=e6]:
+    - generic [ref=e7]:
+      - heading "Theory" [level=2] [ref=e8]
+      - 'heading "The Core Problem: Full Fine-Tuning is Expensive" [level=3] [ref=e9]'
+      - paragraph [ref=e10]: Fine-tuning a 7B parameter model in full precision (fp32) requires storing the model weights (~28 GB), their gradients (~28 GB), and optimizer states for Adam (~56 GB for first and second moments) — totaling ~112 GB of GPU memory before activations. At 13B parameters, you're looking at ~208 GB, which exceeds even the largest single-GPU configurations. Even with bf16 training cutting that in half, full fine-tuning a 70B model requires 4–8 × A100-80GB GPUs. The community needed a smarter approach.
+      - paragraph [ref=e11]:
+        - text: "Parameter-efficient fine-tuning (PEFT) methods emerged to solve this. LoRA (Low-Rank Adaptation of Large Language Models, Hu et al. 2021) became the dominant approach. The key insight:"
+        - strong [ref=e12]: the updates to weight matrices during fine-tuning have low intrinsic rank
+        - text: . You don't need to update all 175 billion parameters — you can approximate the weight delta with two small matrices.
+      - heading "The Mathematical Mechanism" [level=3] [ref=e13]
+      - paragraph [ref=e14]:
+        - text: Consider a pre-trained weight matrix
+        - code [ref=e15]: W₀ ∈ ℝ^(d×k)
+        - text: (e.g., a query projection matrix in an attention layer, where
+        - emphasis [ref=e16]: d
+        - text: might be 4096 and
+        - emphasis [ref=e17]: k
+        - text: "might be 4096 for a large model). In full fine-tuning, the update is:"
+      - generic [ref=e18]: W' = W₀ + ΔW
+      - paragraph [ref=e19]:
+        - text: LoRA constrains
+        - code [ref=e20]: ΔW
+        - text: "to be a low-rank decomposition:"
+      - generic [ref=e21]: ΔW = B · A where A ∈ ℝ^(r×k), B ∈ ℝ^(d×r), r ≪ min(d,k)
+      - paragraph [ref=e22]:
+        - text: During training,
+        - code [ref=e23]: W₀
+        - text: is frozen — its gradients are never computed and optimizer states are never stored for it. Only
+        - code [ref=e24]: A
+        - text: and
+        - code [ref=e25]: B
+        - text: "are updated. At initialization:"
+        - code [ref=e26]: A
+        - text: is initialized with random Gaussian values, and
+        - code [ref=e27]: B
+        - text: is initialized to zero — this ensures
+        - code [ref=e28]: ΔW = BA = 0
+        - text: at the start of training, so fine-tuning begins from exactly the pretrained model's behavior.
+      - paragraph [ref=e29]: "The forward pass computes:"
+      - generic [ref=e30]: h = W₀x + (B · A · x) · (α / r)
+      - paragraph [ref=e31]:
+        - text: Where
+        - code [ref=e32]: α
+        - text: is a scaling hyperparameter (often set equal to
+        - code [ref=e33]: r
+        - text: ). The
+        - code [ref=e34]: α/r
+        - text: scaling factor normalizes the contribution of the LoRA delta — as you increase rank, the delta magnitude would otherwise grow, destabilizing training.
+      - heading "Parameter Count Reduction" [level=3] [ref=e35]
+      - paragraph [ref=e36]:
+        - text: For a single weight matrix of shape
+        - code [ref=e37]: d × k = 4096 × 4096
+        - text: ":"
+      - list [ref=e38]:
+        - listitem [ref=e39]:
+          - strong [ref=e40]: "Full fine-tuning:"
+          - text: 4096 × 4096 = 16,777,216 parameters
+        - listitem [ref=e41]:
+          - strong [ref=e42]: "LoRA r=4:"
+          - text: (4096×4) + (4×4096) = 16,384 + 16,384 = 32,768 parameters — 99.8% reduction
+        - listitem [ref=e43]:
+          - strong [ref=e44]: "LoRA r=16:"
+          - text: 131,072 parameters — 99.2% reduction
+        - listitem [ref=e45]:
+          - strong [ref=e46]: "LoRA r=64:"
+          - text: 524,288 parameters — 96.9% reduction
+      - paragraph [ref=e47]: In practice, LoRA is applied to multiple weight matrices — typically the Q, K, V, and output projections in attention, and sometimes the FFN layers too. Even applying LoRA to all Q and V matrices across all 32 layers of a 7B model at rank 8, the trainable parameter count is typically under 10 million — roughly 0.14% of total parameters. This is enough to substantially shift the model's behavior on a target task.
+      - heading "Rank Selection" [level=3] [ref=e48]
+      - paragraph [ref=e49]: "Rank is the most important LoRA hyperparameter. The original LoRA paper found that surprisingly low ranks (r=4 or r=8) work well for most tasks. Intuition: the space of task-relevant updates is low-dimensional compared to the full weight space. However, rank sensitivity is task-dependent:"
+      - list [ref=e50]:
+        - listitem [ref=e51]:
+          - strong [ref=e52]: "r=4–8:"
+          - text: Adequate for style/format adaptation, simple instruction following. Memory optimal.
+        - listitem [ref=e53]:
+          - strong [ref=e54]: "r=16–32:"
+          - text: Better for domain knowledge injection, complex reasoning tasks.
+        - listitem [ref=e55]:
+          - strong [ref=e56]: "r=64–128:"
+          - text: Approaches full fine-tuning quality at specific tasks, used in QLoRA experiments for high-quality model merging.
+        - listitem [ref=e57]:
+          - strong [ref=e58]: "r ≥ 256:"
+          - text: Rarely justified — at some point you're almost doing full fine-tuning with extra overhead.
+      - paragraph [ref=e59]: The paper showed that increasing rank beyond a task-specific threshold yields diminishing returns. You can empirically determine the "intrinsic rank" needed by training at multiple ranks and measuring validation loss plateau.
+      - heading "Which Matrices to Adapt" [level=3] [ref=e60]
+      - paragraph [ref=e61]: "The original paper experiments found that applying LoRA to Q and V matrices (query and value projections in attention) gives the best parameter-efficiency tradeoff. Later work showed that including K (key), the output projection, and FFN layers helps for complex adaptation tasks. Modern practice:"
+      - list [ref=e62]:
+        - listitem [ref=e63]:
+          - strong [ref=e64]: "Minimal:"
+          - text: Q, V projections only (original LoRA default)
+        - listitem [ref=e65]:
+          - strong [ref=e66]: "Standard:"
+          - text: Q, K, V, O (all attention projections)
+        - listitem [ref=e67]:
+          - strong [ref=e68]: "Aggressive:"
+          - text: All attention + FFN gate/up/down projections (most common in production tuning today)
+      - paragraph [ref=e69]: Embedding layers and LM head are typically excluded — modifying these can destabilize tokenization behavior.
+      - heading "Merging Adapters at Inference" [level=3] [ref=e70]
+      - paragraph [ref=e71]:
+        - text: "LoRA's critical production advantage: the adapter can be"
+        - emphasis [ref=e72]: merged
+        - text: into the base weights before serving. Since
+        - code [ref=e73]: W' = W₀ + B·A
+        - text: ", you can precompute this sum once, discard A and B, and serve exactly as if you had a fine-tuned model — with zero inference latency overhead. This is unlike adapter-based methods that require extra forward pass computations."
+      - generic [ref=e74]:
+        - strong [ref=e75]: "Key insight:"
+        - text: LoRA adapters add zero inference latency when merged. During serving, the merged model is identical in computation to the base model — the only difference is the weights. This is what makes LoRA production-viable, unlike approaches that keep adapters separate at inference time.
+      - paragraph [ref=e76]: You can also keep adapters separate (PEFT "hot-swap" mode) — useful when serving one base model with many per-tenant LoRA adapters, loading/unloading them per request. vLLM's LoRA serving support allows multiple adapters to be loaded simultaneously with minimal overhead.
+      - 'heading "QLoRA: Quantized LoRA" [level=3] [ref=e77]'
+      - paragraph [ref=e78]: QLoRA (Dettmers et al. 2023) extends LoRA by quantizing the frozen base model to 4-bit (using NF4 — Normal Float 4, a quantization format optimized for normally-distributed neural network weights). Only the LoRA matrices are kept in bf16/fp16 for training.
+      - paragraph [ref=e79]: "This enables fine-tuning a 70B model on a single A100-80GB GPU, or a 7B model on consumer GPUs (RTX 3090/4090 with 24 GB VRAM). The compute path: for each forward pass, the 4-bit weights are dequantized block-by-block using stored quantization constants (double quantization further compresses these constants). The LoRA delta is computed in higher precision and added. Memory breakdown for a 7B model with QLoRA:"
+      - list [ref=e80]:
+        - listitem [ref=e81]: "Base model (NF4): ~4 GB"
+        - listitem [ref=e82]: "LoRA adapters (bf16, r=16): ~120 MB"
+        - listitem [ref=e83]: "Optimizer states (AdamW on LoRA params only): ~240 MB"
+        - listitem [ref=e84]: "Activations + working memory: ~6–10 GB depending on sequence length"
+        - listitem [ref=e85]:
+          - strong [ref=e86]: "Total: ~12–16 GB"
+          - text: — fits on a 16 GB or 24 GB consumer GPU
+      - paragraph [ref=e87]: QLoRA typically achieves 95–99% of full fine-tuning quality on downstream tasks, making it the dominant technique for compute-constrained fine-tuning.
+      - heading "Production Reality" [level=3] [ref=e88]
+      - paragraph [ref=e89]: "The Hugging Face PEFT library is the standard LoRA tooling. A minimal training setup requires fewer than 30 lines of code to configure LoRA on any supported model. Key production considerations:"
+      - generic [ref=e90]:
+        - strong [ref=e91]: "Gotcha — merging precision:"
+        - text: Always merge LoRA adapters in fp32 or bf16, not in the quantized base model format. Merging into a quantized model introduces quantization error in the delta, degrading quality. Dequantize → merge → requantize if you need a quantized merged model.
+      - list [ref=e92]:
+        - listitem [ref=e93]:
+          - strong [ref=e94]: "Multi-adapter serving (vLLM):"
+          - text: vLLM supports loading dozens of LoRA adapters per instance with ~2% memory overhead per adapter at r=16. Requests are batched by adapter when possible.
+        - listitem [ref=e95]:
+          - strong [ref=e96]: "LoRA + FSDP:"
+          - text: "For multi-GPU training with base model sharded across GPUs, LoRA adapters must be handled carefully — FSDP doesn't automatically shard them. Use `FullStateDictConfig` for saving."
+        - listitem [ref=e97]:
+          - strong [ref=e98]: "Catastrophic forgetting:"
+          - text: LoRA fine-tuning still suffers from forgetting. If you want to preserve general capability, include a replay buffer of general-purpose examples in your training data (typically 5–10% of the batch).
+        - listitem [ref=e99]:
+          - strong [ref=e100]: "Rank-1 updates (LoRA-One):"
+          - text: Research continues showing that even r=1 can be surprisingly effective for narrow task adaptation — worth experimenting before defaulting to r=16.
+    - generic [ref=e101]:
+      - heading "Interactive Visualization" [level=2] [ref=e102]
+      - paragraph [ref=e103]: Explore how LoRA decomposes a weight matrix into two low-rank matrices A and B. Adjust rank, matrix dimension, and see the parameter count reduction. Switch tabs to view the weight decomposition diagram or the parameter efficiency chart.
+      - generic [ref=e104]:
+        - generic [ref=e105]:
+          - generic [ref=e106]:
+            - generic [ref=e107]:
+              - text: Matrix Dim (d=k)
+              - generic [ref=e108]: "256"
+            - slider [ref=e109] [cursor=pointer]: "256"
+          - generic [ref=e110]:
+            - generic [ref=e111]:
+              - text: LoRA Rank (r)
+              - generic [ref=e112]: "8"
+            - slider [ref=e113] [cursor=pointer]: "8"
+          - generic [ref=e114]:
+            - generic [ref=e115]:
+              - text: Num LoRA Layers
+              - generic [ref=e116]: "32"
+            - slider [ref=e117] [cursor=pointer]: "32"
+        - generic [ref=e118]:
+          - generic [ref=e119]:
+            - generic [ref=e120]: Base Matrix Params
+            - generic [ref=e121]: 65.5K
+          - generic [ref=e122]:
+            - generic [ref=e123]: LoRA Params (A+B)
+            - generic [ref=e124]: 4.1K
+          - generic [ref=e125]:
+            - generic [ref=e126]: Total LoRA (all layers)
+            - generic [ref=e127]: 131.1K
+          - generic [ref=e128]:
+            - generic [ref=e129]: Param Reduction
+            - generic [ref=e130]: 93.8%
+          - generic [ref=e131]:
+            - generic [ref=e132]: Memory Saved (fp32)
+            - generic [ref=e133]: 7.9 MB
+          - generic [ref=e134]:
+            - generic [ref=e135]: Trainable Ratio
+            - generic [ref=e136]: 6.25%
+        - generic [ref=e137]:
+          - button "Matrix Decomposition" [ref=e138] [cursor=pointer]
+          - button "Rank vs Efficiency" [ref=e139] [cursor=pointer]
+          - button "Merge at Inference" [ref=e140] [cursor=pointer]
+    - generic [ref=e144]:
+      - heading "Key Takeaways" [level=2] [ref=e145]
+      - list [ref=e146]:
+        - listitem [ref=e147]:
+          - strong [ref=e148]: "Parameter efficiency is extreme but task-sensitive:"
+          - text: LoRA at r=8 trains ~0.1–0.5% of parameters yet captures most of the fine-tuning signal. However, for complex domain adaptation (e.g., fine-tuning for medicine or law), r=16–64 is often needed. Start low, validate on eval set, increase rank only if you hit a quality ceiling.
+        - listitem [ref=e149]:
+          - strong [ref=e150]: "QLoRA is the production standard for resource-constrained training:"
+          - text: "NF4 quantization of the base model + bf16 LoRA adapters enables fine-tuning 7B models on 16 GB VRAM. The key cost: ~15–30% slower training vs fp16 due to dequantization overhead in the forward pass. Worth it for the memory savings."
+        - listitem [ref=e151]:
+          - strong [ref=e152]: "Merge before serving, always:"
+          - text: Keeping adapters unmerged costs 2 matrix multiplications per adapted layer per token. At 32 layers with 4 adapted matrices each, that's 256 extra matmuls per forward pass. Merge into base weights before deployment unless you need hot-swap multi-tenant adapter serving (where vLLM LoRA mode is designed for exactly this).
+        - listitem [ref=e153]:
+          - strong [ref=e154]: "LoRA doesn't eliminate forgetting — it mitigates memory cost:"
+          - text: A LoRA-fine-tuned model still forgets base capabilities if your fine-tuning data is too narrow or the rank too high. Including ~5–10% general-purpose data in the training mix significantly reduces catastrophic forgetting without meaningfully degrading task-specific performance.
+        - listitem [ref=e155]:
+          - strong [ref=e156]: "Alpha/rank ratio governs effective learning rate:"
+          - text: The
+          - code [ref=e157]: α/r
+          - text: scaling factor is a hidden learning rate multiplier on the LoRA delta. Common practice is
+          - code [ref=e158]: α = r
+          - text: (ratio = 1.0), but some recipes use
+          - code [ref=e159]: α = 2r
+          - text: to amplify the adapter contribution. If training is unstable, check this ratio before blaming other hyperparameters.
+        - listitem [ref=e160]:
+          - strong [ref=e161]: "LoRA composability is powerful:"
+          - text: Multiple LoRA adapters can be linearly interpolated or summed (e.g., task adapter + style adapter). This enables model merging without retraining, a technique used to create Frankenstein-models on HuggingFace that combine specialized capabilities. However, interference between adapters trained on dissimilar tasks can degrade performance — validate merged adapters empirically.
+  - navigation [ref=e162]:
+    - 'link "← Previous Fine-Tuning Types: Full, Partial, PEFT" [ref=e163] [cursor=pointer]':
+      - /url: 15-finetuning-types.html
+      - generic [ref=e164]: ←
+      - generic [ref=e165]:
+        - generic [ref=e166]: Previous
+        - text: "Fine-Tuning Types: Full, Partial, PEFT"
+    - link "Next Model Distillation →" [ref=e167] [cursor=pointer]:
+      - /url: 17-distillation.html
+      - generic [ref=e168]:
+        - generic [ref=e169]: Next
+        - text: Model Distillation
+      - generic [ref=e170]: →

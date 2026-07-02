@@ -1,0 +1,199 @@
+- generic [active] [ref=e1]:
+  - banner [ref=e2]:
+    - generic [ref=e3]: inference
+    - heading "Model & Tensor Parallelism" [level=1] [ref=e4]
+    - paragraph [ref=e5]: How to split a model that doesn't fit on one GPU — tensor parallelism (intra-layer), pipeline parallelism (inter-layer), context & sequence parallelism, and how to pick each strategy for training vs inference.
+  - main [ref=e6]:
+    - generic [ref=e7]:
+      - heading "Theory" [level=2] [ref=e8]
+      - paragraph [ref=e9]: Modern frontier LLMs are simply too large to fit on a single GPU. GPT-4's rumored ~1.8T parameters, Llama-3-70B's 70B parameters at float16 (~140 GB), or even a 7B model with optimizer states during training (~100 GB) all exceed the VRAM of a single A100 (80 GB) or H100 (80 GB SXM). Model parallelism is the collection of strategies that spread computation across multiple GPUs or nodes so training and inference remain feasible.
+      - paragraph [ref=e10]:
+        - text: There are four distinct strategies, each operating at a different granularity. In practice, production systems (
+        - code [ref=e11]: Megatron-LM
+        - text: ","
+        - code [ref=e12]: vLLM
+        - text: ","
+        - code [ref=e13]: TensorRT-LLM
+        - text: ","
+        - code [ref=e14]: DeepSpeed
+        - text: ) combine all of them simultaneously — this is called
+        - strong [ref=e15]: 3D parallelism
+        - text: (tensor × pipeline × data).
+      - heading "1. Tensor Parallelism (TP) — Intra-Layer Splitting" [level=3] [ref=e16]
+      - paragraph [ref=e17]: "Tensor parallelism splits the weight matrices of individual layers across GPUs. The canonical example is the multi-layer perceptron (MLP) sub-block of a transformer. An FFN typically computes:"
+      - generic [ref=e18]: Y = GELU(X · W₁ + b₁) · W₂ + b₂
+      - paragraph [ref=e19]:
+        - text: With column parallelism on W₁ (split along output dim) and row parallelism on W₂ (split along input dim), each GPU holds a shard. Each device processes its shard independently and a single
+        - code [ref=e20]: AllReduce
+        - text: "collective synchronises partial sums at the end. For attention, the Q/K/V heads are partitioned: GPU 0 handles heads 0…h/2, GPU 1 handles h/2…h. This requires two"
+        - code [ref=e21]: AllReduce
+        - text: calls per transformer block.
+      - generic [ref=e22]:
+        - strong [ref=e23]: "Communication pattern:"
+        - text: TP requires fast intra-node communication (NVLink, 600 GB/s+). Crossing PCIe or InfiniBand makes TP prohibitively slow due to per-block all-reduces.
+        - strong [ref=e24]: TP degree is typically limited to the number of GPUs on one node (8).
+      - paragraph [ref=e25]: Megatron-LM introduced this approach in 2019. With TP=8 on an 8-GPU node, each GPU holds 1/8 of every weight matrix. A 70B model's 70 GB shrinks to ~9 GB per GPU — fitting handily in an H100's 80 GB. However, activation memory still scales with the full context × batch, so TP alone isn't enough for huge contexts.
+      - heading "2. Pipeline Parallelism (PP) — Inter-Layer Splitting" [level=3] [ref=e26]
+      - paragraph [ref=e27]:
+        - text: Pipeline parallelism assigns different
+        - emphasis [ref=e28]: layers
+        - text: to different GPUs. GPU 0 runs layers 0–7, GPU 1 runs layers 8–15, etc. Communication is a simple point-to-point send of the activation tensor between stage boundaries — far cheaper bandwidth than all-reduce. This makes PP suitable for cross-node communication over InfiniBand (200–400 Gb/s).
+      - paragraph [ref=e29]:
+        - text: "The naive problem: GPU 1 sits idle while GPU 0 processes the first micro-batch. This is the"
+        - strong [ref=e30]: pipeline bubble
+        - text: ". Its fraction is:"
+      - generic [ref=e31]: bubble fraction = (p - 1) / (m + p - 1)
+      - paragraph [ref=e32]:
+        - text: where
+        - emphasis [ref=e33]: p
+        - text: = pipeline stages,
+        - emphasis [ref=e34]: m
+        - text: = micro-batches. Sending many micro-batches (large
+        - emphasis [ref=e35]: m
+        - text: ) amortises the bubble. GPipe uses
+        - emphasis [ref=e36]: flush
+        - text: scheduling; PipeDream and Megatron-LM use
+        - strong [ref=e37]: 1F1B
+        - text: (one-forward-one-backward) interleaving to keep all stages busy and maintain bounded activation memory.
+      - generic [ref=e38]:
+        - strong [ref=e39]: "Gotcha:"
+        - text: Gradient accumulation is mandatory with PP. Each stage must hold activations for all in-flight micro-batches — activation memory grows as O(p × micro-batch activations). Gradient checkpointing (recomputation) is often necessary on each stage.
+      - heading "3. Data Parallelism (DP) — Replicated Model, Split Batch" [level=3] [ref=e40]
+      - paragraph [ref=e41]:
+        - text: "Data parallelism is the oldest strategy: each GPU holds a full model copy and processes different data shards. Gradients are averaged with an"
+        - code [ref=e42]: AllReduce
+        - text: after each backward pass. DP scales training throughput linearly with GPU count but requires each GPU to hold the full model — so it does
+        - emphasis [ref=e43]: not
+        - text: solve the memory problem.
+      - paragraph [ref=e44]:
+        - strong [ref=e45]: ZeRO (Zero Redundancy Optimizer)
+        - text: from DeepSpeed fixes this by partitioning optimizer states (ZeRO-1), gradients (ZeRO-2), and parameters (ZeRO-3) across DP ranks. ZeRO-3 effectively distributes the entire model across GPUs while still looking like data parallelism from the code's perspective. At ZeRO-3 with 8 GPUs, each GPU only stores 1/8 of parameters, gradients, and optimizer states.
+      - heading "4. Context / Sequence Parallelism — Splitting Along the Sequence Dimension" [level=3] [ref=e46]
+      - paragraph [ref=e47]:
+        - text: "For very long contexts (128K+), attention memory itself becomes the bottleneck: attention scores are O(n²) in sequence length."
+        - strong [ref=e48]: Sequence parallelism
+        - text: (Megatron-LM) splits the sequence dimension of LayerNorm and dropout outputs across TP ranks, complementing tensor parallelism.
+        - strong [ref=e49]: Ring Attention
+        - text: (Liu et al., 2023) shards the sequence across hosts in a ring topology so each host processes its local chunk with a causal mask, passing KV chunks around the ring — enabling essentially unlimited context by paying bandwidth.
+      - paragraph [ref=e50]:
+        - strong [ref=e51]: Context Parallelism
+        - text: "(used in Llama 3's training) further distributes prefill computation across devices. This is distinct from tensor parallelism: it slices the batch × sequence dimension rather than the hidden dimension."
+      - 'heading "3D Parallelism: Combining All Strategies" [level=3] [ref=e52]'
+      - paragraph [ref=e53]: "Production systems nest all strategies. A typical Llama-3 405B training run uses:"
+      - list [ref=e54]:
+        - listitem [ref=e55]:
+          - strong [ref=e56]: TP = 8
+          - text: — within each node (NVLink)
+        - listitem [ref=e57]:
+          - strong [ref=e58]: PP = 16
+          - text: — across nodes (InfiniBand), 16 pipeline stages
+        - listitem [ref=e59]:
+          - strong [ref=e60]: DP = N
+          - text: — replicating the (TP × PP) unit across N data-parallel replicas
+        - listitem [ref=e61]: Total GPU count = TP × PP × DP
+      - generic [ref=e62]:
+        - strong [ref=e63]: Megatron-LM defaults
+        - text: "for 405B: TP=8, PP=16, with 8-GPU nodes. You need at least 8 × 16 = 128 GPUs just for one DP replica. With DP=8, that's 1,024 H100s. This matches Meta's reported training configuration."
+      - heading "Inference vs Training Differences" [level=3] [ref=e64]
+      - paragraph [ref=e65]: At inference time, batch sizes are much smaller (often 1–32), so the pipeline bubble is less amortised. vLLM uses TP across GPUs on a single node (e.g., TP=4 for a 70B model across 4×A100s) and often avoids PP because PP adds latency per layer boundary. TensorRT-LLM supports both but recommends TP-first for latency-sensitive deployments.
+      - paragraph [ref=e66]:
+        - text: For pure inference at massive scale,
+        - strong [ref=e67]: disaggregated prefill-decode
+        - text: "(Splitwise, Mooncake) is an emerging approach: dedicate separate GPU pools to prefill (compute-bound) and decode (memory-bandwidth-bound) phases, sending KV caches between them. This avoids mixing the two workloads on the same hardware, improving utilisation."
+      - heading "Communication Cost Analysis" [level=3] [ref=e68]
+      - table [ref=e69]:
+        - rowgroup [ref=e70]:
+          - row "Strategy Communication Op Volume per Layer Bandwidth Required" [ref=e71]:
+            - columnheader "Strategy" [ref=e72]
+            - columnheader "Communication Op" [ref=e73]
+            - columnheader "Volume per Layer" [ref=e74]
+            - columnheader "Bandwidth Required" [ref=e75]
+        - rowgroup [ref=e76]:
+          - row "Tensor Parallelism AllReduce ×2/block 2 × batch × seq × hidden NVLink (600 GB/s)" [ref=e77]:
+            - cell "Tensor Parallelism" [ref=e78]
+            - cell "AllReduce ×2/block" [ref=e79]
+            - cell "2 × batch × seq × hidden" [ref=e80]
+            - cell "NVLink (600 GB/s)" [ref=e81]
+          - row "Pipeline Parallelism P2P at stage boundary batch × seq × hidden InfiniBand (200 Gb/s)" [ref=e82]:
+            - cell "Pipeline Parallelism" [ref=e83]
+            - cell "P2P at stage boundary" [ref=e84]
+            - cell "batch × seq × hidden" [ref=e85]
+            - cell "InfiniBand (200 Gb/s)" [ref=e86]
+          - row "Data Parallelism (ZeRO) AllReduce / AllGather Gradient tensor (~param bytes) InfiniBand or NVLink" [ref=e87]:
+            - cell "Data Parallelism (ZeRO)" [ref=e88]
+            - cell "AllReduce / AllGather" [ref=e89]
+            - cell "Gradient tensor (~param bytes)" [ref=e90]
+            - cell "InfiniBand or NVLink" [ref=e91]
+          - row "Sequence Parallelism AllGather + ReduceScatter 2 × batch × seq × hidden NVLink" [ref=e92]:
+            - cell "Sequence Parallelism" [ref=e93]
+            - cell "AllGather + ReduceScatter" [ref=e94]
+            - cell "2 × batch × seq × hidden" [ref=e95]
+            - cell "NVLink" [ref=e96]
+      - heading "Practical Selection Guide" [level=3] [ref=e97]
+      - list [ref=e98]:
+        - listitem [ref=e99]:
+          - strong [ref=e100]: "Single node, fits after TP=8:"
+          - text: use TP=8, no PP needed.
+        - listitem [ref=e101]:
+          - strong [ref=e102]: "Multi-node training:"
+          - text: TP within node, PP across nodes, DP × ZeRO-3 on top.
+        - listitem [ref=e103]:
+          - strong [ref=e104]: "Long contexts (>32K):"
+          - text: add sequence or context parallelism.
+        - listitem [ref=e105]:
+          - strong [ref=e106]: "Low-latency inference (batch=1):"
+          - text: prefer TP over PP; PP adds latency proportional to pipeline depth × activation transfer time.
+        - listitem [ref=e107]:
+          - strong [ref=e108]: "High-throughput inference:"
+          - text: PP can be beneficial if stages are well-balanced; vLLM's continuous batching helps keep all stages full.
+    - generic [ref=e109]:
+      - heading "Interactive Visualization" [level=2] [ref=e110]
+      - paragraph [ref=e111]: Explore how model layers are split across GPUs in four different parallelism strategies. Toggle strategy buttons and adjust GPU count to see the partitioning change. Each coloured block is a weight shard; arrows show communication patterns.
+      - generic [ref=e112]:
+        - button "Tensor Parallelism" [ref=e113] [cursor=pointer]
+        - button "Pipeline Parallelism" [ref=e114] [cursor=pointer]
+        - button "Data Parallelism (ZeRO)" [ref=e115] [cursor=pointer]
+        - button "3D Combined" [ref=e116] [cursor=pointer]
+      - generic [ref=e117]:
+        - generic [ref=e118]: "GPU count:"
+        - slider [ref=e119] [cursor=pointer]: "4"
+        - generic [ref=e120]: "4"
+        - generic [ref=e121]: "Layers:"
+        - slider [ref=e122] [cursor=pointer]: "8"
+        - generic [ref=e123]: "8"
+      - generic [ref=e125]:
+        - generic [ref=e126]: Attention shard
+        - generic [ref=e128]: FFN shard
+        - generic [ref=e130]: AllReduce comms
+    - generic [ref=e132]:
+      - heading "Key Takeaways" [level=2] [ref=e133]
+      - list [ref=e134]:
+        - listitem [ref=e135]:
+          - strong [ref=e136]: TP degree is bounded by NVLink bandwidth.
+          - text: TP=8 is the practical ceiling on a single DGX H100 node (all-reduce over NVLink at 900 GB/s bidirectional). Going TP=16 across nodes kills throughput — every transformer block pays two cross-node all-reduces.
+        - listitem [ref=e137]:
+          - strong [ref=e138]: Pipeline bubble tax is real and scales with stages.
+          - text: With PP=16 and only 1 micro-batch, 15/16 ≈ 94% of each stage is idle. Use micro-batch counts ≥ 4×PP to keep bubble below 20%. Megatron's 1F1B schedule halves peak activation memory vs GPipe at the same throughput.
+        - listitem [ref=e139]:
+          - strong [ref=e140]: ZeRO-3 effectively shards the model like TP but with data-parallel semantics.
+          - text: "No code changes to the model graph are required. The trade-off: ZeRO-3 doubles all-gather communication vs ZeRO-1. In practice, ZeRO-2 is the sweet spot — it shards optimizer states + gradients (the 12-byte-per-param overhead) but keeps parameters replicated, avoiding the all-gather on every forward pass."
+        - listitem [ref=e141]:
+          - strong [ref=e142]: For inference, TP dominates; PP adds latency proportional to pipeline depth × inter-stage bandwidth.
+          - text: At 200 Gb/s InfiniBand (25 GB/s), transferring a 4096-token × 8192-hidden activation tensor (≈256 MB at fp16) takes ~10 ms per stage boundary — a 16-stage pipeline adds 160 ms to TTFT. vLLM uses TP=4 for 70B models instead.
+        - listitem [ref=e143]:
+          - strong [ref=e144]: Ring Attention + context parallelism enables 1M+ token contexts
+          - text: at the cost of O(n) all-to-all communication across the ring. Used in Llama 3's training (up to 128K context), Gemini 1.5 (1M context claims to use a similar approach). Bandwidth-efficient but requires custom CUDA kernels to pipeline communication with computation.
+        - listitem [ref=e145]:
+          - strong [ref=e146]: The 3D parallelism grid
+          - text: "(TP × PP × DP) must divide evenly into total GPU count. Misconfigurations waste GPUs or cause OOM. Always verify:"
+          - code [ref=e147]: assert total_gpus == tp * pp * dp
+          - text: . Megatron-LM enforces this at launch; DeepSpeed does not, leading to silent under-utilisation bugs in naive configs.
+  - navigation [ref=e148]:
+    - generic [ref=e149]:
+      - generic [ref=e150]: ← Previous
+      - link "35 — Speculative Decoding" [ref=e151] [cursor=pointer]:
+        - /url: 35-speculative-decoding.html
+    - generic [ref=e152]:
+      - generic [ref=e153]: Next →
+      - link "(End of Series)":
+        - /url: "#"

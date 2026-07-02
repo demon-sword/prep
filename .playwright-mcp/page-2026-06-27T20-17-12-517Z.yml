@@ -1,0 +1,194 @@
+- generic [ref=e1]:
+  - banner [ref=e2]:
+    - generic [ref=e3]: Foundations
+    - heading "Recurrent Neural Networks (RNN)" [level=1] [ref=e4]
+    - paragraph [ref=e5]: RNN cell, hidden state propagation, vanishing gradient problem, LSTM and GRU variants, and why RNNs gave way to transformers.
+  - main [ref=e6]:
+    - generic [ref=e7]:
+      - heading "Theory" [level=2] [ref=e8]
+      - 'heading "The Core Idea: Memory Through Recurrence" [level=3] [ref=e9]'
+      - paragraph [ref=e10]:
+        - text: An RNN processes sequences by maintaining a
+        - emphasis [ref=e11]: hidden state
+        - text: — a fixed-size vector that summarizes everything seen so far. At each timestep
+        - code [ref=e12]: t
+        - text: ", the cell takes the current input"
+        - code [ref=e13]: x_t
+        - text: and the previous hidden state
+        - code [ref=e14]: "h_{t-1}"
+        - text: ", and produces a new hidden state"
+        - code [ref=e15]: h_t
+        - text: and optionally an output
+        - code [ref=e16]: y_t
+        - text: .
+      - generic [ref=e17]:
+        - text: "h_t = tanh(W_h · h_{t-1} + W_x · x_t + b)"
+        - text: y_t = W_y · h_t + b_y
+      - paragraph [ref=e18]:
+        - text: "This recurrence is the defining mechanism: the same weight matrices"
+        - code [ref=e19]: W_h
+        - text: ","
+        - code [ref=e20]: W_x
+        - text: ", and"
+        - code [ref=e21]: W_y
+        - text: are applied at every timestep. The model is "unrolled" across time during backpropagation. This parameter sharing is both the RNN's strength (it generalizes across sequence positions) and its weakness (a single set of weights must handle all temporal distances, making long-range dependencies hard to learn).
+      - heading "The Vanishing Gradient Problem" [level=3] [ref=e22]
+      - paragraph [ref=e23]:
+        - text: Training an RNN requires backpropagating gradients through time (BPTT). If a sequence has length
+        - code [ref=e24]: T
+        - text: ", the gradient of the loss at step"
+        - code [ref=e25]: T
+        - text: with respect to the hidden state at step
+        - code [ref=e26]: "1"
+        - text: involves a product of
+        - code [ref=e27]: T-1
+        - text: Jacobian matrices, each roughly equal to
+        - code [ref=e28]: W_h
+        - text: scaled by the tanh derivative.
+      - generic [ref=e29]: "∂h_T/∂h_1 = ∏_{t=2}^{T} (∂h_t/∂h_{t-1}) = ∏_{t=2}^{T} diag(tanh'(...)) · W_h"
+      - paragraph [ref=e30]:
+        - text: The tanh derivative is at most 1.0 (at zero) and quickly falls to near zero at saturation. If the spectral norm of
+        - code [ref=e31]: W_h
+        - text: is less than 1, this product shrinks exponentially — gradients
+        - strong [ref=e32]: vanish
+        - text: ", and early tokens stop receiving gradient signal. Empirically, vanilla RNNs struggle to learn dependencies beyond ~10–20 timesteps."
+      - paragraph [ref=e33]:
+        - text: The flip side is
+        - strong [ref=e34]: exploding gradients
+        - text: ": when the spectral norm of"
+        - code [ref=e35]: W_h
+        - text: exceeds 1, products grow exponentially. The engineering fix for exploding gradients is gradient clipping (clip by norm to a threshold like 5.0); vanishing is harder to fix at the architecture level, which is why LSTM was invented.
+      - heading "LSTM — Long Short-Term Memory" [level=3] [ref=e36]
+      - paragraph [ref=e37]:
+        - text: "Hochreiter & Schmidhuber (1997) introduced the LSTM to solve vanishing gradients. The key idea: a separate"
+        - strong [ref=e38]: cell state
+        - code [ref=e39]: C_t
+        - text: flows through time with only multiplicative interactions (via gates), creating a "highway" for gradients that can propagate without the repeated squashing.
+      - paragraph [ref=e40]: "LSTM has four gates, all learned:"
+      - list [ref=e41]:
+        - listitem [ref=e42]:
+          - strong [ref=e43]: Forget gate
+          - code [ref=e44]: "f_t = σ(W_f · [h_{t-1}, x_t] + b_f)"
+          - text: — what fraction of the old cell state to keep
+        - listitem [ref=e45]:
+          - strong [ref=e46]: Input gate
+          - code [ref=e47]: "i_t = σ(W_i · [h_{t-1}, x_t] + b_i)"
+          - text: — how much of the new candidate to add
+        - listitem [ref=e48]:
+          - strong [ref=e49]: Candidate
+          - code [ref=e50]: "C̃_t = tanh(W_C · [h_{t-1}, x_t] + b_C)"
+          - text: — new candidate values
+        - listitem [ref=e51]:
+          - strong [ref=e52]: Output gate
+          - code [ref=e53]: "o_t = σ(W_o · [h_{t-1}, x_t] + b_o)"
+          - text: — what part of the cell state to expose
+      - generic [ref=e54]:
+        - text: "C_t = f_t ⊙ C_{t-1} + i_t ⊙ C̃_t"
+        - text: h_t = o_t ⊙ tanh(C_t)
+      - paragraph [ref=e55]:
+        - text: The cell update is a
+        - emphasis [ref=e56]: linear
+        - text: combination of old cell state and new candidate — no repeated nonlinear squashing along the cell path. This means gradients flow back through time without exponential decay (provided the forget gate stays near 1). In practice, LSTMs can learn dependencies spanning hundreds of timesteps, far exceeding vanilla RNNs.
+      - heading "GRU — Gated Recurrent Unit" [level=3] [ref=e57]
+      - paragraph [ref=e58]:
+        - text: Cho et al. (2014) proposed the GRU as a simplified LSTM with two gates and no separate cell state. It merges the forget and input gates into a single
+        - strong [ref=e59]: update gate
+        - text: and adds a
+        - strong [ref=e60]: reset gate
+        - text: ":"
+      - generic [ref=e61]:
+        - text: "z_t = σ(W_z · [h_{t-1}, x_t]) (update gate)"
+        - text: "r_t = σ(W_r · [h_{t-1}, x_t]) (reset gate)"
+        - text: "h̃_t = tanh(W · [r_t ⊙ h_{t-1}, x_t])"
+        - text: "h_t = (1 - z_t) ⊙ h_{t-1} + z_t ⊙ h̃_t"
+      - paragraph [ref=e62]: "GRU is computationally cheaper than LSTM (~25% fewer parameters for same hidden size) and often matches LSTM performance on many benchmarks. The tradeoff: LSTM's separate cell state gives it more independent control over forgetting vs. outputting, which can matter for tasks requiring very selective memory."
+      - heading "Why RNNs Gave Way to Transformers" [level=3] [ref=e63]
+      - paragraph [ref=e64]: "Despite LSTM and GRU improvements, RNNs have three fundamental problems that transformers solved:"
+      - list [ref=e65]:
+        - listitem [ref=e66]:
+          - strong [ref=e67]: Sequential computation
+          - text: ": RNNs must compute"
+          - code [ref=e68]: h_1 → h_2 → ... → h_T
+          - text: strictly in order. You cannot parallelize across timesteps. On modern GPUs with thousands of CUDA cores, this is catastrophically inefficient — GPU utilization drops to near 0% for long sequences. Transformers process all positions simultaneously via matrix multiplications.
+        - listitem [ref=e69]:
+          - strong [ref=e70]: Bottleneck hidden state
+          - text: ": All information about the past must compress into a fixed-size vector"
+          - code [ref=e71]: h_t
+          - text: (typically 256–4096 dimensions). At long range, early information inevitably gets overwritten. Transformers' attention mechanism directly reads from
+          - emphasis [ref=e72]: all
+          - text: previous representations, no bottleneck.
+        - listitem [ref=e73]:
+          - strong [ref=e74]: Vanishing gradients remain hard
+          - text: ": Even with LSTM/GRU, gradients across very long sequences (>500 tokens) are difficult. Residual connections + layer norm in transformers essentially solve this — gradients flow back near-perfectly."
+      - paragraph [ref=e75]: The tipping point was Vaswani et al.'s "Attention is All You Need" (2017), which showed a transformer outperforming LSTM-based seq2seq on WMT translation while training 8x faster on 8 GPUs. By 2018, BERT (transformer) rendered LSTM-based NLP effectively obsolete for most tasks.
+      - heading "Production Reality" [level=3] [ref=e76]
+      - paragraph [ref=e77]: "RNNs are not fully extinct. In low-latency, resource-constrained settings (IoT, edge inference), LSTMs still appear because:"
+      - list [ref=e78]:
+        - listitem [ref=e79]: They process input one token at a time — fixed memory per step, no quadratic attention cost
+        - listitem [ref=e80]: LSTM-based speech systems (e.g., Apple's original Siri acoustic model) ran on device with tiny memory footprints
+        - listitem [ref=e81]: "Time-series forecasting on long sequences: architectures like Temporal Fusion Transformer hybrid LSTM with attention"
+      - paragraph [ref=e82]: However, for language modeling, translation, and generation, transformers dominate entirely. The RNN era produced the foundational ideas — hidden states, gating, BPTT — that transformers inherited in spirit even while abandoning the recurrence itself.
+    - generic [ref=e83]:
+      - heading "Interactive Visualization" [level=2] [ref=e84]
+      - generic [ref=e85]:
+        - generic [ref=e86]:
+          - heading "Unrolled RNN — Hidden State Flow & Gradient Decay" [level=3] [ref=e87]
+          - paragraph [ref=e88]: Animate the forward pass (hidden state propagating left→right) and the backward pass (gradient magnitude fading with distance). Use tabs to switch between vanilla RNN, LSTM, and GRU behavior. Drag the sequence length slider to see how quickly gradients vanish.
+        - generic [ref=e89]:
+          - generic [ref=e90] [cursor=pointer]: Vanilla RNN
+          - generic [ref=e91] [cursor=pointer]: LSTM
+          - generic [ref=e92] [cursor=pointer]: GRU
+        - generic [ref=e93]:
+          - generic [ref=e94]:
+            - generic [ref=e95]: Sequence Length
+            - slider [ref=e96]: "7"
+            - generic [ref=e97]: 7 tokens
+          - generic [ref=e98]:
+            - generic [ref=e99]: W_h Spectral Norm
+            - slider [ref=e100]: "0.85"
+            - generic [ref=e101]: "0.85"
+          - generic [ref=e102]:
+            - generic [ref=e103]: Animation Speed
+            - slider [ref=e104]: "3"
+            - generic [ref=e105]: "3"
+          - generic [ref=e106]:
+            - button "⏸ Pause" [active] [ref=e141] [cursor=pointer]
+            - button "↺ Reset" [ref=e108] [cursor=pointer]
+            - button "Show Gradients" [ref=e109] [cursor=pointer]
+        - generic [ref=e111]:
+          - generic [ref=e112]: Hidden state h_t
+          - generic [ref=e114]: Input x_t
+          - generic [ref=e116]: Gradient magnitude
+          - generic [ref=e118]: Cell state C_t (LSTM)
+    - generic [ref=e120]:
+      - heading "Key Takeaways" [level=2] [ref=e121]
+      - list [ref=e122]:
+        - listitem [ref=e123]:
+          - strong [ref=e124]: Vanishing gradients are architectural, not incidental.
+          - text: In vanilla RNNs, the gradient signal multiplies through
+          - code [ref=e125]: W_h
+          - text: "'s spectral norm at every timestep — at norm 0.9, after 50 steps the gradient is 0.9⁵⁰ ≈ 0.005. LSTMs' additive cell update provides a direct gradient highway, but they still degrade past ~500 tokens."
+        - listitem [ref=e126]:
+          - strong [ref=e127]: Sequential computation is a GPU killer.
+          - text: An RNN on a sequence of length T uses only 1/T of GPU parallelism compared to a transformer. For T=512 tokens, that's 0.2% GPU utilization during sequence processing — the single biggest reason RNNs lost the race.
+        - listitem [ref=e128]:
+          - strong [ref=e129]: GRU ≈ LSTM in most benchmarks, ~25% cheaper.
+          - text: For production sequence tasks where you're still using RNNs (on-device speech, lightweight time-series), GRU is usually the right default. LSTM is worth trying only when the task requires selective forgetting that GRU's merged gate can't express.
+        - listitem [ref=e130]:
+          - strong [ref=e131]: The hidden state bottleneck never goes away.
+          - text: A 512-dim LSTM hidden state must compress everything relevant from an arbitrary-length past into 512 floats. At ~1K+ tokens, this bottleneck dominates quality. Attention sidesteps this by making the "memory" grow with sequence length — at the cost of O(n²) compute.
+        - listitem [ref=e132]:
+          - strong [ref=e133]: BPTT through time is memory-intensive.
+          - text: Full backpropagation through T timesteps requires storing all intermediate activations — O(T) memory. For long sequences, truncated BPTT (e.g., backprop only 100 steps back) is standard but trades gradient quality for memory. This is a hidden training cost that transformer training (gradient checkpointing) handles more elegantly.
+        - listitem [ref=e134]:
+          - strong [ref=e135]: RNNs live on in hybrids.
+          - text: Mamba (2023) and RWKV (2023) revive the linear-recurrence idea with modern gating to achieve O(n) inference — transformer-quality results without the quadratic attention cost. They matter for very long contexts (100K+ tokens) where attention becomes prohibitively expensive.
+  - navigation [ref=e136]:
+    - link "← 02 · Seq2Seq Architecture" [ref=e137] [cursor=pointer]:
+      - /url: 02-seq2seq.html
+      - generic [ref=e138]: ←
+      - text: 02 · Seq2Seq Architecture
+    - link "04 · Transformer Architecture Overview →" [ref=e139] [cursor=pointer]:
+      - /url: 04-transformers-overview.html
+      - text: 04 · Transformer Architecture Overview
+      - generic [ref=e140]: →

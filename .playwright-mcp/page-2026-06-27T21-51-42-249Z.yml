@@ -1,0 +1,204 @@
+- generic [ref=e1]:
+  - banner [ref=e2]:
+    - generic [ref=e3]: Inference
+    - 'heading "Token Sampling: Temperature, Top-K, Top-P" [level=1] [ref=e4]'
+    - paragraph [ref=e5]: How LLMs select the next token — temperature scaling, top-K filtering, and nucleus (top-P) sampling — and how each reshapes the distribution between diversity and coherence.
+  - main [ref=e6]:
+    - generic [ref=e7]:
+      - heading "Theory" [level=2] [ref=e8]
+      - 'heading "The Fundamental Problem: Turning Logits into a Token" [level=3] [ref=e9]'
+      - paragraph [ref=e10]:
+        - text: An LLM's final layer produces a vector of
+        - emphasis [ref=e11]: logits
+        - text: "— one raw score per vocabulary token (GPT-4 vocabulary: ~100K tokens, Llama-3: 128K, BERT: 30K). These raw scores are unbounded real numbers. To sample a next token, we must convert them to a valid probability distribution. The process:"
+        - code [ref=e12]: logits → softmax → probability distribution → sample one token
+        - text: . The design choices made between "softmax" and "sample" define the entire character of the model's output.
+      - heading "Softmax and the Logit Landscape" [level=3] [ref=e13]
+      - paragraph [ref=e14]:
+        - text: "Standard softmax:"
+        - code [ref=e15]: P(i) = exp(z_i) / Σ exp(z_j)
+        - text: . The exponential function naturally concentrates probability mass — a logit difference of just 5 translates to roughly 150× higher probability. This means a model's raw output is already quite "peaky" around high-confidence tokens. The sampling strategies below all operate on this post-softmax distribution (or on logits before the division, in the case of temperature).
+      - heading "Temperature Scaling" [level=3] [ref=e16]
+      - paragraph [ref=e17]:
+        - text: Temperature (
+        - code [ref=e18]: T
+        - text: ) is applied
+        - emphasis [ref=e19]: before
+        - text: "softmax by dividing all logits by T:"
+      - generic [ref=e20]: P(i) = exp(z_i / T) / Σ exp(z_j / T)
+      - paragraph [ref=e21]:
+        - strong [ref=e22]: "T < 1.0 (cold):"
+        - text: dividing by a small number amplifies logit differences — the distribution sharpens and becomes more deterministic. At T → 0, sampling becomes greedy argmax (always pick the highest-probability token). Models become repetitive, factual-but-boring.
+        - strong [ref=e23]: "T = 1.0:"
+        - text: the raw model distribution — whatever the model actually learned.
+        - strong [ref=e24]: "T > 1.0 (hot):"
+        - text: dividing by a large number compresses logit differences — the distribution flattens. Tokens that were nearly impossible now have non-trivial probability. Output becomes more creative, surprising, and eventually incoherent.
+      - paragraph [ref=e25]:
+        - text: "Typical production values:"
+        - code [ref=e26]: T = 0.0–0.3
+        - text: for factual/code tasks;
+        - code [ref=e27]: T = 0.7–1.0
+        - text: for creative writing;
+        - code [ref=e28]: T = 1.2–2.0
+        - text: "for brainstorming or diversity sampling. OpenAI API default: 1.0. Many practitioners set T = 0 for evals and classification."
+      - heading "Top-K Sampling" [level=3] [ref=e29]
+      - paragraph [ref=e30]:
+        - text: Top-K truncates the distribution to only the
+        - code [ref=e31]: K
+        - text: "highest-probability tokens, then renormalizes:"
+      - generic [ref=e32]: Vocabulary ─► keep top K tokens ─► zero out the rest ─► renormalize ─► sample
+      - paragraph [ref=e33]:
+        - strong [ref=e34]: "Why it helps:"
+        - text: prevents the model from ever selecting incoherent low-probability tokens, even at high temperature.
+        - strong [ref=e35]: "Key problem:"
+        - text: K is fixed regardless of the distribution shape. When the model is very confident (one token at 95% probability), K=50 still allows 49 nearly-zero-probability alternatives. When the model is genuinely uncertain (50 tokens each at 2%), K=10 eliminates most viable alternatives. The fixed K ignores the natural shape of the distribution.
+      - paragraph [ref=e36]:
+        - text: "Typical values:"
+        - code [ref=e37]: K = 10–50
+        - text: "for most tasks. GPT-2 defaults: K = 50. K = 1 is greedy decoding."
+      - heading "Top-P / Nucleus Sampling" [level=3] [ref=e38]
+      - paragraph [ref=e39]: "Nucleus sampling (Holtzman et al., 2020) fixes Top-K's shape-blindness by selecting a dynamic K: keep the smallest set of tokens whose cumulative probability exceeds threshold P:"
+      - generic [ref=e40]: Sort tokens by probability descending → accumulate → stop when cumsum ≥ P → renormalize
+      - paragraph [ref=e41]:
+        - strong [ref=e42]: "When the model is confident:"
+        - text: cumsum hits P = 0.9 after just 1–3 tokens → small nucleus → conservative sampling.
+        - strong [ref=e43]: "When uncertain:"
+        - text: cumsum hits P = 0.9 after 50+ tokens → large nucleus → more exploratory sampling. The nucleus adapts to the model's certainty at each step.
+      - paragraph [ref=e44]:
+        - strong [ref=e45]: "Typical values:"
+        - code [ref=e46]: P = 0.9–0.95
+        - text: for most creative tasks;
+        - code [ref=e47]: P = 1.0
+        - text: "disables filtering entirely. Anthropic Claude API default: top_p = 1.0 (off). OpenAI default: 1.0 but recommends not combining with temperature."
+      - heading "Combining Strategies" [level=3] [ref=e48]
+      - paragraph [ref=e49]:
+        - text: "The practical order of operations:"
+        - code [ref=e50]: logits / T → softmax → top-K filter → top-P filter → renormalize → multinomial sample
+        - text: ". Most frameworks apply them in this order. The OpenAI and Anthropic APIs warn against setting both temperature and top_p away from their defaults simultaneously — the interaction can produce unexpected sharpness or flatness. A common production recipe: either use temperature alone, or top-P alone, with temperature set to 1.0."
+      - heading "Min-P Sampling (Emerging)" [level=3] [ref=e51]
+      - paragraph [ref=e52]:
+        - text: "A newer approach (used by LM Studio, llama.cpp): filter out any token whose probability is below"
+        - code [ref=e53]: min_p × max_probability
+        - text: . This is scale-invariant — the threshold moves with the distribution peak. min_p = 0.05 means "never pick a token less than 5% as likely as the best token." This avoids both Top-K's fixed-K problem and Top-P's behavior at extreme confidence levels.
+      - heading "Greedy vs Beam vs Sampling" [level=3] [ref=e54]
+      - paragraph [ref=e55]:
+        - strong [ref=e56]: Greedy decoding
+        - text: (T=0, K=1) is deterministic and fast but notoriously degenerate — prone to repetition loops and locally optimal but globally bad sequences.
+        - strong [ref=e57]: Beam search
+        - text: maintains N best partial sequences simultaneously, exploring more of the probability space but with O(N) cost and a bias toward short, generic outputs.
+        - strong [ref=e58]: Sampling
+        - text: (temperature + top-K/P) adds randomness that paradoxically produces more diverse and often higher-quality outputs for open-ended generation. For constrained tasks (translation, summarization), beam search can outperform sampling.
+      - 'heading "Production Reality: Why This Matters" [level=3] [ref=e59]'
+      - paragraph [ref=e60]:
+        - strong [ref=e61]: "Evaluation reproducibility:"
+        - text: any temperature above 0 makes evals non-deterministic. Always set T = 0 for benchmarks, or run multiple samples and aggregate.
+        - strong [ref=e62]: "Cost at scale:"
+        - text: Best-of-N sampling (generate N completions, pick the best) multiplies cost by N — at T=0 this collapses to N identical outputs, wasting compute.
+        - strong [ref=e63]: "Latency:"
+        - text: sampling strategy itself adds negligible latency; the token generation loop dominates.
+        - strong [ref=e64]: "Batch diversity:"
+        - text: at T=0, you can batch identical prompts and all get identical outputs — cache them. At T>0, each is unique.
+      - paragraph [ref=e65]:
+        - text: Tools like
+        - strong [ref=e66]: vLLM
+        - text: ","
+        - strong [ref=e67]: TGI (Text Generation Inference)
+        - text: ", and"
+        - strong [ref=e68]: llama.cpp
+        - text: all implement these sampling strategies in CUDA kernels for efficiency. vLLM's PagedAttention paper notes that at T=1 with top-P=0.9, GPU throughput is nearly identical to T=0 — the sampling step is not the bottleneck.
+      - generic [ref=e69]:
+        - strong [ref=e70]: "Gotcha:"
+        - text: Temperature affects perplexity calculations. When computing perplexity for evaluation, always use T=1.0 (raw model distribution). Sampling temperature should never be applied to loss/perplexity metrics.
+      - generic [ref=e71]:
+        - strong [ref=e72]: "The repetition problem:"
+        - text: even with temperature, models can enter repetition traps. Modern systems add
+        - emphasis [ref=e73]: repetition penalty
+        - text: (divide logits of recently used tokens by a penalty factor) or
+        - emphasis [ref=e74]: frequency penalty
+        - text: (subtract a penalty proportional to how often the token has appeared). These are applied before temperature scaling.
+    - generic [ref=e75]:
+      - heading "Interactive Visualization" [level=2] [ref=e76]
+      - paragraph [ref=e77]:
+        - text: Adjust temperature, top-K, and top-P sliders to see how they reshape the probability distribution over a vocabulary of 30 tokens. The bar chart shows raw probabilities (gray) and the filtered/renormalized distribution (colored). Click
+        - strong [ref=e78]: Sample Token
+        - text: to draw a token from the current distribution and watch it get highlighted.
+      - generic [ref=e79]:
+        - generic [ref=e80]:
+          - generic [ref=e81]:
+            - generic [ref=e82]:
+              - text: Temperature (T)
+              - generic [ref=e83]: "1.0"
+            - slider [ref=e84] [cursor=pointer]: "1"
+          - generic [ref=e85]:
+            - generic [ref=e86]:
+              - text: Top-K
+              - generic [ref=e87]: 30 (all)
+            - slider [ref=e88] [cursor=pointer]: "30"
+          - generic [ref=e89]:
+            - generic [ref=e90]:
+              - text: Top-P (nucleus)
+              - generic [ref=e91]: "1.00"
+            - slider [ref=e92] [cursor=pointer]: "1"
+          - generic [ref=e93]:
+            - generic [ref=e94]: Active filters
+            - generic [ref=e95]:
+              - button "🌡 Temperature" [ref=e96] [cursor=pointer]
+              - button "🔢 Top-K" [ref=e97] [cursor=pointer]
+              - button "🎯 Top-P" [ref=e98] [cursor=pointer]
+            - paragraph [ref=e99]: Toggle to enable/disable each filter independently
+          - generic [ref=e100]:
+            - generic [ref=e101]: Distribution stats
+            - generic [ref=e102]:
+              - text: "Tokens in nucleus: 30"
+              - text: "Top token: \"the\""
+              - text: "Top prob: 29.1%"
+              - text: "Entropy: 3.27 bits"
+        - generic [ref=e103]:
+          - generic [ref=e104]:
+            - generic [ref=e105]: Token Probability Distribution
+            - generic [ref=e107]:
+              - generic [ref=e110]: Filtered out
+              - generic [ref=e113]: In nucleus (renormalized)
+              - generic [ref=e116]: Sampled token
+          - generic [ref=e117]:
+            - generic [ref=e118]: Sampled tokens (last 12)
+            - generic [ref=e145]: the
+            - button "Sample Token" [active] [ref=e121] [cursor=pointer]
+    - generic [ref=e122]:
+      - heading "Key Takeaways" [level=2] [ref=e123]
+      - list [ref=e124]:
+        - listitem [ref=e125]:
+          - text: ▸
+          - strong [ref=e126]: Temperature is a multiplier on uncertainty, not quality.
+          - text: T < 1 makes the model sycophantic toward its own priors — great for factual retrieval, terrible for diversity. T > 1 doesn't add knowledge; it just spreads mass to tokens the model weakly considered, which often produces hallucinations in factual domains.
+        - listitem [ref=e127]:
+          - text: ▸
+          - strong [ref=e128]: Top-P is almost always better than Top-K for open-ended generation.
+          - text: Top-K's fixed cutoff doesn't adapt to distribution shape — at high-confidence steps it still wastes budget on near-zero tokens. Top-P (nucleus) contracts naturally. The original "The Curious Case of Neural Text Degeneration" (Holtzman 2020) empirically shows nucleus sampling produces more human-like text.
+        - listitem [ref=e129]:
+          - text: ▸
+          - strong [ref=e130]: For evals, always use T = 0 or run multiple samples.
+          - text: Any T > 0 makes results non-deterministic. A 1-point benchmark difference might vanish across seeds. Major leaderboards (MMLU, HumanEval) typically eval at T = 0.
+        - listitem [ref=e131]:
+          - text: ▸
+          - strong [ref=e132]: vLLM, TGI, and llama.cpp implement sampling in CUDA — it's essentially free latency.
+          - text: The bottleneck in decode phase is always memory bandwidth for KV cache, not the softmax+sample step. Don't optimize sampling for speed; optimize it for output quality.
+        - listitem [ref=e133]:
+          - text: ▸
+          - strong [ref=e134]: Repetition penalty is underrated.
+          - text: Even with nucleus sampling, models can degenerate in long generations. llama.cpp's
+          - code [ref=e135]: "--repeat-penalty 1.1"
+          - text: with a context window of 64 past tokens is a practical default that prevents most looping without hurting output quality measurably.
+        - listitem [ref=e136]:
+          - text: ▸
+          - strong [ref=e137]: Don't combine temperature and top-P simultaneously unless you understand the interaction.
+          - text: "Most API providers document this warning. Use one primary lever: either tune temperature (with top-P = 1.0) or tune top-P (with temperature = 1.0). Mixing both creates non-obvious distribution shapes that are hard to reason about."
+  - navigation [ref=e138]:
+    - link "← 20 — Memory Bottlenecks in Fine-Tuning" [ref=e139] [cursor=pointer]:
+      - /url: 20-memory-bottlenecks.html
+      - generic [ref=e140]: ←
+      - generic [ref=e141]: 20 — Memory Bottlenecks in Fine-Tuning
+    - link "22 — LLM Evaluation Metrics →" [ref=e142] [cursor=pointer]:
+      - /url: 22-evaluation-metrics.html
+      - generic [ref=e143]: 22 — LLM Evaluation Metrics
+      - generic [ref=e144]: →

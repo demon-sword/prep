@@ -1,0 +1,207 @@
+- generic [active] [ref=e1]:
+  - banner [ref=e2]:
+    - generic [ref=e3]: finetuning
+    - heading "Model Distillation" [level=1] [ref=e4]
+    - paragraph [ref=e5]: Training a small student model to mimic a large teacher model using soft labels and intermediate representations — achieving near-teacher quality at a fraction of the compute cost.
+  - main [ref=e6]:
+    - generic [ref=e7]:
+      - heading "Theory" [level=2] [ref=e8]
+      - 'heading "The Core Problem: Quality vs. Cost" [level=3] [ref=e9]'
+      - paragraph [ref=e10]:
+        - text: Large language models achieve state-of-the-art quality, but deploying a 70B or 405B parameter model in production is expensive — it requires multiple GPUs per inference call, adds latency, and inflates cloud costs. Model distillation is a training technique that extracts the
+        - emphasis [ref=e11]: knowledge
+        - text: of a large "teacher" model into a much smaller "student" model, without the student ever seeing the original training data. Introduced by Hinton, Vinyals, and Dean (2015), distillation has become a cornerstone of production AI deployment.
+      - paragraph [ref=e12]:
+        - text: The key insight is that a trained model's
+        - strong [ref=e13]: output probability distribution
+        - text: over the vocabulary carries far more information than a one-hot label. When a teacher model reads "The cat sat on the ___", it might assign 40% to "mat", 20% to "floor", 15% to "sofa", 10% to "roof", and the remaining 15% spread across thousands of other tokens. This soft distribution tells the student not just the answer, but the
+        - emphasis [ref=e14]: structure of uncertainty
+        - text: — which alternatives are plausible, which are similar, and which are nonsensical. A one-hot label ("mat = 1, everything else = 0") discards all of that.
+      - heading "The Temperature Trick and Soft Labels" [level=3] [ref=e15]
+      - paragraph [ref=e16]:
+        - text: Before distillation, the teacher runs inference with a temperature T > 1 applied to its logits before softmax. This
+        - strong [ref=e17]: softens the distribution
+        - text: — probabilities become less peaked and the "dark knowledge" in low-probability tokens becomes visible. At T=1 (default), the model might assign 99.9% to one token. At T=4, it redistributes to reveal that several tokens are nearly equally plausible in context.
+      - generic [ref=e18]: softmax(zᵢ/T) → as T↑, distribution flattens; as T→0, distribution sharpens to argmax
+      - paragraph [ref=e19]:
+        - text: The student is then trained to match these softened teacher distributions using
+        - strong [ref=e20]: KL divergence
+        - text: "as the distillation loss:"
+      - generic [ref=e21]: L_distill = KL(p_teacher(T) ‖ p_student(T)) = Σᵢ p_teacher(xᵢ|T) · log(p_teacher(xᵢ|T) / p_student(xᵢ|T))
+      - paragraph [ref=e22]: "In practice, the total student loss combines both distillation loss and standard cross-entropy on the ground-truth labels:"
+      - generic [ref=e23]: L_total = α · L_hard_label + (1 - α) · T² · L_distill
+      - paragraph [ref=e24]: The T² factor re-scales the gradient magnitudes, which shrink when temperature is applied. α is typically 0.1–0.5 — higher weight on distillation (lower α) when teacher quality is high.
+      - 'heading "Beyond Output Logits: Feature Distillation" [level=3] [ref=e25]'
+      - paragraph [ref=e26]:
+        - text: Logit-level distillation transfers the teacher's final output. More aggressive methods also transfer
+        - strong [ref=e27]: intermediate representations
+        - text: ":"
+      - list [ref=e28]:
+        - listitem [ref=e29]:
+          - strong [ref=e30]: "Attention transfer:"
+          - text: Student learns to reproduce the teacher's attention maps layer-by-layer (TinyBERT). This forces the student to "look at" the same tokens the teacher focuses on.
+        - listitem [ref=e31]:
+          - strong [ref=e32]: "Hidden state matching:"
+          - text: Student's hidden states at each layer are aligned to teacher hidden states via MSE loss, often through a linear projection since student and teacher have different dimensions.
+        - listitem [ref=e33]:
+          - strong [ref=e34]: "Intermediate logit distillation:"
+          - text: Distill from intermediate transformer blocks, not just the final output.
+      - paragraph [ref=e35]: Feature distillation is more complex to implement (requires layer mapping, projection layers) but often yields better results for small students, particularly for tasks that require structured understanding (NLI, NER, QA) rather than generation.
+      - heading "Data Distillation and Synthetic Data Pipelines" [level=3] [ref=e36]
+      - paragraph [ref=e37]:
+        - text: "Modern LLM distillation differs from the original Hinton formulation in one important way: you often don't have teacher logits at training time. Instead, you generate a"
+        - strong [ref=e38]: synthetic dataset
+        - text: by prompting the teacher to produce outputs, then train the student on those outputs as hard targets (a process called "data distillation" or "imitation fine-tuning").
+      - paragraph [ref=e39]: This is how models like Alpaca (distilling GPT-4-class models into LLaMA-7B), Vicuna, and most open-weight chat models work. GPT-4 generates thousands of (instruction, response) pairs; the student trains via standard cross-entropy on those responses. This is technically not Hinton-style distillation (no soft labels) — but it transfers teacher knowledge via behavioral cloning on teacher-generated data.
+      - generic [ref=e40]:
+        - strong [ref=e41]: "OpenAI's Terms of Service note:"
+        - text: Using GPT-4 outputs to train competing models is a ToS violation. In practice, many open-source models have done this anyway. Checking data provenance matters for commercial deployment.
+      - heading "Distillation vs. Fine-Tuning vs. Quantization" [level=3] [ref=e42]
+      - paragraph [ref=e43]: "These are complementary, not competing techniques:"
+      - list [ref=e44]:
+        - listitem [ref=e45]:
+          - strong [ref=e46]: Quantization
+          - text: (INT8, INT4) reduces the bit-width of an existing model's weights. No training required; fast to apply. Reduces memory 2–4×, modest quality loss, no architecture change.
+        - listitem [ref=e47]:
+          - strong [ref=e48]: Pruning
+          - text: removes low-magnitude weights or attention heads. Also no training required. Difficult to achieve hardware speedups without structured sparsity.
+        - listitem [ref=e49]:
+          - strong [ref=e50]: Distillation
+          - text: trains a brand-new smaller architecture. Requires significant compute (training the student), but achieves 5–10× size reduction with much smaller quality loss than the other methods.
+        - listitem [ref=e51]:
+          - strong [ref=e52]: Fine-tuning
+          - text: adapts a model to a domain but doesn't reduce size. Often applied to the student after distillation to further improve task performance.
+      - heading "Production Reality" [level=3] [ref=e53]
+      - paragraph [ref=e54]: "Real-world distillation numbers: DistilBERT (2019) achieved 97% of BERT-base performance at 40% of the size and 60% faster. DistilGPT2 is ~50% the size of GPT-2 small. TinyLLaMA (1.1B) was trained to distill LLaMA-2 on 3T tokens. Mistral-7B models distilled from much larger Mixtral-8x22B (141B MoE) models — phi-2 distilled from GPT-4."
+      - paragraph [ref=e55]: "In practice, the student architecture is usually chosen first (based on serving cost constraints), then you distill to meet the budget. If latency target is 50ms on a single A10G GPU, work backwards: that constrains you to roughly 7B dense parameters at FP16, which sets the student size, which sets the quality bar you can hope to hit. Distillation closes the gap from \"random init at 7B\" to \"7B with near-70B quality.\""
+      - paragraph [ref=e56]:
+        - text: Distillation also helps with
+        - strong [ref=e57]: task-specific compression
+        - text: ": a 70B general-purpose model distilled into a 7B model fine-tuned on customer support can outperform a generic 7B model fine-tuned on the same data, because the student learns from the teacher's richer uncertainty estimates across the domain."
+    - generic [ref=e58]:
+      - heading "Interactive Visualization" [level=2] [ref=e59]
+      - paragraph [ref=e60]: Watch the teacher generate soft probability distributions at different temperatures, and see how the student learns to match them. Adjust temperature and training progress to see how the "dark knowledge" in soft labels guides the student toward better calibration.
+      - generic [ref=e61]:
+        - generic [ref=e62]:
+          - generic [ref=e63]: Temperature (T)
+          - generic [ref=e64]:
+            - slider [ref=e65] [cursor=pointer]: "3"
+            - generic [ref=e66]: "3.0"
+        - generic [ref=e67]:
+          - generic [ref=e68]: Training Progress
+          - generic [ref=e69]:
+            - slider [ref=e70] [cursor=pointer]: "0"
+            - generic [ref=e71]: 0%
+        - generic [ref=e72]:
+          - generic [ref=e73]: Loss Weight α
+          - generic [ref=e74]:
+            - slider [ref=e75] [cursor=pointer]: "0.3"
+            - generic [ref=e76]: "0.30"
+        - generic [ref=e77]:
+          - generic [ref=e78]: Distillation Mode
+          - generic [ref=e79]:
+            - button "Logit" [ref=e80] [cursor=pointer]
+            - button "Feature" [ref=e81] [cursor=pointer]
+            - button "Data" [ref=e82] [cursor=pointer]
+      - generic [ref=e85]:
+        - generic [ref=e86]:
+          - heading "Teacher Output (Soft Labels)" [level=4] [ref=e87]
+          - generic [ref=e88]:
+            - generic [ref=e89]:
+              - generic [ref=e90]: mat
+              - generic [ref=e93]: 22.6%
+            - generic [ref=e94]:
+              - generic [ref=e95]: floor
+              - generic [ref=e98]: 15.6%
+            - generic [ref=e99]:
+              - generic [ref=e100]: sofa
+              - generic [ref=e103]: 14.1%
+            - generic [ref=e104]:
+              - generic [ref=e105]: roof
+              - generic [ref=e108]: 8.9%
+            - generic [ref=e109]:
+              - generic [ref=e110]: bed
+              - generic [ref=e113]: 11.2%
+            - generic [ref=e114]:
+              - generic [ref=e115]: chair
+              - generic [ref=e118]: 10.1%
+            - generic [ref=e119]:
+              - generic [ref=e120]: table
+              - generic [ref=e123]: 9.2%
+            - generic [ref=e124]:
+              - generic [ref=e125]: yard
+              - generic [ref=e128]: 8.3%
+        - generic [ref=e129]:
+          - heading "Student Output (Learning)" [level=4] [ref=e130]
+          - generic [ref=e131]:
+            - generic [ref=e132]:
+              - generic [ref=e133]: mat
+              - generic [ref=e136]: 12.6%
+            - generic [ref=e137]:
+              - generic [ref=e138]: floor
+              - generic [ref=e141]: 18.8%
+            - generic [ref=e142]:
+              - generic [ref=e143]: sofa
+              - generic [ref=e146]: 13.9%
+            - generic [ref=e147]:
+              - generic [ref=e148]: roof
+              - generic [ref=e151]: 10.3%
+            - generic [ref=e152]:
+              - generic [ref=e153]: bed
+              - generic [ref=e156]: 15.4%
+            - generic [ref=e157]:
+              - generic [ref=e158]: chair
+              - generic [ref=e161]: 9.3%
+            - generic [ref=e162]:
+              - generic [ref=e163]: table
+              - generic [ref=e166]: 8.4%
+            - generic [ref=e167]:
+              - generic [ref=e168]: yard
+              - generic [ref=e171]: 11.4%
+      - generic [ref=e172]:
+        - generic [ref=e173]:
+          - generic [ref=e174]: KL Divergence
+          - generic [ref=e175]: "0.0473"
+        - generic [ref=e176]:
+          - generic [ref=e177]: Student Entropy
+          - generic [ref=e178]: 2.954 bits
+        - generic [ref=e179]:
+          - generic [ref=e180]: Teacher Entropy
+          - generic [ref=e181]: 2.915 bits
+        - generic [ref=e182]:
+          - generic [ref=e183]: Compression
+          - generic [ref=e184]: 10×
+    - generic [ref=e185]:
+      - heading "Key Takeaways" [level=2] [ref=e186]
+      - list [ref=e187]:
+        - listitem [ref=e188]:
+          - strong [ref=e189]: Soft labels carry exponentially more gradient signal than hard labels.
+          - text: At T=3, the KL divergence loss sees structure across the entire vocabulary; hard labels provide signal only for the correct token. This is why distilled students converge faster and generalize better than direct fine-tuning on the same data.
+        - listitem [ref=e190]:
+          - strong [ref=e191]: Temperature matters enormously.
+          - text: Too low (T≈1) and the distribution is too peaked — soft labels collapse to hard labels and distillation provides no benefit. Too high (T>10) and all tokens look equally likely — the gradient signal becomes noisy. Typical sweet spot is T=3–5 for LLMs.
+        - listitem [ref=e192]:
+          - strong [ref=e193]: Data distillation ≠ Hinton distillation.
+          - text: Most production "distillation" is really behavioral cloning on teacher-generated synthetic data — no soft labels, just hard targets from teacher completions. This is simpler but transfers less fine-grained calibration. It also creates ToS risk when using commercial API teachers (OpenAI, Anthropic, etc.).
+        - listitem [ref=e194]:
+          - strong [ref=e195]: Student architecture is the primary decision.
+          - text: Before distillation begins, choose your student size based on latency/cost SLAs. A 7B model on one A100 targets ~50ms/token; 1.3B fits on a T4 at <10ms. Distillation closes ~70–80% of the quality gap between random-init and teacher, but can't exceed teacher quality.
+        - listitem [ref=e196]:
+          - strong [ref=e197]: Feature distillation (TinyBERT, MobileBERT) > logit distillation for understanding tasks.
+          - text: Matching intermediate attention maps and hidden states adds 2–4% accuracy on NLU benchmarks compared to logit-only distillation, but requires 3–5× more implementation complexity and a layer-mapping strategy.
+        - listitem [ref=e198]:
+          - strong [ref=e199]: Combine distillation with LoRA fine-tuning for production.
+          - text: "Distill a small student from the large teacher, then apply domain-specific LoRA fine-tuning to the student. This often outperforms fine-tuning the large model with LoRA alone, at 5–10× lower serving cost. Tools: Hugging Face"
+          - code [ref=e200]: trl
+          - text: (data distillation),
+          - code [ref=e201]: transformers.Trainer
+          - text: with custom KD loss.
+  - navigation [ref=e202]:
+    - link "← Previous LoRA — Low-Rank Adaptation" [ref=e203] [cursor=pointer]:
+      - /url: 16-lora.html
+      - generic [ref=e204]: ← Previous
+      - generic [ref=e205]: LoRA — Low-Rank Adaptation
+    - link "Next → Multi-Task Fine-Tuning & Model Merging" [ref=e206] [cursor=pointer]:
+      - /url: 18-multitask-finetuning.html
+      - generic [ref=e207]: Next →
+      - generic [ref=e208]: Multi-Task Fine-Tuning & Model Merging

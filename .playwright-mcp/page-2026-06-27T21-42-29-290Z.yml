@@ -1,0 +1,216 @@
+- generic [ref=e1]:
+  - banner [ref=e2]:
+    - generic [ref=e3]: Training
+    - heading "Memory Bottlenecks in Fine-Tuning" [level=1] [ref=e4]
+    - paragraph [ref=e5]: Why fine-tuning consumes far more GPU memory than inference — forward pass, backward pass, optimizer states, activations, and how techniques like gradient checkpointing and quantization reclaim headroom.
+  - main [ref=e6]:
+    - generic [ref=e7]:
+      - heading "Theory" [level=2] [ref=e8]
+      - paragraph [ref=e9]:
+        - text: Inference and fine-tuning feel similar on the surface — both load a model into GPU memory and run data through it. But fine-tuning can require
+        - strong [ref=e10]: 10-20× more VRAM
+        - text: than inference for the same model. Understanding exactly where that memory goes is prerequisite knowledge for choosing the right training strategy and hardware.
+      - heading "1. The Four Memory Consumers" [level=3] [ref=e11]
+      - paragraph [ref=e12]: "GPU memory during training is partitioned into four major categories:"
+      - list [ref=e13]:
+        - listitem [ref=e14]:
+          - strong [ref=e15]: Model weights
+          - text: — the raw parameters in whatever numerical precision you're using
+        - listitem [ref=e16]:
+          - strong [ref=e17]: Optimizer states
+          - text: — auxiliary tensors maintained by the optimizer per parameter
+        - listitem [ref=e18]:
+          - strong [ref=e19]: Gradients
+          - text: — one gradient tensor per parameter computed during backprop
+        - listitem [ref=e20]:
+          - strong [ref=e21]: Activations
+          - text: — intermediate values stored during the forward pass and needed for the backward pass
+      - heading "2. Numerical Precision and the 2-4-8 Rule" [level=3] [ref=e22]
+      - paragraph [ref=e23]:
+        - text: Every parameter in memory occupies bytes based on its dtype. A 7B parameter model at full FP32 uses
+        - strong [ref=e24]: 28 GB
+        - text: for weights alone (7×10⁹ × 4 bytes). At BF16/FP16 (2 bytes each), weights shrink to
+        - strong [ref=e25]: 14 GB
+        - text: . At INT8, down to
+        - strong [ref=e26]: 7 GB
+        - text: ", and INT4 to"
+        - strong [ref=e27]: 3.5 GB
+        - text: .
+      - generic [ref=e28]:
+        - text: Weight memory (GB) = params × bytes_per_param / 1e9
+        - text: e.g. 7B params × 2 bytes (BF16) = 14 GB
+      - 'heading "3. Optimizer States: The Hidden 8× Multiplier" [level=3] [ref=e29]'
+      - paragraph [ref=e30]:
+        - text: Adam — the near-universal optimizer for LLM fine-tuning — maintains
+        - strong [ref=e31]: two extra tensors per parameter
+        - text: ": the first moment (mean of gradients, m) and the second moment (uncentered variance, v). Both are stored in FP32 for numerical stability, even when weights are in BF16. This creates an 8-byte-per-parameter overhead:"
+      - generic [ref=e32]:
+        - text: Full Adam overhead per param = 4B (weight) + 4B (grad) + 4B (m) + 4B (v) = 16 bytes
+        - text: Mixed-precision Adam = 2B (BF16 weight) + 2B (BF16 grad) + 4B (FP32 weight copy) + 4B (m) + 4B (v) = 16 bytes
+        - text: ∴ Same total! Mixed precision saves compute cycles, not optimizer state memory.
+      - paragraph [ref=e33]:
+        - text: "For a 7B model with Adam: 7×10⁹ × 16 bytes ≈"
+        - strong [ref=e34]: 112 GB
+        - text: just for weights + optimizer states + gradients. A single A100 (80 GB) cannot fit this — hence why distributed training or PEFT is necessary.
+      - 'heading "4. Activations: The Batch-Size Scaling Problem" [level=3] [ref=e35]'
+      - paragraph [ref=e36]:
+        - text: Activations are the intermediate tensors produced at each layer during the forward pass. They must be
+        - strong [ref=e37]: retained in memory
+        - text: "until the corresponding backward pass layer computes its gradient. Unlike weights, which are fixed in size, activation memory scales with batch size and sequence length:"
+      - generic [ref=e38]: Activation memory ∝ batch_size × seq_len × model_dim × num_layers
+      - paragraph [ref=e39]:
+        - text: For a 7B model with 4K sequence length and batch size 8, activations can easily reach
+        - strong [ref=e40]: 30-60 GB
+        - text: . This is why training batch sizes are often kept as small as 1-4 and gradient accumulation is used to simulate larger effective batches.
+      - heading "5. Gradient Checkpointing (Activation Recomputation)" [level=3] [ref=e41]
+      - paragraph [ref=e42]:
+        - text: Gradient checkpointing is the primary technique to reclaim activation memory. Instead of storing all activations during the forward pass, only checkpoints at select layers are retained. During the backward pass, activations between checkpoints are
+        - strong [ref=e43]: recomputed
+        - text: on-the-fly from the nearest checkpoint.
+      - paragraph [ref=e44]:
+        - text: "The tradeoff: checkpointing reduces activation memory by roughly"
+        - strong [ref=e45]: 10-20×
+        - text: at the cost of ~33% more compute (one extra forward pass per segment). For memory-constrained environments this is almost always worth it.
+      - paragraph [ref=e46]:
+        - text: "In PyTorch:"
+        - code [ref=e47]: torch.utils.checkpoint.checkpoint()
+        - text: ". In Hugging Face Transformers:"
+        - code [ref=e48]: model.gradient_checkpointing_enable()
+        - text: .
+      - heading "6. Mixed Precision Training (BF16/FP16)" [level=3] [ref=e49]
+      - paragraph [ref=e50]:
+        - text: Mixed precision training keeps weights in BF16/FP16 for the forward pass to reduce memory bandwidth, but maintains a full FP32 master copy of weights and optimizer states to prevent gradient underflow. The
+        - strong [ref=e51]: practical win
+        - text: is mostly in throughput (2-4× faster matrix multiplications on modern GPUs) rather than memory savings, since the FP32 copies must still exist.
+      - paragraph [ref=e52]: "BF16 is preferred over FP16 for LLMs: it has the same dynamic range as FP32 (8-bit exponent vs 5-bit) and avoids the overflow/underflow issues that required loss scaling in FP16 training. All A100, H100, and modern GPUs support BF16 efficiently."
+      - 'heading "7. Quantization: INT8, INT4, NF4" [level=3] [ref=e53]'
+      - paragraph [ref=e54]:
+        - text: QLoRA (Dettmers et al., 2023) demonstrated that you can fine-tune large models on consumer hardware by loading the base model in
+        - strong [ref=e55]: 4-bit NF4 quantization
+        - text: (Normal Float 4) and adding full-precision LoRA adapters. The base weights use ~3.5 GB per 7B params, and only the small adapter matrices are trained in full precision.
+      - paragraph [ref=e56]: "Key insight: quantized base weights still need dequantization to BF16 before compute, so they don't directly reduce compute overhead — but they massively reduce the resting memory footprint. A 70B model that normally needs ~140 GB in BF16 fits in ~35-40 GB with 4-bit quantization."
+      - heading "8. Memory-Efficient Optimizers" [level=3] [ref=e57]
+      - paragraph [ref=e58]: "Several optimizer alternatives reduce the optimizer state overhead:"
+      - list [ref=e59]:
+        - listitem [ref=e60]:
+          - strong [ref=e61]: Adafactor
+          - text: — stores second moment as a rank-1 approximation. Near-zero optimizer state overhead. Slightly less stable but works for most fine-tuning.
+        - listitem [ref=e62]:
+          - strong [ref=e63]: 8-bit Adam (bitsandbytes)
+          - text: — quantizes optimizer states to INT8. Roughly 4× reduction in optimizer state memory vs standard Adam, with minimal quality loss.
+        - listitem [ref=e64]:
+          - strong [ref=e65]: SGD with momentum
+          - text: — only one extra tensor per param instead of two. Dramatically less memory, but convergence is slower without adaptive learning rates.
+        - listitem [ref=e66]:
+          - strong [ref=e67]: Lion optimizer
+          - text: — only maintains the sign of the gradient update. One FP32 tensor per param instead of two. Less stable but memory efficient.
+      - heading "9. Full Fine-Tuning vs. LoRA Memory Profile" [level=3] [ref=e68]
+      - paragraph [ref=e69]:
+        - text: LoRA's primary appeal is its drastic reduction of
+        - strong [ref=e70]: trainable parameter count
+        - text: . With rank=16 and alpha=32 on a 7B model, only ~80M parameters (1.1%) are trainable — but the base model's 7B weights still occupy memory for the forward pass. The gradient and optimizer state savings come only from the small adapter matrices.
+      - paragraph [ref=e71]:
+        - text: "In practice: Full fine-tuning of a 7B model requires ~112 GB (2×A100 or more). LoRA with 8-bit Adam on the same model fits in a"
+        - strong [ref=e72]: single 24 GB RTX 3090
+        - text: .
+      - generic [ref=e73]:
+        - strong [ref=e74]: "Production Reality:"
+        - text: At Mistral/Meta scale, full fine-tuning a 70B model requires 16–64 A100 (80GB) GPUs — costing $100–500/hr on cloud providers. LoRA + QLoRA democratized fine-tuning to run on 2×A100 or even a single A100 for 7–13B models. The DeepSpeed ZeRO optimizer further shards optimizer states across GPUs to enable even larger models on given hardware.
+    - generic [ref=e75]:
+      - heading "Interactive Visualization" [level=2] [ref=e76]
+      - paragraph [ref=e77]: GPU memory breakdown for inference vs. different fine-tuning strategies. Select a model size and training mode, then click any memory segment to learn what it represents and how to reduce it.
+      - generic [ref=e78]:
+        - button "Inference" [ref=e79] [cursor=pointer]
+        - button "Full Fine-Tune" [active] [ref=e80] [cursor=pointer]
+        - button "LoRA (BF16)" [ref=e81] [cursor=pointer]
+        - button "QLoRA (4-bit)" [ref=e82] [cursor=pointer]
+        - generic [ref=e83]:
+          - generic [ref=e84]: "Model size:"
+          - combobox "Model size:" [ref=e85] [cursor=pointer]:
+            - option "7B params" [selected]
+            - option "13B params"
+            - option "70B params"
+      - generic [ref=e86]:
+        - generic [ref=e167]:
+          - generic [ref=e168]:
+            - generic [ref=e169]: Inference (BF16)
+            - generic [ref=e170]: 14.0 GB
+          - generic [ref=e172] [cursor=pointer]:
+            - generic: 14.0G
+        - generic [ref=e173]:
+          - generic [ref=e174]:
+            - generic [ref=e175]: Full Fine-Tune (BF16 + Adam)
+            - generic [ref=e176]: 130.2 GB
+          - generic [ref=e177]:
+            - generic [ref=e178] [cursor=pointer]:
+              - generic: 14.0G
+            - generic [ref=e179] [cursor=pointer]:
+              - generic: 28.0G
+            - generic [ref=e180] [cursor=pointer]:
+              - generic: 28.0G
+            - generic [ref=e181] [cursor=pointer]:
+              - generic: 28.0G
+            - generic [ref=e182] [cursor=pointer]:
+              - generic: 28.0G
+        - generic [ref=e184]:
+          - generic [ref=e185]:
+            - generic [ref=e186]: LoRA Fine-Tune (BF16 + rank=16)
+            - generic [ref=e187]: 18.8 GB
+          - generic [ref=e189] [cursor=pointer]:
+            - generic: 14.0G
+        - generic [ref=e196]:
+          - generic [ref=e197]: QLoRA Fine-Tune (4-bit + rank=16)
+          - generic [ref=e198]: 7.1 GB
+      - generic [ref=e126]:
+        - generic [ref=e208]: Model Weights
+        - generic [ref=e211]: FP32 Master Weight Copy
+        - generic [ref=e214]: Gradients
+        - generic [ref=e217]: Adam m (1st Moment)
+        - generic [ref=e220]: Adam v (2nd Moment)
+        - generic [ref=e223]: Activations (Forward Pass Cache)
+      - generic [ref=e130]: Click any memory segment above to learn what it is and how to reduce it.
+      - generic [ref=e131]:
+        - generic [ref=e224]:
+          - generic [ref=e225]: 130.2 GB
+          - generic [ref=e226]: Total GPU Memory
+        - generic [ref=e227]:
+          - generic [ref=e228]: 9.3×
+          - generic [ref=e229]: vs Inference
+        - generic [ref=e230]:
+          - generic [ref=e231]: 7B
+          - generic [ref=e232]: Parameters
+        - generic [ref=e233]:
+          - generic [ref=e234]: 2×
+          - generic [ref=e235]: A100 (80GB) needed
+    - generic [ref=e144]:
+      - heading "Key Takeaways" [level=2] [ref=e145]
+      - list [ref=e146]:
+        - listitem [ref=e147]:
+          - strong [ref=e148]: Optimizer states dwarf weights.
+          - text: "Adam's m and v tensors (both FP32) add 8 bytes per parameter on top of the 4-byte FP32 weight — meaning optimizer states alone are 2× the weight memory. For 7B params: weights ~14 GB, optimizer states ~56 GB."
+        - listitem [ref=e149]:
+          - strong [ref=e150]: Mixed precision doesn't eliminate FP32 copies.
+          - text: BF16 training still requires a full FP32 master weight copy for optimizer updates. The GPU memory savings from mixed precision come from reduced bandwidth during forward/backward, not smaller optimizer state footprint.
+        - listitem [ref=e151]:
+          - strong [ref=e152]: Activation memory is the sneaky killer.
+          - text: With batch_size=8 and 4K seq_len, activations can exceed 60 GB for a 7B model — dwarfing weight memory. Enable
+          - code [ref=e153]: gradient_checkpointing
+          - text: in HuggingFace Transformers by default for any non-trivial training run; the 33% compute overhead is always worth the 10-20× memory reduction.
+        - listitem [ref=e154]:
+          - strong [ref=e155]: QLoRA is the practical baseline.
+          - text: 4-bit NF4 quantization (bitsandbytes) + LoRA enables 7B fine-tuning on a single 24 GB GPU and 70B fine-tuning on 2×A100. The quality gap vs. full BF16 is minimal for most fine-tuning tasks (Dettmers et al., 2023 showed within 1-2% of full fine-tuning).
+        - listitem [ref=e156]:
+          - strong [ref=e157]: 8-bit Adam (bitsandbytes) is a free lunch.
+          - text: Quantizing optimizer states to INT8 cuts Adam's optimizer overhead by ~4× with negligible training quality impact. For full fine-tuning where you can't use LoRA, this is the first optimization to reach for.
+        - listitem [ref=e158]:
+          - strong [ref=e159]: Batch size and gradient accumulation decouple compute from memory.
+          - text: Effective batch size = per-GPU batch × gradient accumulation steps. Training with batch=1 and accumulation=8 matches the gradient statistics of batch=8 while using 8× less activation memory per step.
+  - navigation [ref=e160]:
+    - link "← Previous Fine-Tuning Hyperparameters" [ref=e161] [cursor=pointer]:
+      - /url: 19-finetuning-hyperparams.html
+      - generic [ref=e162]: ← Previous
+      - generic [ref=e163]: Fine-Tuning Hyperparameters
+    - 'link "Next → Token Sampling: Temperature, Top-K, Top-P" [ref=e164] [cursor=pointer]':
+      - /url: 21-token-sampling.html
+      - generic [ref=e165]: Next →
+      - generic [ref=e166]: "Token Sampling: Temperature, Top-K, Top-P"

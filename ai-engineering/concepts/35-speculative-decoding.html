@@ -1,0 +1,981 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1.0"/>
+  <title>Speculative Decoding — AI Engineering Concepts</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com"/>
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet"/>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg:       #0d0f17;
+      --surface:  #141720;
+      --card:     #1a1e2e;
+      --border:   #252a3d;
+      --accent:   #00d4ff;
+      --purple:   #7c3aed;
+      --green:    #00ff88;
+      --yellow:   #ffd700;
+      --red:      #ff4757;
+      --orange:   #ff9500;
+      --text:     #e2e8f0;
+      --text-dim: #8892a4;
+      --mono:     'JetBrains Mono', monospace;
+      --sans:     'Inter', system-ui, sans-serif;
+    }
+
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: var(--sans);
+      line-height: 1.7;
+      min-height: 100vh;
+    }
+
+    /* ── Header ── */
+    header {
+      background: linear-gradient(135deg, #0d0f17 0%, #1a1030 100%);
+      border-bottom: 1px solid var(--border);
+      padding: 2.5rem 2rem 2rem;
+      text-align: center;
+    }
+    .group-badge {
+      display: inline-block;
+      font-family: var(--mono);
+      font-size: 0.72rem;
+      font-weight: 700;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      color: var(--purple);
+      background: rgba(124,58,237,0.12);
+      border: 1px solid rgba(124,58,237,0.3);
+      padding: 0.25rem 0.75rem;
+      border-radius: 999px;
+      margin-bottom: 1rem;
+    }
+    header h1 {
+      font-size: clamp(1.8rem, 4vw, 2.8rem);
+      font-weight: 700;
+      letter-spacing: -0.02em;
+      color: var(--text);
+      margin-bottom: 0.6rem;
+    }
+    header h1 span { color: var(--accent); }
+    .header-desc {
+      color: var(--text-dim);
+      font-size: 1.05rem;
+      max-width: 660px;
+      margin: 0 auto;
+    }
+
+    /* ── Layout ── */
+    main {
+      max-width: 1100px;
+      margin: 0 auto;
+      padding: 2.5rem 1.5rem;
+      display: flex;
+      flex-direction: column;
+      gap: 3rem;
+    }
+
+    /* ── Section titles ── */
+    .section-title {
+      font-size: 1.5rem;
+      font-weight: 700;
+      color: var(--text);
+      border-left: 3px solid var(--accent);
+      padding-left: 0.8rem;
+      margin-bottom: 1.5rem;
+      letter-spacing: -0.01em;
+    }
+
+    /* ── Theory ── */
+    #theory { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 2rem 2rem 2.5rem; }
+    #theory h3 { font-size: 1.1rem; font-weight: 600; color: var(--accent); margin: 1.8rem 0 0.6rem; }
+    #theory h3:first-of-type { margin-top: 0.5rem; }
+    #theory p { color: var(--text); margin-bottom: 0.9rem; font-size: 0.975rem; line-height: 1.75; }
+    #theory ul { margin: 0.4rem 0 1rem 1.3rem; }
+    #theory li { color: var(--text); font-size: 0.97rem; margin-bottom: 0.45rem; }
+    #theory code {
+      font-family: var(--mono);
+      font-size: 0.84rem;
+      background: rgba(0,212,255,0.1);
+      color: var(--accent);
+      padding: 0.1em 0.45em;
+      border-radius: 4px;
+    }
+    .formula-box {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-left: 3px solid var(--yellow);
+      border-radius: 6px;
+      padding: 1rem 1.25rem;
+      margin: 1rem 0 1.2rem;
+      font-family: var(--mono);
+      font-size: 0.88rem;
+      color: var(--yellow);
+      line-height: 1.6;
+    }
+    .callout {
+      background: rgba(0,212,255,0.07);
+      border: 1px solid rgba(0,212,255,0.2);
+      border-radius: 8px;
+      padding: 0.9rem 1.2rem;
+      margin: 1rem 0;
+      color: var(--text-dim);
+      font-size: 0.93rem;
+    }
+    .callout strong { color: var(--accent); }
+
+    /* ── Visualization ── */
+    #visualization {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 2rem;
+    }
+    .viz-desc {
+      color: var(--text-dim);
+      font-size: 0.92rem;
+      margin-bottom: 1.5rem;
+      line-height: 1.6;
+    }
+
+    /* Controls */
+    .controls {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 1.2rem;
+      margin-bottom: 1.8rem;
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 1.2rem 1.5rem;
+    }
+    .control-group {
+      display: flex;
+      flex-direction: column;
+      gap: 0.4rem;
+      min-width: 180px;
+      flex: 1;
+    }
+    .control-group label {
+      font-size: 0.78rem;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      color: var(--text-dim);
+    }
+    .control-group label span {
+      color: var(--accent);
+      font-family: var(--mono);
+      font-size: 0.82rem;
+      font-weight: 700;
+    }
+    input[type=range] {
+      width: 100%;
+      accent-color: var(--accent);
+      cursor: pointer;
+    }
+
+    /* Button row */
+    .btn-row {
+      display: flex;
+      gap: 0.8rem;
+      flex-wrap: wrap;
+      margin-bottom: 1.5rem;
+    }
+    .btn {
+      font-family: var(--mono);
+      font-size: 0.82rem;
+      font-weight: 600;
+      padding: 0.55rem 1.1rem;
+      border-radius: 6px;
+      border: 1px solid;
+      cursor: pointer;
+      transition: all 0.18s;
+    }
+    .btn-primary {
+      background: var(--accent);
+      border-color: var(--accent);
+      color: #0d0f17;
+    }
+    .btn-primary:hover { opacity: 0.85; }
+    .btn-secondary {
+      background: transparent;
+      border-color: var(--border);
+      color: var(--text-dim);
+    }
+    .btn-secondary:hover { border-color: var(--accent); color: var(--accent); }
+    .btn-secondary.active {
+      border-color: var(--purple);
+      color: var(--purple);
+      background: rgba(124,58,237,0.1);
+    }
+
+    /* Main visualization canvas area */
+    .viz-canvas-wrap {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 1.5rem;
+      margin-bottom: 1.5rem;
+      min-height: 380px;
+    }
+
+    /* Token stream display */
+    .token-timeline {
+      display: flex;
+      flex-direction: column;
+      gap: 1rem;
+    }
+    .tl-row {
+      display: flex;
+      align-items: center;
+      gap: 0.6rem;
+      min-height: 48px;
+    }
+    .tl-label {
+      font-family: var(--mono);
+      font-size: 0.74rem;
+      font-weight: 700;
+      color: var(--text-dim);
+      text-transform: uppercase;
+      letter-spacing: 0.07em;
+      width: 90px;
+      flex-shrink: 0;
+    }
+    .token-seq {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 5px;
+    }
+    .token {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      font-family: var(--mono);
+      font-size: 0.76rem;
+      font-weight: 600;
+      padding: 0.3rem 0.6rem;
+      border-radius: 5px;
+      border: 1px solid transparent;
+      min-width: 52px;
+      transition: all 0.25s ease;
+      cursor: default;
+    }
+    .token.prompt {
+      background: rgba(140,140,160,0.12);
+      border-color: var(--border);
+      color: var(--text-dim);
+    }
+    .token.draft {
+      background: rgba(255,149,0,0.12);
+      border-color: rgba(255,149,0,0.35);
+      color: var(--orange);
+    }
+    .token.accepted {
+      background: rgba(0,255,136,0.12);
+      border-color: rgba(0,255,136,0.35);
+      color: var(--green);
+    }
+    .token.rejected {
+      background: rgba(255,71,87,0.12);
+      border-color: rgba(255,71,87,0.35);
+      color: var(--red);
+      text-decoration: line-through;
+      opacity: 0.6;
+    }
+    .token.target-bonus {
+      background: rgba(0,212,255,0.12);
+      border-color: rgba(0,212,255,0.35);
+      color: var(--accent);
+    }
+    .token.verifying {
+      animation: pulse-border 0.6s ease-in-out infinite;
+    }
+    @keyframes pulse-border {
+      0%,100% { border-color: rgba(124,58,237,0.3); }
+      50% { border-color: var(--purple); box-shadow: 0 0 8px rgba(124,58,237,0.5); }
+    }
+    .token.empty {
+      background: rgba(37,42,61,0.4);
+      border-color: rgba(37,42,61,0.8);
+      border-style: dashed;
+      color: transparent;
+      min-width: 52px;
+    }
+
+    /* Step indicator */
+    .step-info {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 1rem 1.25rem;
+      font-size: 0.88rem;
+      line-height: 1.6;
+      color: var(--text-dim);
+    }
+    .step-info strong { color: var(--text); }
+    .step-info .phase-label {
+      display: inline-block;
+      font-family: var(--mono);
+      font-size: 0.75rem;
+      font-weight: 700;
+      padding: 0.15rem 0.5rem;
+      border-radius: 4px;
+      margin-right: 0.5rem;
+    }
+    .phase-draft { background: rgba(255,149,0,0.15); color: var(--orange); }
+    .phase-verify { background: rgba(124,58,237,0.15); color: var(--purple); }
+    .phase-bonus { background: rgba(0,212,255,0.15); color: var(--accent); }
+    .phase-output { background: rgba(0,255,136,0.15); color: var(--green); }
+
+    /* Stats bar */
+    .stats-bar {
+      display: flex;
+      gap: 1rem;
+      flex-wrap: wrap;
+      margin-top: 1.2rem;
+    }
+    .stat-chip {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 0.6rem 1rem;
+      min-width: 130px;
+      text-align: center;
+    }
+    .stat-chip .val {
+      font-family: var(--mono);
+      font-size: 1.5rem;
+      font-weight: 700;
+      color: var(--accent);
+      display: block;
+    }
+    .stat-chip .key {
+      font-size: 0.7rem;
+      text-transform: uppercase;
+      letter-spacing: 0.07em;
+      color: var(--text-dim);
+      margin-top: 0.1rem;
+    }
+
+    /* Speedup chart */
+    .speedup-chart {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 1.2rem 1.5rem;
+      margin-top: 1.2rem;
+    }
+    .speedup-chart h4 {
+      font-size: 0.85rem;
+      font-weight: 600;
+      color: var(--text-dim);
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      margin-bottom: 1rem;
+    }
+    .bar-row {
+      display: flex;
+      align-items: center;
+      gap: 0.8rem;
+      margin-bottom: 0.6rem;
+    }
+    .bar-label {
+      font-family: var(--mono);
+      font-size: 0.78rem;
+      color: var(--text-dim);
+      width: 150px;
+      flex-shrink: 0;
+    }
+    .bar-track {
+      flex: 1;
+      height: 22px;
+      background: rgba(37,42,61,0.6);
+      border-radius: 4px;
+      overflow: hidden;
+    }
+    .bar-fill {
+      height: 100%;
+      border-radius: 4px;
+      transition: width 0.5s ease;
+      display: flex;
+      align-items: center;
+      padding-left: 8px;
+      font-family: var(--mono);
+      font-size: 0.72rem;
+      font-weight: 700;
+      color: #0d0f17;
+    }
+
+    /* Takeaways */
+    #takeaways {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 2rem 2rem 2.5rem;
+    }
+    #takeaways ul { list-style: none; display: flex; flex-direction: column; gap: 0.85rem; }
+    #takeaways li {
+      display: flex;
+      gap: 0.8rem;
+      align-items: flex-start;
+      padding: 0.9rem 1.1rem;
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      font-size: 0.95rem;
+      line-height: 1.6;
+    }
+    #takeaways li::before {
+      content: '→';
+      color: var(--accent);
+      font-weight: 700;
+      flex-shrink: 0;
+      margin-top: 0.05rem;
+    }
+    #takeaways li strong { color: var(--accent); }
+
+    /* Nav */
+    .concept-nav {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 1.2rem 1.5rem;
+      border-top: 1px solid var(--border);
+      max-width: 1100px;
+      margin: 0 auto;
+    }
+    .nav-link {
+      display: flex;
+      flex-direction: column;
+      gap: 0.2rem;
+      text-decoration: none;
+      padding: 0.7rem 1rem;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      transition: all 0.18s;
+      max-width: 300px;
+    }
+    .nav-link:hover { border-color: var(--accent); background: rgba(0,212,255,0.05); }
+    .nav-link .nav-dir {
+      font-size: 0.7rem;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      color: var(--text-dim);
+      font-weight: 600;
+    }
+    .nav-link .nav-title { font-size: 0.9rem; font-weight: 600; color: var(--text); }
+    .nav-link.disabled { opacity: 0.3; pointer-events: none; }
+    .nav-link.next { text-align: right; margin-left: auto; }
+
+    @media (max-width: 700px) {
+      main { padding: 1.5rem 1rem; }
+      .controls { flex-direction: column; }
+      .concept-nav { flex-direction: column; gap: 0.8rem; }
+      .nav-link { max-width: 100%; }
+    }
+  </style>
+</head>
+<body>
+
+<header>
+  <div class="group-badge">Inference</div>
+  <h1>Speculative <span>Decoding</span></h1>
+  <p class="header-desc">How a small draft model generates candidate tokens that the large target model verifies in parallel — achieving 2–3× speedup without quality loss.</p>
+</header>
+
+<main>
+
+  <!-- ── THEORY ── -->
+  <section id="theory">
+    <h2 class="section-title">Theory</h2>
+
+    <h3>The Core Bottleneck: Autoregressive Decoding Is Sequential</h3>
+    <p>Standard LLM inference during the decode phase is fundamentally serial. To generate token <em>t+1</em>, the model must first produce token <em>t</em>. This creates a hard dependency chain: even if you throw 1,000 A100s at the problem, you cannot parallelize across the output sequence. Every generated token requires a full forward pass through all transformer layers, which — for large models — is expensive in both latency and compute.</p>
+    <p>The memory bandwidth problem compounds this. For a 70B-parameter model in FP16, the weights alone occupy ~140 GB. Each forward pass must stream these weights from HBM into the GPU's compute cores. With modern A100s providing ~2 TB/s of HBM bandwidth, a single token takes roughly 70ms to generate. Throughput is dominated by memory bandwidth, not FLOPs. The hardware is <em>memory-bound</em>, not compute-bound.</p>
+
+    <h3>The Key Insight: Target Model Forward Passes Are Parallelizable</h3>
+    <p>Speculative decoding (Leviathan et al., 2023; Chen et al., 2023, independently) exploits a structural asymmetry: while <em>generating</em> tokens sequentially is expensive, <em>verifying</em> multiple candidate tokens in parallel is cheap. A transformer can evaluate any sequence length in a single forward pass — this is how prefill already works. The question is: can we exploit this property during decoding?</p>
+    <div class="callout">
+      <strong>The fundamental insight:</strong> Running the target model on a sequence of K+1 tokens takes roughly the same wall-clock time as running it on 1 token, because the bottleneck is weight loading, not flops. So if a fast draft model can propose K plausible tokens, the target model can verify all K in one shot — netting up to K tokens per round trip.
+    </div>
+
+    <h3>The Algorithm: Draft → Verify → Correct</h3>
+    <p>The full speculative decoding loop has three stages per iteration:</p>
+    <ul>
+      <li><strong>Draft phase:</strong> A small, fast model (<em>M_draft</em>) generates K candidate tokens autoregressively. This costs K forward passes through a cheap model (e.g., 7B or even 70M parameters).</li>
+      <li><strong>Verify phase:</strong> The large target model (<em>M_target</em>) runs a <em>single</em> forward pass on the original context + all K draft tokens simultaneously. This produces K+1 distributions: one per draft token position, plus the next position after all K.</li>
+      <li><strong>Acceptance/correction:</strong> Starting from the first draft token, accept or reject each based on a ratio of the target's and draft's probabilities. The acceptance criterion ensures the <em>marginal distribution of accepted tokens exactly matches M_target's distribution</em> — no quality loss.</li>
+    </ul>
+
+    <h3>The Acceptance Sampling Math</h3>
+    <p>For each draft token <code>x_i</code> sampled from the draft distribution <code>q(x|context)</code>, compute the acceptance probability:</p>
+    <div class="formula-box">
+      Accept with probability: min(1,  p_target(x_i | context) / q_draft(x_i | context) )
+
+  If rejected: resample from adjusted distribution:
+      p'(x) = normalize( max(0,  p_target(x) − q_draft(x) ) )
+    </div>
+    <p>This is a form of rejection sampling. The resulting sequence has the <em>exact same distribution</em> as if the target model had generated each token independently. The acceptance probability for a token is high when the draft model and target model agree — and the speedup is proportional to the average number of tokens accepted per round.</p>
+
+    <h3>Mean Acceptance Length and Speedup</h3>
+    <p>If the draft model proposes K tokens and each is accepted independently with probability α (the average acceptance rate), the expected number of accepted tokens per round is:</p>
+    <div class="formula-box">
+      E[accepted tokens] = K · α  +  1  (the bonus token from the target's K+1 distribution)
+
+  Speedup ≈ (K · α + 1) / (K · cost_draft / cost_target + 1)
+    </div>
+    <p>In practice, a 7B draft model paired with a 70B target achieves ~10× lower draft latency. With K=5 and α=0.8, you get ~4.5 tokens accepted per target forward pass instead of 1 — roughly 3–4× end-to-end throughput improvement. Real-world measurements from Google's work on PaLM showed 2–2.5× speedup; DeepMind's work on Chinchilla reported similar numbers.</p>
+
+    <h3>Draft Model Selection and Alignment</h3>
+    <p>The draft model must be significantly cheaper than the target while producing distributions that frequently agree with it. Common strategies:</p>
+    <ul>
+      <li><strong>Family-matched smaller model:</strong> Use the same model family (e.g., Llama-7B as draft for Llama-70B). High agreement because they share architecture and training distribution.</li>
+      <li><strong>Self-speculation:</strong> Use early exit layers of the same model as the draft — no separate model needed. Used in Medusa and EAGLE variants.</li>
+      <li><strong>Distilled draft:</strong> Fine-tune a small model specifically to match the target's distribution on your domain — maximizes α for domain-specific workloads.</li>
+      <li><strong>Token trees (SpecTree, EAGLE):</strong> Instead of a single K-token chain, draft a tree of candidates. The target evaluates all branches in one forward pass and picks the longest accepted prefix.</li>
+    </ul>
+
+    <h3>EAGLE, Medusa, and Modern Variants</h3>
+    <p><strong>Medusa (2023):</strong> Adds multiple "head" layers to the base model that predict tokens at positions t+1, t+2, t+3, ... simultaneously from the same hidden state. No separate draft model. Achieves 2–3× speedup on LLaMA-2. Downside: requires fine-tuning the target model to add heads.</p>
+    <p><strong>EAGLE (2024):</strong> The draft model is fed the target model's feature representations (not just token embeddings), making it dramatically better at predicting what the target will generate. Achieves 3–4× speedup — currently state-of-the-art among spec decoding variants.</p>
+    <p><strong>SpecInfer:</strong> Combines speculative decoding with tree-structured speculation and batching, enabling multiple concurrent users to benefit from shared verification forward passes.</p>
+
+    <h3>Production Constraints and When It Helps</h3>
+    <p>Speculative decoding helps most when: (a) you're latency-bound with small batch sizes (batch=1 to ~8), (b) the draft model is readily available, and (c) prompts produce predictable continuations (low perplexity). It hurts or breaks even when batches are large (the target is already compute-bound, not memory-bound), or the task is highly creative/random (low acceptance rate).</p>
+    <p>vLLM integrates speculative decoding natively as of v0.3+. TGI from HuggingFace supports it via the <code>speculative_decoding</code> flag. For serving, you need to manage two models in memory simultaneously — the draft model adds memory overhead, but since it's small (7B vs 70B), the overhead is usually acceptable (~10% additional VRAM).</p>
+
+    <h3>Quality Guarantee</h3>
+    <p>This is speculative decoding's most powerful property: <em>the output distribution is mathematically identical to the target model's distribution</em>. Unlike approximate methods (quantization, pruning, distillation), speculative decoding is lossless. You can verify this empirically by computing token-level acceptance rates across your benchmark — any deviation from 100% marginal agreement indicates an implementation bug.</p>
+  </section>
+
+  <!-- ── VISUALIZATION ── -->
+  <section id="visualization">
+    <h2 class="section-title">Interactive Visualization</h2>
+    <p class="viz-desc">
+      Watch speculative decoding in action. The <strong style="color:var(--orange)">Draft Model</strong> proposes K tokens in sequence, then the <strong style="color:var(--purple)">Target Model</strong> verifies them all in one parallel forward pass. Accepted tokens appear in <strong style="color:var(--green)">green</strong>, rejected in <strong style="color:var(--red)">red</strong>. Adjust K and acceptance rate α to see how speedup changes.
+    </p>
+
+    <div class="controls">
+      <div class="control-group">
+        <label>Draft tokens K <span id="kLabel">5</span></label>
+        <input type="range" id="kSlider" min="1" max="10" value="5"/>
+      </div>
+      <div class="control-group">
+        <label>Acceptance rate α <span id="alphaLabel">0.75</span></label>
+        <input type="range" id="alphaSlider" min="0.20" max="1.00" step="0.05" value="0.75"/>
+      </div>
+      <div class="control-group">
+        <label>Draft speed ratio <span id="speedLabel">10×</span></label>
+        <input type="range" id="speedSlider" min="2" max="20" value="10"/>
+      </div>
+    </div>
+
+    <div class="btn-row">
+      <button class="btn btn-primary" id="btnRun">▶ Run Round</button>
+      <button class="btn btn-secondary" id="btnAuto">Auto Loop</button>
+      <button class="btn btn-secondary" id="btnReset">Reset</button>
+    </div>
+
+    <div class="viz-canvas-wrap">
+      <div class="token-timeline" id="tokenTimeline">
+        <!-- rows injected by JS -->
+      </div>
+      <div class="step-info" id="stepInfo" style="margin-top:1.2rem;">
+        Press <strong>Run Round</strong> to start a speculative decoding round.
+      </div>
+    </div>
+
+    <div class="stats-bar" id="statsBar">
+      <div class="stat-chip">
+        <span class="val" id="statRounds">0</span>
+        <div class="key">Rounds run</div>
+      </div>
+      <div class="stat-chip">
+        <span class="val" id="statAccepted">0</span>
+        <div class="key">Tokens accepted</div>
+      </div>
+      <div class="stat-chip">
+        <span class="val" id="statNaive">0</span>
+        <div class="key">Target fwd passes (naive)</div>
+      </div>
+      <div class="stat-chip">
+        <span class="val" id="statActual">0</span>
+        <div class="key">Target fwd passes (spec)</div>
+      </div>
+      <div class="stat-chip">
+        <span class="val" id="statSpeedup" style="color:var(--green)">—</span>
+        <div class="key">Effective speedup</div>
+      </div>
+    </div>
+
+    <div class="speedup-chart" id="speedupChart">
+      <h4>Theoretical Speedup at Current Settings</h4>
+      <div class="bar-row">
+        <div class="bar-label">Naive (1 tok/pass)</div>
+        <div class="bar-track">
+          <div class="bar-fill" id="barNaive" style="width:25%; background:var(--text-dim);">1.0×</div>
+        </div>
+      </div>
+      <div class="bar-row">
+        <div class="bar-label">Spec Decoding</div>
+        <div class="bar-track">
+          <div class="bar-fill" id="barSpec" style="width:60%; background:var(--green);">—</div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ── TAKEAWAYS ── -->
+  <section id="takeaways">
+    <h2 class="section-title">Key Takeaways</h2>
+    <ul>
+      <li><strong>Lossless speedup:</strong> Unlike quantization or pruning, speculative decoding provides mathematically provable output-distribution equivalence to the target model — verified by rejection sampling math, not empirical approximation.</li>
+      <li><strong>Batch-size cliff:</strong> Speedup degrades sharply above batch size ~8. Large batches already saturate GPU compute, making the target forward pass cheap and eliminating the memory-bandwidth bottleneck that speculative decoding exploits. It's primarily a latency optimization, not a throughput optimization.</li>
+      <li><strong>EAGLE > Medusa > vanilla spec decoding</strong> in practice: EAGLE achieves 3–4× speedup by feeding the draft model target-model feature vectors (not token embeddings), dramatically increasing acceptance rate α. If you're implementing spec decoding in 2024+, start with EAGLE architecture.</li>
+      <li><strong>Draft-target alignment is the key variable:</strong> A draft model from the same family (Llama-7B → Llama-70B) reaches α ≈ 0.7–0.85 on typical tasks. Mismatched families or heavily fine-tuned targets drop α to 0.4–0.5, making speedup marginal. Always measure α on your actual workload before committing.</li>
+      <li><strong>Two models in memory = dual RAM overhead:</strong> For a 70B + 7B setup, you're paying ~140 GB + ~14 GB = ~154 GB VRAM. On an 8×A100 node (640 GB), this is manageable. On tighter deployments, self-speculation (Medusa heads, EAGLE with shared weights) avoids the extra memory cost.</li>
+      <li><strong>vLLM, TGI, and SGLang all support it natively:</strong> vLLM v0.3+ has <code>--speculative-model</code>; SGLang has built-in EAGLE support. In production, combine speculative decoding with continuous batching carefully — the async accept/reject logic complicates request scheduling.</li>
+    </ul>
+  </section>
+
+</main>
+
+<nav class="concept-nav">
+  <a href="34-inference-optimization.html" class="nav-link prev">
+    <span class="nav-dir">← Previous</span>
+    <span class="nav-title">Inference Optimization</span>
+  </a>
+  <a href="36-model-parallelism.html" class="nav-link next">
+    <span class="nav-dir">Next →</span>
+    <span class="nav-title">Model &amp; Tensor Parallelism</span>
+  </a>
+</nav>
+
+<script>
+(function() {
+  'use strict';
+
+  // ── State ──
+  let K = 5;
+  let alpha = 0.75;
+  let speedRatio = 10;
+  let rounds = 0;
+  let totalAccepted = 0;
+  let totalNaive = 0;  // target forward passes if doing naive 1-at-a-time
+  let totalActual = 0; // target forward passes in spec decoding
+  let autoInterval = null;
+  let animating = false;
+
+  // Vocabulary for display
+  const VOCAB = [
+    'the','cat','sat','on','mat','dog','ran','far','sky','blue',
+    'light','fast','slow','deep','model','token','next','text',
+    'word','data','learn','think','know','find','show','give',
+    'make','keep','each','such','much','more','then','when','here'
+  ];
+
+  function randWord() {
+    return VOCAB[Math.floor(Math.random() * VOCAB.length)];
+  }
+
+  // ── DOM refs ──
+  const kSlider     = document.getElementById('kSlider');
+  const alphaSlider = document.getElementById('alphaSlider');
+  const speedSlider = document.getElementById('speedSlider');
+  const kLabel      = document.getElementById('kLabel');
+  const alphaLabel  = document.getElementById('alphaLabel');
+  const speedLabel  = document.getElementById('speedLabel');
+  const btnRun      = document.getElementById('btnRun');
+  const btnAuto     = document.getElementById('btnAuto');
+  const btnReset    = document.getElementById('btnReset');
+  const timeline    = document.getElementById('tokenTimeline');
+  const stepInfo    = document.getElementById('stepInfo');
+  const statRounds  = document.getElementById('statRounds');
+  const statAccepted= document.getElementById('statAccepted');
+  const statNaive   = document.getElementById('statNaive');
+  const statActual  = document.getElementById('statActual');
+  const statSpeedup = document.getElementById('statSpeedup');
+  const barSpec     = document.getElementById('barSpec');
+
+  // ── Slider handlers ──
+  kSlider.addEventListener('input', function() {
+    K = parseInt(this.value);
+    kLabel.textContent = K;
+    updateSpeedupChart();
+  });
+  alphaSlider.addEventListener('input', function() {
+    alpha = parseFloat(this.value);
+    alphaLabel.textContent = alpha.toFixed(2);
+    updateSpeedupChart();
+  });
+  speedSlider.addEventListener('input', function() {
+    speedRatio = parseInt(this.value);
+    speedLabel.textContent = speedRatio + '×';
+    updateSpeedupChart();
+  });
+
+  function computeTheoreticalSpeedup() {
+    // Expected accepted tokens per round: K*alpha + 1 (bonus)
+    // Draft cost per round: K * (1/speedRatio) target-equivalent passes
+    // Target cost per round: 1 pass
+    // Tokens per unit time (spec): (K*alpha + 1) / (K/speedRatio + 1)
+    // Tokens per unit time (naive): 1 / 1 = 1
+    const tokensPerRound = K * alpha + 1;
+    const costPerRound   = K / speedRatio + 1;
+    return tokensPerRound / costPerRound;
+  }
+
+  function updateSpeedupChart() {
+    const su = computeTheoreticalSpeedup();
+    const pct = Math.min(100, (su / 5) * 100);
+    barSpec.style.width = pct + '%';
+    barSpec.textContent = su.toFixed(2) + '×';
+    barSpec.style.background = su >= 2 ? 'var(--green)' : su >= 1.5 ? 'var(--yellow)' : 'var(--red)';
+  }
+
+  // ── Timeline renderer ──
+  function buildTimeline(promptWords, draftTokens, verifyState) {
+    // verifyState: null | {accepted: bool[], bonusToken: string}
+    timeline.innerHTML = '';
+
+    // Row 1: Context (prompt)
+    const row0 = makeRow('Context', promptWords.map(w => makeToken(w, 'prompt')));
+    timeline.appendChild(row0);
+
+    // Row 2: Draft tokens
+    if (draftTokens.length > 0) {
+      const draftRow = makeRow('Draft', draftTokens.map(w => makeToken(w, 'draft')));
+      timeline.appendChild(draftRow);
+    } else {
+      const draftRow = makeRow('Draft', Array.from({length: K}, () => makeToken('...', 'empty')));
+      timeline.appendChild(draftRow);
+    }
+
+    // Row 3: Verification result
+    if (verifyState) {
+      const vTokens = [];
+      for (let i = 0; i < draftTokens.length; i++) {
+        if (verifyState.accepted[i]) {
+          vTokens.push(makeToken(draftTokens[i], 'accepted'));
+        } else {
+          vTokens.push(makeToken(draftTokens[i], 'rejected'));
+          break; // stop at first rejection
+        }
+      }
+      // bonus token
+      if (verifyState.bonusToken) {
+        vTokens.push(makeToken(verifyState.bonusToken, 'target-bonus'));
+      }
+      const verRow = makeRow('Output', vTokens);
+      timeline.appendChild(verRow);
+    }
+  }
+
+  function makeRow(label, tokenEls) {
+    const row = document.createElement('div');
+    row.className = 'tl-row';
+    const lbl = document.createElement('div');
+    lbl.className = 'tl-label';
+    lbl.textContent = label;
+    const seq = document.createElement('div');
+    seq.className = 'token-seq';
+    tokenEls.forEach(t => seq.appendChild(t));
+    row.appendChild(lbl);
+    row.appendChild(seq);
+    return row;
+  }
+
+  function makeToken(word, cls) {
+    const t = document.createElement('span');
+    t.className = 'token ' + cls;
+    t.textContent = word;
+    return t;
+  }
+
+  // ── Run one speculative decoding round ──
+  async function runRound() {
+    if (animating) return;
+    animating = true;
+    btnRun.disabled = true;
+
+    // Generate prompt context words (fixed display)
+    const promptWords = ['The','quick','brown'];
+
+    // Phase 1: Draft
+    setPhase('draft');
+    const draftTokens = [];
+    buildTimeline(promptWords, [], null);
+
+    for (let i = 0; i < K; i++) {
+      await delay(160);
+      draftTokens.push(randWord());
+      buildTimeline(promptWords, draftTokens.concat(
+        Array.from({length: K - draftTokens.length}, () => '...')
+          .map((_, j) => j === 0 ? '█' : '…')), null);
+      // Rebuild with current drafts + placeholder
+      const promptEl = buildPromptOnly(promptWords);
+      const draftEl  = buildDraftInProgress(draftTokens, K);
+      timeline.innerHTML = '';
+      timeline.appendChild(promptEl);
+      timeline.appendChild(draftEl);
+    }
+
+    await delay(200);
+
+    // Phase 2: Verify (target model parallel pass)
+    setPhase('verify');
+    setStepText('<span class="phase-label phase-verify">VERIFY</span> Target model runs <strong>1 forward pass</strong> over all ' + K + ' draft tokens simultaneously…');
+
+    // Animate "verifying" state on draft tokens
+    buildTimeline(promptWords, draftTokens, null);
+    // Add verifying class to draft row tokens
+    const draftRowTokens = timeline.querySelectorAll('.token.draft');
+    draftRowTokens.forEach(t => t.classList.add('verifying'));
+    await delay(600);
+    draftRowTokens.forEach(t => t.classList.remove('verifying'));
+
+    // Determine accepted/rejected
+    const accepted = [];
+    let firstReject = -1;
+    for (let i = 0; i < K; i++) {
+      const acc = Math.random() < alpha;
+      accepted.push(acc);
+      if (!acc && firstReject === -1) {
+        firstReject = i;
+      }
+    }
+
+    const bonusToken = randWord();
+    const numAccepted = firstReject === -1 ? K : firstReject;
+    const tokensThisRound = numAccepted + 1; // +1 for bonus
+
+    await delay(150);
+
+    // Phase 3: Show results token by token
+    setPhase('bonus');
+    for (let i = 0; i <= numAccepted; i++) {
+      await delay(120);
+      const partial = {
+        accepted: accepted.slice(0, i + 1),
+        bonusToken: i === numAccepted ? bonusToken : null
+      };
+      buildTimeline(promptWords, draftTokens, partial);
+    }
+
+    // Update stats
+    rounds++;
+    totalAccepted += tokensThisRound;
+    totalNaive    += tokensThisRound; // would need N target passes
+    totalActual   += 1;              // spec decoding: 1 target pass
+
+    updateStats();
+
+    // Summary
+    setPhase('output');
+    setStepText(
+      '<span class="phase-label phase-output">RESULT</span> ' +
+      'Accepted <strong>' + numAccepted + '/' + K + '</strong> draft tokens + 1 bonus = ' +
+      '<strong style="color:var(--green)">' + tokensThisRound + ' tokens</strong> generated ' +
+      'with <strong>1 target forward pass</strong> (vs ' + tokensThisRound + ' naive). ' +
+      'Acceptance rate this round: <strong>' + (numAccepted/K*100).toFixed(0) + '%</strong>.'
+    );
+
+    animating = false;
+    btnRun.disabled = false;
+  }
+
+  function buildPromptOnly(words) {
+    return makeRow('Context', words.map(w => makeToken(w, 'prompt')));
+  }
+
+  function buildDraftInProgress(draftSoFar, total) {
+    const toks = draftSoFar.map(w => makeToken(w, 'draft'));
+    for (let i = draftSoFar.length; i < total; i++) {
+      toks.push(makeToken('...', 'empty'));
+    }
+    return makeRow('Draft', toks);
+  }
+
+  function setPhase(phase) {
+    const msgs = {
+      draft:  '<span class="phase-label phase-draft">DRAFT</span> Small draft model generating tokens autoregressively…',
+      verify: '<span class="phase-label phase-verify">VERIFY</span> Target model evaluating all draft tokens in a single parallel forward pass…',
+      bonus:  '<span class="phase-label phase-bonus">SAMPLE</span> Accepting tokens via rejection sampling — target model samples bonus token at position K+1…',
+      output: ''
+    };
+    if (msgs[phase]) stepInfo.innerHTML = msgs[phase];
+  }
+
+  function setStepText(html) {
+    stepInfo.innerHTML = html;
+  }
+
+  function updateStats() {
+    statRounds.textContent   = rounds;
+    statAccepted.textContent = totalAccepted;
+    statNaive.textContent    = totalNaive;
+    statActual.textContent   = totalActual;
+    if (totalActual > 0) {
+      const eff = totalNaive / totalActual;
+      statSpeedup.textContent = eff.toFixed(2) + '×';
+    }
+  }
+
+  function delay(ms) {
+    return new Promise(res => setTimeout(res, ms));
+  }
+
+  // ── Buttons ──
+  btnRun.addEventListener('click', runRound);
+
+  btnAuto.addEventListener('click', function() {
+    if (autoInterval) {
+      clearInterval(autoInterval);
+      autoInterval = null;
+      this.textContent = 'Auto Loop';
+      this.classList.remove('active');
+    } else {
+      this.textContent = 'Stop Auto';
+      this.classList.add('active');
+      autoInterval = setInterval(() => {
+        if (!animating) runRound();
+      }, 1400);
+    }
+  });
+
+  btnReset.addEventListener('click', function() {
+    if (autoInterval) {
+      clearInterval(autoInterval);
+      autoInterval = null;
+      btnAuto.textContent = 'Auto Loop';
+      btnAuto.classList.remove('active');
+    }
+    rounds = totalAccepted = totalNaive = totalActual = 0;
+    animating = false;
+    btnRun.disabled = false;
+    updateStats();
+    timeline.innerHTML = '';
+    stepInfo.innerHTML = 'Press <strong>Run Round</strong> to start a speculative decoding round.';
+  });
+
+  // ── Init ──
+  updateSpeedupChart();
+
+  // Initial empty timeline
+  const initPrompt = makeRow('Context', ['The','quick','brown'].map(w => makeToken(w, 'prompt')));
+  const initDraft  = makeRow('Draft',   Array.from({length: K}, () => makeToken('...', 'empty')));
+  timeline.appendChild(initPrompt);
+  timeline.appendChild(initDraft);
+
+})();
+</script>
+
+</body>
+</html>

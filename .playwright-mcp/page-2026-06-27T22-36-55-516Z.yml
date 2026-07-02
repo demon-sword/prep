@@ -1,0 +1,180 @@
+- generic [active] [ref=e1]:
+  - banner [ref=e2]:
+    - generic [ref=e3]: Agents
+    - 'heading "AI Agents: Observe → Decide → Act → Learn" [level=1] [ref=e4]'
+    - paragraph [ref=e5]: The agent loop, tool taxonomy, planning vs execution separation, observability, and failure modes that matter in production.
+  - main [ref=e6]:
+    - generic [ref=e7]:
+      - generic [ref=e8]:
+        - generic [ref=e9]: 🧠
+        - 'heading "Theory: How Agents Work" [level=2] [ref=e10]'
+      - heading "What Is an AI Agent?" [level=3] [ref=e11]
+      - paragraph [ref=e12]:
+        - text: "An AI agent is an LLM embedded in a loop that perceives an environment, decides on actions, executes those actions through external tools, and updates its context based on results — repeating until a goal is achieved or a stopping condition is met. This is distinct from a single-turn LLM call: the agent"
+        - emphasis [ref=e13]: persists across multiple steps
+        - text: ", its outputs affect future inputs, and it interacts with the world beyond just token generation."
+      - paragraph [ref=e14]:
+        - text: "The canonical loop is:"
+        - strong [ref=e15]: Observe → Plan → Act → Observe again
+        - text: ". Each iteration the model sees: (1) its original instruction, (2) the history of actions taken so far, (3) the results of those actions, and (4) any new observations. From this context it decides what to do next — or declares the task complete."
+      - generic [ref=e16]: "Agent Step: s_{t+1} = LLM(system_prompt, goal, history[0..t], observation_t) Action: a_t = tool_call(name, args) | final_answer(text) Observation: o_t = tool_executor(a_t)"
+      - heading "The Four Phases" [level=3] [ref=e17]
+      - paragraph [ref=e18]:
+        - strong [ref=e19]: "Observe:"
+        - text: The agent receives input — initial user message, tool results, environment events, or memory retrievals. This is the only source of grounding. A bad observation (hallucinated tool output, truncated API response, ambiguous error) corrupts all downstream reasoning.
+      - paragraph [ref=e20]:
+        - strong [ref=e21]: "Plan / Decide:"
+        - text: "The model reasons over the observation and emits either a tool call or a final answer. Frameworks like ReAct interleave Reasoning and Acting traces explicitly in the prompt. Chain-of-thought is effectively planning. The quality here depends heavily on: model capability, system prompt clarity, and how well tool schemas are described."
+      - paragraph [ref=e22]:
+        - strong [ref=e23]: "Act:"
+        - text: "A tool executor dispatches the chosen action. Tools can be: read/write to memory, web search, code execution, API calls, browser control, file I/O. The agent is"
+        - emphasis [ref=e24]: decoupled
+        - text: from execution — it emits a specification; the harness fulfills it. This separation is architecturally critical for sandboxing, logging, and retry logic.
+      - paragraph [ref=e25]:
+        - strong [ref=e26]: "Learn / Update:"
+        - text: "Results flow back into context. In production agents, \"learning\" is often just in-context accumulation; true model learning from agent trajectories (e.g., via RL or STaR) is a separate offline training process. The distinction matters: in-context \"learning\" is ephemeral and lost on session end."
+      - heading "Tool Taxonomy" [level=3] [ref=e27]
+      - paragraph [ref=e28]: "Tools fall into three categories that matter architecturally:"
+      - generic [ref=e29]:
+        - generic [ref=e30]:
+          - generic [ref=e31]: Knowledge Augmentation
+          - list [ref=e32]:
+            - listitem [ref=e33]: Web search (Bing, Google API)
+            - listitem [ref=e34]: RAG retrieval (vector DB)
+            - listitem [ref=e35]: SQL queries
+            - listitem [ref=e36]: Document readers (PDF, HTML)
+            - listitem [ref=e37]: Memory store reads
+        - generic [ref=e38]:
+          - generic [ref=e39]: Capability Extension
+          - list [ref=e40]:
+            - listitem [ref=e41]: Code interpreter / REPL
+            - listitem [ref=e42]: Calculator / solver
+            - listitem [ref=e43]: Image generation
+            - listitem [ref=e44]: Speech synthesis
+            - listitem [ref=e45]: Structured data extraction
+        - generic [ref=e46]:
+          - generic [ref=e47]: Write Actions (Risky)
+          - list [ref=e48]:
+            - listitem [ref=e49]: Send email / Slack message
+            - listitem [ref=e50]: Write to filesystem / DB
+            - listitem [ref=e51]: Execute shell commands
+            - listitem [ref=e52]: Deploy code, call APIs
+            - listitem [ref=e53]: Browser form submission
+      - generic [ref=e54]:
+        - strong [ref=e55]: Write actions require escalating oversight.
+        - text: "A read tool failure is recoverable — you retry. A write tool failure can be irreversible: email sent, DB record modified, money transferred. Production agent harnesses should enforce approval gates or dry-run modes for all write-category tools."
+      - heading "Planning vs Execution Separation" [level=3] [ref=e56]
+      - paragraph [ref=e57]:
+        - text: Naive implementations let one LLM call both plan and execute — blurring concerns. Better architectures separate a
+        - emphasis [ref=e58]: planner
+        - text: (high-capability model that writes a task decomposition) from
+        - emphasis [ref=e59]: executors
+        - text: (cheaper models that fulfill individual subtasks). This is the idea behind LangGraph's supervisor pattern, AutoGen's agent conversations, and CrewAI's role-based delegation. The planner can route tasks based on complexity, choose which executor to delegate to, and synthesize results without being bottlenecked on every tool call.
+      - paragraph [ref=e60]: "Multi-agent systems (MAS) extend this: multiple agents with different specializations collaborate via message passing. Key design decisions: synchronous vs asynchronous messaging, shared vs isolated memory, hierarchical vs peer-to-peer topology. OpenAI's Swarm, LangGraph, AutoGen, and CrewAI each make different choices here."
+      - heading "Observability and Failure Modes" [level=3] [ref=e61]
+      - paragraph [ref=e62]: "Agents are notoriously hard to debug. In production you need to trace:"
+      - list [ref=e63]:
+        - listitem [ref=e64]:
+          - strong [ref=e65]: Every LLM call
+          - text: — model, prompt, response, latency, token cost
+        - listitem [ref=e66]:
+          - strong [ref=e67]: Every tool invocation
+          - text: — tool name, args, result, duration, error
+        - listitem [ref=e68]:
+          - strong [ref=e69]: Every agent turn
+          - text: — step index, chosen action, reason
+        - listitem [ref=e70]:
+          - strong [ref=e71]: Session-level metrics
+          - text: — total steps, total tokens, final status (success / timeout / error / human-interrupted)
+      - paragraph [ref=e72]:
+        - text: Tools like LangSmith, Langfuse, and Phoenix (Arize) provide agent-specific tracing. At minimum, assign a
+        - code [ref=e73]: trace_id
+        - text: per run and log structured events at every loop iteration. Without this, debugging a 20-step agent failure is a nightmare.
+      - paragraph [ref=e74]:
+        - strong [ref=e75]: "The critical failure modes every senior engineer should know:"
+      - generic [ref=e76]:
+        - generic [ref=e77]:
+          - generic [ref=e78]: Infinite Loop
+          - list [ref=e79]:
+            - listitem [ref=e80]: Model keeps calling same tool
+            - listitem [ref=e81]: No stopping condition met
+            - listitem [ref=e82]: "Fix: max_steps limit, cycle detection, explicit done-tool"
+        - generic [ref=e83]:
+          - generic [ref=e84]: Context Overflow
+          - list [ref=e85]:
+            - listitem [ref=e86]: History grows past context limit
+            - listitem [ref=e87]: Oldest observations truncated silently
+            - listitem [ref=e88]: "Fix: summarization, memory offload"
+        - generic [ref=e89]:
+          - generic [ref=e90]: Tool Hallucination
+          - list [ref=e91]:
+            - listitem [ref=e92]: Model invents tool args or names
+            - listitem [ref=e93]: Calls non-existent tools
+            - listitem [ref=e94]: "Fix: strict JSON schema validation, function calling APIs"
+        - generic [ref=e95]:
+          - generic [ref=e96]: Prompt Injection
+          - list [ref=e97]:
+            - listitem [ref=e98]: Tool result contains adversarial instructions
+            - listitem [ref=e99]: Agent overrides its goals
+            - listitem [ref=e100]: "Fix: output sandboxing, goal anchoring"
+      - 'heading "Production Reality: Numbers That Matter" [level=3] [ref=e101]'
+      - generic [ref=e102]:
+        - strong [ref=e103]: Cost.
+        - text: A GPT-4-class agent doing 10 reasoning steps with 5 tool calls each, averaging 2K tokens per LLM call = 100K tokens/run. At $30/1M tokens (input), that's $3/run. A 1000-user/day product = $3,000/day in agent costs alone — before infrastructure. This is why model selection per agent role is critical; many steps can use Claude Haiku or Llama-3-8B at 10–50× lower cost.
+      - generic [ref=e104]:
+        - strong [ref=e105]: Latency.
+        - text: Each LLM call adds 1–5s latency (depending on model and token count). A 10-step agent = 10–50s worst case. Parallelizing independent tool calls (when possible) is the primary latency reduction lever. The ReAct pattern does tool calls sequentially by default; modern frameworks support parallel tool dispatch.
+      - generic [ref=e106]:
+        - strong [ref=e107]: Reliability.
+        - text: In evaluations of production agents (Tau-bench, WebArena, SWE-bench), even frontier models achieve 30–60% task completion on realistic long-horizon tasks. This is far below human baselines (80–95%). Agents fail not just on reasoning but on error recovery — they rarely retry correctly after an unexpected tool error.
+    - generic [ref=e108]:
+      - generic [ref=e109]:
+        - generic [ref=e110]: ⚙️
+        - 'heading "Visualization: Agent Loop Simulation" [level=2] [ref=e111]'
+      - paragraph [ref=e112]:
+        - text: Watch the agent loop animate step by step —
+        - strong [ref=e113]: Observe → Plan → Act → Learn
+        - text: . Click
+        - emphasis [ref=e114]: Run Agent
+        - text: to step through a simulated task. Use the
+        - emphasis [ref=e115]: Inject Failure
+        - text: buttons to see how failures propagate. The pulsing node shows the current phase; arrows show data flow.
+      - generic [ref=e118]:
+        - button "▶ Step Once" [ref=e119] [cursor=pointer]
+        - button "⟳ Auto Run" [ref=e120] [cursor=pointer]
+        - button "↺ Reset" [ref=e121] [cursor=pointer]
+      - generic [ref=e122]:
+        - generic [ref=e123]: ⚡ Inject Failure at Next Act
+        - button "Tool Hallucination" [ref=e124] [cursor=pointer]
+        - button "Context Overflow" [ref=e125] [cursor=pointer]
+        - button "Prompt Injection" [ref=e126] [cursor=pointer]
+        - button "Infinite Loop" [ref=e127] [cursor=pointer]
+    - generic [ref=e129]:
+      - generic [ref=e130]:
+        - generic [ref=e131]: 💡
+        - heading "Key Takeaways" [level=2] [ref=e132]
+      - list [ref=e133]:
+        - listitem [ref=e134]:
+          - strong [ref=e135]: Write tools need approval gates, not just logging.
+          - text: A read-tool failure is retryable; a write-tool failure (email sent, row deleted, payment initiated) is often irreversible. Design confirmation steps and dry-run modes into all write-category tools from day one — retrofitting them after an incident is painful.
+        - listitem [ref=e136]:
+          - strong [ref=e137]: Cost per agent run compounds rapidly.
+          - text: At 10+ LLM calls per task at GPT-4 prices, a single run costs $1–5. At scale, tiered model routing — frontier model for planning, smaller model for execution — cuts costs by 5–20× with minimal quality degradation. Always instrument cost per step before going to production.
+        - listitem [ref=e138]:
+          - strong [ref=e139]: Task completion rates on realistic benchmarks hover at 30–60%.
+          - text: Even frontier models on SWE-bench, WebArena, and Tau-bench fall well short of human performance. Agents fail most on error recovery, not on initial reasoning — they don't retry correctly after unexpected tool output. Build retry logic and error normalization at the harness level, not inside prompts.
+        - listitem [ref=e140]:
+          - strong [ref=e141]: Observability is not optional.
+          - text: You cannot debug a 20-step agent failure without structured traces. Assign trace IDs, log every tool invocation with args/results/latency, and use purpose-built tools like LangSmith or Langfuse. Console.log-based debugging at scale is untenable.
+        - listitem [ref=e142]:
+          - strong [ref=e143]: Context overflow is the silent killer of long-horizon agents.
+          - text: "As the history grows past the context window, early observations silently drop. The agent starts reasoning over an incomplete view without knowing it. Fix: proactively summarize history every N steps, offload to external memory, or use a model with larger context — but don't assume 128K context means you can ignore the problem (it's expensive too)."
+        - listitem [ref=e144]:
+          - strong [ref=e145]: Prompt injection via tool results is a real attack surface.
+          - text: When an agent reads from external sources (web, DB, user-uploaded files), adversarial content can hijack the agent's goal. This is especially dangerous for write-capable agents. Mitigate with goal re-anchoring in the system prompt, output sandboxing, and monitoring for unexpected action patterns.
+  - navigation [ref=e146]:
+    - link "← 30. Vector Search & KNN" [ref=e147] [cursor=pointer]:
+      - /url: 30-vector-search.html
+    - generic [ref=e148]: 31 / 36 — Agents
+    - link "32. Agent Memory Systems →" [ref=e149] [cursor=pointer]:
+      - /url: 32-agent-memory.html

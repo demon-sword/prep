@@ -1,0 +1,209 @@
+- generic [active] [ref=e1]:
+  - banner [ref=e2]:
+    - generic [ref=e3]: Inference
+    - heading "Speculative Decoding" [level=1] [ref=e4]
+    - paragraph [ref=e5]: How a small draft model generates candidate tokens that the large target model verifies in parallel — achieving 2–3× speedup without quality loss.
+  - main [ref=e6]:
+    - generic [ref=e7]:
+      - heading "Theory" [level=2] [ref=e8]
+      - 'heading "The Core Bottleneck: Autoregressive Decoding Is Sequential" [level=3] [ref=e9]'
+      - paragraph [ref=e10]:
+        - text: Standard LLM inference during the decode phase is fundamentally serial. To generate token
+        - emphasis [ref=e11]: t+1
+        - text: ", the model must first produce token"
+        - emphasis [ref=e12]: t
+        - text: ". This creates a hard dependency chain: even if you throw 1,000 A100s at the problem, you cannot parallelize across the output sequence. Every generated token requires a full forward pass through all transformer layers, which — for large models — is expensive in both latency and compute."
+      - paragraph [ref=e13]:
+        - text: The memory bandwidth problem compounds this. For a 70B-parameter model in FP16, the weights alone occupy ~140 GB. Each forward pass must stream these weights from HBM into the GPU's compute cores. With modern A100s providing ~2 TB/s of HBM bandwidth, a single token takes roughly 70ms to generate. Throughput is dominated by memory bandwidth, not FLOPs. The hardware is
+        - emphasis [ref=e14]: memory-bound
+        - text: ", not compute-bound."
+      - 'heading "The Key Insight: Target Model Forward Passes Are Parallelizable" [level=3] [ref=e15]'
+      - paragraph [ref=e16]:
+        - text: "Speculative decoding (Leviathan et al., 2023; Chen et al., 2023, independently) exploits a structural asymmetry: while"
+        - emphasis [ref=e17]: generating
+        - text: tokens sequentially is expensive,
+        - emphasis [ref=e18]: verifying
+        - text: "multiple candidate tokens in parallel is cheap. A transformer can evaluate any sequence length in a single forward pass — this is how prefill already works. The question is: can we exploit this property during decoding?"
+      - generic [ref=e19]:
+        - strong [ref=e20]: "The fundamental insight:"
+        - text: Running the target model on a sequence of K+1 tokens takes roughly the same wall-clock time as running it on 1 token, because the bottleneck is weight loading, not flops. So if a fast draft model can propose K plausible tokens, the target model can verify all K in one shot — netting up to K tokens per round trip.
+      - 'heading "The Algorithm: Draft → Verify → Correct" [level=3] [ref=e21]'
+      - paragraph [ref=e22]: "The full speculative decoding loop has three stages per iteration:"
+      - list [ref=e23]:
+        - listitem [ref=e24]:
+          - strong [ref=e25]: "Draft phase:"
+          - text: A small, fast model (
+          - emphasis [ref=e26]: M_draft
+          - text: ) generates K candidate tokens autoregressively. This costs K forward passes through a cheap model (e.g., 7B or even 70M parameters).
+        - listitem [ref=e27]:
+          - strong [ref=e28]: "Verify phase:"
+          - text: The large target model (
+          - emphasis [ref=e29]: M_target
+          - text: ) runs a
+          - emphasis [ref=e30]: single
+          - text: "forward pass on the original context + all K draft tokens simultaneously. This produces K+1 distributions: one per draft token position, plus the next position after all K."
+        - listitem [ref=e31]:
+          - strong [ref=e32]: "Acceptance/correction:"
+          - text: Starting from the first draft token, accept or reject each based on a ratio of the target's and draft's probabilities. The acceptance criterion ensures the
+          - emphasis [ref=e33]: marginal distribution of accepted tokens exactly matches M_target's distribution
+          - text: — no quality loss.
+      - heading "The Acceptance Sampling Math" [level=3] [ref=e34]
+      - paragraph [ref=e35]:
+        - text: For each draft token
+        - code [ref=e36]: x_i
+        - text: sampled from the draft distribution
+        - code [ref=e37]: q(x|context)
+        - text: ", compute the acceptance probability:"
+      - generic [ref=e38]: "Accept with probability: min(1, p_target(x_i | context) / q_draft(x_i | context) ) If rejected: resample from adjusted distribution: p'(x) = normalize( max(0, p_target(x) − q_draft(x) ) )"
+      - paragraph [ref=e39]:
+        - text: This is a form of rejection sampling. The resulting sequence has the
+        - emphasis [ref=e40]: exact same distribution
+        - text: as if the target model had generated each token independently. The acceptance probability for a token is high when the draft model and target model agree — and the speedup is proportional to the average number of tokens accepted per round.
+      - heading "Mean Acceptance Length and Speedup" [level=3] [ref=e41]
+      - paragraph [ref=e42]: "If the draft model proposes K tokens and each is accepted independently with probability α (the average acceptance rate), the expected number of accepted tokens per round is:"
+      - generic [ref=e43]: E[accepted tokens] = K · α + 1 (the bonus token from the target's K+1 distribution) Speedup ≈ (K · α + 1) / (K · cost_draft / cost_target + 1)
+      - paragraph [ref=e44]: In practice, a 7B draft model paired with a 70B target achieves ~10× lower draft latency. With K=5 and α=0.8, you get ~4.5 tokens accepted per target forward pass instead of 1 — roughly 3–4× end-to-end throughput improvement. Real-world measurements from Google's work on PaLM showed 2–2.5× speedup; DeepMind's work on Chinchilla reported similar numbers.
+      - heading "Draft Model Selection and Alignment" [level=3] [ref=e45]
+      - paragraph [ref=e46]: "The draft model must be significantly cheaper than the target while producing distributions that frequently agree with it. Common strategies:"
+      - list [ref=e47]:
+        - listitem [ref=e48]:
+          - strong [ref=e49]: "Family-matched smaller model:"
+          - text: Use the same model family (e.g., Llama-7B as draft for Llama-70B). High agreement because they share architecture and training distribution.
+        - listitem [ref=e50]:
+          - strong [ref=e51]: "Self-speculation:"
+          - text: Use early exit layers of the same model as the draft — no separate model needed. Used in Medusa and EAGLE variants.
+        - listitem [ref=e52]:
+          - strong [ref=e53]: "Distilled draft:"
+          - text: Fine-tune a small model specifically to match the target's distribution on your domain — maximizes α for domain-specific workloads.
+        - listitem [ref=e54]:
+          - strong [ref=e55]: "Token trees (SpecTree, EAGLE):"
+          - text: Instead of a single K-token chain, draft a tree of candidates. The target evaluates all branches in one forward pass and picks the longest accepted prefix.
+      - heading "EAGLE, Medusa, and Modern Variants" [level=3] [ref=e56]
+      - paragraph [ref=e57]:
+        - strong [ref=e58]: "Medusa (2023):"
+        - text: "Adds multiple \"head\" layers to the base model that predict tokens at positions t+1, t+2, t+3, ... simultaneously from the same hidden state. No separate draft model. Achieves 2–3× speedup on LLaMA-2. Downside: requires fine-tuning the target model to add heads."
+      - paragraph [ref=e59]:
+        - strong [ref=e60]: "EAGLE (2024):"
+        - text: The draft model is fed the target model's feature representations (not just token embeddings), making it dramatically better at predicting what the target will generate. Achieves 3–4× speedup — currently state-of-the-art among spec decoding variants.
+      - paragraph [ref=e61]:
+        - strong [ref=e62]: "SpecInfer:"
+        - text: Combines speculative decoding with tree-structured speculation and batching, enabling multiple concurrent users to benefit from shared verification forward passes.
+      - heading "Production Constraints and When It Helps" [level=3] [ref=e63]
+      - paragraph [ref=e64]: "Speculative decoding helps most when: (a) you're latency-bound with small batch sizes (batch=1 to ~8), (b) the draft model is readily available, and (c) prompts produce predictable continuations (low perplexity). It hurts or breaks even when batches are large (the target is already compute-bound, not memory-bound), or the task is highly creative/random (low acceptance rate)."
+      - paragraph [ref=e65]:
+        - text: vLLM integrates speculative decoding natively as of v0.3+. TGI from HuggingFace supports it via the
+        - code [ref=e66]: speculative_decoding
+        - text: flag. For serving, you need to manage two models in memory simultaneously — the draft model adds memory overhead, but since it's small (7B vs 70B), the overhead is usually acceptable (~10% additional VRAM).
+      - heading "Quality Guarantee" [level=3] [ref=e67]
+      - paragraph [ref=e68]:
+        - text: "This is speculative decoding's most powerful property:"
+        - emphasis [ref=e69]: the output distribution is mathematically identical to the target model's distribution
+        - text: . Unlike approximate methods (quantization, pruning, distillation), speculative decoding is lossless. You can verify this empirically by computing token-level acceptance rates across your benchmark — any deviation from 100% marginal agreement indicates an implementation bug.
+    - generic [ref=e70]:
+      - heading "Interactive Visualization" [level=2] [ref=e71]
+      - paragraph [ref=e72]:
+        - text: Watch speculative decoding in action. The
+        - strong [ref=e73]: Draft Model
+        - text: proposes K tokens in sequence, then the
+        - strong [ref=e74]: Target Model
+        - text: verifies them all in one parallel forward pass. Accepted tokens appear in
+        - strong [ref=e75]: green
+        - text: ", rejected in"
+        - strong [ref=e76]: red
+        - text: . Adjust K and acceptance rate α to see how speedup changes.
+      - generic [ref=e77]:
+        - generic [ref=e78]:
+          - generic [ref=e79]: Draft tokens K 5
+          - slider [ref=e80] [cursor=pointer]: "5"
+        - generic [ref=e81]:
+          - generic [ref=e82]: Acceptance rate α 0.75
+          - slider [ref=e83] [cursor=pointer]: "0.75"
+        - generic [ref=e84]:
+          - generic [ref=e85]: Draft speed ratio 10×
+          - slider [ref=e86] [cursor=pointer]: "10"
+      - generic [ref=e87]:
+        - button "▶ Run Round" [ref=e88] [cursor=pointer]
+        - button "Auto Loop" [ref=e89] [cursor=pointer]
+        - button "Reset" [ref=e90] [cursor=pointer]
+      - generic [ref=e91]:
+        - generic [ref=e92]:
+          - generic [ref=e93]:
+            - generic [ref=e94]: Context
+            - generic [ref=e95]:
+              - generic [ref=e96]: The
+              - generic [ref=e97]: quick
+              - generic [ref=e98]: brown
+          - generic [ref=e99]:
+            - generic [ref=e100]: Draft
+            - generic [ref=e101]:
+              - generic [ref=e102]: ...
+              - generic [ref=e103]: ...
+              - generic [ref=e104]: ...
+              - generic [ref=e105]: ...
+              - generic [ref=e106]: ...
+        - generic [ref=e107]:
+          - text: Press
+          - strong [ref=e108]: Run Round
+          - text: to start a speculative decoding round.
+      - generic [ref=e109]:
+        - generic [ref=e110]:
+          - generic [ref=e111]: "0"
+          - generic [ref=e112]: Rounds run
+        - generic [ref=e113]:
+          - generic [ref=e114]: "0"
+          - generic [ref=e115]: Tokens accepted
+        - generic [ref=e116]:
+          - generic [ref=e117]: "0"
+          - generic [ref=e118]: Target fwd passes (naive)
+        - generic [ref=e119]:
+          - generic [ref=e120]: "0"
+          - generic [ref=e121]: Target fwd passes (spec)
+        - generic [ref=e122]:
+          - generic [ref=e123]: —
+          - generic [ref=e124]: Effective speedup
+      - generic [ref=e125]:
+        - heading "Theoretical Speedup at Current Settings" [level=4] [ref=e126]
+        - generic [ref=e127]:
+          - generic [ref=e128]: Naive (1 tok/pass)
+          - generic [ref=e130]: 1.0×
+        - generic [ref=e131]:
+          - generic [ref=e132]: Spec Decoding
+          - generic [ref=e134]: 3.17×
+    - generic [ref=e135]:
+      - heading "Key Takeaways" [level=2] [ref=e136]
+      - list [ref=e137]:
+        - listitem [ref=e138]:
+          - text: →
+          - strong [ref=e139]: "Lossless speedup:"
+          - text: Unlike quantization or pruning, speculative decoding provides mathematically provable output-distribution equivalence to the target model — verified by rejection sampling math, not empirical approximation.
+        - listitem [ref=e140]:
+          - text: →
+          - strong [ref=e141]: "Batch-size cliff:"
+          - text: Speedup degrades sharply above batch size ~8. Large batches already saturate GPU compute, making the target forward pass cheap and eliminating the memory-bandwidth bottleneck that speculative decoding exploits. It's primarily a latency optimization, not a throughput optimization.
+        - listitem [ref=e142]:
+          - text: →
+          - strong [ref=e143]: EAGLE > Medusa > vanilla spec decoding
+          - text: "in practice: EAGLE achieves 3–4× speedup by feeding the draft model target-model feature vectors (not token embeddings), dramatically increasing acceptance rate α. If you're implementing spec decoding in 2024+, start with EAGLE architecture."
+        - listitem [ref=e144]:
+          - text: →
+          - strong [ref=e145]: "Draft-target alignment is the key variable:"
+          - text: A draft model from the same family (Llama-7B → Llama-70B) reaches α ≈ 0.7–0.85 on typical tasks. Mismatched families or heavily fine-tuned targets drop α to 0.4–0.5, making speedup marginal. Always measure α on your actual workload before committing.
+        - listitem [ref=e146]:
+          - text: →
+          - strong [ref=e147]: "Two models in memory = dual RAM overhead:"
+          - text: For a 70B + 7B setup, you're paying ~140 GB + ~14 GB = ~154 GB VRAM. On an 8×A100 node (640 GB), this is manageable. On tighter deployments, self-speculation (Medusa heads, EAGLE with shared weights) avoids the extra memory cost.
+        - listitem [ref=e148]:
+          - text: →
+          - strong [ref=e149]: "vLLM, TGI, and SGLang all support it natively:"
+          - text: vLLM v0.3+ has
+          - code [ref=e150]: "--speculative-model"
+          - text: ; SGLang has built-in EAGLE support. In production, combine speculative decoding with continuous batching carefully — the async accept/reject logic complicates request scheduling.
+  - navigation [ref=e151]:
+    - link "← Previous Inference Optimization" [ref=e152] [cursor=pointer]:
+      - /url: 34-inference-optimization.html
+      - generic [ref=e153]: ← Previous
+      - generic [ref=e154]: Inference Optimization
+    - link "Next → Model & Tensor Parallelism" [ref=e155] [cursor=pointer]:
+      - /url: 36-model-parallelism.html
+      - generic [ref=e156]: Next →
+      - generic [ref=e157]: Model & Tensor Parallelism

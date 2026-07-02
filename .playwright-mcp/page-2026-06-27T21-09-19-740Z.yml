@@ -1,0 +1,123 @@
+- generic [ref=e1]:
+  - banner [ref=e2]:
+    - generic [ref=e3]: Training
+    - heading "Best-of-N & Beam Search" [level=1] [ref=e4]
+    - paragraph [ref=e5]: "Inference-time compute scaling: generate multiple candidates, score with a reward model, and select the best — improving output quality without any retraining."
+  - main [ref=e6]:
+    - generic [ref=e7]:
+      - heading "Theory" [level=2] [ref=e8]
+      - paragraph [ref=e9]:
+        - text: Best-of-N (BoN) and beam search are
+        - strong [ref=e10]: inference-time compute scaling
+        - text: "strategies. Instead of accepting the first token sequence a model produces, you generate multiple candidates and pick the best one. This is a fundamental lever: you trade compute budget for output quality without touching model weights at all."
+      - heading "Why Inference-Time Compute Matters" [level=3] [ref=e11]
+      - paragraph [ref=e12]: Training-time compute is expensive and irreversible — you bake knowledge into weights over weeks or months. Inference-time compute is cheap, parallelizable, and reversible — you can dial it up or down per request. This asymmetry makes inference-time compute scaling especially attractive for high-stakes queries where quality matters more than cost.
+      - paragraph [ref=e13]: "The insight behind BoN is simple: the probability that at least one of N independent samples is high quality grows rapidly with N, especially when combined with a reliable scoring function (reward model). Google's early RLHF paper showed that Best-of-128 sampling could match or exceed expensive RL fine-tuning in some settings. More recently, OpenAI's o1 and DeepSeek's R1 demonstrate that inference-time chain-of-thought scaling (a generalization of BoN) can dramatically improve reasoning — o1-mini with extended thinking can outperform o1 on certain benchmarks."
+      - heading "Best-of-N Sampling (Rejection Sampling)" [level=3] [ref=e14]
+      - paragraph [ref=e15]: "The mechanism is direct:"
+      - list [ref=e16]:
+        - listitem [ref=e17]: Sample N complete sequences from the language model (typically with non-zero temperature).
+        - listitem [ref=e18]: Score each with a reward model (or proxy metric like ROUGE, self-consistency vote, length heuristic).
+        - listitem [ref=e19]: Return the sequence with the highest score.
+      - paragraph [ref=e20]: "The quality gain follows a log-linear law: each doubling of N yields diminishing but consistent returns. Empirically, going from N=1 to N=4 gives a large jump; N=4 to N=16 gives a moderate jump; N=64 to N=128 gives little. The plateau is set by model diversity — once all N samples converge to similar outputs, scoring them differently adds nothing."
+      - generic [ref=e21]:
+        - strong [ref=e22]: "Key insight:"
+        - text: BoN quality scales as
+        - code [ref=e23]: E[max(R₁, R₂, ..., Rₙ)]
+        - text: where Rᵢ are i.i.d. reward scores. For a Gaussian reward distribution, this grows as
+        - code [ref=e24]: ~√(2 ln N)
+        - text: — logarithmic returns. You need 4× the compute to gain one standard deviation of reward.
+      - paragraph [ref=e25]:
+        - text: The critical dependency is the
+        - strong [ref=e26]: reward model quality
+        - text: . If your reward model is miscalibrated, BoN optimizes toward proxy artifacts — longer responses, confident-sounding hedges, preferred vocabulary — not true quality. This is the same reward hacking problem as RLHF, but at inference time.
+      - heading "Beam Search" [level=3] [ref=e27]
+      - paragraph [ref=e28]:
+        - text: Beam search is a structured approximation to exhaustive search over all possible sequences. Instead of greedy (pick the single highest-probability next token at each step) or exhaustive (explore all
+        - code [ref=e29]: "|V|^T"
+        - text: sequences), beam search maintains a
+        - strong [ref=e30]: beam
+        - text: of the top-B partial sequences at each decoding step.
+      - generic [ref=e31]: "Step 0: beam = { \"\" } Step 1: expand each, keep top-B by cumulative log-prob Step 2: expand each, keep top-B ... Step T: return highest-scoring complete sequence from beam"
+      - paragraph [ref=e32]: Beam search trades off memory and compute linearly with beam width B. For B=1 it degenerates to greedy decoding. For B=∞ it finds the globally optimal sequence (under the model's probability distribution) but is intractable for long sequences.
+      - paragraph [ref=e33]:
+        - text: "A key tradeoff: beam search optimizes for"
+        - strong [ref=e34]: maximum likelihood under the model
+        - text: ", not human preference. Empirically, beam search outputs tend to be generic, repetitive, and low-diversity. For open-ended generation tasks (stories, dialogue, creative writing) nucleus sampling beats beam search qualitatively even though beam search has higher log-probability. For constrained tasks (translation, structured extraction) beam search still dominates."
+      - heading "Beam Search Variants" [level=3] [ref=e35]
+      - list [ref=e36]:
+        - listitem [ref=e37]:
+          - strong [ref=e38]: "Length normalization:"
+          - text: Divide cumulative log-prob by sequence length to prevent short-sequence bias.
+        - listitem [ref=e39]:
+          - strong [ref=e40]: "Diverse beam search:"
+          - text: Add a diversity penalty between beams to encourage exploration of different hypotheses.
+        - listitem [ref=e41]:
+          - strong [ref=e42]: "Constrained beam search:"
+          - text: Force certain tokens to appear (useful for structured outputs).
+        - listitem [ref=e43]:
+          - strong [ref=e44]: "Group beam search:"
+          - text: Maintain G groups of beams with inter-group diversity penalty — used in CTRL and prefix-constrained generation.
+      - 'heading "Best-of-N vs Beam Search: When to Use What" [level=3] [ref=e45]'
+      - paragraph [ref=e46]: "These methods have different computational profiles and quality characteristics:"
+      - list [ref=e47]:
+        - listitem [ref=e48]:
+          - strong [ref=e49]: "Best-of-N:"
+          - text: Embarrassingly parallel — run N independent inference calls concurrently. Best for tasks where diversity of candidates matters (brainstorming, creative tasks, code generation). Requires a reliable reward/scoring function. Works with any model, no modification needed.
+        - listitem [ref=e50]:
+          - strong [ref=e51]: "Beam search:"
+          - text: Serially coupled — each step depends on previous. Better when you want maximum likelihood under the model, e.g., translation, structured generation. Does not need a separate scorer but assumes model probabilities align with quality.
+      - generic [ref=e52]:
+        - strong [ref=e53]: "Production reality:"
+        - text: For code generation (HumanEval benchmark), Best-of-100 with a test-execution scorer gives pass@1 rates equivalent to a significantly larger model. This is why "compute-optimal inference" is a growing area — you can rent BoN at inference time rather than train a bigger model.
+      - heading "Speculative Sampling vs BoN" [level=3] [ref=e54]
+      - paragraph [ref=e55]: Don't confuse Best-of-N with speculative decoding. BoN generates N complete sequences and picks one. Speculative decoding generates K draft tokens with a small model and verifies them in parallel with the target model — it's a latency optimization, not a quality-maximization strategy. See concept 35 for speculative decoding.
+      - heading "Self-Consistency as a BoN Variant" [level=3] [ref=e56]
+      - paragraph [ref=e57]: Self-consistency (Wang et al., 2022) is a BoN variant where the "reward model" is a majority vote. Generate N chain-of-thought reasoning paths, extract the final answer from each, and return the plurality answer. This approach achieves 74.4% on GSM8K with a 175B model versus 56.5% for greedy decoding — a substantial gain with no additional training.
+    - generic [ref=e58]:
+      - heading "Visualization" [level=2] [ref=e59]
+      - paragraph [ref=e60]:
+        - text: Watch Best-of-N sampling and Beam Search in action. Use the controls to change N (number of samples), Beam Width, and the reward score distribution. Click
+        - strong [ref=e61]: Run
+        - text: to animate a new search. Toggle between modes to compare strategies.
+      - generic [ref=e62]:
+        - generic [ref=e63]:
+          - generic [ref=e64]: N (candidates) 8
+          - slider [ref=e65]: "8"
+        - generic [ref=e66]:
+          - generic [ref=e67]: Beam Width 3
+          - slider [ref=e68]: "3"
+        - generic [ref=e69]:
+          - generic [ref=e70]: Reward Variance 0.4
+          - slider [ref=e71]: "0.4"
+        - generic [ref=e72]:
+          - generic [ref=e73]: Temperature 0.8
+          - slider [ref=e74]: "0.8"
+      - generic [ref=e75]:
+        - button "Best-of-N" [ref=e76] [cursor=pointer]
+        - button "Beam Search" [active] [ref=e77] [cursor=pointer]
+        - button "▶ Run Animation" [ref=e78] [cursor=pointer]
+        - button "↺ Reset" [ref=e79] [cursor=pointer]
+      - generic [ref=e81]:
+        - generic [ref=e82]: Active / Selected
+        - generic [ref=e84]: Best / Winner
+        - generic [ref=e86]: Pruned / Rejected
+        - generic [ref=e88]: Expanded Beam
+        - generic [ref=e90]: Reward Score
+    - generic [ref=e92]:
+      - heading "Key Takeaways" [level=2] [ref=e93]
+      - list [ref=e94]:
+        - listitem [ref=e95]:
+          - text: "→ BoN quality scales logarithmically with N: doubling N costs 2× compute but gains only"
+          - code [ref=e96]: ~√(2 ln 2)
+          - text: reward standard deviations. Going from N=64 to N=128 rarely justifies the cost.
+        - listitem [ref=e97]: → Beam search maximizes log-probability under the model, which diverges from human preference on open-ended tasks — outputs become generic and repetitive. Use it only where model probability aligns with task quality (translation, constrained extraction).
+        - listitem [ref=e98]: → BoN is parallelizable; beam search is serial. In a multi-GPU serving setup, BoN maps naturally to concurrent inference workers — beam search requires synchronized decoding steps, adding coordination overhead.
+        - listitem [ref=e99]: → The reward model is the limiting factor in BoN. A miscalibrated scorer (e.g., preferring longer responses) leads to reward hacking at inference time — same failure mode as RLHF but without gradient updates to amortize it.
+        - listitem [ref=e100]: → Self-consistency (majority-vote BoN) gained 18+ percentage points on GSM8K math reasoning without any model change. It's one of the highest-ROI inference-time techniques for structured output tasks.
+        - listitem [ref=e101]: "→ Production BoN at scale: cost = N × (1 inference call + 1 reward model call). At N=32 for a 70B model, this is 32 inference calls — feasible only with efficient batching (vLLM, TensorRT-LLM) and a cheap reward model (often a small 7B classifier)."
+  - navigation [ref=e102]:
+    - 'link "← 12: DPO — Direct Preference Optimization" [ref=e103] [cursor=pointer]':
+      - /url: 12-dpo.html
+    - 'link "14: Fine-Tuning: When, Why & Decision Framework →" [ref=e104] [cursor=pointer]':
+      - /url: 14-finetuning-overview.html

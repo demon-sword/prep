@@ -1,0 +1,964 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1.0"/>
+  <title>LLM Development Bottlenecks — AI Engineering Concepts</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com"/>
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet"/>
+  <style>
+    :root {
+      --bg: #0d0f17;
+      --surface: #141720;
+      --card: #1a1e2e;
+      --border: #252a3d;
+      --accent: #00d4ff;
+      --purple: #7c3aed;
+      --green: #00ff88;
+      --yellow: #ffd700;
+      --red: #ff4757;
+      --orange: #ff9500;
+      --text: #e2e8f0;
+      --text-dim: #8892a4;
+      --mono: 'JetBrains Mono', monospace;
+      --sans: 'Inter', system-ui, sans-serif;
+    }
+
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: var(--sans);
+      font-size: 16px;
+      line-height: 1.7;
+      min-height: 100vh;
+    }
+
+    /* ── Header ── */
+    header {
+      background: var(--surface);
+      border-bottom: 1px solid var(--border);
+      padding: 2rem 2rem 1.5rem;
+      max-width: 1100px;
+      margin: 0 auto;
+    }
+    .group-badge {
+      display: inline-block;
+      background: rgba(255, 149, 0, 0.15);
+      color: var(--orange);
+      border: 1px solid rgba(255, 149, 0, 0.3);
+      border-radius: 999px;
+      font-size: 0.72rem;
+      font-weight: 600;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      padding: 0.25rem 0.75rem;
+      margin-bottom: 0.75rem;
+    }
+    header h1 {
+      font-size: clamp(1.6rem, 4vw, 2.4rem);
+      font-weight: 700;
+      letter-spacing: -0.02em;
+      line-height: 1.2;
+      margin-bottom: 0.5rem;
+    }
+    header h1 span { color: var(--orange); }
+    header p {
+      color: var(--text-dim);
+      font-size: 1rem;
+      max-width: 680px;
+    }
+
+    /* ── Main layout ── */
+    main {
+      max-width: 1100px;
+      margin: 0 auto;
+      padding: 2rem 2rem 3rem;
+    }
+
+    /* ── Section titles ── */
+    .section-title {
+      font-size: 1.4rem;
+      font-weight: 700;
+      color: var(--text);
+      margin-bottom: 1.5rem;
+      padding-bottom: 0.5rem;
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+    }
+    .section-title::before {
+      content: '';
+      display: inline-block;
+      width: 4px;
+      height: 1.1em;
+      background: var(--orange);
+      border-radius: 2px;
+    }
+
+    /* ── Theory ── */
+    #theory {
+      margin-bottom: 3rem;
+    }
+    #theory h2 { margin: 1.6rem 0 0.5rem; font-size: 1.15rem; color: var(--accent); }
+    #theory h3 { margin: 1.2rem 0 0.4rem; font-size: 1rem; color: var(--yellow); }
+    #theory p  { margin-bottom: 0.9rem; color: var(--text); }
+    #theory ul, #theory ol { margin: 0.5rem 0 0.9rem 1.4rem; color: var(--text); }
+    #theory li { margin-bottom: 0.4rem; }
+    #theory code {
+      font-family: var(--mono);
+      font-size: 0.85em;
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 4px;
+      padding: 0.1em 0.4em;
+      color: var(--green);
+    }
+    #theory strong { color: var(--yellow); }
+    .callout {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-left: 3px solid var(--orange);
+      border-radius: 8px;
+      padding: 1rem 1.25rem;
+      margin: 1rem 0;
+    }
+    .callout p { margin: 0; }
+
+    /* ── Visualization ── */
+    #visualization {
+      margin-bottom: 3rem;
+    }
+    .viz-container {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 1.5rem;
+    }
+    .viz-description {
+      color: var(--text-dim);
+      font-size: 0.875rem;
+      margin-bottom: 1.25rem;
+      line-height: 1.6;
+    }
+
+    /* bottleneck tabs */
+    .tab-bar {
+      display: flex;
+      gap: 0.5rem;
+      margin-bottom: 1.25rem;
+      flex-wrap: wrap;
+    }
+    .tab-btn {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      color: var(--text-dim);
+      cursor: pointer;
+      font-family: var(--sans);
+      font-size: 0.85rem;
+      font-weight: 500;
+      padding: 0.45rem 1rem;
+      transition: all 0.2s;
+    }
+    .tab-btn.active {
+      background: rgba(255,149,0,0.15);
+      border-color: var(--orange);
+      color: var(--orange);
+    }
+    .tab-btn:hover:not(.active) {
+      border-color: var(--accent);
+      color: var(--accent);
+    }
+
+    /* progress sliders */
+    .slider-group {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+      gap: 1rem;
+      margin-bottom: 1.25rem;
+    }
+    .slider-item {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 0.85rem 1rem;
+    }
+    .slider-item label {
+      display: flex;
+      justify-content: space-between;
+      font-size: 0.82rem;
+      color: var(--text-dim);
+      margin-bottom: 0.4rem;
+    }
+    .slider-item label span { color: var(--accent); font-family: var(--mono); font-weight: 600; }
+    .slider-item input[type=range] {
+      width: 100%;
+      accent-color: var(--orange);
+      cursor: pointer;
+    }
+
+    /* main dual bottleneck canvas */
+    #bottleneckCanvas {
+      width: 100%;
+      border-radius: 8px;
+      display: block;
+    }
+
+    /* stats row */
+    .stat-row {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+      gap: 0.75rem;
+      margin-top: 1rem;
+    }
+    .stat-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 0.8rem 1rem;
+      text-align: center;
+    }
+    .stat-card .stat-label { font-size: 0.72rem; color: var(--text-dim); text-transform: uppercase; letter-spacing: 0.06em; }
+    .stat-card .stat-value { font-size: 1.1rem; font-family: var(--mono); font-weight: 700; margin-top: 0.2rem; }
+
+    /* ── Takeaways ── */
+    #takeaways { margin-bottom: 3rem; }
+    #takeaways ul { list-style: none; display: grid; gap: 0.75rem; }
+    #takeaways li {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 1rem 1.25rem;
+      display: flex;
+      gap: 0.75rem;
+      align-items: flex-start;
+      font-size: 0.9rem;
+    }
+    #takeaways li::before {
+      content: '▸';
+      color: var(--orange);
+      font-size: 1rem;
+      flex-shrink: 0;
+      margin-top: 0.05rem;
+    }
+    #takeaways li strong { color: var(--yellow); }
+
+    /* ── Concept nav ── */
+    .concept-nav {
+      max-width: 1100px;
+      margin: 0 auto;
+      padding: 0 2rem 2.5rem;
+      display: flex;
+      justify-content: space-between;
+      gap: 1rem;
+    }
+    .concept-nav a {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      color: var(--text-dim);
+      display: flex;
+      flex-direction: column;
+      font-size: 0.82rem;
+      gap: 0.2rem;
+      padding: 0.75rem 1.1rem;
+      text-decoration: none;
+      transition: border-color 0.2s, color 0.2s;
+      max-width: 260px;
+    }
+    .concept-nav a:hover { border-color: var(--accent); color: var(--accent); }
+    .concept-nav a .nav-label { font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.08em; color: var(--text-dim); }
+    .concept-nav a .nav-title { font-weight: 600; color: var(--text); }
+    .concept-nav a.disabled { opacity: 0.35; pointer-events: none; }
+    .concept-nav a.next { margin-left: auto; text-align: right; }
+  </style>
+</head>
+<body>
+
+<header>
+  <div class="group-badge">Foundations</div>
+  <h1>LLM Development <span>Bottlenecks</span></h1>
+  <p>The two macro constraints shaping the frontier: training data (quantity, quality, and approaching depletion) and electricity/compute (energy cost, data center capacity, chip availability).</p>
+</header>
+
+<main>
+
+<!-- ══════════════════════════════════════════════
+     THEORY
+══════════════════════════════════════════════ -->
+<section id="theory">
+  <div class="section-title">Theory</div>
+
+  <p>
+    Scaling laws (Kaplan et al. 2020, Chinchilla 2022) give us the recipe for better LLMs: more parameters,
+    more tokens, more compute. But two hard physical limits constrain how far and how fast that recipe can be
+    followed. Understanding them is essential for any engineer planning training runs or forecasting capability
+    jumps.
+  </p>
+
+  <h2>Bottleneck 1: Training Data</h2>
+
+  <h3>Quantity and the Depletion Horizon</h3>
+  <p>
+    GPT-3 was trained on ~300 billion tokens. Chinchilla-optimal for a 70B model is roughly <strong>1.4 trillion
+    tokens</strong>. Llama 3 (70B) trained on <strong>15 trillion tokens</strong>—well beyond Chinchilla-optimal—
+    because inference cost dominates at deployment scale, so over-training on data pays off. The problem is that
+    high-quality English internet text is finite. Epoch AI estimated that the stock of public high-quality text
+    on the internet could be exhausted for training purposes somewhere between <strong>2026 and 2032</strong>
+    depending on demand growth.
+  </p>
+  <p>
+    To put numbers on it: Common Crawl, Wikipedia, Books, ArXiv, GitHub combined yield roughly
+    <strong>5–15 trillion quality-filtered tokens</strong> of English text. If each frontier model trains on
+    10–15T tokens, the top labs are competing for the same fixed resource.
+  </p>
+
+  <h3>Quality Is the Harder Problem</h3>
+  <p>
+    Raw token count is deceiving. The FineWeb and DCLM papers (2024) showed that careful deduplication, quality
+    filtering, and domain reweighting can improve benchmark performance more than simply adding raw tokens. The
+    filtering pipeline typically:
+  </p>
+  <ul>
+    <li>Removes near-duplicates with MinHash LSH (dedup removes 10–60% of typical crawls)</li>
+    <li>Applies language-ID filtering (fastText or similar)</li>
+    <li>Quality-scores with a reference classifier (C4 heuristics, perplexity on a seed corpus, or a trained scorer)</li>
+    <li>Reweights domain mixing ratios (code, math, web, books) using ablation runs</li>
+  </ul>
+  <p>
+    The engineering effort on data quality now rivals model architecture work at frontier labs. Poor data
+    quality manifests as hallucinations, biases, and brittle reasoning—not just lower benchmark numbers.
+  </p>
+
+  <h3>Synthetic Data as the Escape Valve</h3>
+  <p>
+    The industry response to near-depletion is <strong>synthetic data generation</strong>: use a frontier model
+    to produce new training examples, filtered for quality. Phi-1 (1.3B) trained only on synthetic
+    "textbook quality" code data and matched much larger models. Meta's Llama 3 used synthetic data extensively
+    for post-training. The risks are:
+  </p>
+  <ul>
+    <li><strong>Model collapse</strong>: recursively training on model outputs degrades distribution diversity
+    (Shumailov et al. 2024)</li>
+    <li><strong>Bias amplification</strong>: the generator's biases bake into the student</li>
+    <li><strong>Verification cost</strong>: synthetic math/code can be verified (unit tests, symbolic solvers)
+    but open-ended text cannot be cheaply verified at scale</li>
+  </ul>
+
+  <h2>Bottleneck 2: Electricity &amp; Compute</h2>
+
+  <h3>Energy Cost of Training</h3>
+  <p>
+    Training GPT-3 consumed an estimated <strong>1.3 GWh</strong> of electricity. GPT-4 class training runs
+    are estimated at <strong>50–100+ GWh</strong>. A 500MW data center running 10,000 H100s at full utilization
+    for 90 days draws roughly <strong>3.2 TWh</strong>—enough to power ~300,000 US homes for a year.
+    Electricity cost alone (at $0.05–$0.08/kWh data-center rates) is $50–$250M per frontier training run.
+  </p>
+
+  <h3>Data Center Capacity</h3>
+  <p>
+    Building a hyperscale AI data center takes <strong>2–4 years</strong> from land acquisition to commissioning.
+    Power grid interconnects are the binding constraint: utilities have 5–10 year queues for large industrial
+    power requests in many US markets. Microsoft, Google, and Meta announced combined >$100B in data center
+    capex for 2024–2025. The bottleneck is not money—it is transformer substations and transmission lines.
+  </p>
+
+  <h3>Chip Availability and Export Controls</h3>
+  <p>
+    NVIDIA H100 GPUs were constrained throughout 2023–2024, with lead times exceeding 6–9 months. US export
+    controls (BIS Entity List, October 2023 and subsequent) restrict A100/H100 exports to China and parts of
+    the Middle East, reshaping global AI capability geography. Each H100 costs ~$25,000–$40,000; a 10,000-GPU
+    cluster represents $250M–$400M in hardware before networking, cooling, or facilities.
+  </p>
+
+  <div class="callout">
+    <p>
+      <strong>The compounding constraint:</strong> Larger models need exponentially more compute, which needs
+      more chips, more power, more cooling, and more facilities—all on timelines of years, not months. The
+      data depletion and energy walls arrive simultaneously with the capability frontier's appetite.
+    </p>
+  </div>
+
+  <h2>Second-Order Effects</h2>
+
+  <h3>The Quality-Compute Substitution</h3>
+  <p>
+    When raw data and raw compute are constrained, labs substitute quality: better data curation (FineWeb),
+    better architectures (MoE to reduce active params), better training algorithms (muP, Lion optimizer), and
+    better post-training (RLHF, DPO). This is why capability gains continue despite constraints—the efficiency
+    frontier is moving.
+  </p>
+
+  <h3>Inference-Time Compute as an Escape Hatch</h3>
+  <p>
+    OpenAI's o1/o3 series and DeepSeek-R1 demonstrated that spending more compute at <em>inference</em> time
+    (chain-of-thought, search, verification) can substitute for training compute. A model that "thinks longer"
+    on hard problems may outperform a larger model trained on more data. This shifts the bottleneck from
+    training-time data/energy to inference-time compute and latency tolerance.
+  </p>
+
+  <h3>Geopolitical and Environmental Dimensions</h3>
+  <p>
+    Energy constraints interact with sustainability commitments: Google's net-zero pledge was challenged by
+    AI's power demands. Water usage for cooling is another hidden cost (~1.5 liters per kWh for evaporative
+    cooling). Regulators in EU and US are beginning to require AI energy disclosure. For engineers, these
+    are not abstract concerns—they determine where you can build, how fast you can scale, and what your
+    marginal cost of a training run actually is.
+  </p>
+</section>
+
+<!-- ══════════════════════════════════════════════
+     VISUALIZATION
+══════════════════════════════════════════════ -->
+<section id="visualization">
+  <div class="section-title">Interactive Visualization</div>
+
+  <div class="viz-container">
+    <p class="viz-description">
+      Explore the two macro bottlenecks. Use the <strong>tabs</strong> to switch between Data and Energy views.
+      Drag the <strong>sliders</strong> to simulate different scale levels and see how constraints tighten.
+      The gauge fills show headroom remaining before hitting each wall.
+    </p>
+
+    <div class="tab-bar">
+      <button class="tab-btn active" data-tab="data" onclick="switchTab('data')">Data Bottleneck</button>
+      <button class="tab-btn" data-tab="energy" onclick="switchTab('energy')">Energy &amp; Compute Bottleneck</button>
+      <button class="tab-btn" data-tab="combined" onclick="switchTab('combined')">Combined View</button>
+    </div>
+
+    <!-- DATA tab controls -->
+    <div id="ctrl-data" class="slider-group">
+      <div class="slider-item">
+        <label>Model Parameters (B) <span id="val-params">70</span>B</label>
+        <input type="range" id="sl-params" min="1" max="1000" value="70" step="1"/>
+      </div>
+      <div class="slider-item">
+        <label>Training Tokens (T) <span id="val-tokens">15</span>T</label>
+        <input type="range" id="sl-tokens" min="0.3" max="100" value="15" step="0.1"/>
+      </div>
+      <div class="slider-item">
+        <label>Data Quality Score <span id="val-quality">75</span>%</label>
+        <input type="range" id="sl-quality" min="10" max="100" value="75" step="1"/>
+      </div>
+    </div>
+
+    <!-- ENERGY tab controls -->
+    <div id="ctrl-energy" class="slider-group" style="display:none">
+      <div class="slider-item">
+        <label>GPU Count (H100) <span id="val-gpus">10000</span></label>
+        <input type="range" id="sl-gpus" min="100" max="100000" value="10000" step="100"/>
+      </div>
+      <div class="slider-item">
+        <label>Training Duration (days) <span id="val-days">90</span>d</label>
+        <input type="range" id="sl-days" min="7" max="365" value="90" step="1"/>
+      </div>
+      <div class="slider-item">
+        <label>GPU Utilization <span id="val-util">55</span>%</label>
+        <input type="range" id="sl-util" min="20" max="90" value="55" step="1"/>
+      </div>
+    </div>
+
+    <!-- COMBINED tab has no extra controls — uses last set values -->
+    <div id="ctrl-combined" style="display:none"></div>
+
+    <canvas id="bottleneckCanvas" height="360"></canvas>
+
+    <div class="stat-row" id="stat-row"></div>
+  </div>
+</section>
+
+<!-- ══════════════════════════════════════════════
+     TAKEAWAYS
+══════════════════════════════════════════════ -->
+<section id="takeaways">
+  <div class="section-title">Key Takeaways</div>
+  <ul>
+    <li>
+      <strong>Data depletion is measurable now.</strong> High-quality English internet text is estimated at 5–15T tokens. Frontier models training on 10–15T tokens are each consuming a significant fraction of the total stock — repetition and synthetic augmentation are already operational necessities, not future concerns.
+    </li>
+    <li>
+      <strong>Synthetic data solves tokens, not quality.</strong> Phi-1 and Llama 3 proved synthetic data works — but model collapse (Shumailov 2024) is a real failure mode when synthetic examples loop back without grounding. Verifiable domains (code, math) are safer; open-ended prose is not.
+    </li>
+    <li>
+      <strong>Energy cost is the first-class budget line.</strong> At $0.05–0.08/kWh and 50–100 GWh per frontier run, electricity alone is $2.5M–$8M. At inference scale (100B+ requests/day), energy dwarfs all other opex. GPU power efficiency (flops/watt) is now a primary chip selection criterion.
+    </li>
+    <li>
+      <strong>The binding constraint is the substation, not the GPU.</strong> New data center power comes from utility grid upgrades — 2–5 year queues. You cannot buy your way out faster than the grid can deliver. This makes geography (cheap hydro in PNW, Iceland, Norway) and regulatory permitting a strategic advantage.
+    </li>
+    <li>
+      <strong>Inference-time compute is the current escape hatch.</strong> o1/o3 and DeepSeek-R1 shift the tradeoff: spend thinking tokens at inference rather than training tokens. This trades one bottleneck (data) for another (latency tolerance and inference cost), which is currently more manageable at frontier capability levels.
+    </li>
+    <li>
+      <strong>Export controls reshape the capability landscape.</strong> BIS restrictions on A100/H100 exports create a bifurcated global compute market. Engineers working on international deployments must model chip availability as a supply-chain risk, not a commodity assumption.
+    </li>
+  </ul>
+</section>
+
+</main>
+
+<nav class="concept-nav">
+  <a href="08-chinchilla.html">
+    <span class="nav-label">← Previous</span>
+    <span class="nav-title">Chinchilla Scaling Law</span>
+  </a>
+  <a href="10-post-training.html" class="next">
+    <span class="nav-label">Next →</span>
+    <span class="nav-title">Post-Training: Why &amp; How</span>
+  </a>
+</nav>
+
+<script>
+(function () {
+  'use strict';
+
+  /* ─── state ─── */
+  let currentTab = 'data';
+  const C = document.getElementById('bottleneckCanvas');
+  const ctx = C.getContext('2d');
+
+  /* ─── design tokens ─── */
+  const T = {
+    bg:      '#0d0f17',
+    surface: '#141720',
+    card:    '#1a1e2e',
+    border:  '#252a3d',
+    accent:  '#00d4ff',
+    purple:  '#7c3aed',
+    green:   '#00ff88',
+    yellow:  '#ffd700',
+    red:     '#ff4757',
+    orange:  '#ff9500',
+    text:    '#e2e8f0',
+    dim:     '#8892a4',
+  };
+
+  /* ─── helpers ─── */
+  function lerp(a, b, t) { return a + (b - a) * t; }
+
+  function clamp(v, lo, hi) { return Math.max(lo, Math.min(hi, v)); }
+
+  function hexToRgb(hex) {
+    const r = parseInt(hex.slice(1, 3), 16);
+    const g = parseInt(hex.slice(3, 5), 16);
+    const b = parseInt(hex.slice(5, 7), 16);
+    return `${r},${g},${b}`;
+  }
+
+  function rgba(hex, a) { return `rgba(${hexToRgb(hex)},${a})`; }
+
+  function fmtNum(n) {
+    if (n >= 1e12) return (n / 1e12).toFixed(1) + 'T';
+    if (n >= 1e9)  return (n / 1e9).toFixed(1) + 'B';
+    if (n >= 1e6)  return (n / 1e6).toFixed(1) + 'M';
+    return n.toFixed(0);
+  }
+
+  /* ─── slider reads ─── */
+  function dataState() {
+    return {
+      params:   +document.getElementById('sl-params').value,
+      tokens:   +document.getElementById('sl-tokens').value,
+      quality:  +document.getElementById('sl-quality').value,
+    };
+  }
+
+  function energyState() {
+    return {
+      gpus:  +document.getElementById('sl-gpus').value,
+      days:  +document.getElementById('sl-days').value,
+      util:  +document.getElementById('sl-util').value,
+    };
+  }
+
+  /* ─── derived metrics ─── */
+  function deriveData(s) {
+    const totalStock    = 12e12;                       // 12T quality tokens estimate
+    const chinchillaOpt = s.params * 20e9;             // 20 tokens per param
+    const consumed      = s.tokens * 1e12;
+    const stockPct      = clamp(consumed / totalStock, 0, 1);
+    const chiPct        = clamp(consumed / chinchillaOpt, 0, 5) / 5;
+    const syntheticNeed = stockPct > 0.5 ? (stockPct - 0.5) * 2 : 0;
+    const qualEff       = s.quality / 100;
+    const effectivePct  = stockPct / qualEff;           // poor quality = you need more tokens
+    return { stockPct, chiPct, syntheticNeed, qualEff, effectivePct: clamp(effectivePct, 0, 1) };
+  }
+
+  function deriveEnergy(s) {
+    // H100 TDP ~700W per GPU
+    const wattsPerGpu   = 700;
+    const totalWatts    = s.gpus * wattsPerGpu * (s.util / 100);
+    const hours         = s.days * 24;
+    const gwh           = (totalWatts * hours) / 1e9;
+    const costM         = gwh * 0.065;                  // $0.065/kWh avg DC rate
+    const hwCostM       = s.gpus * 30000 / 1e6;        // $30k/H100
+    const gridCapGwh    = 120;                          // notional frontier grid cap
+    const gridPct       = clamp(gwh / gridCapGwh, 0, 1);
+    const chipPct       = clamp(s.gpus / 80000, 0, 1); // 80k GPUs = cluster ceiling
+    return { gwh, costM, hwCostM, gridPct, chipPct };
+  }
+
+  /* ─── render helpers ─── */
+  function setDpr() {
+    const dpr = window.devicePixelRatio || 1;
+    const w   = C.parentElement.clientWidth - 48; // padding
+    C.style.width  = w + 'px';
+    C.style.height = '360px';
+    C.width  = w * dpr;
+    C.height = 360 * dpr;
+    ctx.scale(dpr, dpr);
+    return { w, h: 360 };
+  }
+
+  function drawRoundRect(x, y, w, h, r, fillColor, strokeColor) {
+    ctx.beginPath();
+    ctx.roundRect(x, y, w, h, r);
+    if (fillColor)   { ctx.fillStyle = fillColor;   ctx.fill(); }
+    if (strokeColor) { ctx.strokeStyle = strokeColor; ctx.lineWidth = 1; ctx.stroke(); }
+  }
+
+  function drawGauge(x, y, w, h, pct, color, label, sublabel) {
+    const pad = 4;
+    // track
+    drawRoundRect(x, y, w, h, 5, T.surface, T.border);
+    // fill
+    const fillW = Math.max(0, (w - pad * 2) * clamp(pct, 0, 1));
+    if (fillW > 0) {
+      ctx.save();
+      ctx.beginPath();
+      ctx.roundRect(x + pad, y + pad, fillW, h - pad * 2, 3);
+      ctx.clip();
+
+      // gradient from color to warning red at high fill
+      const grad = ctx.createLinearGradient(x + pad, 0, x + pad + fillW, 0);
+      grad.addColorStop(0, rgba(color, 0.9));
+      grad.addColorStop(pct < 0.7 ? 1 : 0.7 / pct, rgba(color, 0.9));
+      if (pct > 0.7) {
+        grad.addColorStop(1, rgba(T.red, 0.9));
+      }
+      ctx.fillStyle = grad;
+      ctx.fill();
+      ctx.restore();
+    }
+    // label
+    ctx.fillStyle = T.text;
+    ctx.font = '500 12px Inter, system-ui';
+    ctx.textAlign = 'left';
+    ctx.fillText(label, x, y - 7);
+    // pct label
+    const pctStr = Math.round(pct * 100) + '%';
+    ctx.fillStyle = pct > 0.8 ? T.red : (pct > 0.5 ? T.yellow : T.green);
+    ctx.font = '700 12px "JetBrains Mono", monospace';
+    ctx.textAlign = 'right';
+    ctx.fillText(pctStr, x + w, y - 7);
+    // sublabel
+    if (sublabel) {
+      ctx.fillStyle = T.dim;
+      ctx.font = '400 11px Inter, system-ui';
+      ctx.textAlign = 'left';
+      ctx.fillText(sublabel, x, y + h + 14);
+    }
+  }
+
+  function drawSection(x, y, w, title, color) {
+    ctx.fillStyle = rgba(color, 0.07);
+    ctx.beginPath();
+    ctx.roundRect(x, y, w, 10, 3);
+    ctx.fill();
+    ctx.fillStyle = color;
+    ctx.font = '600 13px Inter, system-ui';
+    ctx.textAlign = 'left';
+    ctx.fillText(title, x, y - 8);
+  }
+
+  /* ─── DATA view ─── */
+  function drawData(dim) {
+    const s = dataState();
+    const d = deriveData(s);
+    const { w, h } = dim;
+    const pad = 28;
+    const gw  = w - pad * 2;
+
+    // background
+    ctx.clearRect(0, 0, w, h);
+    drawRoundRect(0, 0, w, h, 10, T.bg, null);
+
+    // section title
+    ctx.fillStyle = T.orange;
+    ctx.font = '700 14px Inter, system-ui';
+    ctx.textAlign = 'left';
+    ctx.fillText('DATA BOTTLENECK', pad, 28);
+
+    // gauges
+    const gaugeH = 20;
+    const gapBetween = 58;
+    let gy = 50;
+
+    drawGauge(
+      pad, gy, gw, gaugeH, d.effectivePct, T.orange,
+      'Internet Data Consumed (quality-adjusted)',
+      `${(d.effectivePct * 100).toFixed(0)}% of estimated ${(12 / d.qualEff).toFixed(0)}T quality-filtered token stock used`
+    );
+    gy += gapBetween;
+
+    drawGauge(
+      pad, gy, gw, gaugeH, Math.min(d.chiPct, 1), T.accent,
+      'Chinchilla Coverage (training tokens / optimal)',
+      `Optimal: ${fmtNum(s.params * 20e9)} tokens for ${s.params}B params — you have ${s.tokens}T`
+    );
+    gy += gapBetween;
+
+    drawGauge(
+      pad, gy, gw, gaugeH, d.syntheticNeed, T.purple,
+      'Synthetic Data Pressure',
+      d.syntheticNeed > 0.01
+        ? `Real data strained — ${(d.syntheticNeed * 100).toFixed(0)}% of demand must come from synthetic generation`
+        : 'Real data sufficient — low pressure for synthetic generation'
+    );
+    gy += gapBetween;
+
+    // quality efficiency annotation
+    ctx.fillStyle = T.dim;
+    ctx.font = '12px Inter, system-ui';
+    ctx.textAlign = 'left';
+    ctx.fillText(
+      `Quality score ${s.quality}% → effective data multiplier: ${d.qualEff.toFixed(2)}×  |  Chinchilla optimal: ${fmtNum(s.params * 20e9)} tokens`,
+      pad, gy + 5
+    );
+  }
+
+  /* ─── ENERGY view ─── */
+  function drawEnergy(dim) {
+    const s = energyState();
+    const e = deriveEnergy(s);
+    const { w, h } = dim;
+    const pad = 28;
+    const gw  = w - pad * 2;
+
+    ctx.clearRect(0, 0, w, h);
+    drawRoundRect(0, 0, w, h, 10, T.bg, null);
+
+    ctx.fillStyle = T.yellow;
+    ctx.font = '700 14px Inter, system-ui';
+    ctx.textAlign = 'left';
+    ctx.fillText('ENERGY & COMPUTE BOTTLENECK', pad, 28);
+
+    const gaugeH = 20;
+    const gapBetween = 58;
+    let gy = 50;
+
+    drawGauge(
+      pad, gy, gw, gaugeH, e.gridPct, T.yellow,
+      'Grid Power Consumed (fraction of frontier cap ~120 GWh)',
+      `${e.gwh.toFixed(1)} GWh drawn  |  Electricity cost: $${e.costM.toFixed(1)}M`
+    );
+    gy += gapBetween;
+
+    drawGauge(
+      pad, gy, gw, gaugeH, e.chipPct, T.accent,
+      'GPU Cluster Scale (fraction of 80k-GPU ceiling)',
+      `${s.gpus.toLocaleString()} × H100s  |  Hardware cost: $${e.hwCostM.toFixed(0)}M`
+    );
+    gy += gapBetween;
+
+    // CO2 proxy
+    const co2kt = e.gwh * 0.4; // 0.4 kg CO2/kWh avg US grid
+    const co2Pct = clamp(co2kt / 50000, 0, 1); // 50kt = large data center annual
+    drawGauge(
+      pad, gy, gw, gaugeH, co2Pct, T.red,
+      'CO₂ Equivalent (US avg grid, 0.4 kg/kWh)',
+      `${(co2kt / 1000).toFixed(1)}kt CO₂  |  ~${Math.round(co2kt * 1000 / 7.3).toLocaleString()} home-years of electricity`
+    );
+    gy += gapBetween;
+
+    ctx.fillStyle = T.dim;
+    ctx.font = '12px Inter, system-ui';
+    ctx.textAlign = 'left';
+    ctx.fillText(
+      `Total power draw: ${(s.gpus * 700 * s.util / 1e8).toFixed(1)} MW  |  Run duration: ${s.days}d  |  Utilization: ${s.util}%`,
+      pad, gy + 5
+    );
+  }
+
+  /* ─── COMBINED view ─── */
+  function drawCombined(dim) {
+    const sd = dataState();
+    const se = energyState();
+    const dd = deriveData(sd);
+    const de = deriveEnergy(se);
+    const { w, h } = dim;
+    const pad = 28;
+
+    ctx.clearRect(0, 0, w, h);
+    drawRoundRect(0, 0, w, h, 10, T.bg, null);
+
+    // split into two columns
+    const colW = (w - pad * 3) / 2;
+
+    // left: data
+    ctx.fillStyle = T.orange;
+    ctx.font = '700 13px Inter, system-ui';
+    ctx.textAlign = 'left';
+    ctx.fillText('DATA', pad, 28);
+
+    const gh = 18;
+    let ly = 46;
+    drawGauge(pad, ly, colW, gh, dd.effectivePct, T.orange, 'Stock consumed', null); ly += 44;
+    drawGauge(pad, ly, colW, gh, Math.min(dd.chiPct, 1), T.accent, 'Chinchilla coverage', null); ly += 44;
+    drawGauge(pad, ly, colW, gh, dd.syntheticNeed, T.purple, 'Synthetic pressure', null); ly += 44;
+
+    // right: energy
+    const rx = pad * 2 + colW;
+    ctx.fillStyle = T.yellow;
+    ctx.font = '700 13px Inter, system-ui';
+    ctx.textAlign = 'left';
+    ctx.fillText('ENERGY', rx, 28);
+
+    let ry = 46;
+    drawGauge(rx, ry, colW, gh, de.gridPct, T.yellow, 'Grid power', null); ry += 44;
+    drawGauge(rx, ry, colW, gh, de.chipPct, T.accent, 'Chip scale', null); ry += 44;
+    const co2Pct = clamp((de.gwh * 0.4) / 50000, 0, 1);
+    drawGauge(rx, ry, colW, gh, co2Pct, T.red, 'CO₂ load', null); ry += 44;
+
+    // overall pressure score
+    const overallData   = (dd.effectivePct + dd.syntheticNeed) / 2;
+    const overallEnergy = (de.gridPct + de.chipPct) / 2;
+    const overall       = clamp((overallData + overallEnergy) / 2, 0, 1);
+    const fullW = w - pad * 2;
+    const oy = h - 55;
+
+    ctx.fillStyle = T.dim;
+    ctx.font = '12px Inter, system-ui';
+    ctx.textAlign = 'left';
+    ctx.fillText('COMBINED CONSTRAINT PRESSURE', pad, oy - 8);
+    drawRoundRect(pad, oy, fullW, 22, 5, T.surface, T.border);
+    if (fullW * overall > 0) {
+      ctx.save();
+      ctx.beginPath();
+      ctx.roundRect(pad + 4, oy + 4, (fullW - 8) * overall, 14, 3);
+      ctx.clip();
+      const grad = ctx.createLinearGradient(pad, 0, pad + fullW, 0);
+      grad.addColorStop(0, rgba(T.green, 0.85));
+      grad.addColorStop(0.5, rgba(T.yellow, 0.85));
+      grad.addColorStop(1, rgba(T.red, 0.9));
+      ctx.fillStyle = grad;
+      ctx.fill();
+      ctx.restore();
+    }
+    ctx.fillStyle = overall > 0.7 ? T.red : overall > 0.4 ? T.yellow : T.green;
+    ctx.font = '700 12px "JetBrains Mono", monospace';
+    ctx.textAlign = 'right';
+    ctx.fillText(`${Math.round(overall * 100)}% constrained`, pad + fullW, oy - 8);
+  }
+
+  /* ─── stat row ─── */
+  function updateStats() {
+    const sr = document.getElementById('stat-row');
+    let stats = [];
+
+    if (currentTab === 'data') {
+      const s = dataState();
+      const d = deriveData(s);
+      stats = [
+        { label: 'Tokens Used', value: s.tokens + 'T', color: T.orange },
+        { label: 'Stock Consumed', value: Math.round(d.effectivePct * 100) + '%', color: d.effectivePct > 0.7 ? T.red : T.yellow },
+        { label: 'Chinchilla Opt.', value: fmtNum(s.params * 20e9), color: T.accent },
+        { label: 'Synth Pressure', value: Math.round(d.syntheticNeed * 100) + '%', color: T.purple },
+      ];
+    } else if (currentTab === 'energy') {
+      const s = energyState();
+      const e = deriveEnergy(s);
+      stats = [
+        { label: 'Energy Used', value: e.gwh.toFixed(1) + ' GWh', color: T.yellow },
+        { label: 'Elec. Cost', value: '$' + e.costM.toFixed(1) + 'M', color: T.orange },
+        { label: 'HW Cost', value: '$' + e.hwCostM.toFixed(0) + 'M', color: T.accent },
+        { label: 'CO₂', value: (e.gwh * 0.4 / 1000).toFixed(1) + 'kt', color: T.red },
+      ];
+    } else {
+      const sd = dataState();
+      const se = energyState();
+      const dd = deriveData(sd);
+      const de = deriveEnergy(se);
+      const overallData   = (dd.effectivePct + dd.syntheticNeed) / 2;
+      const overallEnergy = (de.gridPct + de.chipPct) / 2;
+      stats = [
+        { label: 'Data Pressure', value: Math.round(overallData * 100) + '%', color: T.orange },
+        { label: 'Energy Pressure', value: Math.round(overallEnergy * 100) + '%', color: T.yellow },
+        { label: 'Combined', value: Math.round((overallData + overallEnergy) / 2 * 100) + '%', color: T.red },
+        { label: 'Cost Est.', value: '$' + (de.costM + de.hwCostM).toFixed(0) + 'M', color: T.accent },
+      ];
+    }
+
+    sr.innerHTML = stats.map(s =>
+      `<div class="stat-card">
+        <div class="stat-label">${s.label}</div>
+        <div class="stat-value" style="color:${s.color}">${s.value}</div>
+      </div>`
+    ).join('');
+  }
+
+  /* ─── main render ─── */
+  function render() {
+    const dim = setDpr();
+    if (currentTab === 'data')     drawData(dim);
+    else if (currentTab === 'energy') drawEnergy(dim);
+    else                           drawCombined(dim);
+    updateStats();
+  }
+
+  /* ─── tab switch ─── */
+  window.switchTab = function (tab) {
+    currentTab = tab;
+    document.querySelectorAll('.tab-btn').forEach(b =>
+      b.classList.toggle('active', b.dataset.tab === tab)
+    );
+    document.getElementById('ctrl-data').style.display    = (tab === 'data')    ? 'grid' : 'none';
+    document.getElementById('ctrl-energy').style.display  = (tab === 'energy')  ? 'grid' : 'none';
+    render();
+  };
+
+  /* ─── update slider labels ─── */
+  function bindSliders() {
+    const map = [
+      ['sl-params',  'val-params',  v => v],
+      ['sl-tokens',  'val-tokens',  v => (+v).toFixed(1)],
+      ['sl-quality', 'val-quality', v => v],
+      ['sl-gpus',    'val-gpus',    v => (+v).toLocaleString()],
+      ['sl-days',    'val-days',    v => v],
+      ['sl-util',    'val-util',    v => v],
+    ];
+    map.forEach(([id, vid, fmt]) => {
+      const el = document.getElementById(id);
+      const vl = document.getElementById(vid);
+      if (!el || !vl) return;
+      el.addEventListener('input', () => {
+        vl.textContent = fmt(el.value);
+        render();
+      });
+    });
+  }
+
+  /* ─── animation loop for gentle idle pulse ─── */
+  let frame;
+  let phase = 0;
+
+  function animLoop() {
+    phase += 0.02;
+    // subtle pulse on the canvas border
+    C.style.boxShadow = `0 0 ${6 + 3 * Math.sin(phase)}px rgba(255,149,0,0.12)`;
+    frame = requestAnimationFrame(animLoop);
+  }
+
+  /* ─── init ─── */
+  bindSliders();
+  render();
+  animLoop();
+
+  window.addEventListener('resize', render);
+})();
+</script>
+</body>
+</html>

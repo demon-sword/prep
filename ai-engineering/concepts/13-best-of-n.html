@@ -1,0 +1,1083 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1.0"/>
+  <title>Best-of-N / Beam Search — AI Engineering Concepts</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com"/>
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet"/>
+  <style>
+    :root {
+      --bg: #0d0f17;
+      --surface: #141720;
+      --card: #1a1e2e;
+      --border: #252a3d;
+      --accent: #00d4ff;
+      --purple: #7c3aed;
+      --green: #00ff88;
+      --yellow: #ffd700;
+      --red: #ff4757;
+      --orange: #ff9500;
+      --text: #e2e8f0;
+      --text-dim: #8892a4;
+      --mono: 'JetBrains Mono', monospace;
+      --sans: 'Inter', system-ui, sans-serif;
+    }
+
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: var(--sans);
+      font-size: 16px;
+      line-height: 1.7;
+    }
+
+    header {
+      background: var(--surface);
+      border-bottom: 1px solid var(--border);
+      padding: 2rem;
+      display: flex;
+      flex-direction: column;
+      gap: 0.5rem;
+    }
+
+    .group-badge {
+      display: inline-block;
+      background: var(--purple);
+      color: #fff;
+      font-size: 0.7rem;
+      font-weight: 600;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      padding: 0.25rem 0.75rem;
+      border-radius: 999px;
+      width: fit-content;
+    }
+
+    header h1 {
+      font-size: 2rem;
+      font-weight: 700;
+      color: var(--accent);
+      letter-spacing: -0.02em;
+    }
+
+    header p {
+      color: var(--text-dim);
+      font-size: 1.05rem;
+      max-width: 680px;
+    }
+
+    main {
+      max-width: 1100px;
+      margin: 0 auto;
+      padding: 2rem;
+      display: flex;
+      flex-direction: column;
+      gap: 3rem;
+    }
+
+    section h2 {
+      font-size: 1.5rem;
+      font-weight: 700;
+      color: var(--accent);
+      margin-bottom: 1.25rem;
+      padding-bottom: 0.5rem;
+      border-bottom: 1px solid var(--border);
+    }
+
+    section h3 {
+      font-size: 1.1rem;
+      font-weight: 600;
+      color: var(--yellow);
+      margin: 1.5rem 0 0.6rem;
+    }
+
+    section p {
+      color: var(--text);
+      margin-bottom: 0.85rem;
+    }
+
+    section ul {
+      padding-left: 1.5rem;
+      margin-bottom: 0.85rem;
+    }
+
+    section ul li {
+      margin-bottom: 0.4rem;
+      color: var(--text);
+    }
+
+    code {
+      font-family: var(--mono);
+      background: var(--card);
+      color: var(--green);
+      padding: 0.1rem 0.4rem;
+      border-radius: 4px;
+      font-size: 0.88em;
+    }
+
+    pre {
+      font-family: var(--mono);
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 1rem 1.25rem;
+      overflow-x: auto;
+      color: var(--green);
+      font-size: 0.85rem;
+      margin: 0.75rem 0 1rem;
+    }
+
+    .callout {
+      background: var(--card);
+      border-left: 3px solid var(--accent);
+      border-radius: 0 8px 8px 0;
+      padding: 0.9rem 1.2rem;
+      margin: 1rem 0;
+      color: var(--text-dim);
+      font-size: 0.95rem;
+    }
+
+    .callout strong { color: var(--accent); }
+
+    /* Visualization */
+    #visualization {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 2rem;
+    }
+
+    .viz-intro {
+      color: var(--text-dim);
+      font-size: 0.95rem;
+      margin-bottom: 1.5rem;
+    }
+
+    .viz-controls {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 1.5rem;
+      margin-bottom: 1.5rem;
+      align-items: flex-end;
+    }
+
+    .ctrl-group {
+      display: flex;
+      flex-direction: column;
+      gap: 0.35rem;
+      min-width: 160px;
+    }
+
+    .ctrl-group label {
+      font-size: 0.8rem;
+      font-weight: 600;
+      color: var(--text-dim);
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+    }
+
+    .ctrl-group .val {
+      color: var(--accent);
+      font-family: var(--mono);
+      font-size: 0.9rem;
+    }
+
+    input[type=range] {
+      -webkit-appearance: none;
+      width: 100%;
+      height: 4px;
+      background: var(--border);
+      border-radius: 2px;
+      outline: none;
+    }
+
+    input[type=range]::-webkit-slider-thumb {
+      -webkit-appearance: none;
+      width: 16px;
+      height: 16px;
+      border-radius: 50%;
+      background: var(--accent);
+      cursor: pointer;
+    }
+
+    .viz-buttons {
+      display: flex;
+      gap: 0.75rem;
+      flex-wrap: wrap;
+      margin-bottom: 1.5rem;
+    }
+
+    .btn {
+      background: var(--card);
+      border: 1px solid var(--border);
+      color: var(--text);
+      padding: 0.5rem 1.1rem;
+      border-radius: 6px;
+      font-family: var(--sans);
+      font-size: 0.9rem;
+      cursor: pointer;
+      transition: border-color 0.15s, color 0.15s;
+    }
+
+    .btn:hover { border-color: var(--accent); color: var(--accent); }
+    .btn.active { border-color: var(--accent); color: var(--accent); background: rgba(0,212,255,0.08); }
+
+    #viz-canvas {
+      width: 100%;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      background: var(--bg);
+      display: block;
+    }
+
+    .viz-legend {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 1rem;
+      margin-top: 1rem;
+    }
+
+    .legend-item {
+      display: flex;
+      align-items: center;
+      gap: 0.45rem;
+      font-size: 0.82rem;
+      color: var(--text-dim);
+    }
+
+    .legend-dot {
+      width: 12px;
+      height: 12px;
+      border-radius: 50%;
+    }
+
+    /* Takeaways */
+    #takeaways ul {
+      list-style: none;
+      padding: 0;
+      display: flex;
+      flex-direction: column;
+      gap: 0.75rem;
+    }
+
+    #takeaways ul li {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 0.9rem 1.2rem;
+      display: flex;
+      gap: 0.75rem;
+      align-items: flex-start;
+    }
+
+    #takeaways ul li::before {
+      content: '→';
+      color: var(--accent);
+      font-weight: 700;
+      flex-shrink: 0;
+    }
+
+    /* Nav */
+    .concept-nav {
+      background: var(--surface);
+      border-top: 1px solid var(--border);
+      padding: 1.25rem 2rem;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 1rem;
+    }
+
+    .concept-nav a {
+      color: var(--accent);
+      text-decoration: none;
+      font-size: 0.9rem;
+      font-weight: 500;
+      display: flex;
+      align-items: center;
+      gap: 0.4rem;
+    }
+
+    .concept-nav a:hover { text-decoration: underline; }
+    .concept-nav a.disabled { color: var(--text-dim); pointer-events: none; }
+
+    @media (max-width: 640px) {
+      header h1 { font-size: 1.4rem; }
+      main { padding: 1.25rem; gap: 2rem; }
+      .viz-controls { flex-direction: column; }
+    }
+  </style>
+</head>
+<body>
+
+<header>
+  <span class="group-badge">Training</span>
+  <h1>Best-of-N &amp; Beam Search</h1>
+  <p>Inference-time compute scaling: generate multiple candidates, score with a reward model, and select the best — improving output quality without any retraining.</p>
+</header>
+
+<main>
+
+  <!-- ═══════════════════════════ THEORY ═══════════════════════════ -->
+  <section id="theory">
+    <h2>Theory</h2>
+
+    <p>
+      Best-of-N (BoN) and beam search are <strong>inference-time compute scaling</strong> strategies. Instead of accepting the first token sequence a model produces, you generate multiple candidates and pick the best one. This is a fundamental lever: you trade compute budget for output quality without touching model weights at all.
+    </p>
+
+    <h3>Why Inference-Time Compute Matters</h3>
+    <p>
+      Training-time compute is expensive and irreversible — you bake knowledge into weights over weeks or months. Inference-time compute is cheap, parallelizable, and reversible — you can dial it up or down per request. This asymmetry makes inference-time compute scaling especially attractive for high-stakes queries where quality matters more than cost.
+    </p>
+    <p>
+      The insight behind BoN is simple: the probability that at least one of N independent samples is high quality grows rapidly with N, especially when combined with a reliable scoring function (reward model). Google's early RLHF paper showed that Best-of-128 sampling could match or exceed expensive RL fine-tuning in some settings. More recently, OpenAI's o1 and DeepSeek's R1 demonstrate that inference-time chain-of-thought scaling (a generalization of BoN) can dramatically improve reasoning — o1-mini with extended thinking can outperform o1 on certain benchmarks.
+    </p>
+
+    <h3>Best-of-N Sampling (Rejection Sampling)</h3>
+    <p>
+      The mechanism is direct:
+    </p>
+    <ul>
+      <li>Sample N complete sequences from the language model (typically with non-zero temperature).</li>
+      <li>Score each with a reward model (or proxy metric like ROUGE, self-consistency vote, length heuristic).</li>
+      <li>Return the sequence with the highest score.</li>
+    </ul>
+    <p>
+      The quality gain follows a log-linear law: each doubling of N yields diminishing but consistent returns. Empirically, going from N=1 to N=4 gives a large jump; N=4 to N=16 gives a moderate jump; N=64 to N=128 gives little. The plateau is set by model diversity — once all N samples converge to similar outputs, scoring them differently adds nothing.
+    </p>
+    <div class="callout">
+      <strong>Key insight:</strong> BoN quality scales as <code>E[max(R₁, R₂, ..., Rₙ)]</code> where Rᵢ are i.i.d. reward scores. For a Gaussian reward distribution, this grows as <code>~√(2 ln N)</code> — logarithmic returns. You need 4× the compute to gain one standard deviation of reward.
+    </div>
+    <p>
+      The critical dependency is the <strong>reward model quality</strong>. If your reward model is miscalibrated, BoN optimizes toward proxy artifacts — longer responses, confident-sounding hedges, preferred vocabulary — not true quality. This is the same reward hacking problem as RLHF, but at inference time.
+    </p>
+
+    <h3>Beam Search</h3>
+    <p>
+      Beam search is a structured approximation to exhaustive search over all possible sequences. Instead of greedy (pick the single highest-probability next token at each step) or exhaustive (explore all <code>|V|^T</code> sequences), beam search maintains a <strong>beam</strong> of the top-B partial sequences at each decoding step.
+    </p>
+    <pre>
+Step 0: beam = { "" }
+Step 1: expand each, keep top-B by cumulative log-prob
+Step 2: expand each, keep top-B
+...
+Step T: return highest-scoring complete sequence from beam</pre>
+    <p>
+      Beam search trades off memory and compute linearly with beam width B. For B=1 it degenerates to greedy decoding. For B=∞ it finds the globally optimal sequence (under the model's probability distribution) but is intractable for long sequences.
+    </p>
+    <p>
+      A key tradeoff: beam search optimizes for <strong>maximum likelihood under the model</strong>, not human preference. Empirically, beam search outputs tend to be generic, repetitive, and low-diversity. For open-ended generation tasks (stories, dialogue, creative writing) nucleus sampling beats beam search qualitatively even though beam search has higher log-probability. For constrained tasks (translation, structured extraction) beam search still dominates.
+    </p>
+
+    <h3>Beam Search Variants</h3>
+    <ul>
+      <li><strong>Length normalization:</strong> Divide cumulative log-prob by sequence length to prevent short-sequence bias.</li>
+      <li><strong>Diverse beam search:</strong> Add a diversity penalty between beams to encourage exploration of different hypotheses.</li>
+      <li><strong>Constrained beam search:</strong> Force certain tokens to appear (useful for structured outputs).</li>
+      <li><strong>Group beam search:</strong> Maintain G groups of beams with inter-group diversity penalty — used in CTRL and prefix-constrained generation.</li>
+    </ul>
+
+    <h3>Best-of-N vs Beam Search: When to Use What</h3>
+    <p>
+      These methods have different computational profiles and quality characteristics:
+    </p>
+    <ul>
+      <li><strong>Best-of-N:</strong> Embarrassingly parallel — run N independent inference calls concurrently. Best for tasks where diversity of candidates matters (brainstorming, creative tasks, code generation). Requires a reliable reward/scoring function. Works with any model, no modification needed.</li>
+      <li><strong>Beam search:</strong> Serially coupled — each step depends on previous. Better when you want maximum likelihood under the model, e.g., translation, structured generation. Does not need a separate scorer but assumes model probabilities align with quality.</li>
+    </ul>
+    <div class="callout">
+      <strong>Production reality:</strong> For code generation (HumanEval benchmark), Best-of-100 with a test-execution scorer gives pass@1 rates equivalent to a significantly larger model. This is why "compute-optimal inference" is a growing area — you can rent BoN at inference time rather than train a bigger model.
+    </div>
+
+    <h3>Speculative Sampling vs BoN</h3>
+    <p>
+      Don't confuse Best-of-N with speculative decoding. BoN generates N complete sequences and picks one. Speculative decoding generates K draft tokens with a small model and verifies them in parallel with the target model — it's a latency optimization, not a quality-maximization strategy. See concept 35 for speculative decoding.
+    </p>
+
+    <h3>Self-Consistency as a BoN Variant</h3>
+    <p>
+      Self-consistency (Wang et al., 2022) is a BoN variant where the "reward model" is a majority vote. Generate N chain-of-thought reasoning paths, extract the final answer from each, and return the plurality answer. This approach achieves 74.4% on GSM8K with a 175B model versus 56.5% for greedy decoding — a substantial gain with no additional training.
+    </p>
+  </section>
+
+  <!-- ═══════════════════════════ VISUALIZATION ═══════════════════════════ -->
+  <section id="visualization">
+    <h2>Visualization</h2>
+    <p class="viz-intro">
+      Watch Best-of-N sampling and Beam Search in action. Use the controls to change N (number of samples), Beam Width, and the reward score distribution. Click <strong>Run</strong> to animate a new search. Toggle between modes to compare strategies.
+    </p>
+
+    <div class="viz-controls">
+      <div class="ctrl-group">
+        <label>N (candidates) <span class="val" id="n-val">8</span></label>
+        <input type="range" id="n-slider" min="2" max="16" value="8" step="1"/>
+      </div>
+      <div class="ctrl-group">
+        <label>Beam Width <span class="val" id="beam-val">3</span></label>
+        <input type="range" id="beam-slider" min="1" max="6" value="3" step="1"/>
+      </div>
+      <div class="ctrl-group">
+        <label>Reward Variance <span class="val" id="var-val">0.4</span></label>
+        <input type="range" id="var-slider" min="0.1" max="1.0" value="0.4" step="0.05"/>
+      </div>
+      <div class="ctrl-group">
+        <label>Temperature <span class="val" id="temp-val">0.8</span></label>
+        <input type="range" id="temp-slider" min="0.1" max="2.0" value="0.8" step="0.1"/>
+      </div>
+    </div>
+
+    <div class="viz-buttons">
+      <button class="btn active" id="mode-bon">Best-of-N</button>
+      <button class="btn" id="mode-beam">Beam Search</button>
+      <button class="btn" id="btn-run">▶ Run Animation</button>
+      <button class="btn" id="btn-reset">↺ Reset</button>
+    </div>
+
+    <canvas id="viz-canvas" height="480"></canvas>
+
+    <div class="viz-legend">
+      <div class="legend-item"><div class="legend-dot" style="background:#00d4ff"></div> Active / Selected</div>
+      <div class="legend-item"><div class="legend-dot" style="background:#00ff88"></div> Best / Winner</div>
+      <div class="legend-item"><div class="legend-dot" style="background:#ff4757"></div> Pruned / Rejected</div>
+      <div class="legend-item"><div class="legend-dot" style="background:#7c3aed"></div> Expanded Beam</div>
+      <div class="legend-item"><div class="legend-dot" style="background:#ffd700"></div> Reward Score</div>
+    </div>
+  </section>
+
+  <!-- ═══════════════════════════ TAKEAWAYS ═══════════════════════════ -->
+  <section id="takeaways">
+    <h2>Key Takeaways</h2>
+    <ul>
+      <li>BoN quality scales logarithmically with N: doubling N costs 2× compute but gains only <code>~√(2 ln 2)</code> reward standard deviations. Going from N=64 to N=128 rarely justifies the cost.</li>
+      <li>Beam search maximizes log-probability under the model, which diverges from human preference on open-ended tasks — outputs become generic and repetitive. Use it only where model probability aligns with task quality (translation, constrained extraction).</li>
+      <li>BoN is parallelizable; beam search is serial. In a multi-GPU serving setup, BoN maps naturally to concurrent inference workers — beam search requires synchronized decoding steps, adding coordination overhead.</li>
+      <li>The reward model is the limiting factor in BoN. A miscalibrated scorer (e.g., preferring longer responses) leads to reward hacking at inference time — same failure mode as RLHF but without gradient updates to amortize it.</li>
+      <li>Self-consistency (majority-vote BoN) gained 18+ percentage points on GSM8K math reasoning without any model change. It's one of the highest-ROI inference-time techniques for structured output tasks.</li>
+      <li>Production BoN at scale: cost = N × (1 inference call + 1 reward model call). At N=32 for a 70B model, this is 32 inference calls — feasible only with efficient batching (vLLM, TensorRT-LLM) and a cheap reward model (often a small 7B classifier).</li>
+    </ul>
+  </section>
+
+</main>
+
+<nav class="concept-nav">
+  <a href="12-dpo.html">← 12: DPO — Direct Preference Optimization</a>
+  <a href="14-finetuning-overview.html">14: Fine-Tuning: When, Why &amp; Decision Framework →</a>
+</nav>
+
+<script>
+(function() {
+  'use strict';
+
+  // ── State ──────────────────────────────────────────────────────────────────
+  const canvas = document.getElementById('viz-canvas');
+  const ctx = canvas.getContext('2d');
+
+  let mode = 'bon'; // 'bon' | 'beam'
+  let N = 8;
+  let beamW = 3;
+  let rewardVar = 0.4;
+  let temperature = 0.8;
+  let animating = false;
+  let animFrame = null;
+  let phase = 'idle'; // idle | generating | scoring | selected
+  let animT = 0;
+  let sequences = [];
+  let beamState = null;
+  let winnerIdx = -1;
+
+  // ── Colors ─────────────────────────────────────────────────────────────────
+  const C = {
+    bg: '#0d0f17',
+    surface: '#141720',
+    card: '#1a1e2e',
+    border: '#252a3d',
+    accent: '#00d4ff',
+    purple: '#7c3aed',
+    green: '#00ff88',
+    yellow: '#ffd700',
+    red: '#ff4757',
+    orange: '#ff9500',
+    text: '#e2e8f0',
+    dim: '#8892a4',
+  };
+
+  // ── Helpers ────────────────────────────────────────────────────────────────
+  function randNorm(mean, std) {
+    let u = 0, v = 0;
+    while (u === 0) u = Math.random();
+    while (v === 0) v = Math.random();
+    return mean + std * Math.sqrt(-2 * Math.log(u)) * Math.cos(2 * Math.PI * v);
+  }
+
+  function clamp(x, lo, hi) { return Math.max(lo, Math.min(hi, x)); }
+
+  function lerp(a, b, t) { return a + (b - a) * t; }
+
+  function easeOut(t) { return 1 - Math.pow(1 - t, 3); }
+
+  function tokenColor(tok) {
+    const hue = (tok * 47) % 360;
+    return `hsl(${hue}, 60%, 65%)`;
+  }
+
+  // ── Canvas resize ─────────────────────────────────────────────────────────
+  function resizeCanvas() {
+    const rect = canvas.parentElement.getBoundingClientRect();
+    const dpr = window.devicePixelRatio || 1;
+    const W = Math.floor(rect.width - 2);
+    const H = 480;
+    canvas.style.width = W + 'px';
+    canvas.style.height = H + 'px';
+    canvas.width = W * dpr;
+    canvas.height = H * dpr;
+    ctx.scale(dpr, dpr);
+    draw();
+  }
+
+  function getW() { return parseFloat(canvas.style.width) || 800; }
+  function getH() { return parseFloat(canvas.style.height) || 480; }
+
+  // ── Sequence generation (Best-of-N) ────────────────────────────────────────
+  function makeSequences(n) {
+    const seqs = [];
+    const SEQ_LEN = 6;
+    for (let i = 0; i < n; i++) {
+      const tokens = [];
+      for (let t = 0; t < SEQ_LEN; t++) {
+        tokens.push(Math.floor(Math.random() * 30) + 1);
+      }
+      const baseReward = 0.5;
+      const reward = clamp(randNorm(baseReward, rewardVar), 0, 1);
+      seqs.push({ tokens, reward, progress: 0, scored: false, selected: false, rejected: false });
+    }
+    return seqs;
+  }
+
+  // ── Beam Search state ──────────────────────────────────────────────────────
+  function makeBeamState(bw) {
+    const SEQ_LEN = 6;
+    const BRANCH = 3; // each beam expands to BRANCH children
+    const steps = SEQ_LEN;
+    // Build tree: each step, each beam expands to BRANCH children, we keep top bw
+    const tree = [];
+    // Step 0: one root
+    const root = { tokens: [], logprob: 0, alive: true, x: 0, y: 0, parentIdx: -1 };
+    tree.push([root]);
+    for (let s = 0; s < steps; s++) {
+      const prev = tree[tree.length - 1];
+      const candidates = [];
+      prev.forEach((beam, pi) => {
+        if (!beam.alive) return;
+        for (let b = 0; b < BRANCH; b++) {
+          const tok = Math.floor(Math.random() * 30) + 1;
+          const delta = (Math.random() - 0.5) * temperature;
+          candidates.push({
+            tokens: [...beam.tokens, tok],
+            logprob: beam.logprob + Math.log(Math.random() * 0.5 + 0.5) + delta,
+            alive: true,
+            x: 0, y: 0,
+            parentIdx: pi,
+            parentStep: s,
+          });
+        }
+      });
+      // Sort and keep top bw
+      candidates.sort((a, b) => b.logprob - a.logprob);
+      const kept = candidates.slice(0, bw).map(c => ({ ...c, alive: true }));
+      const pruned = candidates.slice(bw).map(c => ({ ...c, alive: false }));
+      tree.push([...kept, ...pruned]);
+    }
+    return { tree, steps, bw, BRANCH, currentStep: -1, revealProgress: 0 };
+  }
+
+  // ── Drawing helpers ────────────────────────────────────────────────────────
+  function roundRect(x, y, w, h, r) {
+    ctx.beginPath();
+    ctx.moveTo(x + r, y);
+    ctx.lineTo(x + w - r, y);
+    ctx.quadraticCurveTo(x + w, y, x + w, y + r);
+    ctx.lineTo(x + w, y + h - r);
+    ctx.quadraticCurveTo(x + w, y + h, x + w - r, y + h);
+    ctx.lineTo(x + r, y + h);
+    ctx.quadraticCurveTo(x, y + h, x, y + h - r);
+    ctx.lineTo(x, y + r);
+    ctx.quadraticCurveTo(x, y, x + r, y);
+    ctx.closePath();
+  }
+
+  // ── Draw Best-of-N ────────────────────────────────────────────────────────
+  function drawBoN() {
+    const W = getW(), H = getH();
+    ctx.clearRect(0, 0, W, H);
+
+    // Background
+    ctx.fillStyle = C.bg;
+    ctx.fillRect(0, 0, W, H);
+
+    if (sequences.length === 0) {
+      ctx.fillStyle = C.dim;
+      ctx.font = '15px ' + "'Inter', sans-serif";
+      ctx.textAlign = 'center';
+      ctx.fillText('Press ▶ Run Animation to start', W / 2, H / 2);
+      return;
+    }
+
+    const n = sequences.length;
+    const PAD = 24;
+    const ROW_H = Math.min(54, (H - 100) / n);
+    const SCORE_W = 80;
+    const START_X = PAD + 100;
+    const END_X = W - PAD - SCORE_W - 10;
+    const SEQ_W = END_X - START_X;
+    const SEQ_LEN = sequences[0].tokens.length;
+    const TOKEN_W = Math.min(40, SEQ_W / SEQ_LEN - 4);
+    const TOP_Y = 60;
+
+    // Title
+    ctx.fillStyle = C.accent;
+    ctx.font = 'bold 14px ' + "'Inter', sans-serif";
+    ctx.textAlign = 'left';
+    ctx.fillText(`Best-of-${n} Sampling`, PAD, 32);
+    ctx.fillStyle = C.dim;
+    ctx.font = '12px ' + "'Inter', sans-serif";
+    ctx.fillText('↓ Generate N sequences  →  Score  →  Select best', PAD, 50);
+
+    sequences.forEach((seq, i) => {
+      const y = TOP_Y + i * ROW_H;
+      const cy = y + ROW_H / 2;
+      const progress = seq.progress; // 0..1 = token reveal
+      const tokensToShow = Math.floor(progress * SEQ_LEN);
+
+      // Row bg
+      let rowColor = C.surface;
+      if (seq.selected) rowColor = 'rgba(0,255,136,0.07)';
+      else if (seq.rejected) rowColor = 'rgba(255,71,87,0.05)';
+      ctx.fillStyle = rowColor;
+      roundRect(PAD, y + 2, W - PAD * 2, ROW_H - 4, 6);
+      ctx.fill();
+
+      // Row border
+      let borderColor = C.border;
+      if (seq.selected) borderColor = C.green;
+      else if (seq.rejected) borderColor = C.red;
+      ctx.strokeStyle = borderColor;
+      ctx.lineWidth = seq.selected ? 2 : 1;
+      roundRect(PAD, y + 2, W - PAD * 2, ROW_H - 4, 6);
+      ctx.stroke();
+
+      // Sequence label
+      ctx.fillStyle = seq.selected ? C.green : (seq.rejected ? C.red : C.dim);
+      ctx.font = '11px ' + "'JetBrains Mono', monospace";
+      ctx.textAlign = 'left';
+      ctx.fillText(`Seq ${i + 1}`, PAD + 6, cy + 4);
+
+      // Tokens
+      for (let t = 0; t < SEQ_LEN; t++) {
+        const tx = START_X + t * (TOKEN_W + 4);
+        const ty = cy - TOKEN_W / 2 + 2;
+        const visible = t < tokensToShow;
+        const partial = t === tokensToShow && progress * SEQ_LEN % 1 > 0;
+        const alpha = visible ? 1 : (partial ? (progress * SEQ_LEN % 1) : 0.1);
+
+        ctx.globalAlpha = alpha;
+        ctx.fillStyle = tokenColor(seq.tokens[t]);
+        roundRect(tx, ty, TOKEN_W - 2, TOKEN_W - 4, 4);
+        ctx.fill();
+
+        ctx.fillStyle = C.bg;
+        ctx.font = '9px ' + "'JetBrains Mono', monospace";
+        ctx.textAlign = 'center';
+        ctx.fillText(seq.tokens[t], tx + (TOKEN_W - 2) / 2, ty + (TOKEN_W - 4) / 2 + 3);
+        ctx.globalAlpha = 1;
+      }
+
+      // Score bar (shown after scoring)
+      if (seq.scored) {
+        const barX = W - PAD - SCORE_W + 4;
+        const barH = ROW_H - 14;
+        const barY = cy - barH / 2;
+        const barW = SCORE_W - 14;
+        // Background
+        ctx.fillStyle = C.border;
+        roundRect(barX, barY, barW, barH, 3);
+        ctx.fill();
+        // Fill
+        const fillColor = seq.selected ? C.green : (seq.rejected ? C.red : C.yellow);
+        ctx.fillStyle = fillColor;
+        roundRect(barX, barY, barW * seq.reward, barH, 3);
+        ctx.fill();
+        // Label
+        ctx.fillStyle = fillColor;
+        ctx.font = 'bold 11px ' + "'JetBrains Mono', monospace";
+        ctx.textAlign = 'center';
+        ctx.fillText(seq.reward.toFixed(2), barX + barW / 2, barY + barH / 2 + 4);
+      }
+
+      // Trophy for winner
+      if (seq.selected) {
+        ctx.fillStyle = C.yellow;
+        ctx.font = '16px serif';
+        ctx.textAlign = 'left';
+        ctx.fillText('★', PAD + 6, cy - 12);
+      }
+    });
+
+    // Phase label
+    ctx.fillStyle = C.accent;
+    ctx.font = 'bold 12px ' + "'Inter', sans-serif";
+    ctx.textAlign = 'right';
+    let phaseLabel = '';
+    if (phase === 'generating') phaseLabel = 'Phase 1: Generating candidates...';
+    else if (phase === 'scoring') phaseLabel = 'Phase 2: Scoring with reward model...';
+    else if (phase === 'selected') phaseLabel = `Phase 3: Selected best (Seq ${winnerIdx + 1}) ★`;
+    ctx.fillText(phaseLabel, W - PAD, H - 12);
+  }
+
+  // ── Draw Beam Search ──────────────────────────────────────────────────────
+  function drawBeam() {
+    const W = getW(), H = getH();
+    ctx.clearRect(0, 0, W, H);
+    ctx.fillStyle = C.bg;
+    ctx.fillRect(0, 0, W, H);
+
+    if (!beamState || beamState.currentStep < 0) {
+      ctx.fillStyle = C.dim;
+      ctx.font = '15px ' + "'Inter', sans-serif";
+      ctx.textAlign = 'center';
+      ctx.fillText('Press ▶ Run Animation to start', W / 2, H / 2);
+      return;
+    }
+
+    const { tree, steps, bw, BRANCH, currentStep, revealProgress } = beamState;
+    const PAD = 32;
+    const TOP_Y = 70;
+    const BOT_Y = H - 40;
+    const TREE_H = BOT_Y - TOP_Y;
+    const NUM_COLS = steps + 2; // root + steps
+    const COL_W = (W - PAD * 2) / NUM_COLS;
+    const NODE_R = 14;
+    const SCORE_BAR_H = 8;
+
+    // Title
+    ctx.fillStyle = C.accent;
+    ctx.font = 'bold 14px ' + "'Inter', sans-serif";
+    ctx.textAlign = 'left';
+    ctx.fillText(`Beam Search (width=${bw})`, PAD, 28);
+    ctx.fillStyle = C.dim;
+    ctx.font = '12px ' + "'Inter', sans-serif";
+    ctx.fillText('Expands top-B beams at each step; prunes the rest', PAD, 46);
+
+    // Compute positions for all visible nodes
+    // For each step s, we show all candidates from tree[s+1]
+    // Root is at step 0
+    const stepsToShow = Math.min(currentStep + 1, steps + 1);
+
+    // Layout: assign y positions per step
+    // For step s (tree[s]), assign y based on index within alive/dead
+    function getNodePos(step, idxInStep, totalInStep) {
+      const x = PAD + (step + 0.5) * COL_W;
+      // Distribute vertically
+      const spread = Math.min(TREE_H * 0.8, totalInStep * 44);
+      const startY = TOP_Y + (TREE_H - spread) / 2;
+      const y = totalInStep === 1 ? (TOP_Y + TREE_H / 2) : startY + (idxInStep / (totalInStep - 1)) * spread;
+      return { x, y };
+    }
+
+    // Draw connections first
+    for (let s = 1; s < Math.min(stepsToShow, tree.length); s++) {
+      const curNodes = tree[s];
+      const prevNodes = tree[s - 1];
+      const totalPrev = prevNodes.filter(n => n.alive !== false || s === 1).length; // root always 1
+      const totalPrev2 = s === 1 ? 1 : prevNodes.length;
+
+      curNodes.forEach((node, ni) => {
+        const pi = node.parentIdx;
+        const { x: x2, y: y2 } = getNodePos(s, ni, curNodes.length);
+        const prevTotal = s === 1 ? 1 : prevNodes.length;
+        const { x: x1, y: y1 } = getNodePos(s - 1, pi === undefined ? 0 : pi, prevTotal);
+
+        const alpha = s <= currentStep ? 1 : (revealProgress < 0.3 ? revealProgress / 0.3 : 1);
+        ctx.globalAlpha = alpha * (node.alive ? 0.7 : 0.2);
+        ctx.strokeStyle = node.alive ? C.purple : C.border;
+        ctx.lineWidth = node.alive ? 1.5 : 0.5;
+        ctx.setLineDash(node.alive ? [] : [3, 3]);
+        ctx.beginPath();
+        ctx.moveTo(x1, y1);
+        ctx.bezierCurveTo((x1 + x2) / 2, y1, (x1 + x2) / 2, y2, x2, y2);
+        ctx.stroke();
+        ctx.setLineDash([]);
+        ctx.globalAlpha = 1;
+      });
+    }
+
+    // Draw nodes
+    for (let s = 0; s < Math.min(stepsToShow, tree.length); s++) {
+      const nodes = tree[s];
+      nodes.forEach((node, ni) => {
+        const { x, y } = getNodePos(s, ni, nodes.length);
+        const isAlive = node.alive !== false;
+        const alpha = s < currentStep ? 1 : (s === currentStep ? easeOut(revealProgress) : 0);
+        ctx.globalAlpha = alpha;
+
+        // Node circle
+        ctx.beginPath();
+        ctx.arc(x, y, NODE_R, 0, Math.PI * 2);
+        if (isAlive) {
+          ctx.fillStyle = s === currentStep && s === steps ? C.green :
+                          (s === 0 ? C.accent : C.purple);
+        } else {
+          ctx.fillStyle = C.red;
+        }
+        ctx.fill();
+
+        // Border
+        ctx.strokeStyle = isAlive ? (s === 0 ? C.accent : 'rgba(255,255,255,0.15)') : 'transparent';
+        ctx.lineWidth = 1.5;
+        ctx.stroke();
+
+        // Token label
+        if (node.tokens && node.tokens.length > 0) {
+          ctx.fillStyle = C.bg;
+          ctx.font = 'bold 10px ' + "'JetBrains Mono', monospace";
+          ctx.textAlign = 'center';
+          ctx.fillText(node.tokens[node.tokens.length - 1], x, y + 3);
+        } else {
+          ctx.fillStyle = C.bg;
+          ctx.font = 'bold 10px ' + "'JetBrains Mono', monospace";
+          ctx.textAlign = 'center';
+          ctx.fillText('S', x, y + 3);
+        }
+
+        // Log prob label under node (for alive nodes at last step)
+        if (isAlive && s === steps) {
+          ctx.fillStyle = C.green;
+          ctx.font = '9px ' + "'JetBrains Mono', monospace";
+          ctx.textAlign = 'center';
+          ctx.fillText(node.logprob.toFixed(1), x, y + NODE_R + 14);
+          // Trophy for top beam
+          if (ni === 0) {
+            ctx.font = '12px serif';
+            ctx.fillStyle = C.yellow;
+            ctx.fillText('★', x + NODE_R + 4, y - NODE_R + 4);
+          }
+        }
+
+        // Pruned X mark
+        if (!isAlive && s > 0) {
+          ctx.strokeStyle = C.red;
+          ctx.lineWidth = 1.5;
+          ctx.beginPath();
+          ctx.moveTo(x - 6, y - 6); ctx.lineTo(x + 6, y + 6);
+          ctx.moveTo(x + 6, y - 6); ctx.lineTo(x - 6, y + 6);
+          ctx.stroke();
+        }
+
+        ctx.globalAlpha = 1;
+      });
+    }
+
+    // Step labels
+    for (let s = 0; s < Math.min(stepsToShow, tree.length); s++) {
+      const xc = PAD + (s + 0.5) * COL_W;
+      ctx.fillStyle = C.dim;
+      ctx.font = '10px ' + "'Inter', sans-serif";
+      ctx.textAlign = 'center';
+      ctx.fillText(s === 0 ? 'Start' : `Step ${s}`, xc, TOP_Y - 12);
+    }
+
+    // Beam legend strip
+    ctx.fillStyle = C.dim;
+    ctx.font = '11px ' + "'Inter', sans-serif";
+    ctx.textAlign = 'left';
+    ctx.fillText(`↑ Alive beams (top ${bw} kept)`, PAD, H - 10);
+    ctx.fillStyle = C.red;
+    ctx.fillText(`  Pruned (rank > ${bw})`, PAD + 180, H - 10);
+
+    // Phase
+    ctx.fillStyle = C.accent;
+    ctx.font = 'bold 12px ' + "'Inter', sans-serif";
+    ctx.textAlign = 'right';
+    let phaseLabel2 = currentStep < steps ? `Expanding step ${currentStep + 1}/${steps}...` : 'Search complete ★';
+    ctx.fillText(phaseLabel2, W - PAD, H - 10);
+  }
+
+  // ── Main draw ──────────────────────────────────────────────────────────────
+  function draw() {
+    if (mode === 'bon') drawBoN();
+    else drawBeam();
+  }
+
+  // ── Animation: Best-of-N ──────────────────────────────────────────────────
+  let bonStep = 0; // 0=gen, 1=score, 2=done
+
+  function runBoN() {
+    sequences = makeSequences(N);
+    winnerIdx = -1;
+    bonStep = 0;
+    phase = 'generating';
+    const SEQ_LEN = sequences[0].tokens.length;
+    let startTime = null;
+    const GEN_DUR = 1400; // ms to generate all tokens
+    const SCORE_DUR = 900;
+    const SELECT_DUR = 400;
+
+    function step(ts) {
+      if (!startTime) startTime = ts;
+      const elapsed = ts - startTime;
+
+      if (bonStep === 0) {
+        // Generating phase
+        const t = Math.min(elapsed / GEN_DUR, 1);
+        sequences.forEach(seq => { seq.progress = easeOut(t); });
+        if (t >= 1) {
+          bonStep = 1;
+          startTime = ts;
+          phase = 'scoring';
+          sequences.forEach(seq => { seq.progress = 1; });
+        }
+      } else if (bonStep === 1) {
+        // Scoring phase
+        const t = Math.min(elapsed / SCORE_DUR, 1);
+        sequences.forEach(seq => {
+          if (t > 0.2) seq.scored = true;
+        });
+        if (t >= 1) {
+          bonStep = 2;
+          startTime = ts;
+          // Find winner
+          winnerIdx = sequences.reduce((best, s, i) => s.reward > sequences[best].reward ? i : best, 0);
+          phase = 'selected';
+          sequences.forEach((seq, i) => {
+            if (i === winnerIdx) seq.selected = true;
+            else seq.rejected = true;
+          });
+        }
+      } else {
+        // Done
+        animating = false;
+        draw();
+        return;
+      }
+
+      draw();
+      if (animating) animFrame = requestAnimationFrame(step);
+    }
+
+    animating = true;
+    animFrame = requestAnimationFrame(step);
+  }
+
+  // ── Animation: Beam Search ────────────────────────────────────────────────
+  function runBeam() {
+    beamState = makeBeamState(beamW);
+    beamState.currentStep = 0;
+    beamState.revealProgress = 0;
+    const STEP_DUR = 600;
+    let startTime = null;
+
+    function step(ts) {
+      if (!startTime) startTime = ts;
+      const elapsed = ts - startTime;
+      const t = Math.min(elapsed / STEP_DUR, 1);
+      beamState.revealProgress = easeOut(t);
+
+      if (t >= 1) {
+        beamState.revealProgress = 1;
+        if (beamState.currentStep < beamState.steps) {
+          beamState.currentStep++;
+          startTime = ts;
+        } else {
+          animating = false;
+          draw();
+          return;
+        }
+      }
+
+      draw();
+      if (animating) animFrame = requestAnimationFrame(step);
+    }
+
+    animating = true;
+    animFrame = requestAnimationFrame(step);
+  }
+
+  // ── Controls ───────────────────────────────────────────────────────────────
+  function stopAnim() {
+    animating = false;
+    if (animFrame) { cancelAnimationFrame(animFrame); animFrame = null; }
+  }
+
+  function resetViz() {
+    stopAnim();
+    sequences = [];
+    beamState = null;
+    winnerIdx = -1;
+    phase = 'idle';
+    draw();
+  }
+
+  document.getElementById('n-slider').addEventListener('input', function() {
+    N = parseInt(this.value);
+    document.getElementById('n-val').textContent = N;
+    if (!animating) resetViz();
+  });
+
+  document.getElementById('beam-slider').addEventListener('input', function() {
+    beamW = parseInt(this.value);
+    document.getElementById('beam-val').textContent = beamW;
+    if (!animating) resetViz();
+  });
+
+  document.getElementById('var-slider').addEventListener('input', function() {
+    rewardVar = parseFloat(this.value);
+    document.getElementById('var-val').textContent = rewardVar.toFixed(2);
+    if (!animating) resetViz();
+  });
+
+  document.getElementById('temp-slider').addEventListener('input', function() {
+    temperature = parseFloat(this.value);
+    document.getElementById('temp-val').textContent = temperature.toFixed(1);
+    if (!animating) resetViz();
+  });
+
+  document.getElementById('btn-run').addEventListener('click', function() {
+    stopAnim();
+    sequences = [];
+    beamState = null;
+    winnerIdx = -1;
+    phase = 'idle';
+    if (mode === 'bon') runBoN();
+    else runBeam();
+  });
+
+  document.getElementById('btn-reset').addEventListener('click', resetViz);
+
+  document.getElementById('mode-bon').addEventListener('click', function() {
+    if (mode === 'bon') return;
+    mode = 'bon';
+    this.classList.add('active');
+    document.getElementById('mode-beam').classList.remove('active');
+    resetViz();
+  });
+
+  document.getElementById('mode-beam').addEventListener('click', function() {
+    if (mode === 'beam') return;
+    mode = 'beam';
+    this.classList.add('active');
+    document.getElementById('mode-bon').classList.remove('active');
+    resetViz();
+  });
+
+  window.addEventListener('resize', resizeCanvas);
+  resizeCanvas();
+  draw();
+})();
+</script>
+
+</body>
+</html>

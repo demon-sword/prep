@@ -1,0 +1,187 @@
+- generic [active] [ref=e1]:
+  - banner [ref=e2]:
+    - generic [ref=e3]: Transformers
+    - heading "Query, Key, Value Attention" [level=1] [ref=e4]
+    - paragraph [ref=e5]: "Self-attention mechanism: Q/K/V projections, scaled dot-product attention, softmax, multi-head attention, and causal masking."
+  - main [ref=e6]:
+    - generic [ref=e7]:
+      - heading "Theory" [level=2] [ref=e8]
+      - 'heading "The Core Insight: Differentiable Lookup" [level=3] [ref=e9]'
+      - paragraph [ref=e10]:
+        - text: Attention is best understood as a
+        - emphasis [ref=e11]: soft, differentiable key-value store lookup
+        - text: . Imagine a database of key-value pairs. To retrieve a value, you supply a query and compare it to every key; the similarity scores determine how much of each value you blend together. The transformer makes this entire process end-to-end differentiable by parameterizing Q, K, and V as learned linear projections of the same input sequence.
+      - paragraph [ref=e12]:
+        - text: Formally, given an input matrix
+        - code [ref=e13]: "X ∈ ℝ^{n×d_model}"
+        - text: ", three learned weight matrices project it into queries, keys, and values:"
+      - generic [ref=e14]:
+        - text: Q = X·W_Q | K = X·W_K | V = X·W_V
+        - text: "W_Q, W_K ∈ ℝ^{d_model × d_k} | W_V ∈ ℝ^{d_model × d_v}"
+      - paragraph [ref=e15]:
+        - text: The dot product
+        - code [ref=e16]: Q·Kᵀ
+        - text: computes a raw similarity between every query-key pair, producing an
+        - code [ref=e17]: n×n
+        - text: score matrix. This is scaled by
+        - code [ref=e18]: √d_k
+        - text: to prevent the softmax from saturating (at large
+        - code [ref=e19]: d_k
+        - text: ", dot products grow in magnitude, pushing gradients to near-zero), then normalized via softmax to get attention weights, then applied to values:"
+      - generic [ref=e20]: Attention(Q, K, V) = softmax( Q·Kᵀ / √d_k ) · V
+      - heading "Why the √d_k Scaling Matters" [level=3] [ref=e21]
+      - paragraph [ref=e22]:
+        - text: If Q and K are initialized with unit variance, their dot product has variance
+        - code [ref=e23]: d_k
+        - text: . Without scaling, for
+        - code [ref=e24]: d_k = 64
+        - text: (typical in GPT-2), dot products have std ≈ 8, pushing softmax into regions where gradients vanish. Dividing by √64 = 8 restores unit variance. This is not just a stability trick — without it, training is qualitatively harder, especially in the first few layers.
+      - heading "Multi-Head Attention" [level=3] [ref=e25]
+      - paragraph [ref=e26]:
+        - text: "Single-head attention computes one set of attention patterns. But language requires attending to different relationships simultaneously: subject-verb agreement, coreference, positional adjacency, semantic similarity. Multi-head attention runs"
+        - code [ref=e27]: h
+        - text: "independent attention heads in parallel, each with its own projection matrices:"
+      - generic [ref=e28]:
+        - text: head_i = Attention(X·W_Qᵢ, X·W_Kᵢ, X·W_Vᵢ)
+        - text: MultiHead(X) = Concat(head₁, ..., headₕ) · W_O
+        - text: "where W_Qᵢ, W_Kᵢ ∈ ℝ^{d_model × (d_model/h)}"
+      - paragraph [ref=e29]:
+        - text: In GPT-style models,
+        - code [ref=e30]: d_model
+        - text: "is split evenly across heads: GPT-2 (1.5B) uses"
+        - code [ref=e31]: h=25
+        - text: heads with
+        - code [ref=e32]: d_k=64
+        - text: . GPT-3 uses
+        - code [ref=e33]: h=96
+        - text: heads with
+        - code [ref=e34]: d_k=128
+        - text: . The output projection
+        - code [ref=e35]: "W_O ∈ ℝ^{d_model × d_model}"
+        - text: "mixes information across heads. Empirically, different heads specialize: some attend to local context, others to distant syntactic dependencies. This is verified via probing experiments — ablating individual heads shows measurable degradation on specific linguistic tasks."
+      - heading "Causal Masking for Autoregressive Models" [level=3] [ref=e36]
+      - paragraph [ref=e37]:
+        - text: Decoder-only models (GPT, Llama, etc.) must not allow token
+        - code [ref=e38]: i
+        - text: to attend to token
+        - code [ref=e39]: j > i
+        - text: during training — that would let the model cheat by peeking at future tokens. Causal masking sets the upper triangle of the attention score matrix to
+        - code [ref=e40]: "-∞"
+        - text: before softmax, making those positions contribute zero weight after exponentiation. The result is a lower-triangular attention pattern.
+      - paragraph [ref=e41]: "This masking is the reason decoder-only models can be trained with a simple next-token prediction objective: every position predicts its next token in parallel using only its causal context. Encoder models (BERT) use full bidirectional attention (no mask) and are trained with masked language modeling (MLM) instead."
+      - 'heading "KV Cache: The Inference-Critical Optimization" [level=3] [ref=e42]'
+      - paragraph [ref=e43]:
+        - text: During autoregressive decoding, each new token needs to attend to all prior tokens. Without caching, this requires recomputing K and V for all previous positions at every step — O(n²) work total for a sequence of length n. The
+        - strong [ref=e44]: KV cache
+        - text: stores K and V matrices for all past tokens; each step only computes Q/K/V for the new token and appends to the cache.
+      - paragraph [ref=e45]:
+        - text: "KV cache memory cost: for a model with"
+        - code [ref=e46]: L
+        - text: layers,
+        - code [ref=e47]: h
+        - text: heads,
+        - code [ref=e48]: d_k
+        - text: per head, sequence length
+        - code [ref=e49]: "n"
+        - text: ", and batch size"
+        - code [ref=e50]: B
+        - text: ", in FP16:"
+        - code [ref=e51]: 2 × L × B × n × h × d_k × 2 bytes
+        - text: ". For Llama-2-70B with n=4096 and B=1: ~≈17 GB just for the cache. This is why long-context inference is memory-bound, not compute-bound."
+      - heading "Grouped-Query Attention (GQA) and Multi-Query Attention (MQA)" [level=3] [ref=e52]
+      - paragraph [ref=e53]:
+        - text: To reduce KV cache size,
+        - strong [ref=e54]: Multi-Query Attention
+        - text: (Shazeer 2019) shares a single K and V across all query heads — slashing cache by factor
+        - code [ref=e55]: h
+        - text: at the cost of some expressivity.
+        - strong [ref=e56]: Grouped-Query Attention
+        - text: (Ainslie et al. 2023, used in Llama-2-70B) groups
+        - code [ref=e57]: h
+        - text: query heads into
+        - code [ref=e58]: g
+        - text: groups, each sharing one K/V pair. GQA reduces cache by
+        - code [ref=e59]: h/g
+        - text: while maintaining most quality — Llama-2-70B uses 8 KV heads for 64 query heads (8× reduction). This is now the dominant pattern in production models.
+      - 'heading "Flash Attention: Memory-Efficient Exact Attention" [level=3] [ref=e60]'
+      - paragraph [ref=e61]:
+        - text: Naive attention materializes the full
+        - code [ref=e62]: n×n
+        - text: score matrix in HBM (GPU memory), which costs O(n²) memory and creates expensive memory I/O. FlashAttention (Dao et al. 2022) tiles the computation to stay within SRAM (L2 cache), computing attention in blocks without ever materializing the full matrix. This reduces HBM reads/writes from O(n²) to O(n), achieving 2–4× wall-clock speedup for sequence lengths ≥ 1K. FlashAttention-2 adds better parallelism across sequence positions; FlashAttention-3 exploits H100 TMA hardware. All major frameworks (PyTorch, JAX) use Flash variants by default.
+      - generic [ref=e63]:
+        - generic [ref=e64]:
+          - generic [ref=e65]: Attention Complexity
+          - generic [ref=e66]: O(n² · d_k)
+          - paragraph [ref=e67]: Quadratic in sequence length — the fundamental bottleneck for long contexts
+        - generic [ref=e68]:
+          - generic [ref=e69]: KV Cache Memory
+          - generic [ref=e70]: ~17 GB
+          - paragraph [ref=e71]: Llama-2-70B, n=4096, B=1, FP16 — often exceeds model weights for long seqs
+        - generic [ref=e72]:
+          - generic [ref=e73]: MHA vs MQA
+          - generic [ref=e74]: h× cache reduction
+          - paragraph [ref=e75]: MQA shares all KV heads; GQA (used in Llama-2) offers a quality-efficient middle ground
+        - generic [ref=e76]:
+          - generic [ref=e77]: Flash Attention Speedup
+          - generic [ref=e78]: 2–4×
+          - paragraph [ref=e79]: Achieved by tiling to avoid HBM reads of O(n²) attention matrix
+      - heading "Positional Encoding and Attention" [level=3] [ref=e80]
+      - paragraph [ref=e81]:
+        - text: "Attention itself is permutation-invariant — it has no sense of token order. Position must be injected separately. In the original transformer: absolute sinusoidal PE added to embeddings before attention. Modern LLMs use"
+        - strong [ref=e82]: RoPE
+        - text: "(Rotary Position Embedding, Su et al. 2021): rotation matrices applied to Q and K at each attention head so that inner products naturally encode relative distance. RoPE generalizes better to sequence lengths beyond training — RoPE + YaRN / ALiBi extensions allow extrapolation to 128K+ token contexts. Llama-2, Mistral, and GPT-NeoX all use RoPE."
+    - generic [ref=e83]:
+      - heading "Interactive Visualization" [level=2] [ref=e84]
+      - paragraph [ref=e85]:
+        - text: Explore Q/K/V attention interactively.
+        - strong [ref=e86]: Tab 1
+        - text: ": hover over a token to see its full attention pattern across the sequence."
+        - strong [ref=e87]: Tab 2
+        - text: ": watch the scaled dot-product computation step-by-step with live sliders."
+        - strong [ref=e88]: Tab 3
+        - text: ": visualize causal masking on a short sequence."
+      - generic [ref=e89]:
+        - button "Attention Map" [ref=e90] [cursor=pointer]
+        - button "Scaled Dot-Product" [ref=e91] [cursor=pointer]
+        - button "Causal Masking" [ref=e92] [cursor=pointer]
+      - generic [ref=e94]:
+        - generic [ref=e96]: Hover over a token (top row) to highlight its attention weights — or click to pin
+        - generic [ref=e97]:
+          - generic [ref=e98]:
+            - generic [ref=e99]: Sequence Length
+            - generic [ref=e100]:
+              - slider [ref=e101] [cursor=pointer]: "7"
+              - generic [ref=e102]: "7"
+          - generic [ref=e103]:
+            - generic [ref=e104]: Temperature (sharpness)
+            - generic [ref=e105]:
+              - slider [ref=e106] [cursor=pointer]: "1"
+              - generic [ref=e107]: "1.00"
+          - generic [ref=e108]:
+            - generic [ref=e109]: Causal Mask
+            - 'button "Causal: OFF" [ref=e111] [cursor=pointer]'
+          - generic [ref=e112]:
+            - generic [ref=e113]: Randomize
+            - button "New Pattern" [ref=e115] [cursor=pointer]
+        - generic [ref=e116]:
+          - generic [ref=e117]: High attention
+          - generic [ref=e119]: Zero / masked
+          - generic [ref=e121]: Low attention
+    - generic [ref=e123]:
+      - heading "Key Takeaways" [level=2] [ref=e124]
+      - list [ref=e125]:
+        - listitem [ref=e126]: → The √d_k scaling is not cosmetic — without it, dot products grow proportional to √d_k, saturating softmax and killing gradients in large heads. In GPT-3 (d_k=128), unscaled std ≈ 11, causing near-zero gradients in all but the max-scoring pair.
+        - listitem [ref=e127]: "→ KV cache is why long-context inference is memory-bound: a 70B model serving 32K tokens with B=8 needs ~70GB for the KV cache alone. GQA (Llama-2-70B uses 8 KV heads for 64 query heads) reduces this 8× with minimal quality loss — now the standard pattern in production-grade models."
+        - listitem [ref=e128]: → FlashAttention-2 does not reduce FLOPs — it reduces HBM memory bandwidth usage by tiling to SRAM. The speedup (2–4×) is entirely from avoiding the O(n²) memory write of the attention matrix, making long-context training 4–8× more memory-efficient.
+        - listitem [ref=e129]: "→ Different attention heads provably specialize: syntactic heads track subject-verb dependencies, positional heads handle local context, semantic heads do long-range coreference. Head pruning experiments (Michel et al. 2019) show 50–70% of heads can be removed from BERT with <1% task degradation — but which heads matter depends on the task."
+        - listitem [ref=e130]: → RoPE (used in Llama, Mistral, Falcon) encodes relative position via rotation, making attention scores decay naturally with distance and enabling better length extrapolation vs. learned absolute embeddings. Combining RoPE with YaRN or dynamic NTK scaling lets models generalize from 4K→128K tokens without full retraining.
+        - listitem [ref=e131]: "→ Causal masking is what enables teacher-forcing: the entire sequence is processed in one forward pass with O(n) parallelism during training. At inference, this collapses to sequential token-by-token generation, which is why prefill (parallel) is compute-bound and decode (sequential) is memory-bound."
+  - navigation [ref=e132]:
+    - link "← 05 · Prefill & Decode Phases" [ref=e133] [cursor=pointer]:
+      - /url: 05-prefill-decode.html
+      - generic [ref=e134]: ←
+      - text: 05 · Prefill & Decode Phases
+    - link "07 · RWKV Model →" [ref=e135] [cursor=pointer]:
+      - /url: 07-rwkv.html
+      - text: 07 · RWKV Model
+      - generic [ref=e136]: →

@@ -21,7 +21,7 @@ Each Ralph session completes **one category block**:
 
 ## File naming
 
-- Category overview: `categories/NN-<slug>.md` — NN is the 2-digit category number (01–10), independent of the source section number
+- Category overview: `categories/NN-<slug>.md` — NN is the 2-digit category number (01–11), independent of the source section number
 - Answer note: `answers/NN-QQQ-<slug>.md` — NN=2-digit category, QQQ=3-digit question number within that category
 - Slug: lowercase, spaces→dash, strip non-word chars, cap 60 chars, no trailing dash
 
@@ -94,6 +94,7 @@ Answer note:
 | 8 | `08-safety-guardrails` | §10 | 10 |
 | 9 | `09-system-design-ai` | §11 | 55 |
 | 10 | `10-behavioral` | §18 | 74 |
+| 11 | `11-context-management` | §22 | 15 |
 
 ## Reference docs
 

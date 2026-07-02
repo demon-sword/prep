@@ -1,0 +1,193 @@
+- generic [active] [ref=e1]:
+  - banner [ref=e2]:
+    - generic [ref=e3]: Foundations
+    - heading "01Self-Supervision in LLMs" [level=1] [ref=e4]
+    - paragraph [ref=e5]: How LLMs learn from unlabeled text via next-token prediction, masked language modeling, and the pretraining objective — the engine behind modern foundation models.
+  - main [ref=e6]:
+    - generic [ref=e7]:
+      - heading "Theory" [level=2] [ref=e8]
+      - 'heading "The Core Insight: Supervision Hidden in Sequences" [level=3] [ref=e9]'
+      - paragraph [ref=e10]:
+        - text: "Self-supervised learning solves a fundamental problem: we have vastly more unlabeled text than human-labeled data. The key insight is that"
+        - strong [ref=e11]: language itself provides the labels
+        - text: . Given a sequence of tokens, the model can be trained to predict any token from the others — no human annotation required. This transforms an unsupervised abundance (internet text) into a supervised training signal.
+      - paragraph [ref=e12]: "Two dominant pretraining objectives emerged:"
+      - list [ref=e13]:
+        - listitem [ref=e14]:
+          - strong [ref=e15]: Causal Language Modeling (CLM)
+          - text: — predict the
+          - emphasis [ref=e16]: next
+          - text: token given all previous tokens. Used by GPT, LLaMA, PaLM, and virtually every modern autoregressive LLM.
+        - listitem [ref=e17]:
+          - strong [ref=e18]: Masked Language Modeling (MLM)
+          - text: — mask ~15% of tokens and predict them from bidirectional context. Used by BERT, RoBERTa, and encoder-focused models.
+      - 'heading "Causal Language Modeling: The Math" [level=3] [ref=e19]'
+      - paragraph [ref=e20]:
+        - text: For a sequence of tokens
+        - code [ref=e21]: x₁, x₂, ..., xₙ
+        - text: ", CLM maximizes the likelihood of each token given its prefix:"
+      - generic [ref=e22]: L(θ) = Σᵢ log P(xᵢ | x₁, ..., xᵢ₋₁; θ)
+      - paragraph [ref=e23]:
+        - text: This factorization is exact — the chain rule of probability guarantees the product of these conditionals equals the joint probability of the full sequence. No approximation. The model is trained to minimize cross-entropy loss at every position simultaneously, so a sequence of length
+        - emphasis [ref=e24]: "n"
+        - text: provides
+        - emphasis [ref=e25]: n−1
+        - text: training signals per forward pass. This is extraordinarily data-efficient compared to supervised approaches where one label is provided per example.
+      - paragraph [ref=e26]:
+        - text: At training time,
+        - strong [ref=e27]: causal (triangular) masking
+        - text: in the attention mechanism enforces that position
+        - emphasis [ref=e28]: i
+        - text: can only attend to positions 1…i. This means every token in the sequence can be a prediction target in a single forward pass — full parallelism during training, despite the task being inherently sequential.
+      - 'heading "Masked Language Modeling: Bidirectional Context" [level=3] [ref=e29]'
+      - paragraph [ref=e30]:
+        - text: "MLM, introduced by Devlin et al. (2018) in BERT, uses a different strategy. Rather than predicting the next token, it randomly masks a subset of tokens (typically 15%) and trains the model to reconstruct them using both left and right context. Of the masked positions: 80% are replaced with"
+        - code [ref=e31]: "[MASK]"
+        - text: ", 10% with a random token, and 10% kept unchanged — a recipe designed to prevent the model from learning trivial shortcuts."
+      - paragraph [ref=e32]:
+        - text: MLM produces richer bidirectional representations, making it powerful for classification and extraction tasks. However, it cannot be used autoregressively for generation, and the train/inference distribution mismatch (due to
+        - code [ref=e33]: "[MASK]"
+        - text: tokens only appearing during training) is a known limitation. XLNet addressed this with permutation language modeling.
+      - heading "What the Model Actually Learns" [level=3] [ref=e34]
+      - paragraph [ref=e35]: "A model that achieves low CLM loss must have learned far more than surface-level pattern matching:"
+      - list [ref=e36]:
+        - listitem [ref=e37]:
+          - strong [ref=e38]: Syntax
+          - text: ": subject-verb agreement, pronoun resolution, nested clause structure"
+        - listitem [ref=e39]:
+          - strong [ref=e40]: Semantics
+          - text: ": word meaning, compositional phrase meaning, analogical reasoning"
+        - listitem [ref=e41]:
+          - strong [ref=e42]: World knowledge
+          - text: ": facts about entities, events, relationships"
+        - listitem [ref=e43]:
+          - strong [ref=e44]: Pragmatics
+          - text: ": discourse coherence, implication, conversational structure"
+        - listitem [ref=e45]:
+          - strong [ref=e46]: Code structure
+          - text: ": indentation rules, API signatures, algorithmic patterns (if trained on code)"
+      - paragraph [ref=e47]: "These capabilities emerge because predicting next tokens well requires correctly modeling the full generative process that produced the text. This is why scaling works: a bigger model can capture more of this structure."
+      - heading "The Scale That Makes It Work" [level=3] [ref=e48]
+      - paragraph [ref=e49]: Self-supervision is only viable at scale. BERT was trained on 3.3B tokens. GPT-2 on 40B. GPT-3 on ~300B. LLaMA-3.1 405B used approximately 15T tokens. The Chinchilla paper (2022) established that for compute-optimal training, you need roughly 20× more tokens than parameters — so a 7B parameter model wants ~140B tokens minimum, and inference-optimized models (trained past Chinchilla optimum) use far more.
+      - generic [ref=e50]:
+        - strong [ref=e51]: "Why \"compute-optimal\" ≠ \"inference-optimal\":"
+        - text: Chinchilla optimizes for loss at a fixed compute budget. But in production, you want a model that performs well
+        - emphasis [ref=e52]: at a given size
+        - text: — which means training smaller models on more tokens than Chinchilla recommends, yielding cheaper inference for the same quality. LLaMA adopted this strategy explicitly.
+      - heading "From Self-Supervision to Useful Models" [level=3] [ref=e53]
+      - paragraph [ref=e54]:
+        - text: Raw CLM pretraining produces a model that excels at continuing text — not following instructions, not refusing harmful requests, not staying helpful. This is why post-training (SFT + RLHF or DPO) is required. Self-supervision gives the model
+        - emphasis [ref=e55]: capability
+        - text: ; post-training shapes its
+        - emphasis [ref=e56]: behavior
+        - text: . The division is fundamental to the modern LLM development pipeline.
+      - paragraph [ref=e57]: "Pretraining cost dominates total training cost: GPT-4's pretraining reportedly cost >$100M. Post-training is ~1–5% of that. But post-training typically requires labeled data (instruction-response pairs, preference pairs), making quality control far more expensive per token. The asymmetry — cheap self-supervised pretraining, expensive post-training — drives the field toward better pretraining that requires less alignment work."
+      - heading "Practical Implications" [level=3] [ref=e58]
+      - paragraph [ref=e59]: "Understanding self-supervision matters for production AI engineering in several ways:"
+      - list [ref=e60]:
+        - listitem [ref=e61]:
+          - strong [ref=e62]: Tokenization affects everything
+          - text: ": the model predicts tokens, not characters. BPE/WordPiece/SentencePiece tokenizers affect what constitutes a \"hard\" prediction, how many tokens code vs prose uses, and what the model's effective context window covers in real content."
+        - listitem [ref=e63]:
+          - strong [ref=e64]: Perplexity is the training signal
+          - text: ": lower perplexity = better fit. Perplexity on a held-out set (eval loss) is the primary signal during pretraining to detect overfitting or divergence."
+        - listitem [ref=e65]:
+          - strong [ref=e66]: Domain mismatch is real
+          - text: ": a model pretrained on English web text will have high perplexity on legal German documents. Continued pretraining on domain-specific data (domain-adaptive pretraining) before fine-tuning is a well-established recipe."
+        - listitem [ref=e67]:
+          - strong [ref=e68]: Data quality beats quantity
+          - text: ": FineWeb, RedPajama, and Dolma all found that aggressive deduplication and quality filtering (removing boilerplate, spam, near-duplicates) dramatically improves downstream performance even at the same token count."
+    - generic [ref=e69]:
+      - heading "Interactive Visualization" [level=2] [ref=e70]
+      - generic [ref=e71]:
+        - generic [ref=e72]: Token Prediction Flow
+        - generic [ref=e73]:
+          - text: Toggle between
+          - strong [ref=e74]: Next-Token (CLM)
+          - text: and
+          - strong [ref=e75]: Masked LM
+          - text: modes. In CLM mode, press Play to watch the model step through each position predicting the next token. In MLM mode, adjust mask ratio and click Randomize to mask tokens — then click a masked token to see candidate predictions.
+        - generic [ref=e76]:
+          - button "Next-Token (CLM)" [ref=e77] [cursor=pointer]
+          - button "Masked LM (MLM)" [ref=e78] [cursor=pointer]
+        - generic [ref=e79]:
+          - button "▶ Play" [ref=e80] [cursor=pointer]
+          - button "↺ Reset" [ref=e81] [cursor=pointer]
+          - generic [ref=e82]:
+            - generic [ref=e83]: Speed
+            - slider [ref=e84]: "900"
+            - generic [ref=e85]: 900ms
+        - generic [ref=e86]:
+          - generic [ref=e87]: The
+          - generic [ref=e88]: transformer
+          - generic [ref=e89]: model
+          - generic [ref=e90]: learns
+          - generic [ref=e91]: to
+          - generic [ref=e92]: predict
+          - generic [ref=e93]: the
+          - generic [ref=e94]: next
+          - generic [ref=e95]: token
+          - generic [ref=e96]: from
+          - generic [ref=e97]: context
+        - generic [ref=e99]: Press Play to start stepping through positions
+        - generic [ref=e100]:
+          - strong [ref=e101]: "Position:"
+          - text: — |
+          - strong [ref=e102]: "Context window:"
+          - text: — |
+          - strong [ref=e103]: "Task:"
+          - text: Press Play to begin (CLM mode)
+        - generic [ref=e104]:
+          - generic [ref=e105]: Context tokens
+          - generic [ref=e107]: Current target (CLM)
+          - generic [ref=e109]: Masked token (MLM)
+          - generic [ref=e111]: Predicted / revealed
+      - generic [ref=e113]:
+        - generic [ref=e114]: Training Loss Curve (Simulated)
+        - generic [ref=e115]: Simulated CLM training loss over steps for models of different sizes. Use the slider to explore how scale affects loss convergence. Real GPT-3 final eval loss ≈ 1.73 nats.
+        - generic [ref=e116]:
+          - generic [ref=e117]:
+            - generic [ref=e118]: Model params
+            - slider [ref=e119]: "2"
+            - generic [ref=e120]: 7B
+          - button "▶ Animate" [ref=e121] [cursor=pointer]
+    - generic [ref=e124]:
+      - heading "Key Takeaways" [level=2] [ref=e125]
+      - list [ref=e126]:
+        - listitem [ref=e127]:
+          - text: →
+          - strong [ref=e128]: CLM provides n−1 training signals per forward pass
+          - text: — every token in a sequence is simultaneously a context element for future tokens and a prediction target for past positions. This data efficiency is why pretraining can scale to trillions of tokens without running out of labels.
+        - listitem [ref=e129]:
+          - text: →
+          - strong [ref=e130]: Causal masking (not model size) is what makes CLM autoregressive
+          - text: — the triangular attention mask prevents position i from attending to i+1…n, enforcing the left-to-right generative factorization. Remove the mask and you get bidirectional context (like BERT), which is great for understanding but cannot generate.
+        - listitem [ref=e131]:
+          - text: →
+          - strong [ref=e132]: Pretraining domain determines what the model "knows"
+          - text: — models trained on code+text outperform text-only models on coding tasks, not due to fine-tuning but because self-supervised next-token prediction over code teaches the model Python syntax, library APIs, and algorithmic reasoning. Domain-adaptive pretraining (DAP) on domain-specific corpora before SFT is a well-validated recipe.
+        - listitem [ref=e133]:
+          - text: →
+          - strong [ref=e134]: Inference-optimal ≠ Chinchilla-optimal
+          - text: — Chinchilla (2022) says to scale parameters and tokens proportionally. But LLaMA showed training a
+          - emphasis [ref=e135]: smaller
+          - text: model on
+          - emphasis [ref=e136]: more
+          - text: tokens yields the same quality at a fraction of the inference cost. For production deployments where you serve millions of requests, inference cost dwarfs training cost.
+        - listitem [ref=e137]:
+          - text: →
+          - strong [ref=e138]: Data quality filters matter more than raw token count
+          - text: — FineWeb's ablations showed that quality filtering (removing near-duplicates, boilerplate, low-quality web text) with MinHash + perplexity filtering improved benchmark performance by 2–4% even at the same token count. At scale, garbage data doesn't just add noise — it actively degrades capability.
+        - listitem [ref=e139]:
+          - text: →
+          - strong [ref=e140]: Self-supervision gives capability; post-training gives alignment
+          - text: — the pretrained model is a next-token predictor, not an assistant. It will complete prompts in character voices, continue harmful text, and hallucinate freely. RLHF/DPO and SFT are required to steer behavior — but they work only because the pretrained model already has the underlying capability. Post-training cannot install capability that wasn't learned during pretraining.
+  - navigation [ref=e141]:
+    - link "← Previous —":
+      - /url: "#"
+      - generic: ← Previous
+      - generic: —
+    - link "Next → Seq2Seq Architecture" [ref=e142] [cursor=pointer]:
+      - /url: ./02-seq2seq.html
+      - generic [ref=e143]: Next →
+      - generic [ref=e144]: Seq2Seq Architecture
