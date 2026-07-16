@@ -1,0 +1,967 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1.0"/>
+  <title>Quantization for Inference — AI Engineering Concepts</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com"/>
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet"/>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg:       #0d0f17;
+      --surface:  #141720;
+      --card:     #1a1e2e;
+      --border:   #252a3d;
+      --accent:   #00d4ff;
+      --purple:   #7c3aed;
+      --green:    #00ff88;
+      --yellow:   #ffd700;
+      --red:      #ff4757;
+      --orange:   #ff9500;
+      --text:     #e2e8f0;
+      --text-dim: #8892a4;
+      --mono:     'JetBrains Mono', monospace;
+      --sans:     'Inter', system-ui, sans-serif;
+    }
+
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: var(--sans);
+      line-height: 1.7;
+      min-height: 100vh;
+    }
+
+    /* ── Header ── */
+    header {
+      background: linear-gradient(135deg, #0d0f17 0%, #101a28 100%);
+      border-bottom: 1px solid var(--border);
+      padding: 2.5rem 2rem 2rem;
+      text-align: center;
+    }
+    .group-badge {
+      display: inline-block;
+      font-family: var(--mono);
+      font-size: 0.72rem;
+      font-weight: 700;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      color: var(--orange);
+      background: rgba(255,149,0,0.12);
+      border: 1px solid rgba(255,149,0,0.3);
+      padding: 0.25rem 0.75rem;
+      border-radius: 999px;
+      margin-bottom: 1rem;
+    }
+    header h1 {
+      font-size: clamp(1.8rem, 4vw, 2.8rem);
+      font-weight: 700;
+      letter-spacing: -0.02em;
+      color: var(--text);
+      margin-bottom: 0.6rem;
+    }
+    header h1 span { color: var(--accent); }
+    .header-desc {
+      color: var(--text-dim);
+      font-size: 1.05rem;
+      max-width: 700px;
+      margin: 0 auto;
+    }
+
+    /* ── Layout ── */
+    main {
+      max-width: 1100px;
+      margin: 0 auto;
+      padding: 2.5rem 1.5rem;
+      display: flex;
+      flex-direction: column;
+      gap: 3rem;
+    }
+
+    /* ── Section titles ── */
+    .section-title {
+      font-size: 1.5rem;
+      font-weight: 700;
+      color: var(--text);
+      border-left: 3px solid var(--accent);
+      padding-left: 0.8rem;
+      margin-bottom: 1.5rem;
+      letter-spacing: -0.01em;
+    }
+
+    /* ── Theory ── */
+    #theory { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 2rem 2rem 2.5rem; }
+    #theory h3 { font-size: 1.05rem; font-weight: 600; color: var(--accent); margin: 1.8rem 0 0.6rem; }
+    #theory h3:first-of-type { margin-top: 0.5rem; }
+    #theory p { color: var(--text); margin-bottom: 0.9rem; font-size: 0.965rem; line-height: 1.75; }
+    #theory ul { margin: 0.4rem 0 1rem 1.3rem; }
+    #theory li { color: var(--text); font-size: 0.965rem; margin-bottom: 0.45rem; }
+    #theory code {
+      font-family: var(--mono);
+      font-size: 0.84rem;
+      background: rgba(0,212,255,0.1);
+      color: var(--accent);
+      padding: 0.1em 0.45em;
+      border-radius: 4px;
+    }
+    .formula-box {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-left: 3px solid var(--yellow);
+      border-radius: 6px;
+      padding: 1rem 1.25rem;
+      margin: 1rem 0 1.2rem;
+      font-family: var(--mono);
+      font-size: 0.85rem;
+      color: var(--yellow);
+      line-height: 1.6;
+    }
+    .callout {
+      background: rgba(0,212,255,0.07);
+      border: 1px solid rgba(0,212,255,0.2);
+      border-radius: 8px;
+      padding: 0.9rem 1.2rem;
+      margin: 1rem 0;
+      color: var(--text-dim);
+      font-size: 0.93rem;
+    }
+    .callout strong { color: var(--accent); }
+
+    /* ── Comparison table ── */
+    .cmp-table {
+      width: 100%;
+      border-collapse: collapse;
+      margin: 1rem 0 1.5rem;
+      font-size: 0.88rem;
+    }
+    .cmp-table th {
+      text-align: left;
+      font-family: var(--mono);
+      font-size: 0.75rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.07em;
+      color: var(--text-dim);
+      padding: 0.6rem 0.8rem;
+      border-bottom: 1px solid var(--border);
+    }
+    .cmp-table td {
+      padding: 0.6rem 0.8rem;
+      border-bottom: 1px solid rgba(37,42,61,0.5);
+      color: var(--text);
+    }
+    .cmp-table tr:hover td { background: rgba(0,212,255,0.04); }
+    .cmp-table code { font-size: 0.82rem; }
+
+    .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; }
+    @media(max-width:700px){ .grid-2 { grid-template-columns: 1fr; } }
+
+    .card {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 1.3rem 1.5rem;
+      margin-bottom: 1rem;
+    }
+    .card h4 { font-size: 0.95rem; font-weight: 600; color: var(--green); margin-bottom: 0.4rem; }
+
+    /* ── Visualization ── */
+    #visualization {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 2rem;
+    }
+    .viz-desc {
+      color: var(--text-dim);
+      font-size: 0.92rem;
+      margin-bottom: 1.5rem;
+      line-height: 1.6;
+    }
+
+    /* Controls */
+    .controls-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 1rem;
+      margin-bottom: 1.2rem;
+      align-items: flex-end;
+    }
+    .control-group {
+      display: flex;
+      flex-direction: column;
+      gap: 0.35rem;
+      min-width: 170px;
+    }
+    .control-group label {
+      font-size: 0.76rem;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.07em;
+      color: var(--text-dim);
+    }
+    select {
+      background: var(--card);
+      color: var(--text);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 0.5rem 0.8rem;
+      font-family: var(--mono);
+      font-size: 0.84rem;
+      cursor: pointer;
+    }
+    select:focus { border-color: var(--accent); outline: none; }
+
+    .precision-btns {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.5rem;
+      margin-bottom: 1.5rem;
+    }
+    .prec-btn {
+      font-family: var(--mono);
+      font-size: 0.78rem;
+      font-weight: 600;
+      padding: 0.5rem 1rem;
+      border-radius: 6px;
+      border: 1px solid var(--border);
+      background: transparent;
+      color: var(--text-dim);
+      cursor: pointer;
+      transition: all 0.18s;
+    }
+    .prec-btn:hover { border-color: var(--accent); color: var(--accent); }
+    .prec-btn.active {
+      border-color: var(--purple);
+      color: var(--purple);
+      background: rgba(124,58,237,0.1);
+    }
+
+    /* Main viz area */
+    .viz-canvas-wrap {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 1.5rem;
+      margin-bottom: 1.2rem;
+      min-height: 260px;
+    }
+    .viz-canvas-wrap canvas {
+      display: block;
+      width: 100%;
+      max-width: 100%;
+    }
+
+    /* Stats chips */
+    .stat-row {
+      display: flex;
+      gap: 1rem;
+      flex-wrap: wrap;
+      margin-bottom: 1.2rem;
+    }
+    .stat-chip {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 0.7rem 1.1rem;
+      min-width: 140px;
+      flex: 1;
+      text-align: center;
+    }
+    .stat-chip .val {
+      font-family: var(--mono);
+      font-size: 1.4rem;
+      font-weight: 700;
+      display: block;
+    }
+    .stat-chip .key {
+      font-size: 0.7rem;
+      text-transform: uppercase;
+      letter-spacing: 0.07em;
+      color: var(--text-dim);
+      margin-top: 0.15rem;
+    }
+    .val-accent { color: var(--accent); }
+    .val-green  { color: var(--green); }
+    .val-yellow { color: var(--yellow); }
+    .val-purple { color: var(--purple); }
+
+    /* GPU fit table */
+    .gpu-fit-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+      gap: 0.7rem;
+      margin-top: 1rem;
+    }
+    .gpu-card {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 0.9rem 1rem;
+      text-align: center;
+      transition: border-color 0.3s, box-shadow 0.3s;
+    }
+    .gpu-card.fits {
+      border-color: var(--green);
+      box-shadow: 0 0 12px rgba(0,255,136,0.12);
+    }
+    .gpu-card.no-fit {
+      border-color: var(--red);
+      box-shadow: 0 0 12px rgba(255,71,87,0.12);
+    }
+    .gpu-card .gpu-name {
+      font-family: var(--mono);
+      font-size: 0.76rem;
+      font-weight: 700;
+      color: var(--text);
+      margin-bottom: 0.3rem;
+    }
+    .gpu-card .gpu-vram {
+      font-size: 0.7rem;
+      color: var(--text-dim);
+      margin-bottom: 0.5rem;
+    }
+    .gpu-card .gpu-status {
+      font-family: var(--mono);
+      font-size: 0.82rem;
+      font-weight: 700;
+    }
+    .fits .gpu-status { color: var(--green); }
+    .no-fit .gpu-status { color: var(--red); }
+
+    /* Takeaways */
+    #takeaways {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 2rem 2rem 2.5rem;
+    }
+    #takeaways ul { list-style: none; display: flex; flex-direction: column; gap: 0.85rem; }
+    #takeaways li {
+      display: flex;
+      gap: 0.8rem;
+      align-items: flex-start;
+      padding: 0.9rem 1.1rem;
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      font-size: 0.95rem;
+      line-height: 1.6;
+    }
+    #takeaways li::before {
+      content: '→';
+      color: var(--accent);
+      font-weight: 700;
+      flex-shrink: 0;
+      margin-top: 0.05rem;
+    }
+    #takeaways li strong { color: var(--accent); }
+
+    /* Nav */
+    .concept-nav {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 1.2rem 1.5rem;
+      border-top: 1px solid var(--border);
+      max-width: 1100px;
+      margin: 0 auto;
+    }
+    .nav-link {
+      display: flex;
+      flex-direction: column;
+      gap: 0.2rem;
+      text-decoration: none;
+      padding: 0.7rem 1rem;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      transition: all 0.18s;
+      max-width: 300px;
+    }
+    .nav-link:hover { border-color: var(--accent); background: rgba(0,212,255,0.05); }
+    .nav-link .nav-dir {
+      font-size: 0.7rem;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      color: var(--text-dim);
+      font-weight: 600;
+    }
+    .nav-link .nav-title { font-size: 0.9rem; font-weight: 600; color: var(--text); }
+    .nav-link.disabled { opacity: 0.3; pointer-events: none; }
+    .nav-link.next { text-align: right; margin-left: auto; }
+    .nav-center {
+      font-size: .8rem;
+      color: var(--text-dim);
+      text-align: center;
+    }
+
+    @media (max-width: 700px) {
+      main { padding: 1.5rem 1rem; }
+      .controls-row { flex-direction: column; }
+      .concept-nav { flex-direction: column; gap: 0.8rem; }
+      .nav-link { max-width: 100%; }
+    }
+  </style>
+</head>
+<body>
+
+<header>
+  <div class="group-badge">Inference</div>
+  <h1>Quantization for <span>Inference</span></h1>
+  <p class="header-desc">int8, int4, AWQ, GPTQ, GGUF, NF4 — how post-training quantization reduces model size 2–4× with minimal quality loss, and how to choose the right scheme for your deployment.</p>
+</header>
+
+<main>
+
+  <!-- ── THEORY ── -->
+  <section id="theory">
+    <h2 class="section-title">Theory</h2>
+
+    <h3>1. Why Quantization Matters at Inference</h3>
+    <p>
+      LLM inference during the decode phase is overwhelmingly <strong>memory-bandwidth-bound</strong>, not compute-bound. Every generated token requires streaming all model weights from HBM (high-bandwidth memory) into the GPU's compute cores. A 7B-parameter model in fp16 occupies ~14 GB of weights. On an A100 with ~2 TB/s memory bandwidth, the theoretical maximum throughput is:
+    </p>
+    <div class="formula-box">
+      7B params × 2 bytes/param = 14 GB weights<br>
+      A100 80GB HBM bandwidth = 2,039 GB/s<br>
+      Theoretical ceiling ≈ 2,039 / 14 ≈ <strong>145 tokens/sec</strong> (weights-only bound, no compute)
+    </div>
+    <p>
+      For a 70B model (140 GB fp16), this drops to ~15 tok/s. In practice, real throughput is even lower (50–60% of this ceiling) due to KV cache overhead, activation memory, and compute latency. <strong>Quantization solves the root cause: it reduces the bytes per parameter.</strong> Compress to int4 (0.5 bytes/param) and a 70B model drops from 140 GB to 35 GB — pushing the bandwidth ceiling to ~58 tok/s, a 4× improvement. Add continuous batching and you can reach hundreds of tok/s on the same hardware.
+    </p>
+
+    <h3>2. fp16 / bf16 — The Baseline</h3>
+    <p>
+      fp16 (IEEE 754 half-precision) is the standard floating-point format for modern inference: 1 sign bit, 5 exponent bits, 10 mantissa bits. It covers a dynamic range of ~1e-8 to 65,504 — sufficient for most activation values in transformer networks. bf16 (Brain Floating Point, Google) uses the same exponent width as fp32 (8 bits) but truncates the mantissa to 7 bits. This gives bf16 a <em>wider dynamic range</em> (~1e-38 to 3.4e38), which eliminates overflow/underflow issues in attention softmax and layer norm operations.
+    </p>
+    <p>
+      <strong>In practice, fp16 and bf16 inference produce outputs indistinguishable from fp32 on all standard benchmarks.</strong> The weight values in transformer models are already fairly distributed; the extra fp32 precision in the mantissa offers no measurable benefit at inference time. All major inference engines (vLLM, TGI, TensorRT-LLM) default to fp16/bf16. The only reason to use fp32 at inference is if you suspect numerical instability in a custom architecture or if you need reproducibility to the last bit.
+    </p>
+    <p>
+      Hardware note: NVIDIA A100 and H100 have dedicated fp16 and bf16 tensor cores. fp16 matmuls on tensor cores are roughly 2× faster than fp32. Ampere and newer architectures support both formats natively. Apple Silicon (M2/M3/M4) favors fp16; Google TPUs favor bf16.
+    </p>
+
+    <h3>3. int8 (W8A8) — The Safe Bet</h3>
+    <p>
+      int8 quantization maps 32-bit floating-point weights (fp32) to 8-bit integers (int8) using a per-channel or per-tensor scale factor <code>s = max(|W|) / 127</code> and zero-point offset. The dequantized weight is <code>W_dequant = s * (W_int8 - z)</code>. The principal challenge is <strong>outlier features</strong>: in most transformer models, a tiny fraction of hidden dimensions (~0.1%) have activations that are 10–100× larger than the rest. Uniform quantization of these dimensions causes large errors that cascade through attention and FFN layers.
+    </p>
+    <div class="callout">
+      <strong>LLM.int8() (Dettmers et al., 2022):</strong> The key innovation is <em>mixed-precision decomposition</em>. Matrix columns with outlier activations are kept in fp16 and computed with fp16 matmul; the remaining 99.9% of columns are quantized to int8. This hybrid approach eliminates the outlier problem while maintaining ~2× memory savings and ~1.5–2× throughput on NVIDIA Turing/Ampere tensor cores.
+    </div>
+    <p>
+      <strong>SmoothQuant</strong> (Xiao et al., 2023) takes a different approach: instead of isolating outliers, it <em>smooths</em> activation outliers into adjacent weight channels via a per-channel scaling factor. This makes both weights and activations easier to quantize uniformly — no mixed precision needed. SmoothQuant achieves W8A8 (8-bit weights AND activations) with &lt;0.5% accuracy loss on Llama and OPT models, and nearly 2× speedup on hardware with int8 tensor core support (A100, H100).
+    </p>
+    <p>
+      <strong>GPTQ</strong> (Frantar et al., 2023) performs int8 quantization using a second-order (Hessian-based) error compensation approach: quantize weights column by column, and adjust remaining full-precision columns to compensate for the quantization error of the current column. This is mathematically equivalent to minimizing the L2 output error of each linear layer. GPTQ runs in a few GPU hours on 100–1000 calibration samples — no gradient descent, no retraining. Quality loss on MMLU for Llama 3 8B int8: &lt;0.5%.
+    </p>
+
+    <h3>4. int4 (W4A16 / NF4) — The Sweet Spot</h3>
+    <p>
+      int4 quantization compresses weights to 4 bits (16 storage levels), while activations remain in fp16 during computation. This is the most common production scheme because it offers ~4× memory reduction with acceptable quality degradation (2–5% on most benchmarks for 70B+ models).
+    </p>
+    <p>
+      <strong>AWQ (Activation-aware Weight Quantization)</strong> — Lin et al., 2023. The core observation: <em>not all weights matter equally.</em> Weight channels corresponding to high-magnitude activations are disproportionately important for output accuracy. AWQ identifies the top ~1% of weight channels (by activation magnitude) and keeps those at fp16, quantizing the rest to int4. It also applies a per-channel scaling factor to minimize error in the int4 channels. This simple salience-based selection outperforms uniform int4 by 3–5 percentage points on perplexity benchmarks.
+    </p>
+    <div class="callout">
+      <strong>AWQ vs GPTQ tradeoff:</strong> GPTQ uses second-order Hessian information to minimize layer-wise L2 error — it's mathematically more rigorous. AWQ uses activation-based salience to decide <em>which weights to protect</em> — it's more heuristic but often produces better real-world quality because it targets the channels that actually matter for downstream performance. In practice, AWQ-int4 and GPTQ-int4 on Llama 3 70B are within 0.5–1% MMLU of each other; the choice often comes down to tooling and ecosystem support.
+    </div>
+    <p>
+      <strong>NF4 (4-bit NormalFloat)</strong> — The data type used in QLoRA (Dettmers et al., 2023). NormalFloat is an information-theoretically optimal quantization data type for normally distributed data. Since pretrained LLM weights are approximately normally distributed, NF4 allocates quantization levels proportionally to the probability mass of a standard normal — more levels near zero, fewer in the tails. Combined with <strong>double quantization</strong> (quantizing the per-block scaling factors themselves to 8-bit), NF4 achieves ~4.5 bits/parameter memory usage while preserving quality within 0.5% of fp16 on most tasks.
+    </p>
+
+    <h3>5. GGUF / GGML — The Consumer Hardware Ecosystem</h3>
+    <p>
+      GGUF (GPT-Generated Unified Format) is the successor to GGML, designed for <strong>llama.cpp</strong> and CPU/GPU hybrid inference. Its defining feature is <strong>per-tensor mixed precision</strong>: the format allows each weight tensor in the model to use a different quantization level. In practice, Q4_K_M (the community sweet spot) uses:
+    </p>
+    <ul>
+      <li><strong>Q6_K</strong> (6-bit): attention query/key/value projections — because attention is sensitive to weight precision</li>
+      <li><strong>Q5_K</strong> (5-bit): feed-forward network up/gate projections</li>
+      <li><strong>Q4_K</strong> (4-bit): feed-forward network down projections — larger but less sensitive</li>
+    </ul>
+    <p>
+      This per-layer strategy allows Llama 3 70B to run on a single RTX 4090 24GB (with offloading) or, more practically, on a Mac Studio with 192 GB unified memory at ~12 tok/s — usable for batch processing and low-throughput applications. The ecosystem also supports Q8_0 (8-bit, best quality), Q5_K_M, Q3_K_M (aggressive compression), and IQ (importance-based quantization).
+    </p>
+
+    <h3>6. PTQ vs QAT</h3>
+    <p>
+      <strong>Post-Training Quantization (PTQ)</strong> applies quantization to a fully trained model without any retraining. It requires a small calibration dataset (100–1000 samples) to compute scaling factors (dynamic range) or Hessian corrections (GPTQ). PTQ is fast (minutes to hours), requires no training infrastructure, and is sufficient for most production use cases at int8 and int4 precision. All methods described above (LLM.int8(), AWQ, GPTQ, GGUF) are PTQ.
+    </p>
+    <p>
+      <strong>Quantization-Aware Training (QAT)</strong> inserts fake quantization nodes during training/continued pretraining, so the model learns to produce good outputs under quantized arithmetic. QAT can achieve &lt;0.1% quality loss even at int4, but it requires retraining the full model — expensive and rarely justified for decoder-only LLMs where PTQ-int4 already works well. QAT is more common in vision transformers and edge deployment (TFLite, CoreML) where every bit matters.
+    </p>
+
+    <h3>7. How to Choose — Decision Framework</h3>
+    <table class="cmp-table">
+      <thead>
+        <tr><th>Scenario</th><th>Recommended</th><th>Rationale</th></tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>Single A100 80GB, quality-critical</td>
+          <td><code>fp16</code> or <code>int8 (GPTQ)</code></td>
+          <td>fp16 if 70B fits in 80GB with KV cache headroom; int8 if batch size or context length pushes memory limits. &lt;0.5% quality loss at int8.</td>
+        </tr>
+        <tr>
+          <td>RTX 4090 24GB, 70B model</td>
+          <td><code>int4 (AWQ/GPTQ)</code> + GGUF offloading</td>
+          <td>70B int4 = ~35 GB still exceeds 24 GB; use GGUF Q4_K_M with llama.cpp layer offloading to GPU + CPU. ~5–10 tok/s.</td>
+        </tr>
+        <tr>
+          <td>Mac Studio 192GB, Llama 3 70B</td>
+          <td><code>GGUF Q4_K_M</code></td>
+          <td>Metal-accelerated llama.cpp. Unified memory means no CPU/GPU transfer overhead. ~10–15 tok/s at Q4_K_M.</td>
+        </tr>
+        <tr>
+          <td>8B model, throughput-optimized serving</td>
+          <td><code>int8 (SmoothQuant)</code></td>
+          <td>W8A8 on Ampere tensor cores = 2× throughput. 8B already fits easily in VRAM; the win here is speed, not memory.</td>
+        </tr>
+        <tr>
+          <td>Finetuning on consumer hardware</td>
+          <td><code>NF4 (QLoRA)</code></td>
+          <td>NF4 + double quantization + LoRA adapters. 65B model trains on a single 48GB GPU. QLoRA paper benchmarks show parity with fp16 full finetuning.</td>
+        </tr>
+        <tr>
+          <td>CPU-only / edge deployment</td>
+          <td><code>GGUF Q4_0</code> or <code>Q4_K_M</code></td>
+          <td>llama.cpp with CPU inference. 7B Q4_K_M runs at ~20 tok/s on M2 Max; 70B at ~3 tok/s on high-end desktop with AVX2.</td>
+        </tr>
+      </tbody>
+    </table>
+
+    <h3>8. Production Reality</h3>
+    <div class="grid-2">
+      <div class="card">
+        <h4>vLLM</h4>
+        <p>Supports AWQ, GPTQ, and SqueezeLLM quantization formats natively. The <code>--quantization awq</code> flag enables 4-bit inference with PagedAttention. vLLM's memory management integrates with quantized weight loading so the KV cache gets whatever VRAM remains.</p>
+      </div>
+      <div class="card">
+        <h4>llama.cpp</h4>
+        <p>The defacto standard for consumer-hardware inference. GGUF format with per-layer mixed precision. Runs Llama 3 70B Q4_K_M on 48GB+ VRAM or Mac Studio. Supports NVIDIA CUDA, Apple Metal, AMD ROCm, Vulkan, and pure CPU (AVX2/AVX-512/NEON).</p>
+      </div>
+      <div class="card">
+        <h4>HuggingFace TGI</h4>
+        <p>Supports GPTQ, AWQ, and bitsandbytes int8 through the <code>--quantize</code> flag. EETQ (Easy & Efficient Transformer Quantization) integration provides optimized int8 kernels. Flash Attention + quantization work together.</p>
+      </div>
+      <div class="card">
+        <h4>TensorRT-LLM</h4>
+        <p>NVIDIA's framework supports INT8 (post-training and SmoothQuant) and INT4 (AWQ, GPTQ) with custom CUDA kernels. Delivers the highest absolute throughput on A100/H100 — often 30%+ faster than vLLM for the same quantized model — but requires compilation.</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- ── VISUALIZATION ── -->
+  <section id="visualization">
+    <h2 class="section-title">Interactive Quantization Explorer</h2>
+    <p class="viz-desc">
+      Select a model and precision level to see how quantization affects VRAM usage, theoretical throughput, and quality. The bar chart shows a <strong>stacked memory breakdown</strong>. The GPU fit indicators show whether this configuration will run on common hardware tiers. <em>All estimates are approximate and based on published benchmarks.</em>
+    </p>
+
+    <div class="controls-row">
+      <div class="control-group">
+        <label>Model</label>
+        <select id="modelSelect">
+          <option value="llama3-8b">Llama 3 8B</option>
+          <option value="llama3-70b" selected>Llama 3 70B</option>
+          <option value="mixtral-8x7b">Mixtral 8×7B</option>
+        </select>
+      </div>
+    </div>
+
+    <div class="precision-btns" id="precisionBtns">
+      <button class="prec-btn" data-prec="fp16">fp16</button>
+      <button class="prec-btn" data-prec="int8">int8</button>
+      <button class="prec-btn active" data-prec="int4-awq">int4 (AWQ)</button>
+      <button class="prec-btn" data-prec="int4-gptq">int4 (GPTQ)</button>
+      <button class="prec-btn" data-prec="nf4">NF4</button>
+    </div>
+
+    <div class="stat-row">
+      <div class="stat-chip">
+        <span class="val val-accent" id="statVram">35.2 GB</span>
+        <div class="key">Total VRAM</div>
+      </div>
+      <div class="stat-chip">
+        <span class="val val-green" id="statThroughput">58 tok/s</span>
+        <div class="key">Est. Throughput (A100)</div>
+      </div>
+      <div class="stat-chip">
+        <span class="val val-yellow" id="statQuality">96.2%</span>
+        <div class="key">MMLU Score Preservation</div>
+      </div>
+      <div class="stat-chip">
+        <span class="val val-purple" id="statCompression">4.0×</span>
+        <div class="key">Compression vs fp16</div>
+      </div>
+    </div>
+
+    <div class="viz-canvas-wrap">
+      <canvas id="vramCanvas" width="1000" height="320"></canvas>
+    </div>
+
+    <h4 style="font-size:0.85rem;font-weight:600;color:var(--text-dim);text-transform:uppercase;letter-spacing:0.08em;margin-bottom:0.8rem;">Will it fit?</h4>
+    <div class="gpu-fit-grid" id="gpuFitGrid">
+      <!-- JS-populated -->
+    </div>
+  </section>
+
+  <!-- ── TAKEAWAYS ── -->
+  <section id="takeaways">
+    <h2 class="section-title">Key Takeaways</h2>
+    <ul>
+      <li><strong>Quantization is a memory-bandwidth optimization first, compute optimization second.</strong> The decode phase is memory-bandwidth-bound at real-world batch sizes. Quantization reduces the bytes-per-weight that must be streamed from HBM each token. The throughput ceiling scales linearly with compression ratio — int4 gives you ~4× the theoretical tok/s of fp16 on the same GPU, even ignoring compute savings from int4 matmuls.</li>
+      <li><strong>AWQ outperforms uniform int4 because it protects salient channels.</strong> Not all weight channels are equal: channels with high activation magnitudes contribute disproportionately to layer output. AWQ keeps ~1% of weights at fp16 (salient channels) and int4-quantizes the rest. GPTQ minimizes L2 error but ignores activation salience. In practice, AWQ-int4 and GPTQ-int4 are within 0.5–1% on MMLU for 70B models, but AWQ tends to handle outlier-heavy models (Mixtral, Llama 3) better.</li>
+      <li><strong>Uniform quantization hurts — outlier channels are the enemy.</strong> In transformer models, ~0.1% of hidden dimensions have activation magnitudes 10–100× larger than average. Uniform int8 quantization of these channels causes catastrophic errors. LLM.int8() solves this by keeping outlier columns in fp16; SmoothQuant solves it by migrating the outlier magnitude to adjacent weight channels. Either way, you must address outliers — they are not a corner case.</li>
+      <li><strong>int4 on 70B+ models is production-safe.</strong> Llama 3 70B int4 (AWQ) scores ~81.5% on MMLU vs ~83.5% at fp16 — a ~2% absolute drop. For most production applications (chat, summarization, RAG, code generation), this is imperceptible. The VRAM savings (140 GB → 35 GB, running on a single 48GB GPU instead of 2×A100s) are transformative. Below 8B parameters, int4 degrades more noticeably — stick with int8 for small models.</li>
+      <li><strong>The GGUF ecosystem makes consumer-hardware LLM deployment practical.</strong> llama.cpp's per-layer mixed precision (Q4_K_M: Q6 for attention, Q5 for FFN gates, Q4 for FFN downs) squeezes the most quality out of 4-bit budgets. It's not just for hobbyists — Mac Studios running llama.cpp serve production workloads at small-to-medium scale. The key numbers: 70B Q4_K_M at ~12 tok/s on Mac Studio 192GB; 8B Q4_K_M at ~40 tok/s on M2 Max. Offloading layers to GPU while keeping others on CPU RAM enables running larger models than VRAM alone would allow.</li>
+      <li><strong>NF4 + double quantization is the information-theoretic ideal for normally distributed weights.</strong> QLoRA's NormalFloat data type allocates quantization levels proportional to the probability mass of a standard normal distribution — it is provably optimal for Gaussian-distributed data. Combined with 8-bit double quantization of scaling factors, NF4 achieves ~4.5 effective bits/parameter (beating uniform int4's 4.0). For QLoRA finetuning, this means the base model fits in ~33 GB instead of ~35 GB for Llama 3 70B — small gap, but enough to matter on a 48GB GPU.</li>
+    </ul>
+  </section>
+
+</main>
+
+<nav class="concept-nav">
+  <a href="38-production-llm-serving.html" class="nav-link prev">
+    <span class="nav-dir">← Previous</span>
+    <span class="nav-title">Production LLM Serving</span>
+  </a>
+  <span class="nav-center">39 of 41 · Quantization for Inference</span>
+  <a href="40-kv-cache.html" class="nav-link next">
+    <span class="nav-dir">Next →</span>
+    <span class="nav-title">KV Cache Management</span>
+  </a>
+</nav>
+
+<script>
+(function() {
+  'use strict';
+
+  // ── Model definitions ──
+  const MODELS = {
+    'llama3-8b': {
+      name: 'Llama 3 8B',
+      params: 8.0,          // billions
+      hbm_bandwidth: 2039,  // GB/s (A100 80GB)
+      kvOverheadPerContext: 0.7, // GB per 4K context (GQA reduces this)
+      mmlu_fp16: 68.4,     // approximate MMLU score
+    },
+    'llama3-70b': {
+      name: 'Llama 3 70B',
+      params: 70.0,
+      hbm_bandwidth: 2039,
+      kvOverheadPerContext: 1.3,
+      mmlu_fp16: 83.5,
+    },
+    'mixtral-8x7b': {
+      name: 'Mixtral 8×7B',
+      params: 46.7,         // total params (all experts must be in memory)
+      hbm_bandwidth: 2039,
+      kvOverheadPerContext: 1.1,
+      mmlu_fp16: 70.6,
+    }
+  };
+
+  // ── Precision definitions ──
+  const PRECISIONS = {
+    'fp16': {
+      name: 'fp16',
+      bytesPerParam: 2.0,
+      color: '#00d4ff',
+      throughputFactor: 1.0,
+      qualityPreservation: 1.0,
+      label: 'fp16 (Baseline)',
+    },
+    'int8': {
+      name: 'int8',
+      bytesPerParam: 1.0,
+      color: '#ffd700',
+      throughputFactor: 1.7,
+      qualityPreservation: 0.994,
+      label: 'int8 (W8A8)',
+    },
+    'int4-awq': {
+      name: 'int4 (AWQ)',
+      bytesPerParam: 0.55,   // 0.5 for weights + 0.05 overhead for scaling factors
+      color: '#7c3aed',
+      throughputFactor: 3.5,
+      qualityPreservation: 0.962,
+      label: 'int4 (AWQ)',
+    },
+    'int4-gptq': {
+      name: 'int4 (GPTQ)',
+      bytesPerParam: 0.55,
+      color: '#ff9500',
+      throughputFactor: 3.5,
+      qualityPreservation: 0.958,
+      label: 'int4 (GPTQ)',
+    },
+    'nf4': {
+      name: 'NF4',
+      bytesPerParam: 0.56,   // 4-bit + double quantization overhead
+      color: '#00ff88',
+      throughputFactor: 3.3,
+      qualityPreservation: 0.960,
+      label: 'NF4 (QLoRA format)',
+    },
+  };
+
+  // ── GPU tiers ──
+  const GPU_TIERS = [
+    { name: 'A100 80GB',   vram: 80,  icon: '⬠' },
+    { name: 'A100 40GB',   vram: 40,  icon: '⬠' },
+    { name: 'RTX 4090 24GB', vram: 24, icon: '▣' },
+    { name: 'RTX 3090 24GB', vram: 24, icon: '▣' },
+    { name: 'Mac Studio 192GB', vram: 192, icon: '◆' },
+  ];
+
+  // ── State ──
+  let currentModel = 'llama3-70b';
+  let currentPrec  = 'int4-awq';
+
+  // ── DOM refs ──
+  const modelSelect   = document.getElementById('modelSelect');
+  const precisionBtns = document.getElementById('precisionBtns');
+  const vramCanvas    = document.getElementById('vramCanvas');
+  const statVram      = document.getElementById('statVram');
+  const statThroughput= document.getElementById('statThroughput');
+  const statQuality   = document.getElementById('statQuality');
+  const statCompression = document.getElementById('statCompression');
+  const gpuFitGrid    = document.getElementById('gpuFitGrid');
+
+  // ── Compute derived values ──
+  function compute(modelId, precId) {
+    const m = MODELS[modelId];
+    const p = PRECISIONS[precId];
+
+    const weightGB = m.params * p.bytesPerParam;
+    const kvGB = m.kvOverheadPerContext;
+    const overheadGB = weightGB * 0.08; // ~8% runtime overhead (activations, metadata)
+    const totalGB = weightGB + kvGB + overheadGB;
+
+    const fp16Weight = m.params * 2.0;
+    const fp16Total = fp16Weight + m.kvOverheadPerContext + fp16Weight * 0.08;
+
+    const ceilToks = m.hbm_bandwidth / weightGB; // weights-only theoretical ceiling
+    // In practice, get ~60% of theoretical due to compute and KV overhead
+    const practicalToks = Math.round(ceilToks * 0.58 * p.throughputFactor);
+
+    const qualityPct = (m.mmlu_fp16 * p.qualityPreservation).toFixed(1);
+    const qualityPreservationPct = (p.qualityPreservation * 100).toFixed(1);
+
+    const compression = fp16Total / totalGB;
+
+    return {
+      weightGB, kvGB, overheadGB, totalGB,
+      fp16Total,
+      practicalToks,
+      qualityPct,
+      qualityPreservationPct,
+      compression,
+      ceilToks,
+    };
+  }
+
+  // ── Draw VRAM bar chart on canvas ──
+  function drawViz() {
+    const canvas = vramCanvas;
+    const ctx = canvas.getContext('2d');
+    const dpr = window.devicePixelRatio || 1;
+
+    const rect = canvas.parentElement.getBoundingClientRect();
+    const w = rect.width - 32; // padding
+    const h = 320;
+
+    canvas.width = w * dpr;
+    canvas.height = h * dpr;
+    canvas.style.width = w + 'px';
+    canvas.style.height = h + 'px';
+    ctx.scale(dpr, dpr);
+
+    ctx.clearRect(0, 0, w, h);
+
+    const data = compute(currentModel, currentPrec);
+    const p = PRECISIONS[currentPrec];
+
+    const chartX = 40;
+    const chartY = 40;
+    const chartW = w - chartX - 30;
+    const chartH = h - chartY - 50;
+
+    // Max value for scale
+    const maxGB = Math.max(data.fp16Total * 1.2, 180);
+
+    // Draw Y axis grid lines
+    ctx.strokeStyle = 'rgba(37,42,61,0.5)';
+    ctx.lineWidth = 1;
+    const nGrid = 5;
+    for (let i = 0; i <= nGrid; i++) {
+      const y = chartY + (chartH / nGrid) * i;
+      ctx.beginPath();
+      ctx.moveTo(chartX, y);
+      ctx.lineTo(w - 30, y);
+      ctx.stroke();
+
+      const val = maxGB - (maxGB / nGrid) * i;
+      ctx.fillStyle = '#8892a4';
+      ctx.font = '11px "JetBrains Mono", monospace';
+      ctx.textAlign = 'right';
+      ctx.fillText(Math.round(val) + ' GB', chartX - 8, y + 4);
+    }
+
+    // Draw bars — side by side: fp16 reference and quantized
+    const barGroupW = chartW * 0.85;
+    const barW = Math.min(80, barGroupW * 0.25);
+    const barGap = barW * 0.8;
+    const startX = chartX + (chartW - (barW * 2 + barGap)) / 2;
+
+    // Helper: draw stacked bar
+    function drawStackedBar(x, totalGB, wBar, segments) {
+      let yOffset = 0;
+      for (const seg of segments) {
+        const segH = (seg.gb / maxGB) * chartH;
+        const segY = chartY + chartH - yOffset - segH;
+        ctx.fillStyle = seg.color;
+        ctx.fillRect(x, segY, wBar, segH);
+
+        // Label if big enough
+        if (segH > 22) {
+          ctx.fillStyle = '#0d0f17';
+          ctx.font = 'bold 11px "JetBrains Mono", monospace';
+          ctx.textAlign = 'center';
+          ctx.fillText(seg.gb.toFixed(1) + 'G', x + wBar / 2, segY + segH / 2 + 4);
+        }
+        yOffset += segH;
+      }
+      // Total label above
+      ctx.fillStyle = '#e2e8f0';
+      ctx.font = 'bold 11px "JetBrains Mono", monospace';
+      ctx.textAlign = 'center';
+      ctx.fillText(totalGB.toFixed(1) + ' GB', x + wBar / 2, chartY + chartH - yOffset - 6);
+    }
+
+    // fp16 bar
+    const fp16Segs = [
+      { gb: MODELS[currentModel].params * 2.0, color: 'rgba(0,212,255,0.4)', label: 'Weights fp16' },
+      { gb: MODELS[currentModel].kvOverheadPerContext, color: 'rgba(255,149,0,0.5)', label: 'KV Cache' },
+      { gb: MODELS[currentModel].params * 2.0 * 0.08, color: 'rgba(136,146,164,0.3)', label: 'Overhead' },
+    ];
+    drawStackedBar(startX, data.fp16Total, barW, fp16Segs);
+
+    // Label under fp16 bar
+    ctx.fillStyle = '#8892a4';
+    ctx.font = '10px "JetBrains Mono", monospace';
+    ctx.textAlign = 'center';
+    ctx.fillText('fp16', startX + barW / 2, chartY + chartH + 16);
+
+    // Quantized bar
+    const qSegs = [
+      { gb: data.weightGB, color: p.color, label: 'Weights ' + p.name },
+      { gb: data.kvGB, color: 'rgba(255,149,0,0.5)', label: 'KV Cache' },
+      { gb: data.overheadGB, color: 'rgba(136,146,164,0.3)', label: 'Overhead' },
+    ];
+    drawStackedBar(startX + barW + barGap, data.totalGB, barW, qSegs);
+
+    // Label under quantized bar
+    ctx.fillStyle = p.color;
+    ctx.font = 'bold 10px "JetBrains Mono", monospace';
+    ctx.textAlign = 'center';
+    ctx.fillText(p.name, startX + barW + barGap + barW / 2, chartY + chartH + 16);
+
+    // Legend
+    const legendY = chartY + chartH + 34;
+    const legendItems = [
+      { label: 'Weights', color: p.color },
+      { label: 'KV Cache', color: 'rgba(255,149,0,0.7)' },
+      { label: 'Overhead', color: 'rgba(136,146,164,0.5)' },
+    ];
+    let legendX = startX;
+    ctx.font = '10px Inter, sans-serif';
+    for (const item of legendItems) {
+      ctx.fillStyle = item.color;
+      ctx.fillRect(legendX, legendY - 8, 12, 12);
+      ctx.fillStyle = '#8892a4';
+      ctx.textAlign = 'left';
+      ctx.fillText(item.label, legendX + 16, legendY + 3);
+      legendX += ctx.measureText(item.label).width + 36;
+    }
+
+    // Arrow between bars showing compression
+    const arrowX = startX + barW + barGap / 2;
+    const arrowY = chartY + chartH + 28;
+    ctx.fillStyle = '#ffd700';
+    ctx.font = 'bold 14px Inter, sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText('→ ' + data.compression.toFixed(1) + '× smaller', arrowX, arrowY);
+  }
+
+  // ── Update stats and UI ──
+  function updateUI() {
+    const data = compute(currentModel, currentPrec);
+    const p = PRECISIONS[currentPrec];
+
+    statVram.textContent = data.totalGB.toFixed(1) + ' GB';
+    statVram.className = 'val val-accent';
+
+    statThroughput.textContent = '~' + data.practicalToks + ' tok/s';
+    statThroughput.className = 'val val-green';
+
+    statQuality.textContent = data.qualityPreservationPct + '%';
+    statQuality.className = 'val val-yellow';
+
+    statCompression.textContent = data.compression.toFixed(1) + '×';
+    statCompression.className = 'val val-purple';
+
+    // GPU fit grid
+    gpuFitGrid.innerHTML = '';
+    for (const gpu of GPU_TIERS) {
+      const fits = data.totalGB <= gpu.vram;
+      const card = document.createElement('div');
+      card.className = 'gpu-card ' + (fits ? 'fits' : 'no-fit');
+      card.innerHTML = `
+        <div class="gpu-name">${gpu.icon} ${gpu.name}</div>
+        <div class="gpu-vram">${gpu.vram} GB</div>
+        <div class="gpu-status">${fits ? 'FITS ✓' : 'NO FIT ✗'}</div>
+      `;
+      gpuFitGrid.appendChild(card);
+    }
+
+    drawViz();
+  }
+
+  // ── Event handlers ──
+  modelSelect.addEventListener('change', function() {
+    currentModel = this.value;
+    updateUI();
+  });
+
+  precisionBtns.addEventListener('click', function(e) {
+    const btn = e.target.closest('.prec-btn');
+    if (!btn) return;
+    const prec = btn.getAttribute('data-prec');
+    if (!prec) return;
+
+    currentPrec = prec;
+    // Update active state
+    document.querySelectorAll('.prec-btn').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    updateUI();
+  });
+
+  // ── Resize handler ──
+  let resizeTimeout;
+  window.addEventListener('resize', function() {
+    clearTimeout(resizeTimeout);
+    resizeTimeout = setTimeout(drawViz, 150);
+  });
+
+  // ── Init ──
+  updateUI();
+
+})();
+</script>
+
+</body>
+</html>

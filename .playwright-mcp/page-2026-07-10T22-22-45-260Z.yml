@@ -1,0 +1,208 @@
+- generic [active] [ref=f13e1]:
+  - banner [ref=f13e2]:
+    - generic [ref=f13e3]: Inference
+    - heading "Flash Attention" [level=1] [ref=f13e4]
+    - paragraph [ref=f13e5]: How tiled attention keeps computation in SRAM to avoid materializing the full N×N attention matrix in HBM — 2–4× speedup, O(N) memory, mathematically identical output to standard attention. Dao et al., 2022.
+  - main [ref=f13e6]:
+    - generic [ref=f13e7]:
+      - heading "Theory" [level=2] [ref=f13e8]
+      - 'heading "The Problem: HBM Is Slow" [level=3] [ref=f13e9]'
+      - paragraph [ref=f13e10]:
+        - text: Modern GPUs are compute monsters with a critical weakness. An NVIDIA A100 delivers
+        - strong [ref=f13e11]: 312 TFLOPS
+        - text: (FP16 tensor core) but only
+        - strong [ref=f13e12]: 2 TB/s
+        - text: of HBM bandwidth. That's an arithmetic-intensity threshold of roughly 156 FLOPs per byte — if an operation does less compute per byte than this, the GPU stalls waiting for memory.
+      - paragraph [ref=f13e13]:
+        - text: Standard scaled dot-product attention is brutally memory-bound. For sequence length N, computing
+        - code [ref=f13e14]: S = QK^T
+        - text: "produces an N×N matrix. With N=8192 and fp16: that's 67 million elements ="
+        - strong [ref=f13e15]: 134 MB per head per layer
+        - text: . With 32 heads across 80 transformer layers, the raw attention matrix materialization would consume hundreds of gigabytes of HBM traffic — per forward pass. The GPU spends most of its time moving data between HBM and compute, not actually computing.
+      - generic [ref=f13e16]:
+        - generic [ref=f13e17]:
+          - heading "A100 HBM (High Bandwidth Memory)" [level=4] [ref=f13e18]
+          - paragraph [ref=f13e19]: 80 GB capacity | 2 TB/s bandwidth | Off-chip, far from compute cores
+        - generic [ref=f13e20]:
+          - heading "A100 SRAM (On-Chip)" [level=4] [ref=f13e21]
+          - paragraph [ref=f13e22]: 192 KB per SM | 19 TB/s bandwidth | 9.5× faster than HBM, but only ~20 MB total across 108 SMs
+        - generic [ref=f13e23]:
+          - heading "The Arithmetic-Intensity Gap" [level=4] [ref=f13e24]
+          - paragraph [ref=f13e25]: "Attention: ~3 FLOPs/byte — far below the 156 needed to saturate A100. Standard attention is memory-bound by design."
+      - 'heading "The Key Insight: SRAM Is Tiny But Blazing Fast" [level=3] [ref=f13e26]'
+      - paragraph [ref=f13e27]:
+        - text: GPU on-chip SRAM runs at 19 TB/s — roughly
+        - strong [ref=f13e28]: 9.5× faster
+        - text: "than HBM. The problem is size: each SM on an A100 has just 192 KB of SRAM (total on-chip SRAM across 108 SMs is ~20 MB). For an N=8192 attention matrix (134 MB), the full N×N matrix cannot fit in SRAM even if you dedicated"
+        - emphasis [ref=f13e29]: all
+        - text: of it to a single attention head.
+      - paragraph [ref=f13e30]:
+        - text: "The critical question that Flash Attention (Dao et al., 2022) answers:"
+        - strong [ref=f13e31]: can we compute softmax(QK^T/sqrt(d)) × V without ever writing the full N×N intermediate matrix to HBM?
+        - text: The answer is yes — through tiling and online softmax.
+      - heading "The Tiling Algorithm" [level=3] [ref=f13e32]
+      - paragraph [ref=f13e33]: "Flash Attention breaks the Q, K, V matrices into blocks that fit in SRAM. Instead of materializing the entire S = QK^T matrix at once:"
+      - list [ref=f13e34]:
+        - listitem [ref=f13e35]:
+          - strong [ref=f13e36]: "Outer loop over Q blocks:"
+          - text: Load one block of Q (size B_r × d) from HBM into SRAM.
+        - listitem [ref=f13e37]:
+          - strong [ref=f13e38]: "Inner loop over K/V blocks:"
+          - text: For each K/V block (size B_c × d), load it into SRAM, compute the local attention scores S_ij = Q_i K_j^T, apply softmax numerically stably using
+          - strong [ref=f13e39]: online softmax
+          - text: ", multiply by V_j, and accumulate into the output O_i."
+        - listitem [ref=f13e40]:
+          - strong [ref=f13e41]: "Write output only:"
+          - text: After processing all K/V blocks for a given Q block, write the final O_i block to HBM. The full N×N attention matrix is
+          - emphasis [ref=f13e42]: never materialized anywhere
+          - text: — not in HBM, not in SRAM.
+      - 'heading "Online Softmax: The Numerical Trick" [level=3] [ref=f13e43]'
+      - paragraph [ref=f13e44]:
+        - text: "Standard softmax requires two passes over the data: one to find the maximum (for numerical stability via"
+        - code [ref=f13e45]: exp(x_i - max)
+        - text: ) and one to compute the sum. In a tiled setting, you don't have all scores at once — you see them block by block. Online softmax maintains a running maximum
+        - code [ref=f13e46]: m
+        - text: and a running sum
+        - code [ref=f13e47]: l
+        - text: ":"
+      - generic [ref=f13e48]: "For each new block with scores s: m_new = max(m_old, max(s)) l_new = exp(m_old - m_new) * l_old + sum(exp(s - m_new)) O_new = exp(m_old - m_new) * O_old + exp(s - m_new) * V_block Final output: O = O_final / l_final"
+      - paragraph [ref=f13e49]:
+        - text: This produces
+        - strong [ref=f13e50]: mathematically identical output
+        - text: to standard two-pass softmax. Flash Attention is not an approximation — unlike quantization or pruning, there is zero quality tradeoff. The output tensor is bit-identical to the naive implementation (or within floating-point rounding).
+      - heading "Recomputation for the Backward Pass" [level=3] [ref=f13e51]
+      - paragraph [ref=f13e52]:
+        - text: During training, the backward pass needs the attention weights (or equivalent information) to compute gradients. Storing all attention weights for all heads and layers would be memory-prohibitive. Flash Attention solves this by
+        - strong [ref=f13e53]: recomputing
+        - text: the attention scores during the backward pass, rather than caching them from the forward pass. Since the forward pass was SRAM-optimized and the backward pass can reuse the same tiling pattern with recomputation, the total memory for both passes remains O(N).
+      - 'heading "FlashAttention-2 (2023): Better Work Partitioning" [level=3] [ref=f13e54]'
+      - paragraph [ref=f13e55]: "FA2 improved the real-world efficiency of FA1 by ~2× through better CUDA-level engineering:"
+      - list [ref=f13e56]:
+        - listitem [ref=f13e57]:
+          - strong [ref=f13e58]: "Reduced non-matmul FLOPs:"
+          - text: The softmax and rescaling operations (which don't use tensor cores) were better parallelized across thread blocks.
+        - listitem [ref=f13e59]:
+          - strong [ref=f13e60]: "Forward pass parallelism:"
+          - text: Switched from parallelizing over Q blocks to parallelizing over both batch and head dimensions simultaneously, reducing the sequential inner loop and improving occupancy.
+        - listitem [ref=f13e61]:
+          - strong [ref=f13e62]: "Better warp scheduling:"
+          - text: Tighter pipelining of HBM loads and SRAM computations — overlapping data transfer with compute.
+      - 'heading "FlashAttention-3 (2024): Hopper-Native" [level=3] [ref=f13e63]'
+      - paragraph [ref=f13e64]: "FA3 exploits NVIDIA Hopper (H100) architecture features that FA1/FA2 couldn't use:"
+      - list [ref=f13e65]:
+        - listitem [ref=f13e66]:
+          - strong [ref=f13e67]: "WGMMA (Warp-Group Matrix Multiply-Accumulate):"
+          - text: Asynchronous tensor core instructions that let different warp groups compute matmuls while others handle data movement — true async compute.
+        - listitem [ref=f13e68]:
+          - strong [ref=f13e69]: "TMA (Tensor Memory Accelerator):"
+          - text: Hardware unit for async data movement between HBM and SMEM. Frees up CUDA cores that would otherwise wait on data loads.
+        - listitem [ref=f13e70]:
+          - strong [ref=f13e71]: "Results:"
+          - text: 740 TFLOPS on H100 —
+          - strong [ref=f13e72]: 75% of theoretical peak
+          - text: ". FA2 on H100 hit ~35% utilization. This is a systems engineering masterclass: squeezing more from hardware by restructuring how work is dispatched, not by changing the math."
+      - heading "When Flash Attention Helps (And When It Doesn't)" [level=3] [ref=f13e73]
+      - paragraph [ref=f13e74]:
+        - text: Flash Attention delivers 2–4× speedup on
+        - strong [ref=f13e75]: prefill
+        - text: — the phase where the model processes a long prompt in one parallel forward pass. The N×N matrix is materialized in standard attention, and FA eliminates that HBM traffic. Below N=512, the SRAM tiling overhead dominates and the benefit is negligible. For
+        - strong [ref=f13e76]: single-token decode
+        - text: (autoregressive generation), the attention matrix is 1×N (current token attending to all previous keys) — not N×N — so the memory savings are minimal. Flash Attention does not significantly accelerate token-by-token decoding.
+      - paragraph [ref=f13e77]:
+        - text: Flash Attention is also heavily beneficial during
+        - strong [ref=f13e78]: training
+        - text: ", where the backward pass's recomputation strategy (avoiding storing attention weights) dramatically reduces peak memory. This enabled training on longer sequences that were previously impossible."
+      - heading "Adoption and Ecosystem" [level=3] [ref=f13e79]
+      - paragraph [ref=f13e80]:
+        - text: PyTorch 2.0 integrated Flash Attention as the default backend for
+        - code [ref=f13e81]: torch.nn.functional.scaled_dot_product_attention
+        - text: "— meaning millions of PyTorch programs got FA automatically with no code changes. Every major framework supports it: HuggingFace Transformers, vLLM, TGI (Text Generation Inference), TensorRT-LLM, SGLang, and llama.cpp. On the A100, you get FA2; on the H100, FA3 is the optimal choice. The"
+        - code [ref=f13e82]: flash_attn
+        - text: Python package from Dao-AILab provides the canonical implementation.
+    - generic [ref=f13e83]:
+      - heading "Interactive Visualization" [level=2] [ref=f13e84]
+      - paragraph [ref=f13e85]:
+        - text: Animated side-by-side comparison of
+        - strong [ref=f13e86]: Standard Attention
+        - text: (materializes full N×N matrix in HBM, O(N²) memory) vs
+        - strong [ref=f13e87]: Flash Attention
+        - text: (tiled blocks computed in SRAM, O(N) memory). The left panel shows HBM reads/writes; the right panel shows SRAM block streaming. Use the controls to adjust sequence length and toggle FA versions.
+      - generic [ref=f13e88]:
+        - generic [ref=f13e89]:
+          - generic [ref=f13e90]: Sequence Length N 512
+          - slider [ref=f13e91] [cursor=pointer]: "512"
+        - generic [ref=f13e92]:
+          - generic [ref=f13e93]: Head Dim 64
+          - slider [ref=f13e94] [cursor=pointer]: "64"
+        - generic [ref=f13e95]:
+          - generic [ref=f13e96]: FA Version FA2
+          - combobox [ref=f13e97]:
+            - option "FA1 (2022) — Basic tiling"
+            - option "FA2 (2023) — 2× faster work partitioning" [selected]
+            - option "FA3 (2024) — Hopper WGMMA + TMA"
+      - generic [ref=f13e98]:
+        - button "▶ Play Animation" [ref=f13e99] [cursor=pointer]
+        - button "⏸ Pause" [ref=f13e100] [cursor=pointer]
+        - button "Step" [ref=f13e101] [cursor=pointer]
+        - button "Reset" [ref=f13e102] [cursor=pointer]
+      - generic [ref=f13e103]:
+        - generic [ref=f13e104]: Q matrix (rows)
+        - generic [ref=f13e106]: K matrix (cols)
+        - generic [ref=f13e108]: Attention scores S = QK^T
+        - generic [ref=f13e110]: Output O = softmax(S) × V
+        - generic [ref=f13e112]: SRAM block (active)
+      - generic [ref=f13e116]:
+        - generic [ref=f13e117]:
+          - generic [ref=f13e118]: "0.5"
+          - generic [ref=f13e119]: "Standard: HBM Peak (MB)"
+        - generic [ref=f13e120]:
+          - generic [ref=f13e121]: "0.02"
+          - generic [ref=f13e122]: "Flash Attn: HBM Peak (MB)"
+        - generic [ref=f13e123]:
+          - generic [ref=f13e124]: "1.3"
+          - generic [ref=f13e125]: "Standard: HBM R/W (MB)"
+        - generic [ref=f13e126]:
+          - generic [ref=f13e127]: "0.3"
+          - generic [ref=f13e128]: "Flash Attn: HBM R/W (MB)"
+        - generic [ref=f13e129]:
+          - generic [ref=f13e130]: 5×
+          - generic [ref=f13e131]: Est. Speedup
+    - generic [ref=f13e132]:
+      - heading "Key Takeaways" [level=2] [ref=f13e133]
+      - list [ref=f13e134]:
+        - listitem [ref=f13e135]:
+          - text: →
+          - strong [ref=f13e136]: "Mathematically identical output — zero quality tradeoff:"
+          - text: Flash Attention is a pure systems optimization. Unlike quantization, pruning, or speculative decoding, it produces the exact same attention output. Online softmax is numerically stable and equivalent to the two-pass naive softmax. You can adopt it with zero model quality risk.
+        - listitem [ref=f13e137]:
+          - text: →
+          - strong [ref=f13e138]: "Prefill speeds up 2–4×; decode sees almost nothing:"
+          - text: The N×N attention matrix only appears during prefill (parallel processing of the input prompt). During autoregressive decode, attention is 1×N — the matrix is a single row, so the memory savings are negligible. Flash Attention is a prefill + training optimization, not a decode accelerator.
+        - listitem [ref=f13e139]:
+          - text: →
+          - strong [ref=f13e140]: "Below N=512, the tiling overhead dominates:"
+          - text: Flash Attention's SRAM block management has fixed overhead. For very short sequences (< 512 tokens), standard attention with fused kernels often wins. Production serving systems like vLLM dynamically select the backend based on sequence length — FA for prefill, standard for very short prompts.
+        - listitem [ref=f13e141]:
+          - text: →
+          - strong [ref=f13e142]: "PyTorch 2.0 made it a default:"
+          - code [ref=f13e143]: scaled_dot_product_attention
+          - text: in PyTorch 2.0+ auto-selects Flash Attention when the input shapes and hardware support it. Every HuggingFace model using this function gets FA automatically. The
+          - code [ref=f13e144]: flash_attn
+          - text: package from Dao-AILab gives you the standalone implementation for custom attention patterns.
+        - listitem [ref=f13e145]:
+          - text: →
+          - strong [ref=f13e146]: "FA3 on H100 is a different beast:"
+          - text: FlashAttention-3 exploits Hopper-specific features (WGMMA, TMA) that don't exist on A100. It achieves 740 TFLOPS — 75% of H100's theoretical peak — by overlapping async tensor core operations with data movement. On A100s, FA2 is the ceiling. If you're running on H100 GPUs, benchmark FA3 explicitly — the gap vs FA2 is significant at long context.
+        - listitem [ref=f13e147]:
+          - text: →
+          - strong [ref=f13e148]: "Training benefits are arguably larger than inference:"
+          - text: Recomputation in the backward pass means Flash Attention avoids storing the N×N attention matrix for gradient computation. For a 65B model training on 2048-token sequences, this saves ~40 GB of activation memory per GPU — enabling larger batch sizes and longer context windows that were previously impossible. Long-context training (32k, 128k tokens) is practical because of Flash Attention.
+  - navigation [ref=f13e149]:
+    - link "← Previous KV Cache Management" [ref=f13e150] [cursor=pointer]:
+      - /url: 40-kv-cache.html
+      - generic [ref=f13e151]: ← Previous
+      - generic [ref=f13e152]: KV Cache Management
+    - generic [ref=f13e153]: 41 of 41 · Flash Attention
+    - generic:
+      - generic: Next →
+      - generic: (End of Series)

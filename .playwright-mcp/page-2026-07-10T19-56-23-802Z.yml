@@ -1,0 +1,212 @@
+- generic [active] [ref=e1]:
+  - banner [ref=e2]:
+    - generic [ref=e3]: Agents
+    - heading "Agent Observability" [level=1] [ref=e4]
+    - paragraph [ref=e5]: Tracing, monitoring, and debugging multi-step agent runs — why console.log doesn't scale past 5 steps, the three pillars of observability, and the tools and metrics that matter in production.
+  - main [ref=e6]:
+    - generic [ref=e7]:
+      - heading "Theory" [level=2] [ref=e8]
+      - paragraph [ref=e9]:
+        - text: Agent observability is more than LLM monitoring. A standard LLM call is a single request-response pair — you log the prompt, the completion, and the latency, and you're done. An agent run spans
+        - strong [ref=e10]: multiple LLM calls
+        - text: ","
+        - strong [ref=e11]: multiple tool invocations
+        - text: ", and a"
+        - strong [ref=e12]: branching decision tree
+        - text: where each step's output becomes the next step's input. When a 20-step agent run fails on step 17 because of a hallucinated tool argument injected at step 9 and a truncated observation at step 13, you cannot debug that with unstructured logs. You need purpose-built observability infrastructure.
+      - heading "Why Agent Observability Is Hard" [level=3] [ref=e13]
+      - paragraph [ref=e14]: "Three properties make agents uniquely hard to observe, compared to either traditional microservices or single-turn LLMs:"
+      - list [ref=e15]:
+        - listitem [ref=e16]:
+          - strong [ref=e17]: "Non-determinism:"
+          - text: The same prompt produces different outputs across calls. Two runs of the same agent on the same task can take different paths — different tool calls, different reasoning traces — and both succeed. This means comparing runs requires semantic comparison, not just diffing outputs.
+        - listitem [ref=e18]:
+          - strong [ref=e19]: "Long-horizon cascading failures:"
+          - text: A small error early in a run (bad retrieval result, slightly wrong tool argument) can cascade across subsequent steps. By the time the agent produces a wrong final answer, the root cause is 10 steps back. Without a trace of every intermediate state, debugging is guesswork.
+        - listitem [ref=e20]:
+          - strong [ref=e21]: "External tool unreliability:"
+          - text: Unlike an LLM inference which fails deterministically (timeout, rate limit, bad request), tool calls fail in non-deterministic ways — API flakiness, empty search results, permission errors, malformed responses. The agent's ability to recover from these failures is part of what you need to measure, not just log.
+      - generic [ref=e22]:
+        - strong [ref=e23]: "The console.log trap:"
+        - text: Many teams start by logging agent steps with print statements or unstructured JSON blobs. This works for 3–5 step demos. At 20+ steps in production, you have hundreds of log lines per run, no way to correlate across steps, and no way to search for "all runs where the web_search tool returned empty results." Structured tracing with trace IDs is not optional — it's the difference between a 5-minute investigation and a multi-hour firefight.
+      - heading "The Three Pillars of Observability" [level=3] [ref=e24]
+      - paragraph [ref=e25]: "Borrowed from distributed systems observability but adapted for agent workloads:"
+      - generic [ref=e26]:
+        - generic [ref=e27]:
+          - generic [ref=e28]: 🔍
+          - generic [ref=e29]: Tracing (Per-Run)
+          - paragraph [ref=e30]:
+            - text: "Capture the full execution graph of a single agent run: every LLM call, tool invocation, and intermediate reasoning step. Assign a unique"
+            - code [ref=e31]: trace_id
+            - text: per run. This is what you use to debug "why did this specific run fail?"
+        - generic [ref=e32]:
+          - generic [ref=e33]: 📊
+          - generic [ref=e34]: Monitoring (Aggregate)
+          - paragraph [ref=e35]: "Roll up traces into aggregate metrics: p50/p95/p99 latency, tool success rate, token cost per run, step count distribution, error rate by tool type. This is what tells you \"something changed after the last deploy\" before users notice."
+        - generic [ref=e36]:
+          - generic [ref=e37]: 🧪
+          - generic [ref=e38]: Evaluation (Offline)
+          - paragraph [ref=e39]: Run the same agent against a fixed benchmark repeatedly, capturing traces to compare performance across model versions, prompt changes, or tool configuration tweaks. This is regression testing for agents — does the new prompt improve accuracy without increasing cost?
+      - heading "What to Trace — The Minimum Viable Span" [level=3] [ref=e40]
+      - paragraph [ref=e41]:
+        - text: Every agent run should emit structured spans at these granularities. At minimum, each span carries a
+        - code [ref=e42]: trace_id
+        - text: ","
+        - code [ref=e43]: span_id
+        - text: ", parent"
+        - code [ref=e44]: span_id
+        - text: ", timestamp, and duration:"
+      - table [ref=e45]:
+        - rowgroup [ref=e46]:
+          - row [ref=e47]:
+            - columnheader "Span Type" [ref=e48]
+            - columnheader "Key Fields" [ref=e49]
+            - columnheader "Why It Matters" [ref=e50]
+        - rowgroup [ref=e51]:
+          - row [ref=e52]:
+            - cell "LLM Call" [ref=e53]
+            - cell "model, prompt (or hash), response, input_tokens, output_tokens, latency_ms, finish_reason" [ref=e55]
+            - cell "Token cost attribution and model performance regression detection. A sudden increase in average tokens per call signals prompt drift or a model routing issue." [ref=e56]
+          - row [ref=e57]:
+            - cell "Tool Invocation" [ref=e58]
+            - cell "tool_name, args, result (truncated), error, duration_ms, retry_count" [ref=e60]
+            - cell "Tool failure rate is the leading indicator of agent reliability. Track per-tool error rates separately — a 2% failure rate on web_search and a 30% rate on sql_query require different responses." [ref=e61]
+          - row [ref=e62]:
+            - cell "Agent Turn" [ref=e63]
+            - cell "step_index, phase (plan/act/observe), action, reasoning_summary" [ref=e65]
+            - cell "Step count is a leading cost indicator. A prompt change that adds 3 extra reasoning steps per run increases cost by 30%+ — you need per-step visibility to catch this." [ref=e66]
+          - row [ref=e67]:
+            - cell "Session" [ref=e68]
+            - cell "trace_id, user_id, total_steps, total_tokens, total_cost, final_status (success/timeout/error/user_abort)" [ref=e70]
+            - 'cell "Session-level aggregates power business metrics: cost per user, success rate per task type, average time-to-completion." [ref=e71]'
+      - heading "Key Metrics to Track" [level=3] [ref=e72]
+      - paragraph [ref=e73]: "What you measure determines what you optimize. The following metrics should be on any production agent dashboard:"
+      - list [ref=e74]:
+        - listitem [ref=e75]:
+          - strong [ref=e76]: "Time-to-completion (TTC):"
+          - text: Wall-clock time from user input to final answer. Break down into LLM time vs. tool execution time — they have different scaling properties. Tool parallelism is the primary lever for reducing TTC.
+        - listitem [ref=e77]:
+          - strong [ref=e78]: "Token cost per run:"
+          - text: Sum of input + output tokens across all LLM calls in a run multiplied by model pricing. At GPT-4 prices ($5/1M input, $15/1M output), a 10-step agent averaging 2K input + 500 output tokens per call costs roughly $0.13/run in input + $0.075/run in output = ~$0.20/run. At 50K runs/day this is $10K/day.
+        - listitem [ref=e79]:
+          - strong [ref=e80]: "Tool call success rate:"
+          - text: Percentage of tool invocations that return successfully (no error, non-empty result where expected). A rapid decline in a specific tool's success rate usually means an upstream API change or rate limiting.
+        - listitem [ref=e81]:
+          - strong [ref=e82]: "Step count distribution:"
+          - text: Histogram of steps per run. A long tail of runs requiring many steps often signals poor planning or ambiguous instructions — the agent keeps trying things that don't work. Cap it with a
+          - code [ref=e83]: max_steps
+          - text: ", but monitor how often you hit the cap."
+        - listitem [ref=e84]:
+          - strong [ref=e85]: "User intervention rate:"
+          - text: Percentage of runs where the user interrupts, asks for clarification, or rejects the agent's action. This is your best real-time signal for agent quality — lower is almost always better (except in high-stakes domains where confirmations are designed-in).
+      - heading "Tools and Ecosystem" [level=3] [ref=e86]
+      - paragraph [ref=e87]: "The agent observability tooling ecosystem has matured rapidly. The major players:"
+      - list [ref=e88]:
+        - listitem [ref=e89]:
+          - strong [ref=e90]: LangSmith
+          - text: "(LangChain): The most mature agent-specific tracing platform. Captures full traces with LLM calls, tool invocations, and chain steps automatically when using LangChain/LangGraph. Supports dataset creation from production traces for offline evaluation. Free tier for development; paid at scale."
+        - listitem [ref=e91]:
+          - strong [ref=e92]: Langfuse
+          - text: ": Open-source alternative to LangSmith. Self-hostable, with a managed cloud option. Supports OpenTelemetry-native ingestion, which makes it easier to integrate with existing observability stacks (Datadog, Grafana). Strong on cost analytics — per-user, per-model, per-session cost breakdowns."
+        - listitem [ref=e93]:
+          - strong [ref=e94]: Phoenix (Arize)
+          - text: ": Open-source, focused on embedding-based analysis. Useful for RAG-heavy agents because it can visualize embedding drift and retrieval quality over time, not just text-based traces."
+        - listitem [ref=e95]:
+          - strong [ref=e96]: Weights & Biases
+          - text: ": Strong for model-level tracking (training runs, prompt experiments) but increasingly used for agent evaluation pipelines via Weave."
+        - listitem [ref=e97]:
+          - strong [ref=e98]: OpenTelemetry
+          - text: ": The emerging standard for agent span emission. Both Langfuse and LangSmith support OTel ingestion. If you're building custom agent infrastructure (not using a framework), emit OTel spans directly — don't invent a custom format."
+      - heading "Production Patterns" [level=3] [ref=e99]
+      - paragraph [ref=e100]: "Beyond basic tracing, production-grade observability requires several patterns that go beyond what off-the-shelf tools provide out of the box:"
+      - list [ref=e101]:
+        - listitem [ref=e102]:
+          - strong [ref=e103]: "Sampling:"
+          - text: Not every run needs a full trace. For high-volume agents (100K+ runs/day), trace everything at the session level (cost, status, step count) but only capture full LLM/tool spans for a sample — 100% of errors, 10% of successes, or adaptive sampling based on anomaly scores. Full tracing at scale is cost-prohibitive — storing every token of every run can exceed the cost of running the agent itself.
+        - listitem [ref=e104]:
+          - strong [ref=e105]: "Context window monitoring:"
+          - text: Track how close each LLM call is to the model's context limit. If calls routinely approach 90%+ of the context window, older messages are being silently truncated. Emit a warning span when context utilization crosses 80% — this is a leading indicator of "the agent is forgetting things."
+        - listitem [ref=e106]:
+          - strong [ref=e107]: "Cost anomaly detection:"
+          - text: A simple moving average of cost per run, with alerting on 2σ deviation. An agent that normally costs $0.20/run suddenly costing $1.50/run usually means a prompt change increased step count, a model routing bug fell back to a more expensive model, or a tool started returning bloated responses.
+        - listitem [ref=e108]:
+          - strong [ref=e109]: "Replay debugging:"
+          - text: The gold standard for debugging agent failures. Capture the exact inputs and outputs of every LLM call in a run, serialize them, and build a replayer that can re-execute the agent deterministically by substituting stored LLM responses. This lets you step through a failed run like a debugger — inspecting state at each step, modifying tool results, and re-running to verify fixes. Without this, you're debugging with incomplete information.
+        - listitem [ref=e110]:
+          - strong [ref=e111]: "Prompt versioning in traces:"
+          - text: Every LLM call span should include a
+          - code [ref=e112]: prompt_template_id
+          - text: or hash. When you change a system prompt between deploys, you need to be able to filter traces by prompt version to compare before/after metrics. Without this, prompt experiments are uninterpretable.
+      - generic [ref=e113]:
+        - strong [ref=e114]: "Start simple, add depth as you scale:"
+        - text: "For a new agent in production, the minimum viable observability is: (1) structured JSON logs with trace_id per run, (2) a dashboard showing run count, error rate, and p95 latency, (3) an alert on error rate > 5%. That's it. Add full span tracing, replay debugging, and cost attribution when you have enough volume to justify the engineering investment. The biggest mistake is overbuilding observability before you know what failure modes actually occur."
+    - generic [ref=e115]:
+      - 'heading "Visualization: Agent Trace Viewer" [level=2] [ref=e116]'
+      - paragraph [ref=e117]:
+        - text: Explore a simulated 12-step agent trace. Each row is a span — an LLM call or tool invocation.
+        - strong [ref=e118]: Click any span to inspect its details
+        - text: "(prompt snippet, tokens, latency, cost). Use the buttons to step through or replay the trace with animation. The running cost bar updates as spans complete. Color coding: cyan = LLM call, green = successful tool call, red = tool error, orange = tool retry, yellow = warning."
+      - generic [ref=e119]:
+        - generic [ref=e120]:
+          - generic [ref=e121]: "Trace:"
+          - generic [ref=e122]: run-7a3f
+        - generic [ref=e123]:
+          - generic [ref=e124]: "Steps:"
+          - generic [ref=e125]: 0 / 12
+        - generic [ref=e126]:
+          - generic [ref=e127]: "Input tokens:"
+          - generic [ref=e128]: "0"
+        - generic [ref=e129]:
+          - generic [ref=e130]: "Output tokens:"
+          - generic [ref=e131]: "0"
+        - generic [ref=e132]:
+          - generic [ref=e133]: "Cost:"
+          - generic [ref=e134]: $0.000
+      - generic [ref=e135]:
+        - button "▶ Step Once" [ref=e136] [cursor=pointer]
+        - button "⟳ Auto Replay" [ref=e137] [cursor=pointer]
+        - button "↺ Reset" [ref=e138] [cursor=pointer]
+        - button "⏩ Show All" [ref=e139] [cursor=pointer]
+      - generic [ref=e142]:
+        - generic [ref=e143]: LLM Call
+        - generic [ref=e145]: Tool Success
+        - generic [ref=e147]: Tool Error
+        - generic [ref=e149]: Tool Retry
+        - generic [ref=e151]: Context Warning
+        - generic [ref=e153]: Agent Turn boundary
+    - generic [ref=e155]:
+      - heading "Key Takeaways" [level=2] [ref=e156]
+      - list [ref=e157]:
+        - listitem [ref=e158]:
+          - text: →
+          - strong [ref=e159]: trace_id is the first thing you implement — not the last.
+          - text: Assign a UUID per run, attach it to every log line, span, and error message. Without it, correlating a user complaint ("the agent gave me a wrong answer at 3pm") with internal logs is a manual grep through thousands of lines. This is table stakes, not a nice-to-have.
+        - listitem [ref=e160]:
+          - text: →
+          - strong [ref=e161]: Tool success rate is your leading health indicator.
+          - text: LLM output quality is hard to measure in real-time. Tool success rate is not — it's a simple count of errors vs. successes. A sudden drop from 98% to 92% on a specific tool is the earliest signal that something changed upstream (API deprecation, rate limiting, schema change) and it alerts you before users notice degraded quality.
+        - listitem [ref=e162]:
+          - text: →
+          - strong [ref=e163]: Context window saturation silently degrades agent behavior.
+          - text: When an LLM call uses 85%+ of the context window, older messages are truncated, and the agent loses access to early instructions and observations. This produces subtle failures — not crashes, but wrong answers — that are extremely hard to diagnose without instrumentation. Monitor context utilization on every LLM call span.
+        - listitem [ref=e164]:
+          - text: →
+          - strong [ref=e165]: Sampling full traces is essential at scale — trace everything at the session level, sample at the span level.
+          - text: Storing every token of every LLM call for 100K+ runs/day can cost more than running the agent. Log session-level aggregates (steps, cost, status) for 100% of runs; capture full span traces for 100% of errors and 5–10% of successful runs. Use adaptive sampling based on anomaly score if you have the infra for it.
+        - listitem [ref=e166]:
+          - text: →
+          - strong [ref=e167]: Replay debugging is the only reliable way to fix long-horizon agent failures.
+          - text: A 20-step agent failure where the root cause is at step 9 is unsolvable from aggregate metrics alone. Store the exact prompt and response of every LLM call in a run, build a replayer that substitutes stored responses, and step through the agent like a debugger. Teams that skip this spend 10× longer debugging production incidents.
+        - listitem [ref=e168]:
+          - text: →
+          - strong [ref=e169]: Cost instrumentation must be per-step, not per-run.
+          - text: A prompt change that adds a single extra reasoning step per run increases cost by 10–20%. If you only monitor total cost per run, you won't know which step became more expensive — and you won't know which prompt to fix. Attribute input tokens, output tokens, and model used to every individual LLM call span.
+  - navigation [ref=e170]:
+    - link "← Previous Model & Tensor Parallelism" [ref=e171] [cursor=pointer]:
+      - /url: 36-model-parallelism.html
+      - generic [ref=e172]: ← Previous
+      - generic [ref=e173]: Model & Tensor Parallelism
+    - link "↑ Index All Concepts" [ref=e174] [cursor=pointer]:
+      - /url: index.html
+      - generic [ref=e175]: ↑ Index
+      - generic [ref=e176]: All Concepts

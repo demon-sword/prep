@@ -1,9 +1,9 @@
 # Plan: AI Engineering Concepts
 
 ## Meta
-total_concepts: 36
-done: 0
-remaining: 36
+total_concepts: 41
+done: 41
+remaining: 0
 created: 2026-06-28
 
 ## Done
@@ -46,3 +46,8 @@ created: 2026-06-28
 - [x] 34-inference-optimization — Inference Optimization
 - [x] 35-speculative-decoding — Speculative Decoding
 - [x] 36-model-parallelism — Model & Tensor Parallelism
+- [x] 37-agent-observability — Agent Observability
+- [x] 38-production-llm-serving — Production LLM Serving
+- [x] 39-quantization-inference — Quantization for Inference
+- [x] 40-kv-cache — KV Cache Management
+- [x] 41-flash-attention — Flash Attention

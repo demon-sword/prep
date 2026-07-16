@@ -1,0 +1,206 @@
+- generic [active] [ref=f7e1]:
+  - banner [ref=f7e2]:
+    - generic [ref=f7e3]: Inference
+    - heading "Production LLM Serving" [level=1] [ref=f7e4]
+    - paragraph [ref=f7e5]: The decode bottleneck and the three pillars that solve it — PagedAttention, continuous batching, and Flash Attention — converging in vLLM, TGI, and TensorRT-LLM into a unified serving stack.
+  - main [ref=f7e6]:
+    - generic [ref=f7e7]:
+      - heading "Theory" [level=2] [ref=f7e8]
+      - 'heading "The Decode Bottleneck: Memory-Bandwidth-Bound at Batch=1" [level=3] [ref=f7e9]'
+      - paragraph [ref=f7e10]:
+        - text: Autoregressive decoding is fundamentally serial. To generate token
+        - emphasis [ref=f7e11]: t+1
+        - text: ", the model must first produce token"
+        - emphasis [ref=f7e12]: t
+        - text: . For a single request, each token requires loading all model weights from HBM (High Bandwidth Memory) into the GPU's compute cores. A 70B model in FP16 occupies ~140 GB — every single token generated streams this full weight matrix through the memory bus. With an A100 delivering ~2 TB/s of HBM bandwidth, each token takes roughly
+        - strong [ref=f7e13]: 70 ms
+        - text: to generate. The GPU's compute units sit idle while waiting for memory — this is the
+        - strong [ref=f7e14]: memory-bandwidth-bound
+        - text: regime, where throughput is determined by how fast you can move data, not how fast you can compute.
+      - paragraph [ref=f7e15]: "The naive approach to serving multiple users is embarrassingly wasteful: run each request sequentially, or spin up multiple model replicas each serving one request. A single A100 can only produce ~14 tokens/second at batch size 1 — costing thousands of dollars in idle compute per month. The solution requires three innovations that work together: making batching dynamic (continuous batching), eliminating memory fragmentation (PagedAttention), and speeding up the attention computation itself (Flash Attention)."
+      - 'heading "Continuous Batching: Iteration-Level Scheduling" [level=3] [ref=f7e16]'
+      - paragraph [ref=f7e17]: "Static batching — where all requests in a batch must start and finish together — wastes enormous GPU time. In a batch of 32 requests, if Request #3 finishes at step 50 while Request #27 keeps generating until step 2048, the GPU slot for Request #3 sits empty for 1,998 useless decode steps. Multiply this across thousands of requests, and you lose over 50% of GPU capacity to padding."
+      - generic [ref=f7e18]:
+        - strong [ref=f7e19]: "The core insight of continuous batching:"
+        - text: At every decode iteration, eject any requests that have finished (EOS token or max_tokens reached) and immediately insert new pending requests. Scheduling decision happens
+        - emphasis [ref=f7e20]: per iteration
+        - text: ", not per batch lifetime. The batch composition evolves continuously as requests complete and new ones arrive."
+      - paragraph [ref=f7e21]: Continuous batching transforms LLM serving from a batch-size scheduler into an iteration-level scheduler. This single change increases GPU utilization from 45-55% to 85-95%+ for high-volume production workloads. Orca (OSDI 2022) first introduced the idea; vLLM, TGI, and TensorRT-LLM all implement it today.
+      - paragraph [ref=f7e22]: "The math: with static batching, throughput T ≈ B / max(L_i / t), where B is batch size and L_i are individual decode lengths. The longest request dominates. With continuous batching, T ≈ B_avg / (L_avg / t), where B_avg stays near the max batch size because slots are refilled instantly. The throughput gain is roughly max(L_i) / avg(L_i) — often 3-5× in practice."
+      - 'heading "PagedAttention: Virtual Memory for the KV Cache" [level=3] [ref=f7e23]'
+      - paragraph [ref=f7e24]: The KV cache is the single largest memory consumer during inference. For a 70B model with 2048 context serving 32 concurrent requests, the KV cache alone requires ~280 GB of memory — double the model weights. In a naive contiguous allocation scheme, each request reserves a KV cache block sized for its maximum possible context length (16K or 32K tokens), even if the actual context is only 1K tokens. This fragmentation wastes 60-80% of KV cache memory.
+      - paragraph [ref=f7e25]:
+        - text: PagedAttention (Kwon et al., SOSP 2023) applies the OS virtual memory principle to the KV cache. Instead of allocating one huge contiguous block per request, the KV cache is divided into fixed-size
+        - strong [ref=f7e26]: pages
+        - text: (typically 16 tokens each). A request only allocates pages as it generates tokens, and different requests can share read-only pages when they share a common prefix (e.g., a long system prompt).
+      - generic [ref=f7e27]: "KV cache waste without PagedAttention: waste = sum_over_requests( max_len - actual_len ) * bytes_per_token With PagedAttention: near-zero internal fragmentation. Each request gets exactly the pages it needs — no pre-allocation. Shared prefix pages are stored once and mapped into multiple requests' page tables."
+      - paragraph [ref=f7e28]: "The practical impact is dramatic: PagedAttention reduces KV cache memory waste from 60-80% to under 5%. This lets you serve 2-3× more concurrent requests on the same GPU, or serve longer context lengths without OOM. It is the single biggest differentiator between vLLM's 10-20× throughput advantage over naive HuggingFace inference and competitors. Both TGI and TensorRT-LLM have adopted similar paged KV cache architectures."
+      - 'heading "Flash Attention: Never Materialize the N×N Matrix" [level=3] [ref=f7e29]'
+      - paragraph [ref=f7e30]: Standard attention computes QK^T to produce an N×N attention matrix, applies softmax, then multiplies by V. This materializes an O(N²) matrix in HBM. For 32K context with 40 attention heads and batch=32, this single matrix is ~5 GB — per layer. A 70B model with 80 layers would generate 400 GB of intermediate attention matrices.
+      - paragraph [ref=f7e31]: Flash Attention (Dao et al., 2022; Flash Attention 2, 2023; Flash Attention 3, 2024) eliminates this by tiling the computation. It loads small blocks of Q, K, and V into SRAM (on-chip memory, ~20 TB/s bandwidth vs ~2 TB/s for HBM), computes the attention for that tile entirely on-chip, and writes only the final output to HBM. The N×N attention matrix is never materialized.
+      - generic [ref=f7e32]: "Standard attention memory: O(N²) per attention head Flash Attention memory: O(N) per attention head Speedup: 2-4× for prefill (long sequences) Modest for decode (N=1 in autoregressive step) Quality: Mathematically identical output to standard attention. Not an approximation — same softmax, same output."
+      - paragraph [ref=f7e33]:
+        - text: Flash Attention is now the default in PyTorch's
+        - code [ref=f7e34]: torch.nn.functional.scaled_dot_product_attention
+        - text: (SDPA) since PyTorch 2.0, and is used internally by vLLM, TGI, and TensorRT-LLM. It is particularly impactful during the prefill phase, where sequences are long — cutting prefill latency by 2-4× for 8K+ prompts.
+      - generic [ref=f7e35]:
+        - strong [ref=f7e36]: "How the three pillars compose:"
+        - text: Continuous batching maximizes GPU utilization by keeping all slots full. PagedAttention maximizes memory efficiency so you can fit more slots. Flash Attention minimizes per-iteration compute time. Together they create the modern serving stack that makes LLM APIs economically viable at scale.
+      - heading "Framework Landscape" [level=3] [ref=f7e37]
+      - table [ref=f7e38]:
+        - rowgroup [ref=f7e39]:
+          - row [ref=f7e40]:
+            - columnheader "Framework" [ref=f7e41]
+            - columnheader "Developer" [ref=f7e42]
+            - columnheader "Throughput vs HF" [ref=f7e43]
+            - columnheader "Key Strengths" [ref=f7e44]
+            - columnheader "Best For" [ref=f7e45]
+        - rowgroup [ref=f7e46]:
+          - row [ref=f7e47]:
+            - cell [ref=f7e48]:
+              - strong [ref=f7e49]: vLLM
+            - cell "UC Berkeley / Community" [ref=f7e50]
+            - cell "10-20×" [ref=f7e51]
+            - cell "PagedAttention, best open-source ecosystem, easy deployment, prefix caching, speculative decoding, multi-LoRA serving" [ref=f7e53]
+            - cell [ref=f7e54]:
+              - text: General-purpose production serving;
+              - strong [ref=f7e55]: de facto standard
+              - text: for open-source LLMs
+          - row [ref=f7e56]:
+            - cell [ref=f7e57]:
+              - strong [ref=f7e58]: TGI
+              - text: (Text Generation Inference)
+            - cell "HuggingFace" [ref=f7e59]
+            - cell "8-15×" [ref=f7e60]
+            - cell "Tight HuggingFace ecosystem integration, watermarking, guidance/constrained decoding, simple Docker deployment" [ref=f7e62]
+            - cell "Teams already in the HuggingFace ecosystem; when you need constrained generation" [ref=f7e63]
+          - row [ref=f7e64]:
+            - cell [ref=f7e65]:
+              - strong [ref=f7e66]: TensorRT-LLM
+            - cell "NVIDIA" [ref=f7e67]
+            - cell "Highest raw throughput" [ref=f7e68]
+            - cell "NVIDIA-optimized kernels, inflight batching, FP8/INT4 quantization, multi-node tensor parallelism, Grace-Hopper support" [ref=f7e70]
+            - cell "Maximum throughput on NVIDIA hardware; H100/B200 deployments; when latency SLOs are sub-50ms" [ref=f7e71]
+          - row [ref=f7e72]:
+            - cell [ref=f7e73]:
+              - strong [ref=f7e74]: llama.cpp
+            - cell "ggerganov / Community" [ref=f7e75]
+            - cell "N/A (CPU/GPU)" [ref=f7e76]
+            - cell "GGUF format, CPU inference, consumer GPU support (Metal, CUDA, Vulkan), extreme memory efficiency" [ref=f7e78]
+            - cell "Local/edge deployment, consumer hardware, Apple Silicon, single-user scenarios" [ref=f7e79]
+          - row [ref=f7e80]:
+            - cell [ref=f7e81]:
+              - strong [ref=f7e82]: SGLang
+            - cell "Stanford / Community" [ref=f7e83]
+            - cell "Comparable to vLLM" [ref=f7e84]
+            - cell "RadixAttention (automatic prefix caching), structured generation DSL, programmable serving" [ref=f7e86]
+            - cell "Complex serving pipelines with structured outputs; prefix-heavy workloads (multi-turn chat)" [ref=f7e87]
+      - heading "Production Deployment Patterns" [level=3] [ref=f7e88]
+      - paragraph [ref=f7e89]:
+        - strong [ref=f7e90]: "Prefill-decode disaggregation:"
+        - text: "The prefill phase (processing the prompt) and decode phase (generating tokens) have opposite hardware requirements. Prefill is compute-bound (parallel across sequence), demanding high FLOPs — H100's Transformer Engine excels here. Decode is memory-bandwidth-bound, where memory throughput matters more than raw FLOPs. Prefill-decode disaggregation splits these across separate GPU pools: a prefill pool of H100s handles all incoming prompts with maximum parallelism, then ships KV caches to a larger decode pool of A100s that churns through token generation. This reduces time-to-first-token by 2-5× and improves overall throughput by not letting decode requests block prefill."
+      - paragraph [ref=f7e91]:
+        - strong [ref=f7e92]: "Autoscaling on request backlog:"
+        - text: Production serving systems should scale based on queue depth, not CPU/GPU utilization. When the pending request queue exceeds a threshold (e.g., 50 requests), spin up additional replicas. vLLM's API server supports this natively with
+        - code [ref=f7e93]: "--max-num-seqs"
+        - text: and Kubernetes HPA integration via custom metrics. Scale-down should be slower than scale-up to avoid thrashing — a 5-minute cooldown is typical.
+      - paragraph [ref=f7e94]:
+        - strong [ref=f7e95]: "Request prioritization and queuing:"
+        - text: "Not all requests are equal. Implement priority classes: interactive users get high priority (target <500ms latency), batch processing gets low priority. vLLM supports priority-based scheduling via the"
+        - code [ref=f7e96]: priority
+        - text: field in the OpenAI-compatible API. Combine with request timeouts and max-token limits to prevent any single request from starving the queue.
+      - paragraph [ref=f7e97]:
+        - strong [ref=f7e98]: "Prefix caching in production:"
+        - text: When many users share a common system prompt or few-shot examples, PagedAttention's prefix sharing eliminates redundant KV cache computation. vLLM's automatic prefix caching detects matching prefix hashes and reuses cached KV pages. For chatbot APIs where every request shares a 500-token system prompt, this saves ~500 tokens of prefill compute per request — roughly 30-50% prefill latency reduction at scale.
+      - paragraph [ref=f7e99]:
+        - strong [ref=f7e100]: "GPU memory fragmentation prevention:"
+        - text: "Even with PagedAttention, long-running serving instances can suffer from GPU memory fragmentation as allocations and deallocations interleave. Techniques: pre-allocate a fixed number of KV cache blocks at startup; use"
+        - code [ref=f7e101]: gpu_memory_utilization
+        - text: parameter (vLLM default 0.90) to reserve headroom; restart instances periodically (e.g., every 24h) as a safety measure; monitor with
+        - code [ref=f7e102]: nvidia-smi
+        - text: for unexpected memory growth patterns.
+    - generic [ref=f7e103]:
+      - heading "Interactive Visualization" [level=2] [ref=f7e104]
+      - paragraph [ref=f7e105]:
+        - strong [ref=f7e106]: Continuous batching in action.
+        - text: Each horizontal lane is a decode slot. Colored bars show requests being served — when a request finishes (bar reaches the right), it exits immediately and a new request enters at the next decode step. The GPU utilization gauge updates live based on how many slots are occupied. The
+        - strong [ref=f7e107]: naive batching comparison
+        - text: shows how much GPU time static batching wastes waiting for the longest request.
+      - generic [ref=f7e108]:
+        - button "▶ Play" [ref=f7e109] [cursor=pointer]
+        - button "⏸ Pause" [ref=f7e110] [cursor=pointer]
+        - button "⏭ Step" [ref=f7e111] [cursor=pointer]
+        - button "↺ Reset" [ref=f7e112] [cursor=pointer]
+        - generic [ref=f7e113]: "Speed:"
+        - button "−" [ref=f7e114] [cursor=pointer]
+        - generic [ref=f7e115]: 1×
+        - button "+" [ref=f7e116] [cursor=pointer]
+        - button "+ Add Request" [ref=f7e117] [cursor=pointer]
+      - generic [ref=f7e120]:
+        - generic [ref=f7e121]: GPU Utilization
+        - generic [ref=f7e124]: 63%
+        - generic [ref=f7e125]: Naive Batching Waste
+        - generic [ref=f7e127]: 0%
+      - generic [ref=f7e128]:
+        - generic [ref=f7e129]:
+          - generic [ref=f7e130]: "0"
+          - generic [ref=f7e131]: Decode Steps
+        - generic [ref=f7e132]:
+          - generic [ref=f7e133]: "5"
+          - generic [ref=f7e134]: Active Requests
+        - generic [ref=f7e135]:
+          - generic [ref=f7e136]: "0"
+          - generic [ref=f7e137]: Completed
+        - generic [ref=f7e138]:
+          - generic [ref=f7e139]: "7"
+          - generic [ref=f7e140]: Waiting in Queue
+        - generic [ref=f7e141]:
+          - generic [ref=f7e142]: 0%
+          - generic [ref=f7e143]: Naive GPU Waste
+      - generic [ref=f7e144]:
+        - generic [ref=f7e145]: Prefill (processing prompt)
+        - generic [ref=f7e147]: Decode (generating tokens)
+        - generic [ref=f7e149]: Idle slot (waiting in naive batch)
+        - generic [ref=f7e151]: New request inserted
+        - generic [ref=f7e153]: Request completed
+    - generic [ref=f7e155]:
+      - heading "Key Takeaways" [level=2] [ref=f7e156]
+      - list [ref=f7e157]:
+        - listitem [ref=f7e158]:
+          - text: →
+          - strong [ref=f7e159]: Continuous batching is the single highest-leverage optimization for LLM serving.
+          - text: Moving from static batching to iteration-level scheduling increases GPU utilization from 45-55% to 85-95%+ — a 3-5× throughput improvement without any model changes. If you deploy exactly one optimization, make it continuous batching. Both vLLM and TGI implement this out of the box as their default scheduling strategy, so there is no excuse for static batching in 2025.
+        - listitem [ref=f7e160]:
+          - text: →
+          - strong [ref=f7e161]: PagedAttention eliminates the KV cache fragmentation problem.
+          - text: Before PagedAttention, KV cache memory waste of 60-80% was normal because each request pre-allocated for worst-case context length. vLLM's page-based allocation (16-token pages, shared prefix pages via copy-on-write) brings waste under 5%, letting you serve 2-3× more concurrent requests. This is not a marginal improvement — it is architectural. Any serving framework without paged KV cache allocation is unsuitable for production workloads above ~100 concurrent requests.
+        - listitem [ref=f7e162]:
+          - text: →
+          - strong [ref=f7e163]: Choose your serving framework based on your deployment profile, not raw benchmarks.
+          - text: vLLM is the best general-purpose choice for most teams — easy deployment, excellent community, solid performance. TensorRT-LLM wins on raw throughput (5-15% faster on H100) but requires significant engineering investment (C++ build system, NVIDIA-specific kernels, complex model conversion). TGI is the right choice if you are deeply integrated with HuggingFace (custom tokenizers, constrained generation). SGLang is emerging as the best choice for prefix-heavy workloads via RadixAttention. If you are on a budget or deploying to consumer hardware, llama.cpp with GGUF quantization is unbeatable.
+        - listitem [ref=f7e164]:
+          - text: →
+          - strong [ref=f7e165]: Prefill-decode disaggregation is the next frontier.
+          - text: Splitting prefill and decode across separate GPU pools is not just an optimization — it reflects their fundamentally different hardware requirements. Prefill wants high-FLOPs GPUs (H100, B200) for parallel prompt processing; decode wants high-memory-bandwidth GPUs (even A100-80GB works well). This pattern reduces time-to-first-token latency by 2-5× and is being adopted by every major LLM API provider (Anthropic, Together AI, Fireworks). Expect this to become the default deployment architecture for large-scale serving by 2026.
+        - listitem [ref=f7e166]:
+          - text: →
+          - strong [ref=f7e167]: Prefix caching delivers massive savings for chatbot and multi-turn workloads.
+          - text: When 80%+ of your requests share a 500-token system prompt or a large few-shot example block, automatic prefix caching (vLLM's
+          - code [ref=f7e168]: enable_prefix_caching=True
+          - text: ", SGLang's RadixAttention) eliminates redundant KV cache computation for every shared prefix. In high-volume chatbot deployments (100K+ requests/day), this saves 15-30% of total GPU compute. The savings compound with continuous batching because your decode slots stay filled with non-redundant work."
+        - listitem [ref=f7e169]:
+          - text: →
+          - strong [ref=f7e170]: Production serving is not just about throughput — latency, fairness, and robustness matter equally.
+          - text: A 10× throughput server that delivers p99 latency of 15 seconds is worse than a 5× server with p99 of 2 seconds for an interactive chatbot. Implement request-level timeouts, max-token limits, priority classes (interactive vs batch), and queue-depth-based autoscaling. vLLM's
+          - code [ref=f7e171]: "--max-num-seqs"
+          - text: and request scheduling priorities, combined with Kubernetes HPA on request queue depth, form the minimum viable production setup. Monitor GPU memory fragmentation over multi-day runs and plan for periodic restarts.
+  - navigation [ref=f7e172]:
+    - link "← Previous Agent Observability" [ref=f7e173] [cursor=pointer]:
+      - /url: 37-agent-observability.html
+      - generic [ref=f7e174]: ← Previous
+      - generic [ref=f7e175]: Agent Observability
+    - generic [ref=f7e176]: 38 of 41 · Production LLM Serving
+    - link "Next → Quantization for Inference" [ref=f7e177] [cursor=pointer]:
+      - /url: 39-quantization-inference.html
+      - generic [ref=f7e178]: Next →
+      - generic [ref=f7e179]: Quantization for Inference

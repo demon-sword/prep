@@ -1,0 +1,211 @@
+- generic [active] [ref=f9e1]:
+  - banner [ref=f9e2]:
+    - generic [ref=f9e3]: Inference
+    - heading "KV Cache Management" [level=1] [ref=f9e4]
+    - paragraph [ref=f9e5]: How the Key-Value cache grows during autoregressive decoding, why it becomes the memory bottleneck at long context, and how PagedAttention, GQA/MQA, and prefix caching manage it.
+  - main [ref=f9e6]:
+    - generic [ref=f9e7]:
+      - heading "Theory" [level=2] [ref=f9e8]
+      - heading "1. What Is the KV Cache and Why It Exists" [level=3] [ref=f9e9]
+      - paragraph [ref=f9e10]:
+        - text: During autoregressive decoding, each new token must attend to
+        - emphasis [ref=f9e11]: all previous tokens
+        - text: in every attention layer. Without caching, you would recompute Key (K) and Value (V) projections for every previous token at every decode step — an O(n^2) compute cost per step that quickly becomes catastrophic. A 2048-token sequence would require recomputing attention over 2048 tokens 2048 times.
+      - paragraph [ref=f9e12]:
+        - text: The
+        - strong [ref=f9e13]: KV cache
+        - text: "solves this by storing the computed K and V tensors from all previous decode steps. At step t, you compute K and V only for token t, append them to the cache, and compute attention of token t against the entire cached K/V — reducing per-step complexity from O(n^2) to O(n). This is the single most important systems optimization in LLM inference: it converts a repeated quadratic computation into a linear one, at the cost of memory."
+      - heading "2. The Memory Formula" [level=3] [ref=f9e14]
+      - generic [ref=f9e15]: KV cache bytes = 2 × num_layers × num_kv_heads × head_dim × seq_len × bytes_per_element
+      - paragraph [ref=f9e16]:
+        - strong [ref=f9e17]: Why the factor of 2?
+        - text: Both K and V tensors are cached (Q is not cached — it's computed fresh for each new token).
+      - paragraph [ref=f9e18]:
+        - strong [ref=f9e19]: Concrete example — Llama 3 70B
+        - text: "(80 layers, 8 GQA KV heads, 128 head_dim, fp16):"
+        - code [ref=f9e20]: 2 × 80 × 8 × 128 × 2 = 327,680 bytes ≈ 320 KB per token
+        - text: "A 4096-token sequence: ~1.3 GB of KV cache per request. A"
+        - strong [ref=f9e21]: 128K context request
+        - text: ": ~40 GB of KV cache alone — dwarfing model weights for most deployments."
+      - paragraph [ref=f9e22]:
+        - strong [ref=f9e23]: Llama 3 8B
+        - text: "(32 layers, 8 GQA, 128 head_dim, fp16):"
+        - code [ref=f9e24]: 2 × 32 × 8 × 128 × 2 = 131,072 bytes ≈ 128 KB per token
+        - text: "128K context: ~16 GB KV cache — still more than the model weights (~16 GB)."
+      - paragraph [ref=f9e25]:
+        - text: "Without GQA, using standard MHA with 64 heads: the KV cache would be"
+        - strong [ref=f9e26]: 8x larger
+        - text: — 320 GB for a 128K sequence on Llama 3 70B, completely infeasible on any single GPU.
+      - heading "3. The Fragmentation Problem (Naive Allocation)" [level=3] [ref=f9e27]
+      - paragraph [ref=f9e28]:
+        - text: The simplest approach pre-allocates KV cache memory for the
+        - emphasis [ref=f9e29]: maximum
+        - text: possible sequence length for every request. If you reserve slots for 128K tokens but most requests generate only 8K tokens,
+        - strong [ref=f9e30]: 94% of KV cache memory sits idle
+        - text: . This is a massive waste — imagine malloc'ing 128GB for every web request.
+      - paragraph [ref=f9e31]: Worse, different requests finish at different times. When a request that reserved a contiguous 128K block finishes mid-sequence, it frees its block — but new requests with different sizes can't always fit in the resulting hole. Over time, the memory becomes fragmented with unusable gaps between active allocations. This is identical to the fragmentation problem that virtual memory solves in operating systems.
+      - heading "4. PagedAttention — vLLM's Virtual Memory for KV Cache" [level=3] [ref=f9e32]
+      - paragraph [ref=f9e33]: "PagedAttention, introduced in vLLM (Kwon et al., 2023), models KV cache management directly on OS virtual memory:"
+      - list [ref=f9e34]:
+        - listitem [ref=f9e35]:
+          - strong [ref=f9e36]: "Fixed-size pages:"
+          - text: KV cache is divided into fixed-size blocks (typically 16 tokens per page). Each page stores K and V for a contiguous chunk of tokens.
+        - listitem [ref=f9e37]:
+          - strong [ref=f9e38]: "On-demand allocation:"
+          - text: Blocks are allocated only when needed, not pre-reserved for the maximum sequence length.
+        - listitem [ref=f9e39]:
+          - strong [ref=f9e40]: "Non-contiguous physical, contiguous logical:"
+          - text: Physical blocks can be scattered across GPU memory, but a page table maps them to a logically contiguous sequence for the attention kernel.
+        - listitem [ref=f9e41]:
+          - strong [ref=f9e42]: "Shared prefixes:"
+          - text: When two requests share the same system prompt or conversation prefix, the KV cache pages for that prefix are identical — PagedAttention enables both requests to reference the
+          - emphasis [ref=f9e43]: same
+          - text: physical pages. This is copy-on-write for LLMs.
+        - listitem [ref=f9e44]:
+          - strong [ref=f9e45]: "Near-zero internal fragmentation:"
+          - text: The worst-case waste is at most one partially filled page per request (~15 tokens max).
+      - paragraph [ref=f9e46]: When a request finishes, all its pages return to the free pool instantly. No fragmentation buildup, zero defragmentation overhead. This is why vLLM can serve 10-20x more concurrent requests than naive implementations with the same GPU memory.
+      - heading "5. GQA — Architecture-Level KV Cache Optimization" [level=3] [ref=f9e47]
+      - paragraph [ref=f9e48]:
+        - strong [ref=f9e49]: Grouped Query Attention (GQA)
+        - text: divides query heads into groups that share a single K/V head pair. Instead of each query head having its own K and V (as in standard Multi-Head Attention), G groups of query heads share one K/V pair, reducing the number of K/V heads by a factor of G.
+      - paragraph [ref=f9e50]:
+        - text: Llama 3 70B uses 64 query heads but only
+        - strong [ref=f9e51]: 8 KV heads
+        - text: (G = 8) — an
+        - strong [ref=f9e52]: 8x reduction
+        - text: "in KV cache size compared to standard MHA. Llama 3 8B and Mistral models use GQA as well. The quality impact: MMLU scores on Llama 2 using GQA vs MHA differ by"
+        - strong [ref=f9e53]: less than 0.5 percentage points
+        - text: — negligible for most production use cases.
+      - paragraph [ref=f9e54]:
+        - strong [ref=f9e55]: Multi-Query Attention (MQA)
+        - text: "takes this to the extreme:"
+        - emphasis [ref=f9e56]: all
+        - text: query heads share a single K/V pair. Used in PaLM, Falcon, and older Google models. MQA offers the maximum KV cache reduction but with a slightly larger quality penalty than GQA — especially for tasks requiring fine-grained attention patterns (long-context retrieval, multi-document reasoning).
+      - paragraph [ref=f9e57]: "The tradeoff matrix: MQA gives Nx reduction (where N = num_heads), GQA gives Gx reduction, MHA gives no reduction. Most modern architectures converge on GQA as the sweet spot."
+      - heading "6. Prefix / Prompt Caching" [level=3] [ref=f9e58]
+      - paragraph [ref=f9e59]: "When multiple requests share a common prefix — a long system prompt, a set of few-shot examples, or a document context — the KV cache for that prefix is identical across all requests. Instead of recomputing and storing it separately:"
+      - list [ref=f9e60]:
+        - listitem [ref=f9e61]:
+          - strong [ref=f9e62]: vLLM's Automatic Prefix Caching (APC)
+          - text: hashes KV cache pages by their content. When a new request shares a prefix, vLLM detects the hash match and reuses the cached pages — no recomputation, no duplicate storage.
+        - listitem [ref=f9e63]:
+          - strong [ref=f9e64]: Anthropic's Prompt Caching
+          - text: "exposes this as a pricing mechanism: cache writes cost 10% of the full price, cache hits cost only 1%. This frames prompt caching as an economic optimization — you pay dramatically less for tokens already cached."
+        - listitem [ref=f9e65]:
+          - strong [ref=f9e66]: "Efficiency impact:"
+          - text: A 10K-token system prompt shared across 100 concurrent requests requires only one copy of the KV cache (10K tokens' worth) instead of 100 copies. That's a 99% reduction in KV cache memory for the prefix portion and near-zero prefill compute for cached tokens.
+      - heading "7. KV Cache Offloading and Escape Hatches" [level=3] [ref=f9e67]
+      - paragraph [ref=f9e68]: "When even PagedAttention + GQA isn't enough for the desired context length, additional techniques stack:"
+      - list [ref=f9e69]:
+        - listitem [ref=f9e70]:
+          - strong [ref=f9e71]: "CPU offloading:"
+          - text: Swap KV cache pages to CPU RAM when GPU VRAM is full. Each layer swap adds ~50-200 microseconds over NVLink, or ~5-20 ms over PCIe — accumulating to significant latency for models with 80+ layers. Use as a last resort for extremely long contexts.
+        - listitem [ref=f9e72]:
+          - strong [ref=f9e73]: "Sliding window attention:"
+          - text: Only cache the most recent W tokens (Mistral uses W=4096). Older tokens' K and V are discarded — context beyond the window is lost. Acceptable for streaming/real-time use cases, problematic for long-document QA.
+        - listitem [ref=f9e74]:
+          - strong [ref=f9e75]: "KV cache quantization:"
+          - text: Store K and V tensors in int8 instead of fp16 — 2x memory reduction. Unlike weight quantization, KV cache quantization must happen dynamically during inference. Techniques like KIVI (2024) quantize per-channel with less than 1% quality degradation. NVIDIA's FP8 KV cache on H100 achieves similar reduction with hardware acceleration.
+      - heading "8. Multi-Turn Conversation Impact" [level=3] [ref=f9e76]
+      - paragraph [ref=f9e77]:
+        - text: "In a chat application, every conversation turn appends tokens to the sequence. A 20-turn conversation with 400-token responses and a 2000-token system prompt:"
+        - strong [ref=f9e78]: "System prompt:"
+        - text: 2,000 tokens
+        - strong [ref=f9e79]: "Turns:"
+        - text: 20 x (100 user + 400 assistant) = 10,000 tokens
+        - strong [ref=f9e80]: "Total KV cache:"
+        - text: 12,000 tokens × 320 KB = ~3.8 GB for Llama 3 70B (GQA), or ~30 GB without GQA.
+      - paragraph [ref=f9e81]: This is why serving systems must budget KV cache memory per user and enforce a max-context limit — an unbounded conversation will eventually exhaust even the best-optimized GPU memory. Some systems evict the oldest turns (LRU eviction of KV cache pages) to make room for new tokens, at the cost of the model "forgetting" earlier parts of the conversation.
+      - heading "Production Reality" [level=3] [ref=f9e82]
+      - generic [ref=f9e83]:
+        - generic [ref=f9e84]:
+          - heading "vLLM PagedAttention" [level=4] [ref=f9e85]
+          - paragraph [ref=f9e86]: Open-source. Near-zero fragmentation via fixed-size KV pages. Automatic prefix caching via content hashing. 10-20x throughput vs naive. Default for most production LLM serving.
+        - generic [ref=f9e87]:
+          - heading "GQA in Modern LLMs" [level=4] [ref=f9e88]
+          - paragraph [ref=f9e89]: Llama 3 (all sizes), Mistral, Gemma, Qwen all use GQA with 4-8 KV head groups. Standard MHA is now rare in production models.
+        - generic [ref=f9e90]:
+          - heading "Anthropic Prompt Caching" [level=4] [ref=f9e91]
+          - paragraph [ref=f9e92]: "Economic incentive for KV cache reuse: 10% price for cache writes, 1% for hits. Makes long system prompts 10x cheaper when reused across calls."
+        - generic [ref=f9e93]:
+          - heading "KIVI Quantized KV Cache" [level=4] [ref=f9e94]
+          - paragraph [ref=f9e95]: Per-channel int4 K + int8 V quantization with <1% quality loss. 2-4x KV cache reduction without hardware changes. Emerging technique (NeurIPS 2024).
+    - generic [ref=f9e96]:
+      - heading "KV Cache Memory Visualizer" [level=2] [ref=f9e97]
+      - paragraph [ref=f9e98]:
+        - text: Watch how the KV cache memory evolves during inference.
+        - strong [ref=f9e99]: "Left:"
+        - text: naive contiguous allocation with reserved (wasted) blocks and fragmentation holes.
+        - strong [ref=f9e100]: "Right:"
+        - text: PagedAttention with on-demand allocation, non-contiguous pages, and optional prefix sharing (green blocks). Use the controls to add requests, toggle prefix caching, and adjust animation speed.
+      - generic [ref=f9e101]:
+        - generic [ref=f9e102]:
+          - heading "Naive Contiguous Allocation" [level=4] [ref=f9e103]
+          - paragraph [ref=f9e104]: Pre-reserved blocks · fragmentation holes · massive waste
+        - generic [ref=f9e106]:
+          - heading "PagedAttention (vLLM)" [level=4] [ref=f9e107]
+          - paragraph [ref=f9e108]: On-demand pages · prefix sharing · zero fragmentation
+      - generic [ref=f9e110]:
+        - generic [ref=f9e111]: Filled (active tokens)
+        - generic [ref=f9e113]: Wasted (reserved, unused)
+        - generic [ref=f9e115]: Shared prefix (PagedAttention)
+        - generic [ref=f9e117]: Fragmentation hole
+        - generic [ref=f9e119]: Free
+      - generic [ref=f9e121]:
+        - button "+ Add Request" [ref=f9e122] [cursor=pointer]
+        - button "Clear All" [ref=f9e123] [cursor=pointer]
+        - 'button "Prefix Caching: OFF" [ref=f9e124] [cursor=pointer]'
+        - button "Pause" [ref=f9e125] [cursor=pointer]
+        - generic [ref=f9e126]:
+          - generic [ref=f9e127]: Speed
+          - slider [ref=f9e128]: "4"
+          - generic [ref=f9e129]: 4x
+      - generic [ref=f9e130]:
+        - generic [ref=f9e131]:
+          - generic [ref=f9e132]: Active Requests
+          - generic [ref=f9e133]: "3"
+        - generic [ref=f9e134]:
+          - generic [ref=f9e135]: Memory Used (naive)
+          - generic [ref=f9e136]: 630.0 MB
+        - generic [ref=f9e137]:
+          - generic [ref=f9e138]: Wasted (naive)
+          - generic [ref=f9e139]: 430.0 MB
+        - generic [ref=f9e140]:
+          - generic [ref=f9e141]: Fragmentation % (naive)
+          - generic [ref=f9e142]: 0%
+        - generic [ref=f9e143]:
+          - generic [ref=f9e144]: Pages Used (PagedAttn)
+          - generic [ref=f9e145]: "40"
+        - generic [ref=f9e146]:
+          - generic [ref=f9e147]: Shared Pages
+          - generic [ref=f9e148]: "0"
+    - generic [ref=f9e149]:
+      - heading "Key Takeaways" [level=2] [ref=f9e150]
+      - list [ref=f9e151]:
+        - listitem [ref=f9e152]:
+          - strong [ref=f9e153]: "KV cache is the memory budget killer at long context:"
+          - text: "A single 128K-context request on Llama 3 70B uses ~40 GB of KV cache alone — more than the model weights (70 GB). Without GQA (standard MHA), that same request would demand ~320 GB of KV cache, completely infeasible on any single GPU. Every decision about context length flows from this formula:"
+          - code [ref=f9e154]: 2 x L x Hkv x d x n x bytes
+          - text: .
+        - listitem [ref=f9e155]:
+          - strong [ref=f9e156]: "PagedAttention is the virtual-memory solution applied to LLMs:"
+          - text: vLLM's key insight is that KV cache management is isomorphic to OS virtual memory — fixed-size pages, on-demand allocation, page tables for logical-to-physical mapping, and copy-on-write prefix sharing. This eliminates fragmentation and enables 10-20x higher concurrent throughput. It is not an incremental optimization; it is a category-defining architectural change.
+        - listitem [ref=f9e157]:
+          - strong [ref=f9e158]: "GQA is an architecture-level optimization that pays for itself 8x:"
+          - text: Grouped Query Attention reduces KV cache by the ratio of query heads to KV heads (typically 8x) with less than 0.5% quality degradation on standard benchmarks. Every modern production model uses GQA — standard MHA is effectively obsolete for large-scale serving.
+        - listitem [ref=f9e159]:
+          - strong [ref=f9e160]: "Prefix caching makes system prompts free (or nearly free):"
+          - text: When 100 requests share a 10K-token system prompt, PagedAttention stores it once and serves all 100 from the same physical pages. Anthropic charges 1% for cache hits. This changes the economics of prompt design — you can afford elaborate system prompts, extensive few-shot examples, or long document contexts when they're cached.
+        - listitem [ref=f9e161]:
+          - strong [ref=f9e162]: "Quantize the KV cache, not just the weights:"
+          - text: Storing K and V in int8 (vs fp16) halves KV cache memory with negligible quality impact (<1% on most evals). KIVI (per-channel int4 K + int8 V) pushes this to 2-4x reduction. FP8 on H100 offers hardware-accelerated quantized KV cache. This is the cheapest way to double your effective context window without changing the model architecture.
+        - listitem [ref=f9e163]:
+          - strong [ref=f9e164]: "In the long-context serving stack, GQA + PagedAttention + KV cache quantization + prefix caching compound multiplicatively:"
+          - text: GQA gives you 8x baseline reduction. PagedAttention eliminates waste from fragmentation (~2-5x effective). Prefix caching amortizes shared prefixes (up to Nx for N concurrent requests with the same preamble). KV cache quantization gives 2x. Taken together, a workload that would require 320 GB of KV cache per request (MHA, naive allocation) can be served in ~2 GB (GQA, paged, shared, quantized).
+  - navigation [ref=f9e165]:
+    - link "← 39 · Quantization for Inference" [ref=f9e166] [cursor=pointer]:
+      - /url: 39-quantization-inference.html
+    - generic [ref=f9e167]: 40 of 41 · KV Cache Management
+    - link "41 · Flash Attention →" [ref=f9e168] [cursor=pointer]:
+      - /url: 41-flash-attention.html

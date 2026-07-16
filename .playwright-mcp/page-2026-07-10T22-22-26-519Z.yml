@@ -1,0 +1,248 @@
+- generic [active] [ref=f10e1]:
+  - banner [ref=f10e2]:
+    - generic [ref=f10e3]: Inference
+    - heading "Quantization for Inference" [level=1] [ref=f10e4]
+    - paragraph [ref=f10e5]: int8, int4, AWQ, GPTQ, GGUF, NF4 — how post-training quantization reduces model size 2–4× with minimal quality loss, and how to choose the right scheme for your deployment.
+  - main [ref=f10e6]:
+    - generic [ref=f10e7]:
+      - heading "Theory" [level=2] [ref=f10e8]
+      - heading "1. Why Quantization Matters at Inference" [level=3] [ref=f10e9]
+      - paragraph [ref=f10e10]:
+        - text: LLM inference during the decode phase is overwhelmingly
+        - strong [ref=f10e11]: memory-bandwidth-bound
+        - text: ", not compute-bound. Every generated token requires streaming all model weights from HBM (high-bandwidth memory) into the GPU's compute cores. A 7B-parameter model in fp16 occupies ~14 GB of weights. On an A100 with ~2 TB/s memory bandwidth, the theoretical maximum throughput is:"
+      - generic [ref=f10e12]:
+        - text: 7B params × 2 bytes/param = 14 GB weights A100 80GB HBM bandwidth = 2,039 GB/s Theoretical ceiling ≈ 2,039 / 14 ≈
+        - strong [ref=f10e13]: 145 tokens/sec
+        - text: (weights-only bound, no compute)
+      - paragraph [ref=f10e14]:
+        - text: For a 70B model (140 GB fp16), this drops to ~15 tok/s. In practice, real throughput is even lower (50–60% of this ceiling) due to KV cache overhead, activation memory, and compute latency.
+        - strong [ref=f10e15]: "Quantization solves the root cause: it reduces the bytes per parameter."
+        - text: Compress to int4 (0.5 bytes/param) and a 70B model drops from 140 GB to 35 GB — pushing the bandwidth ceiling to ~58 tok/s, a 4× improvement. Add continuous batching and you can reach hundreds of tok/s on the same hardware.
+      - heading "2. fp16 / bf16 — The Baseline" [level=3] [ref=f10e16]
+      - paragraph [ref=f10e17]:
+        - text: "fp16 (IEEE 754 half-precision) is the standard floating-point format for modern inference: 1 sign bit, 5 exponent bits, 10 mantissa bits. It covers a dynamic range of ~1e-8 to 65,504 — sufficient for most activation values in transformer networks. bf16 (Brain Floating Point, Google) uses the same exponent width as fp32 (8 bits) but truncates the mantissa to 7 bits. This gives bf16 a"
+        - emphasis [ref=f10e18]: wider dynamic range
+        - text: (~1e-38 to 3.4e38), which eliminates overflow/underflow issues in attention softmax and layer norm operations.
+      - paragraph [ref=f10e19]:
+        - strong [ref=f10e20]: In practice, fp16 and bf16 inference produce outputs indistinguishable from fp32 on all standard benchmarks.
+        - text: The weight values in transformer models are already fairly distributed; the extra fp32 precision in the mantissa offers no measurable benefit at inference time. All major inference engines (vLLM, TGI, TensorRT-LLM) default to fp16/bf16. The only reason to use fp32 at inference is if you suspect numerical instability in a custom architecture or if you need reproducibility to the last bit.
+      - paragraph [ref=f10e21]: "Hardware note: NVIDIA A100 and H100 have dedicated fp16 and bf16 tensor cores. fp16 matmuls on tensor cores are roughly 2× faster than fp32. Ampere and newer architectures support both formats natively. Apple Silicon (M2/M3/M4) favors fp16; Google TPUs favor bf16."
+      - heading "3. int8 (W8A8) — The Safe Bet" [level=3] [ref=f10e22]
+      - paragraph [ref=f10e23]:
+        - text: int8 quantization maps 32-bit floating-point weights (fp32) to 8-bit integers (int8) using a per-channel or per-tensor scale factor
+        - code [ref=f10e24]: s = max(|W|) / 127
+        - text: and zero-point offset. The dequantized weight is
+        - code [ref=f10e25]: W_dequant = s * (W_int8 - z)
+        - text: . The principal challenge is
+        - strong [ref=f10e26]: outlier features
+        - text: ": in most transformer models, a tiny fraction of hidden dimensions (~0.1%) have activations that are 10–100× larger than the rest. Uniform quantization of these dimensions causes large errors that cascade through attention and FFN layers."
+      - generic [ref=f10e27]:
+        - strong [ref=f10e28]: "LLM.int8() (Dettmers et al., 2022):"
+        - text: The key innovation is
+        - emphasis [ref=f10e29]: mixed-precision decomposition
+        - text: . Matrix columns with outlier activations are kept in fp16 and computed with fp16 matmul; the remaining 99.9% of columns are quantized to int8. This hybrid approach eliminates the outlier problem while maintaining ~2× memory savings and ~1.5–2× throughput on NVIDIA Turing/Ampere tensor cores.
+      - paragraph [ref=f10e30]:
+        - strong [ref=f10e31]: SmoothQuant
+        - text: "(Xiao et al., 2023) takes a different approach: instead of isolating outliers, it"
+        - emphasis [ref=f10e32]: smooths
+        - text: activation outliers into adjacent weight channels via a per-channel scaling factor. This makes both weights and activations easier to quantize uniformly — no mixed precision needed. SmoothQuant achieves W8A8 (8-bit weights AND activations) with <0.5% accuracy loss on Llama and OPT models, and nearly 2× speedup on hardware with int8 tensor core support (A100, H100).
+      - paragraph [ref=f10e33]:
+        - strong [ref=f10e34]: GPTQ
+        - text: "(Frantar et al., 2023) performs int8 quantization using a second-order (Hessian-based) error compensation approach: quantize weights column by column, and adjust remaining full-precision columns to compensate for the quantization error of the current column. This is mathematically equivalent to minimizing the L2 output error of each linear layer. GPTQ runs in a few GPU hours on 100–1000 calibration samples — no gradient descent, no retraining. Quality loss on MMLU for Llama 3 8B int8: <0.5%."
+      - heading "4. int4 (W4A16 / NF4) — The Sweet Spot" [level=3] [ref=f10e35]
+      - paragraph [ref=f10e36]: int4 quantization compresses weights to 4 bits (16 storage levels), while activations remain in fp16 during computation. This is the most common production scheme because it offers ~4× memory reduction with acceptable quality degradation (2–5% on most benchmarks for 70B+ models).
+      - paragraph [ref=f10e37]:
+        - strong [ref=f10e38]: AWQ (Activation-aware Weight Quantization)
+        - text: "— Lin et al., 2023. The core observation:"
+        - emphasis [ref=f10e39]: not all weights matter equally.
+        - text: Weight channels corresponding to high-magnitude activations are disproportionately important for output accuracy. AWQ identifies the top ~1% of weight channels (by activation magnitude) and keeps those at fp16, quantizing the rest to int4. It also applies a per-channel scaling factor to minimize error in the int4 channels. This simple salience-based selection outperforms uniform int4 by 3–5 percentage points on perplexity benchmarks.
+      - generic [ref=f10e40]:
+        - strong [ref=f10e41]: "AWQ vs GPTQ tradeoff:"
+        - text: GPTQ uses second-order Hessian information to minimize layer-wise L2 error — it's mathematically more rigorous. AWQ uses activation-based salience to decide
+        - emphasis [ref=f10e42]: which weights to protect
+        - text: — it's more heuristic but often produces better real-world quality because it targets the channels that actually matter for downstream performance. In practice, AWQ-int4 and GPTQ-int4 on Llama 3 70B are within 0.5–1% MMLU of each other; the choice often comes down to tooling and ecosystem support.
+      - paragraph [ref=f10e43]:
+        - strong [ref=f10e44]: NF4 (4-bit NormalFloat)
+        - text: — The data type used in QLoRA (Dettmers et al., 2023). NormalFloat is an information-theoretically optimal quantization data type for normally distributed data. Since pretrained LLM weights are approximately normally distributed, NF4 allocates quantization levels proportionally to the probability mass of a standard normal — more levels near zero, fewer in the tails. Combined with
+        - strong [ref=f10e45]: double quantization
+        - text: (quantizing the per-block scaling factors themselves to 8-bit), NF4 achieves ~4.5 bits/parameter memory usage while preserving quality within 0.5% of fp16 on most tasks.
+      - heading "5. GGUF / GGML — The Consumer Hardware Ecosystem" [level=3] [ref=f10e46]
+      - paragraph [ref=f10e47]:
+        - text: GGUF (GPT-Generated Unified Format) is the successor to GGML, designed for
+        - strong [ref=f10e48]: llama.cpp
+        - text: and CPU/GPU hybrid inference. Its defining feature is
+        - strong [ref=f10e49]: per-tensor mixed precision
+        - text: ": the format allows each weight tensor in the model to use a different quantization level. In practice, Q4_K_M (the community sweet spot) uses:"
+      - list [ref=f10e50]:
+        - listitem [ref=f10e51]:
+          - strong [ref=f10e52]: Q6_K
+          - text: "(6-bit): attention query/key/value projections — because attention is sensitive to weight precision"
+        - listitem [ref=f10e53]:
+          - strong [ref=f10e54]: Q5_K
+          - text: "(5-bit): feed-forward network up/gate projections"
+        - listitem [ref=f10e55]:
+          - strong [ref=f10e56]: Q4_K
+          - text: "(4-bit): feed-forward network down projections — larger but less sensitive"
+      - paragraph [ref=f10e57]: This per-layer strategy allows Llama 3 70B to run on a single RTX 4090 24GB (with offloading) or, more practically, on a Mac Studio with 192 GB unified memory at ~12 tok/s — usable for batch processing and low-throughput applications. The ecosystem also supports Q8_0 (8-bit, best quality), Q5_K_M, Q3_K_M (aggressive compression), and IQ (importance-based quantization).
+      - heading "6. PTQ vs QAT" [level=3] [ref=f10e58]
+      - paragraph [ref=f10e59]:
+        - strong [ref=f10e60]: Post-Training Quantization (PTQ)
+        - text: applies quantization to a fully trained model without any retraining. It requires a small calibration dataset (100–1000 samples) to compute scaling factors (dynamic range) or Hessian corrections (GPTQ). PTQ is fast (minutes to hours), requires no training infrastructure, and is sufficient for most production use cases at int8 and int4 precision. All methods described above (LLM.int8(), AWQ, GPTQ, GGUF) are PTQ.
+      - paragraph [ref=f10e61]:
+        - strong [ref=f10e62]: Quantization-Aware Training (QAT)
+        - text: inserts fake quantization nodes during training/continued pretraining, so the model learns to produce good outputs under quantized arithmetic. QAT can achieve <0.1% quality loss even at int4, but it requires retraining the full model — expensive and rarely justified for decoder-only LLMs where PTQ-int4 already works well. QAT is more common in vision transformers and edge deployment (TFLite, CoreML) where every bit matters.
+      - heading "7. How to Choose — Decision Framework" [level=3] [ref=f10e63]
+      - table [ref=f10e64]:
+        - rowgroup [ref=f10e65]:
+          - row [ref=f10e66]:
+            - columnheader "Scenario" [ref=f10e67]
+            - columnheader "Recommended" [ref=f10e68]
+            - columnheader "Rationale" [ref=f10e69]
+        - rowgroup [ref=f10e70]:
+          - row [ref=f10e71]:
+            - cell "Single A100 80GB, quality-critical" [ref=f10e72]
+            - cell [ref=f10e73]:
+              - code [ref=f10e74]: fp16
+              - text: or
+              - code [ref=f10e75]: int8 (GPTQ)
+            - cell "fp16 if 70B fits in 80GB with KV cache headroom; int8 if batch size or context length pushes memory limits. <0.5% quality loss at int8." [ref=f10e76]
+          - row [ref=f10e77]:
+            - cell "RTX 4090 24GB, 70B model" [ref=f10e78]
+            - cell [ref=f10e79]:
+              - code [ref=f10e80]: int4 (AWQ/GPTQ)
+              - text: + GGUF offloading
+            - cell "70B int4 = ~35 GB still exceeds 24 GB; use GGUF Q4_K_M with llama.cpp layer offloading to GPU + CPU. ~5–10 tok/s." [ref=f10e81]
+          - row [ref=f10e82]:
+            - cell "Mac Studio 192GB, Llama 3 70B" [ref=f10e83]
+            - cell [ref=f10e84]:
+              - code [ref=f10e85]: GGUF Q4_K_M
+            - cell "Metal-accelerated llama.cpp. Unified memory means no CPU/GPU transfer overhead. ~10–15 tok/s at Q4_K_M." [ref=f10e86]
+          - row [ref=f10e87]:
+            - cell "8B model, throughput-optimized serving" [ref=f10e88]
+            - cell [ref=f10e89]:
+              - code [ref=f10e90]: int8 (SmoothQuant)
+            - cell "W8A8 on Ampere tensor cores = 2× throughput. 8B already fits easily in VRAM; the win here is speed, not memory." [ref=f10e91]
+          - row [ref=f10e92]:
+            - cell "Finetuning on consumer hardware" [ref=f10e93]
+            - cell [ref=f10e94]:
+              - code [ref=f10e95]: NF4 (QLoRA)
+            - cell "NF4 + double quantization + LoRA adapters. 65B model trains on a single 48GB GPU. QLoRA paper benchmarks show parity with fp16 full finetuning." [ref=f10e96]
+          - row [ref=f10e97]:
+            - cell "CPU-only / edge deployment" [ref=f10e98]
+            - cell [ref=f10e99]:
+              - code [ref=f10e100]: GGUF Q4_0
+              - text: or
+              - code [ref=f10e101]: Q4_K_M
+            - cell "llama.cpp with CPU inference. 7B Q4_K_M runs at ~20 tok/s on M2 Max; 70B at ~3 tok/s on high-end desktop with AVX2." [ref=f10e102]
+      - heading "8. Production Reality" [level=3] [ref=f10e103]
+      - generic [ref=f10e104]:
+        - generic [ref=f10e105]:
+          - heading "vLLM" [level=4] [ref=f10e106]
+          - paragraph [ref=f10e107]:
+            - text: Supports AWQ, GPTQ, and SqueezeLLM quantization formats natively. The
+            - code [ref=f10e108]: "--quantization awq"
+            - text: flag enables 4-bit inference with PagedAttention. vLLM's memory management integrates with quantized weight loading so the KV cache gets whatever VRAM remains.
+        - generic [ref=f10e109]:
+          - heading "llama.cpp" [level=4] [ref=f10e110]
+          - paragraph [ref=f10e111]: The defacto standard for consumer-hardware inference. GGUF format with per-layer mixed precision. Runs Llama 3 70B Q4_K_M on 48GB+ VRAM or Mac Studio. Supports NVIDIA CUDA, Apple Metal, AMD ROCm, Vulkan, and pure CPU (AVX2/AVX-512/NEON).
+        - generic [ref=f10e112]:
+          - heading "HuggingFace TGI" [level=4] [ref=f10e113]
+          - paragraph [ref=f10e114]:
+            - text: Supports GPTQ, AWQ, and bitsandbytes int8 through the
+            - code [ref=f10e115]: "--quantize"
+            - text: flag. EETQ (Easy & Efficient Transformer Quantization) integration provides optimized int8 kernels. Flash Attention + quantization work together.
+        - generic [ref=f10e116]:
+          - heading "TensorRT-LLM" [level=4] [ref=f10e117]
+          - paragraph [ref=f10e118]: NVIDIA's framework supports INT8 (post-training and SmoothQuant) and INT4 (AWQ, GPTQ) with custom CUDA kernels. Delivers the highest absolute throughput on A100/H100 — often 30%+ faster than vLLM for the same quantized model — but requires compilation.
+    - generic [ref=f10e119]:
+      - heading "Interactive Quantization Explorer" [level=2] [ref=f10e120]
+      - paragraph [ref=f10e121]:
+        - text: Select a model and precision level to see how quantization affects VRAM usage, theoretical throughput, and quality. The bar chart shows a
+        - strong [ref=f10e122]: stacked memory breakdown
+        - text: . The GPU fit indicators show whether this configuration will run on common hardware tiers.
+        - emphasis [ref=f10e123]: All estimates are approximate and based on published benchmarks.
+      - generic [ref=f10e125]:
+        - generic [ref=f10e126]: Model
+        - combobox [ref=f10e127] [cursor=pointer]:
+          - option "Llama 3 8B"
+          - option "Llama 3 70B" [selected]
+          - option "Mixtral 8×7B"
+      - generic [ref=f10e128]:
+        - button "fp16" [ref=f10e129] [cursor=pointer]
+        - button "int8" [ref=f10e130] [cursor=pointer]
+        - button "int4 (AWQ)" [ref=f10e131] [cursor=pointer]
+        - button "int4 (GPTQ)" [ref=f10e132] [cursor=pointer]
+        - button "NF4" [ref=f10e133] [cursor=pointer]
+      - generic [ref=f10e134]:
+        - generic [ref=f10e135]:
+          - generic [ref=f10e136]: 42.9 GB
+          - generic [ref=f10e137]: Total VRAM
+        - generic [ref=f10e138]:
+          - generic [ref=f10e139]: ~108 tok/s
+          - generic [ref=f10e140]: Est. Throughput (A100)
+        - generic [ref=f10e141]:
+          - generic [ref=f10e142]: 96.2%
+          - generic [ref=f10e143]: MMLU Score Preservation
+        - generic [ref=f10e144]:
+          - generic [ref=f10e145]: 3.6×
+          - generic [ref=f10e146]: Compression vs fp16
+      - heading "Will it fit?" [level=4] [ref=f10e149]
+      - generic [ref=f10e150]:
+        - generic [ref=f10e151]:
+          - generic [ref=f10e152]: ⬠ A100 80GB
+          - generic [ref=f10e153]: 80 GB
+          - generic [ref=f10e154]: FITS ✓
+        - generic [ref=f10e155]:
+          - generic [ref=f10e156]: ⬠ A100 40GB
+          - generic [ref=f10e157]: 40 GB
+          - generic [ref=f10e158]: NO FIT ✗
+        - generic [ref=f10e159]:
+          - generic [ref=f10e160]: ▣ RTX 4090 24GB
+          - generic [ref=f10e161]: 24 GB
+          - generic [ref=f10e162]: NO FIT ✗
+        - generic [ref=f10e163]:
+          - generic [ref=f10e164]: ▣ RTX 3090 24GB
+          - generic [ref=f10e165]: 24 GB
+          - generic [ref=f10e166]: NO FIT ✗
+        - generic [ref=f10e167]:
+          - generic [ref=f10e168]: ◆ Mac Studio 192GB
+          - generic [ref=f10e169]: 192 GB
+          - generic [ref=f10e170]: FITS ✓
+    - generic [ref=f10e171]:
+      - heading "Key Takeaways" [level=2] [ref=f10e172]
+      - list [ref=f10e173]:
+        - listitem [ref=f10e174]:
+          - text: →
+          - strong [ref=f10e175]: Quantization is a memory-bandwidth optimization first, compute optimization second.
+          - text: The decode phase is memory-bandwidth-bound at real-world batch sizes. Quantization reduces the bytes-per-weight that must be streamed from HBM each token. The throughput ceiling scales linearly with compression ratio — int4 gives you ~4× the theoretical tok/s of fp16 on the same GPU, even ignoring compute savings from int4 matmuls.
+        - listitem [ref=f10e176]:
+          - text: →
+          - strong [ref=f10e177]: AWQ outperforms uniform int4 because it protects salient channels.
+          - text: "Not all weight channels are equal: channels with high activation magnitudes contribute disproportionately to layer output. AWQ keeps ~1% of weights at fp16 (salient channels) and int4-quantizes the rest. GPTQ minimizes L2 error but ignores activation salience. In practice, AWQ-int4 and GPTQ-int4 are within 0.5–1% on MMLU for 70B models, but AWQ tends to handle outlier-heavy models (Mixtral, Llama 3) better."
+        - listitem [ref=f10e178]:
+          - text: →
+          - strong [ref=f10e179]: Uniform quantization hurts — outlier channels are the enemy.
+          - text: In transformer models, ~0.1% of hidden dimensions have activation magnitudes 10–100× larger than average. Uniform int8 quantization of these channels causes catastrophic errors. LLM.int8() solves this by keeping outlier columns in fp16; SmoothQuant solves it by migrating the outlier magnitude to adjacent weight channels. Either way, you must address outliers — they are not a corner case.
+        - listitem [ref=f10e180]:
+          - text: →
+          - strong [ref=f10e181]: int4 on 70B+ models is production-safe.
+          - text: Llama 3 70B int4 (AWQ) scores ~81.5% on MMLU vs ~83.5% at fp16 — a ~2% absolute drop. For most production applications (chat, summarization, RAG, code generation), this is imperceptible. The VRAM savings (140 GB → 35 GB, running on a single 48GB GPU instead of 2×A100s) are transformative. Below 8B parameters, int4 degrades more noticeably — stick with int8 for small models.
+        - listitem [ref=f10e182]:
+          - text: →
+          - strong [ref=f10e183]: The GGUF ecosystem makes consumer-hardware LLM deployment practical.
+          - text: "llama.cpp's per-layer mixed precision (Q4_K_M: Q6 for attention, Q5 for FFN gates, Q4 for FFN downs) squeezes the most quality out of 4-bit budgets. It's not just for hobbyists — Mac Studios running llama.cpp serve production workloads at small-to-medium scale. The key numbers: 70B Q4_K_M at ~12 tok/s on Mac Studio 192GB; 8B Q4_K_M at ~40 tok/s on M2 Max. Offloading layers to GPU while keeping others on CPU RAM enables running larger models than VRAM alone would allow."
+        - listitem [ref=f10e184]:
+          - text: →
+          - strong [ref=f10e185]: NF4 + double quantization is the information-theoretic ideal for normally distributed weights.
+          - text: QLoRA's NormalFloat data type allocates quantization levels proportional to the probability mass of a standard normal distribution — it is provably optimal for Gaussian-distributed data. Combined with 8-bit double quantization of scaling factors, NF4 achieves ~4.5 effective bits/parameter (beating uniform int4's 4.0). For QLoRA finetuning, this means the base model fits in ~33 GB instead of ~35 GB for Llama 3 70B — small gap, but enough to matter on a 48GB GPU.
+  - navigation [ref=f10e186]:
+    - link "← Previous Production LLM Serving" [ref=f10e187] [cursor=pointer]:
+      - /url: 38-production-llm-serving.html
+      - generic [ref=f10e188]: ← Previous
+      - generic [ref=f10e189]: Production LLM Serving
+    - generic [ref=f10e190]: 39 of 41 · Quantization for Inference
+    - link "Next → KV Cache Management" [ref=f10e191] [cursor=pointer]:
+      - /url: 40-kv-cache.html
+      - generic [ref=f10e192]: Next →
+      - generic [ref=f10e193]: KV Cache Management
