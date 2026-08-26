@@ -86,7 +86,7 @@ Prompt injection, PII, red-teaming, real incident postmortems.
 | 6 | What's the difference between an agent and a simple LLM chain? | Technical |
 | 7 | When would you fine-tune vs use prompt engineering? | Technical |
 | 8 | How do you evaluate a RAG pipeline? What metrics? | Technical / design |
-| 9 | How do you detect and mitigate hallucinations in production? | Technical |
+| 9 | How do you detect and mitigate hallucinations in **RAG pipelines**? | Technical |
 | 10 | Scale an AI chat feature to 1M daily users | System design |
 | 11 | How do you reduce latency in GenAI applications? | System design |
 | 12 | How do you optimize cost at 1M queries/day? | System design |
@@ -303,7 +303,7 @@ From LockedIn AI session data:
 
 - What metrics for benchmarking LLM performance?
 - How evaluate a chatbot?
-- Detect and mitigate hallucinations in production? ⭐
+- Detect and mitigate hallucinations in **RAG pipelines**? ⭐
 - Prevent factual errors in summarization?
 - Reduce hallucinations in a medical chatbot?
 - LLM confidently wrong — debug RAG giving confident wrong answers?

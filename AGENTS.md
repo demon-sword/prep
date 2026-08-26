@@ -24,8 +24,14 @@ prep/
 │   ├── js-event-loop-card.html
 │   ├── js-this-keyword-card.html
 │   └── recrew-interview-prep.html
+├── machine_learning/        # ML Engineer / Data Scientist interview prep
+│   └── concepts/            # 38 interactive HTML visualizations (self-contained)
+├── backend/                 # Backend / distributed systems interview prep
+│   └── concepts/            # 22 interactive HTML visualizations (self-contained)
 ├── ralph-ai-engineering/    # AI Eng notes generator (Cursor Agent loop)
 ├── ralph-concepts/          # Interactive HTML concept generator (41 concepts)
+├── ralph-machine-learning/  # ML interactive HTML concept generator (38 concepts)
+├── ralph-backend/           # Backend interactive HTML concept generator (22 concepts)
 ├── ralph-dsa/               # DSA pattern/problem generator
 ├── ralph-system-design/     # System design topic generator
 ├── venv/                    # Python venv (for generators)
@@ -63,6 +69,26 @@ Categories (start with smallest):
 ```
 
 Concept IDs: `01-self-supervision` through `41-flash-attention` (see `concepts.json`)
+
+**Machine Learning Concepts** (`ralph-machine-learning/`):
+```bash
+./ralph-machine-learning/scaffold.sh                    # build plan from concepts.json
+./ralph-machine-learning/once.sh [concept-id]           # generate one (or next in queue)
+./ralph-machine-learning/loop.sh [max] [--model slug]   # loop all 38 concepts
+./ralph-machine-learning/validate.sh [concept-id]       # validate HTML structure
+```
+
+Concept IDs: `01-bias-variance-tradeoff` through `38-arima-forecasting` (see `concepts.json`). Deeper/broader classical-ML track for dedicated ML Engineer / Data Scientist interviews — distinct from `ai-engineering/categories/06-ml-fundamentals.md`, which stays scoped to what shows up in LLM/AI-engineer interviews.
+
+**Backend / Distributed Systems Concepts** (`ralph-backend/`):
+```bash
+./ralph-backend/scaffold.sh                    # build plan from concepts.json
+./ralph-backend/once.sh [concept-id]           # generate one (or next in queue)
+./ralph-backend/loop.sh [max] [--model slug]   # loop all 22 concepts
+./ralph-backend/validate.sh [concept-id]       # validate HTML structure
+```
+
+Concept IDs: `01-caching-strategies` through `22-connection-pooling` (see `concepts.json`). 8 of the 22 (`01`–`08`) are seeded from hand-written source notes in `ralph-backend/sources/` — the generator adapts them faithfully rather than inventing theory; the rest are written from scratch in the same voice. Each concept page also has a dedicated `#interview-line` section (the exact sentence to say when the topic comes up), not just theory/viz/takeaways.
 
 **DSA Notes** (`ralph-dsa/`):
 ```bash
@@ -134,6 +160,12 @@ Playwright MCP is used by Ralph agents for validation (screenshot, console check
 - Ralph Concepts env:
   - `RALPH_CONCEPTS_MODEL` — model slug
   - `RALPH_CONCEPTS_TIMEOUT` — default 3600
+- Ralph Machine Learning env:
+  - `RALPH_ML_MODEL` — model slug
+  - `RALPH_ML_TIMEOUT` — default 3600
+- Ralph Backend env:
+  - `RALPH_BACKEND_MODEL` — model slug
+  - `RALPH_BACKEND_TIMEOUT` — default 3600
 
 ## What NOT to Do
 
@@ -151,4 +183,8 @@ Playwright MCP is used by Ralph agents for validation (screenshot, console check
 | Generate next concept HTML | `./ralph-concepts/once.sh` |
 | Validate concept HTML | `./ralph-concepts/validate.sh` |
 | Preview concept in browser | `open ai-engineering/concepts/06-qkv-attention.html` |
+| Generate next ML concept HTML | `./ralph-machine-learning/once.sh` |
+| Validate ML concept HTML | `./ralph-machine-learning/validate.sh` |
+| Generate next Backend concept HTML | `./ralph-backend/once.sh` |
+| Validate Backend concept HTML | `./ralph-backend/validate.sh` |
 | Run local server for HTML | `python3 -m http.server 8765` |
