@@ -1,0 +1,768 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1.0"/>
+<title>Sharding and Partitioning — Backend Concepts</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #0d0f17;
+    --surface: #141720;
+    --card: #1a1e2e;
+    --border: #252a3d;
+    --accent: #00d4ff;
+    --purple: #7c3aed;
+    --green: #00ff88;
+    --yellow: #ffd700;
+    --red: #ff4757;
+    --orange: #ff9500;
+    --text: #e2e8f0;
+    --text-dim: #8892a4;
+    --mono: 'JetBrains Mono', monospace;
+    --sans: 'Inter', system-ui, sans-serif;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--sans);
+    line-height: 1.6;
+  }
+  header {
+    padding: 48px 24px 32px;
+    max-width: 920px;
+    margin: 0 auto;
+    border-bottom: 1px solid var(--border);
+  }
+  .badge {
+    display: inline-block;
+    font-family: var(--mono);
+    font-size: 12px;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--accent);
+    background: rgba(0,212,255,0.08);
+    border: 1px solid rgba(0,212,255,0.3);
+    padding: 4px 10px;
+    border-radius: 4px;
+    margin-bottom: 14px;
+  }
+  h1 {
+    font-size: 32px;
+    margin: 0 0 12px;
+    font-weight: 700;
+    letter-spacing: -0.01em;
+  }
+  header p.desc {
+    color: var(--text-dim);
+    font-size: 16px;
+    max-width: 720px;
+    margin: 0;
+  }
+  main {
+    max-width: 920px;
+    margin: 0 auto;
+    padding: 0 24px 60px;
+  }
+  section {
+    margin-top: 48px;
+  }
+  h2 {
+    font-size: 13px;
+    font-family: var(--mono);
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    color: var(--purple);
+    margin-bottom: 20px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+  h2::after {
+    content: '';
+    flex: 1;
+    height: 1px;
+    background: var(--border);
+  }
+  h3 {
+    font-size: 18px;
+    color: var(--accent);
+    margin: 28px 0 10px;
+  }
+  h3:first-child { margin-top: 0; }
+  p { color: var(--text); margin: 8px 0; }
+  ul { padding-left: 22px; }
+  li { margin: 6px 0; }
+  code {
+    font-family: var(--mono);
+    background: rgba(124,58,237,0.12);
+    color: var(--purple);
+    padding: 2px 6px;
+    border-radius: 4px;
+    font-size: 0.9em;
+  }
+  pre {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 16px;
+    overflow-x: auto;
+    font-family: var(--mono);
+    font-size: 13.5px;
+    color: var(--green);
+    line-height: 1.5;
+  }
+  .aside {
+    margin-top: 10px;
+    font-size: 13.5px;
+    color: var(--text-dim);
+    border-left: 2px solid var(--border);
+    padding-left: 12px;
+    font-style: italic;
+  }
+  .card {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 22px 24px;
+  }
+
+  .strategy-grid {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 12px;
+    margin-top: 12px;
+  }
+  .strategy-grid .cell {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 12px 14px;
+    font-size: 13px;
+  }
+  .strategy-grid .cell b { display: block; margin-bottom: 4px; font-size: 13.5px; }
+  .strategy-grid .cell.range b { color: var(--orange); }
+  .strategy-grid .cell.hash b { color: var(--accent); }
+  .strategy-grid .cell.consistent b { color: var(--green); }
+  .strategy-grid .cell.directory b { color: var(--purple); }
+  .strategy-grid .cell p { color: var(--text-dim); font-size: 12.5px; margin: 0; }
+
+  .fail-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+    gap: 14px;
+    margin-top: 12px;
+  }
+  .fail-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-left: 3px solid var(--red);
+    border-radius: 8px;
+    padding: 14px 16px;
+  }
+  .fail-card.orange { border-left-color: var(--orange); }
+  .fail-card.purple { border-left-color: var(--purple); }
+  .fail-card h4 {
+    margin: 0 0 6px;
+    font-size: 14.5px;
+    color: var(--red);
+  }
+  .fail-card.orange h4 { color: var(--orange); }
+  .fail-card.purple h4 { color: var(--purple); }
+  .fail-card p { font-size: 13.5px; color: var(--text-dim); margin: 0; }
+
+  /* Visualization */
+  .viz-card {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 24px;
+  }
+  .viz-intro { color: var(--text-dim); font-size: 14.5px; margin-bottom: 18px; }
+  .viz-sub-title { font-family: var(--mono); font-size: 13px; color: var(--purple); text-transform: uppercase; letter-spacing: 0.08em; margin: 0 0 6px; }
+  .viz-block { margin-bottom: 34px; }
+  .viz-block:last-child { margin-bottom: 0; }
+  .controls-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 22px;
+    align-items: center;
+    margin-bottom: 16px;
+  }
+  .control-group { display: flex; flex-direction: column; gap: 6px; }
+  .control-group label { font-family: var(--mono); font-size: 12px; color: var(--text-dim); }
+  input[type=range] { width: 200px; accent-color: var(--accent); }
+  .btn-row { display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 16px; }
+  .run-btn {
+    font-family: var(--mono);
+    font-size: 13px;
+    background: var(--purple);
+    color: white;
+    border: none;
+    padding: 10px 18px;
+    border-radius: 6px;
+    cursor: pointer;
+    font-weight: 600;
+  }
+  .run-btn:hover { opacity: 0.88; }
+  .run-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+  .run-btn.secondary { background: var(--surface); border: 1px solid var(--border); color: var(--text); }
+  .run-btn.danger { background: var(--red); }
+
+  .dual-canvas-row {
+    display: grid;
+    grid-template-columns: 1.2fr 1fr;
+    gap: 20px;
+    align-items: start;
+  }
+  .canvas-col { display: flex; flex-direction: column; gap: 8px; }
+  .canvas-col .col-title { font-family: var(--mono); font-size: 12.5px; color: var(--text-dim); }
+  .canvas-col .col-title b { color: var(--text); }
+  canvas#ring-canvas {
+    width: 100%;
+    height: 320px;
+    background: var(--surface);
+    border-radius: 8px;
+    border: 1px solid var(--border);
+    display: block;
+  }
+  canvas#mod-canvas {
+    width: 100%;
+    height: 320px;
+    background: var(--surface);
+    border-radius: 8px;
+    border: 1px solid var(--border);
+    display: block;
+  }
+
+  .stat-row {
+    display: flex;
+    gap: 24px;
+    margin-top: 18px;
+    flex-wrap: wrap;
+  }
+  .stat {
+    font-family: var(--mono);
+    font-size: 13px;
+    color: var(--text-dim);
+  }
+  .stat b { color: var(--yellow); font-size: 18px; display: block; }
+  .stat b.good { color: var(--green); }
+  .stat b.warn { color: var(--red); }
+  .divider { height: 1px; background: var(--border); margin: 20px 0; }
+
+  blockquote#interview-quote {
+    background: linear-gradient(135deg, rgba(0,212,255,0.06), rgba(124,58,237,0.06));
+    border-left: 4px solid var(--accent);
+    border-radius: 8px;
+    margin: 0;
+    padding: 22px 26px;
+    font-size: 16.5px;
+    color: var(--text);
+    font-style: italic;
+    position: relative;
+  }
+  blockquote#interview-quote::before {
+    content: '\201C';
+    font-size: 48px;
+    color: var(--accent);
+    opacity: 0.3;
+    position: absolute;
+    top: -6px;
+    left: 10px;
+    font-style: normal;
+  }
+  #takeaways ul { list-style: none; padding: 0; }
+  #takeaways li {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-left: 3px solid var(--green);
+    border-radius: 8px;
+    padding: 12px 16px;
+    margin-bottom: 10px;
+    font-size: 14.5px;
+  }
+  #takeaways li b { color: var(--green); }
+
+  nav.concept-nav {
+    max-width: 920px;
+    margin: 0 auto;
+    padding: 24px 24px 60px;
+    display: flex;
+    justify-content: space-between;
+    font-family: var(--mono);
+    font-size: 13.5px;
+  }
+  nav.concept-nav a {
+    color: var(--accent);
+    text-decoration: none;
+    border: 1px solid var(--border);
+    padding: 10px 16px;
+    border-radius: 6px;
+  }
+  nav.concept-nav a:hover { border-color: var(--accent); }
+  nav.concept-nav span.disabled {
+    color: var(--text-dim);
+    border: 1px solid var(--border);
+    padding: 10px 16px;
+    border-radius: 6px;
+    opacity: 0.4;
+  }
+  @media (max-width: 700px) {
+    h1 { font-size: 24px; }
+    .controls-row { flex-direction: column; align-items: flex-start; }
+    .strategy-grid { grid-template-columns: 1fr 1fr; }
+    .dual-canvas-row { grid-template-columns: 1fr; }
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <span class="badge">scaling</span>
+  <h1>Sharding and Partitioning</h1>
+  <p class="desc">Range vs hash vs consistent-hash partitioning, shard-key selection criteria, the noisy-neighbour problem, fixed-partition-count rebalancing, and local vs global secondary indexes.</p>
+</header>
+
+<main>
+
+  <section id="theory">
+    <h2>Theory</h2>
+    <div class="card">
+      <h3>Terminology</h3>
+      <p><b>Partitioning</b> splits data into subsets. <b>Sharding</b> usually means partitioning across separate machines. <b>Vertical partitioning</b> splits by column or feature (users here, orders there); <b>horizontal partitioning</b> splits rows by key. Sharding almost always means horizontal.</p>
+      <p>You shard when a single node can't hold the data, can't serve the throughput, or can't meet the latency target. <b>Not before</b> — sharding costs you cross-shard joins, distributed transactions, and operational complexity forever.</p>
+
+      <h3>Strategies</h3>
+      <div class="strategy-grid">
+        <div class="cell range">
+          <b>Range partitioning</b>
+          <p>Shard by key ranges (A–F, G–M…) or by time. Range scans are efficient. <b>Hotspots are the danger</b>: time-based partitioning means all writes hit the newest partition. Common and often acceptable for time-series, disastrous for a general workload.</p>
+        </div>
+        <div class="cell hash">
+          <b>Hash partitioning</b>
+          <p>Hash the key, mod by shard count. Even distribution, no hotspots on a good hash. <b>Range queries become scatter-gather</b> across every shard, and resharding is painful because changing the shard count remaps almost every key.</p>
+        </div>
+        <div class="cell consistent">
+          <b>Consistent hashing</b>
+          <p>Map both keys and nodes onto a ring; a key belongs to the next node clockwise. Adding/removing a node only remaps the keys between it and its neighbour — roughly K/N keys, not nearly all of them. <b>Virtual nodes</b> (each physical node occupying many ring positions) fix uneven distribution with few nodes. This is the answer when someone asks how to reshard without a full migration.</p>
+        </div>
+        <div class="cell directory">
+          <b>Directory / lookup-based</b>
+          <p>A lookup service maps key to shard. Maximum flexibility, easy rebalancing, but the directory is a dependency and a potential bottleneck. Often the pragmatic choice for multi-tenant systems where tenants vary wildly in size.</p>
+        </div>
+      </div>
+
+      <h3>Choosing a shard key</h3>
+      <p>The single highest-leverage decision, and hard to change later. Criteria:</p>
+      <ul>
+        <li><b>High cardinality</b> — enough distinct values to spread across shards</li>
+        <li><b>Even distribution</b> — no single value dominating</li>
+        <li><b>Query alignment</b> — most queries should hit one shard. If your common query needs data from every shard, the key is wrong.</li>
+      </ul>
+      <div class="fail-grid">
+        <div class="fail-card purple">
+          <h4>Noisy neighbour</h4>
+          <p><b>Multi-tenant systems</b> usually shard by tenant, which aligns beautifully with queries and isolation but produces this problem: one huge tenant overwhelms its shard. Fixes: dedicated shards for the largest tenants, or a composite key (tenant + sub-key) for those tenants specifically.</p>
+        </div>
+      </div>
+
+      <h3>Rebalancing</h3>
+      <p><b>Fixed partition count</b> — create far more partitions than nodes (say 1024 partitions across 8 nodes), and rebalance by moving whole partitions. The number of partitions never changes; the mapping to nodes does. This is what Kafka and Elasticsearch do, and it's the cleanest answer to "how do you add capacity."</p>
+
+      <h3>Secondary indexes</h3>
+      <p>The subtle part. Two options:</p>
+      <div class="fail-grid">
+        <div class="fail-card orange">
+          <h4>Local (document-partitioned)</h4>
+          <p>Each shard indexes its own data. Writes are cheap and local. Reads by the secondary key must <b>scatter-gather</b> across all shards.</p>
+        </div>
+        <div class="fail-card orange">
+          <h4>Global (term-partitioned)</h4>
+          <p>The index itself is partitioned by the indexed term. Reads hit one shard. Writes must update an index on a <i>different</i> shard, so writes become distributed and often asynchronous.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section id="visualization">
+    <h2>Visualization</h2>
+    <div class="viz-card">
+      <p class="viz-sub-title">Consistent hashing vs hash-mod-N — the same "add a node" operation</p>
+      <p class="viz-intro">24 keys, both diagrams use the <i>same</i> underlying hash values. Left: a real consistent-hash ring — each key belongs to the next node clockwise. Right: naive <code>hash(key) % N</code>. Click <b>Add Node</b> or <b>Remove Node</b> and watch how few keys move on the ring versus how nearly all of them move under mod-N.</p>
+
+      <div class="controls-row">
+        <div class="btn-row" style="margin-bottom:0;">
+          <button class="run-btn" id="add-node-btn">+ Add Node</button>
+          <button class="run-btn secondary" id="remove-node-btn">− Remove Node</button>
+          <button class="run-btn secondary" id="reset-btn">Reset</button>
+        </div>
+        <div class="control-group">
+          <label>Virtual nodes per physical node: <span id="vnode-val">3</span></label>
+          <input type="range" id="vnode-slider" min="1" max="8" value="3">
+        </div>
+      </div>
+
+      <div class="dual-canvas-row">
+        <div class="canvas-col">
+          <div class="col-title"><b>Consistent hashing ring</b> — key belongs to next node clockwise</div>
+          <canvas id="ring-canvas" width="480" height="320"></canvas>
+        </div>
+        <div class="canvas-col">
+          <div class="col-title"><b>hash(key) % N</b> — naive modulo partitioning</div>
+          <canvas id="mod-canvas" width="380" height="320"></canvas>
+        </div>
+      </div>
+
+      <div class="stat-row">
+        <div class="stat">Nodes<b id="stat-nodes">4</b></div>
+        <div class="stat">Consistent hash: remapped<b id="stat-ring-remap" class="good">0 / 24 (0%)</b></div>
+        <div class="stat">hash % N: remapped<b id="stat-mod-remap" class="warn">0 / 24 (0%)</b></div>
+        <div class="stat">Ring balance (max÷min keys/node)<b id="stat-balance">—</b></div>
+      </div>
+    </div>
+  </section>
+
+  <section id="interview-line">
+    <h2>Interview Line</h2>
+    <blockquote id="interview-quote">
+      "I'd shard by tenant, because it aligns with both query patterns and the isolation requirement. The risk is noisy neighbours — one enterprise tenant generating 100x the volume — so I'd use a fixed large partition count and pin the biggest tenants to dedicated partitions rather than resharding the whole cluster."
+    </blockquote>
+  </section>
+
+  <section id="takeaways">
+    <h2>Key Takeaways</h2>
+    <ul>
+      <li><b>Consistent hashing remaps ~K/N keys on a topology change; hash-mod-N remaps almost all of them.</b> That's the entire pitch — mod-N is fine until the day you need to add capacity, and then it's a full data migration.</li>
+      <li><b>Virtual nodes exist to fix the balance problem consistent hashing introduces with few physical nodes.</b> With only 4–8 nodes, random ring positions produce lopsided arcs; giving each physical node 100+ virtual positions smooths the distribution without giving up the "few keys move" property.</li>
+      <li><b>Sharding creates the hot-partition problem that consistent hashing and fixed-partition-count rebalancing exist to solve.</b> Kafka and Elasticsearch both fix the partition count at creation time (e.g. 1024 partitions over 8 brokers) and rebalance by moving whole partitions — the count never changes, only the assignment.</li>
+      <li><b>The shard key is the highest-leverage, hardest-to-reverse decision in the whole design.</b> Get query alignment wrong and every hot query becomes a scatter-gather across every shard — the same operational cost as a full-collection scan, just distributed.</li>
+      <li><b>Global secondary indexes trade read cost for write cost.</b> Local indexes keep writes cheap and single-shard but make secondary-key reads scatter-gather; global indexes make reads single-shard but writes become distributed and often async — pick based on your read:write ratio.</li>
+      <li><b>Noisy neighbour is the tenant-sharding tax.</b> Pinning your largest tenants to dedicated shards (or a composite tenant+sub-key for just those tenants) is cheaper than redesigning the shard key for everyone else.</li>
+    </ul>
+  </section>
+
+</main>
+
+<nav class="concept-nav">
+  <a href="../concepts/03-consistency-tradeoffs.html">← Previous: Consistency Trade-offs</a>
+  <a href="../concepts/05-idempotency.html">Next: Idempotency →</a>
+</nav>
+
+<script>
+(function() {
+  const RING = 1000; // hash space size, shared by both diagrams
+  const palette = ['#00d4ff','#7c3aed','#00ff88','#ffd700','#ff9500','#ff4757','#38bdf8','#f472b6','#a3e635','#fb923c'];
+
+  function hashStr(s) {
+    // FNV-1a with an integer avalanche finalizer — plain polynomial hashing
+    // clusters near-identical short strings like "key-0".."key-9" together,
+    // which defeats the point of a ring visualization.
+    let h = 2166136261;
+    for (let i = 0; i < s.length; i++) {
+      h ^= s.charCodeAt(i);
+      h = Math.imul(h, 16777619);
+    }
+    h ^= h >>> 16;
+    h = Math.imul(h, 0x45d9f3b);
+    h ^= h >>> 16;
+    h = Math.imul(h, 0x45d9f3b);
+    h ^= h >>> 16;
+    return (h >>> 0) % RING;
+  }
+
+  const KEY_COUNT = 24;
+  const keys = Array.from({ length: KEY_COUNT }, (_, i) => 'key-' + i);
+  const keyHash = keys.map(k => hashStr(k)); // shared hash value used both as ring angle and as mod input
+
+  const letters = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ'.split('');
+  let physicalNodes = [];   // array of node letters, in creation order
+  let nodeCreationIdx = {}; // letter -> color index (stable across removals)
+  let colorCounter = 0;
+  let virtualCount = 3;
+  let virtualPositions = []; // [{node, angle}]
+
+  let ringAssign = [];  // per-key node letter (consistent hashing)
+  let modAssign = [];   // per-key shard index (hash % N)
+  let ringChanged = new Set();
+  let modChanged = new Set();
+
+  function addPhysicalNode() {
+    const letter = letters[nodeCreationIdx.__next || 0] || ('N' + physicalNodes.length);
+    // pick next unused letter deterministically
+    let idx = 0;
+    while (physicalNodes.includes(letters[idx])) idx++;
+    const l = letters[idx];
+    physicalNodes.push(l);
+    nodeCreationIdx[l] = colorCounter++;
+    return l;
+  }
+
+  function initNodes() {
+    physicalNodes = [];
+    nodeCreationIdx = {};
+    colorCounter = 0;
+    for (let i = 0; i < 4; i++) addPhysicalNode();
+  }
+
+  function buildVirtualPositions() {
+    virtualPositions = [];
+    physicalNodes.forEach(node => {
+      for (let v = 0; v < virtualCount; v++) {
+        virtualPositions.push({ node, angle: hashStr(node + '#' + v) });
+      }
+    });
+    virtualPositions.sort((a, b) => a.angle - b.angle);
+  }
+
+  function assignRing(angle) {
+    for (const vp of virtualPositions) {
+      if (vp.angle >= angle) return vp.node;
+    }
+    return virtualPositions[0].node; // wrap around
+  }
+
+  function computeRingAssign() {
+    return keyHash.map(h => assignRing(h));
+  }
+
+  function computeModAssign() {
+    const N = physicalNodes.length;
+    return keyHash.map(h => h % N);
+  }
+
+  function nodeColor(letter) {
+    return palette[nodeCreationIdx[letter] % palette.length];
+  }
+  function shardColor(idx) {
+    return palette[idx % palette.length];
+  }
+
+  // ============ DOM refs ============
+  const addBtn = document.getElementById('add-node-btn');
+  const removeBtn = document.getElementById('remove-node-btn');
+  const resetBtn = document.getElementById('reset-btn');
+  const vSlider = document.getElementById('vnode-slider');
+  const vVal = document.getElementById('vnode-val');
+  const statNodes = document.getElementById('stat-nodes');
+  const statRingRemap = document.getElementById('stat-ring-remap');
+  const statModRemap = document.getElementById('stat-mod-remap');
+  const statBalance = document.getElementById('stat-balance');
+
+  const ringCanvas = document.getElementById('ring-canvas');
+  const ringCtx = ringCanvas.getContext('2d');
+  const modCanvas = document.getElementById('mod-canvas');
+  const modCtx = modCanvas.getContext('2d');
+
+  function angleToXY(angle, cx, cy, radius) {
+    const rad = (angle / RING) * Math.PI * 2 - Math.PI / 2;
+    return { x: cx + radius * Math.cos(rad), y: cy + radius * Math.sin(rad) };
+  }
+
+  function drawRing() {
+    const W = ringCanvas.width, H = ringCanvas.height;
+    ringCtx.clearRect(0, 0, W, H);
+    const cx = W / 2, cy = H / 2 - 6, radius = 118;
+
+    ringCtx.strokeStyle = '#252a3d';
+    ringCtx.lineWidth = 2;
+    ringCtx.beginPath();
+    ringCtx.arc(cx, cy, radius, 0, Math.PI * 2);
+    ringCtx.stroke();
+
+    // virtual node ticks
+    virtualPositions.forEach(vp => {
+      const outer = angleToXY(vp.angle, cx, cy, radius + 10);
+      const inner = angleToXY(vp.angle, cx, cy, radius - 6);
+      ringCtx.strokeStyle = nodeColor(vp.node);
+      ringCtx.lineWidth = 2;
+      ringCtx.beginPath();
+      ringCtx.moveTo(inner.x, inner.y);
+      ringCtx.lineTo(outer.x, outer.y);
+      ringCtx.stroke();
+    });
+
+    // physical node labels — placed at each node's lowest-angle virtual
+    // position, staggered outward when two nodes hash close together so
+    // labels don't overlap (deterministic hashing can put e.g. A and D
+    // only a couple of ring units apart)
+    const labelPositions = physicalNodes.map(node => {
+      const nodeVps = virtualPositions.filter(x => x.node === node);
+      const angle = Math.min(...nodeVps.map(x => x.angle));
+      return { node, angle };
+    }).sort((a, b) => a.angle - b.angle);
+
+    let lastAngle = null, ring = 0;
+    const collisionThreshold = RING * 0.03; // ~3% of ring width
+    labelPositions.forEach(lp => {
+      if (lastAngle !== null && (lp.angle - lastAngle) < collisionThreshold) {
+        ring += 1;
+      } else {
+        ring = 0;
+      }
+      lastAngle = lp.angle;
+      const pos = angleToXY(lp.angle, cx, cy, radius + 26 + ring * 16);
+      ringCtx.fillStyle = nodeColor(lp.node);
+      ringCtx.font = 'bold 12px JetBrains Mono';
+      ringCtx.textAlign = 'center';
+      ringCtx.fillText(lp.node, pos.x, pos.y + 4);
+    });
+
+    // keys
+    keyHash.forEach((h, i) => {
+      const pos = angleToXY(h, cx, cy, radius - 22);
+      const node = ringAssign[i];
+      const remapped = ringChanged.has(i);
+      ringCtx.beginPath();
+      ringCtx.arc(pos.x, pos.y, remapped ? 7 : 5, 0, Math.PI * 2);
+      ringCtx.fillStyle = nodeColor(node);
+      ringCtx.fill();
+      if (remapped) {
+        ringCtx.strokeStyle = '#ffd700';
+        ringCtx.lineWidth = 2.5;
+        ringCtx.stroke();
+      }
+    });
+
+    ringCtx.textAlign = 'left';
+    ringCtx.font = '11px JetBrains Mono';
+    ringCtx.fillStyle = '#8892a4';
+    ringCtx.fillText('yellow ring = remapped this operation', 10, H - 10);
+  }
+
+  function drawMod() {
+    const W = modCanvas.width, H = modCanvas.height;
+    modCtx.clearRect(0, 0, W, H);
+    const cols = 6, rows = 4;
+    const pad = 14;
+    const cellW = (W - pad * 2) / cols;
+    const cellH = (H - pad * 2 - 24) / rows;
+
+    keys.forEach((k, i) => {
+      const col = i % cols, row = Math.floor(i / cols);
+      const x = pad + col * cellW + 4;
+      const y = pad + row * cellH + 4;
+      const w = cellW - 8, h = cellH - 8;
+      const shard = modAssign[i];
+      const remapped = modChanged.has(i);
+
+      modCtx.fillStyle = shardColor(shard);
+      modCtx.globalAlpha = 0.85;
+      modCtx.fillRect(x, y, w, h);
+      modCtx.globalAlpha = 1;
+
+      if (remapped) {
+        modCtx.strokeStyle = '#ffd700';
+        modCtx.lineWidth = 3;
+        modCtx.strokeRect(x, y, w, h);
+      } else {
+        modCtx.strokeStyle = '#252a3d';
+        modCtx.lineWidth = 1;
+        modCtx.strokeRect(x, y, w, h);
+      }
+
+      modCtx.fillStyle = '#0d0f17';
+      modCtx.font = 'bold 11px JetBrains Mono';
+      modCtx.textAlign = 'center';
+      modCtx.fillText('S' + shard, x + w / 2, y + h / 2 + 4);
+    });
+
+    modCtx.textAlign = 'left';
+    modCtx.font = '11px JetBrains Mono';
+    modCtx.fillStyle = '#8892a4';
+    modCtx.fillText('yellow border = remapped this operation', 10, H - 10);
+  }
+
+  function computeBalance() {
+    const counts = {};
+    physicalNodes.forEach(n => counts[n] = 0);
+    ringAssign.forEach(n => counts[n] = (counts[n] || 0) + 1);
+    const vals = Object.values(counts);
+    const max = Math.max(...vals), min = Math.min(...vals);
+    return min === 0 ? '∞ (a node holds 0 keys)' : (max / min).toFixed(2) + '×';
+  }
+
+  function recompute(prevRing, prevMod) {
+    ringAssign = computeRingAssign();
+    modAssign = computeModAssign();
+
+    ringChanged = new Set();
+    modChanged = new Set();
+    if (prevRing) {
+      for (let i = 0; i < KEY_COUNT; i++) {
+        if (prevRing[i] !== ringAssign[i]) ringChanged.add(i);
+      }
+    }
+    if (prevMod) {
+      for (let i = 0; i < KEY_COUNT; i++) {
+        if (prevMod[i] !== modAssign[i]) modChanged.add(i);
+      }
+    }
+
+    const ringPct = Math.round((ringChanged.size / KEY_COUNT) * 100);
+    const modPct = Math.round((modChanged.size / KEY_COUNT) * 100);
+    statRingRemap.textContent = ringChanged.size + ' / ' + KEY_COUNT + ' (' + ringPct + '%)';
+    statModRemap.textContent = modChanged.size + ' / ' + KEY_COUNT + ' (' + modPct + '%)';
+    statNodes.textContent = physicalNodes.length;
+    statBalance.textContent = computeBalance();
+
+    drawRing();
+    drawMod();
+  }
+
+  addBtn.addEventListener('click', () => {
+    const prevRing = ringAssign.slice();
+    const prevMod = modAssign.slice();
+    addPhysicalNode();
+    buildVirtualPositions();
+    recompute(prevRing, prevMod);
+    removeBtn.disabled = physicalNodes.length <= 1;
+  });
+
+  removeBtn.addEventListener('click', () => {
+    if (physicalNodes.length <= 1) return;
+    const prevRing = ringAssign.slice();
+    const prevMod = modAssign.slice();
+    physicalNodes.pop();
+    buildVirtualPositions();
+    recompute(prevRing, prevMod);
+    removeBtn.disabled = physicalNodes.length <= 1;
+  });
+
+  resetBtn.addEventListener('click', () => {
+    initNodes();
+    virtualCount = 3;
+    vSlider.value = 3;
+    vVal.textContent = 3;
+    buildVirtualPositions();
+    ringAssign = computeRingAssign();
+    modAssign = computeModAssign();
+    ringChanged = new Set();
+    modChanged = new Set();
+    recompute(null, null);
+    removeBtn.disabled = physicalNodes.length <= 1;
+  });
+
+  vSlider.addEventListener('input', () => {
+    virtualCount = parseInt(vSlider.value, 10);
+    vVal.textContent = virtualCount;
+    const prevRing = ringAssign.slice();
+    buildVirtualPositions();
+    recompute(prevRing, modAssign.slice()); // mod side unaffected by virtual node count
+  });
+
+  // init
+  initNodes();
+  buildVirtualPositions();
+  ringAssign = computeRingAssign();
+  modAssign = computeModAssign();
+  recompute(null, null);
+  removeBtn.disabled = physicalNodes.length <= 1;
+})();
+</script>
+</body>
+</html>

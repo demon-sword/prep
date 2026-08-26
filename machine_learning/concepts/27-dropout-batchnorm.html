@@ -1,0 +1,789 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1.0"/>
+  <title>Dropout & Batch Normalization — Machine Learning Concepts</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com"/>
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet"/>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg:        #0d0f17;
+      --surface:   #141720;
+      --card:      #1a1e2e;
+      --border:    #252a3d;
+      --accent:    #00d4ff;
+      --purple:    #7c3aed;
+      --green:     #00ff88;
+      --yellow:    #ffd700;
+      --red:       #ff4757;
+      --orange:    #ff9500;
+      --text:      #e2e8f0;
+      --text-dim:  #8892a4;
+      --mono:      'JetBrains Mono', monospace;
+      --sans:      'Inter', system-ui, sans-serif;
+    }
+
+    html { scroll-behavior: smooth; }
+
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: var(--sans);
+      font-size: 16px;
+      line-height: 1.7;
+      min-height: 100vh;
+    }
+
+    header {
+      background: var(--surface);
+      border-bottom: 1px solid var(--border);
+      padding: 2rem 2rem 1.5rem;
+      max-width: 1100px;
+      margin: 0 auto;
+    }
+
+    .group-badge {
+      display: inline-block;
+      font-family: var(--mono);
+      font-size: 0.7rem;
+      font-weight: 700;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      color: var(--accent);
+      background: rgba(0, 212, 255, 0.1);
+      border: 1px solid rgba(0, 212, 255, 0.3);
+      padding: 0.2em 0.7em;
+      border-radius: 4px;
+      margin-bottom: 0.75rem;
+    }
+
+    header h1 {
+      font-size: clamp(1.6rem, 4vw, 2.4rem);
+      font-weight: 700;
+      color: var(--text);
+      line-height: 1.2;
+      margin-bottom: 0.5rem;
+    }
+
+    header h1 span.id {
+      color: var(--text-dim);
+      font-size: 0.55em;
+      font-family: var(--mono);
+      margin-right: 0.5rem;
+      vertical-align: middle;
+    }
+
+    header p.desc {
+      color: var(--text-dim);
+      font-size: 1.05rem;
+      max-width: 700px;
+    }
+
+    main {
+      max-width: 1100px;
+      margin: 0 auto;
+      padding: 0 2rem 4rem;
+    }
+
+    section { margin-top: 3rem; }
+
+    section > h2 {
+      font-size: 1.4rem;
+      font-weight: 700;
+      color: var(--accent);
+      border-bottom: 1px solid var(--border);
+      padding-bottom: 0.5rem;
+      margin-bottom: 1.5rem;
+    }
+
+    h3 {
+      font-size: 1.1rem;
+      font-weight: 600;
+      color: var(--yellow);
+      margin: 1.5rem 0 0.6rem;
+    }
+
+    p { margin-bottom: 1rem; color: var(--text); }
+
+    ul, ol { padding-left: 1.5rem; margin-bottom: 1rem; }
+    li { margin-bottom: 0.4rem; }
+
+    code {
+      font-family: var(--mono);
+      font-size: 0.85em;
+      background: rgba(0, 212, 255, 0.08);
+      color: var(--accent);
+      padding: 0.1em 0.35em;
+      border-radius: 3px;
+    }
+
+    .formula-block {
+      background: var(--card);
+      border-left: 3px solid var(--purple);
+      border-radius: 0 8px 8px 0;
+      padding: 0.8rem 1.2rem;
+      margin: 1rem 0;
+      font-family: var(--mono);
+      font-size: 0.95rem;
+      color: var(--text);
+    }
+
+    .callout {
+      background: rgba(124, 58, 237, 0.08);
+      border: 1px solid rgba(124, 58, 237, 0.3);
+      border-radius: 8px;
+      padding: 1rem 1.2rem;
+      margin: 1rem 0;
+    }
+
+    .callout strong { color: var(--purple); }
+
+    /* ── Visualization ── */
+    #visualization .viz-card {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 1.5rem;
+      margin-bottom: 1.5rem;
+    }
+
+    .viz-title { font-weight: 600; font-size: 1rem; color: var(--text); margin-bottom: 0.3rem; }
+    .viz-desc { font-size: 0.88rem; color: var(--text-dim); margin-bottom: 1.2rem; }
+
+    .controls {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 1.25rem;
+      align-items: center;
+      margin-bottom: 1.2rem;
+    }
+
+    .slider-row { display: flex; align-items: center; gap: 0.75rem; }
+
+    .slider-row label {
+      font-size: 0.82rem;
+      color: var(--text-dim);
+      white-space: nowrap;
+    }
+
+    .slider-row input[type="range"] {
+      accent-color: var(--accent);
+      width: 220px;
+    }
+
+    .slider-val {
+      font-family: var(--mono);
+      font-size: 0.85rem;
+      color: var(--accent);
+      min-width: 2.8rem;
+      display: inline-block;
+    }
+
+    .ctrl-btn {
+      font-family: var(--mono);
+      font-size: 0.8rem;
+      padding: 0.45em 1.1em;
+      border-radius: 6px;
+      border: 1px solid var(--accent);
+      background: rgba(0, 212, 255, 0.08);
+      color: var(--accent);
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+
+    .ctrl-btn:hover { background: rgba(0, 212, 255, 0.2); }
+    .ctrl-btn:active { transform: scale(0.97); }
+    .ctrl-btn.ghost { border-color: var(--border); background: transparent; color: var(--text-dim); }
+    .ctrl-btn.ghost:hover { border-color: var(--text-dim); }
+    .ctrl-btn.active-on { background: rgba(0, 255, 136, 0.15); border-color: var(--green); color: var(--green); }
+    .ctrl-btn:disabled { opacity: 0.35; cursor: not-allowed; }
+
+    canvas {
+      display: block;
+      border-radius: 8px;
+      background: var(--surface);
+      max-width: 100%;
+      margin: 0 auto;
+    }
+
+    .legend {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 1rem;
+      margin-top: 0.8rem;
+      justify-content: center;
+    }
+
+    .legend-item {
+      display: flex;
+      align-items: center;
+      gap: 0.4rem;
+      font-size: 0.78rem;
+      color: var(--text-dim);
+    }
+
+    .legend-dot { width: 10px; height: 10px; border-radius: 50%; }
+    .legend-swatch { width: 14px; height: 14px; border-radius: 3px; }
+
+    .side-panel {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 1.1rem;
+      margin-top: 1.2rem;
+    }
+
+    .side-panel h4 {
+      font-size: 0.85rem;
+      font-weight: 700;
+      color: var(--text);
+      margin-bottom: 0.8rem;
+      letter-spacing: 0.02em;
+    }
+
+    .readout-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.6rem;
+      margin-top: 0.4rem;
+    }
+
+    .readout {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 0.55rem 0.9rem;
+      font-size: 0.78rem;
+      color: var(--text-dim);
+      flex: 1;
+      min-width: 150px;
+      border-left: 3px solid var(--border);
+    }
+
+    .readout strong { display: block; font-family: var(--mono); font-size: 1.05rem; margin-top: 0.2rem; color: var(--text); }
+
+    .hint {
+      font-size: 0.78rem;
+      color: var(--text-dim);
+      margin-top: 0.8rem;
+      font-style: italic;
+      text-align: center;
+    }
+
+    /* ── Takeaways ── */
+    #takeaways ul { list-style: none; padding: 0; }
+
+    #takeaways li {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 1rem 1.2rem;
+      margin-bottom: 0.75rem;
+      padding-left: 3rem;
+      position: relative;
+    }
+
+    #takeaways li::before {
+      content: '→';
+      position: absolute;
+      left: 1rem;
+      color: var(--accent);
+      font-weight: 700;
+    }
+
+    /* ── Nav ── */
+    .concept-nav {
+      max-width: 1100px;
+      margin: 0 auto;
+      padding: 1.5rem 2rem 3rem;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      border-top: 1px solid var(--border);
+    }
+
+    .nav-link {
+      display: flex;
+      flex-direction: column;
+      gap: 0.2rem;
+      text-decoration: none;
+      padding: 0.6rem 1rem;
+      border-radius: 8px;
+      border: 1px solid var(--border);
+      background: var(--surface);
+      transition: all 0.2s;
+      max-width: 220px;
+    }
+
+    .nav-link:hover { border-color: var(--accent); background: rgba(0, 212, 255, 0.06); }
+    .nav-link.disabled { opacity: 0.3; pointer-events: none; }
+
+    .nav-dir {
+      font-size: 0.7rem;
+      font-family: var(--mono);
+      color: var(--text-dim);
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+    }
+
+    .nav-title { font-size: 0.88rem; color: var(--text); font-weight: 500; }
+
+    @media (max-width: 640px) {
+      header, main { padding-left: 1rem; padding-right: 1rem; }
+      .concept-nav { padding-left: 1rem; padding-right: 1rem; flex-direction: column; gap: 0.75rem; }
+      .nav-link { max-width: 100%; width: 100%; }
+      .slider-row input[type="range"] { width: 140px; }
+    }
+  </style>
+</head>
+<body>
+
+<header>
+  <div class="group-badge">Optimization</div>
+  <h1><span class="id">27</span>Dropout & Batch Normalization</h1>
+  <p class="desc">Dropout as approximate model averaging via random unit masking, and batch normalization's effect on internal covariate shift and training stability.</p>
+</header>
+
+<main>
+
+  <!-- ── THEORY ── -->
+  <section id="theory">
+    <h2>Theory</h2>
+
+    <h3>Dropout: Training an Exponential Ensemble for the Price of One Network</h3>
+    <p>
+      Dropout (Srivastava et al., 2014) regularizes a neural network by, on every training forward pass, independently zeroing each hidden unit's activation with probability <code>p</code> (a Bernoulli mask, typically <code>p = 0.5</code> for hidden layers and <code>p = 0.1–0.2</code> for inputs). Because the mask is resampled every mini-batch, a network with <code>n</code> droppable units trains something like <code>2ⁿ</code> distinct "thinned" sub-networks that share weights — an implicit ensemble at a fraction of the memory and compute cost of training <code>2ⁿ</code> separate models. At test time you can't literally average <code>2ⁿ</code> networks, so the original formulation used the <strong>weight-scaling rule</strong>: run the full network with all units active but multiply each weight by <code>(1 − p)</code>, which approximates the ensemble's geometric mean output. Modern frameworks instead use <strong>inverted dropout</strong>: during training, surviving activations are scaled up by <code>1/(1 − p)</code> so the expected activation magnitude matches what the full network would produce, leaving the test-time forward pass completely unmodified (no rescaling needed at inference). This is what <code>torch.nn.Dropout</code> and <code>tf.keras.layers.Dropout</code> both implement, and it's why forgetting to call <code>model.eval()</code> in PyTorch is a classic bug — the model keeps randomly zeroing units and randomly re-scaling at serving time, causing inconsistent, non-deterministic predictions.
+    </p>
+    <p>
+      Dropout also has a Bayesian reading: leaving dropout <em>on</em> at inference time and running many stochastic forward passes (<strong>Monte Carlo Dropout</strong>, Gal & Ghahramani, 2016) turns the spread of predictions into an approximate posterior predictive distribution — a cheap way to get uncertainty estimates from an already-trained network without an explicit Bayesian model.
+    </p>
+
+    <h3>Batch Normalization: Re-Centering Activations Mid-Network</h3>
+    <p>
+      Batch normalization (Ioffe & Szegedy, 2015) normalizes each layer's pre-activation using the mean and variance computed <em>across the current mini-batch</em>, then applies a learnable affine transform so the layer isn't forced to stay at exactly zero-mean/unit-variance:
+    </p>
+    <div class="formula-block">
+      x̂ᵢ = (xᵢ − μ_batch) / √(σ²_batch + ε)  &nbsp;→&nbsp; yᵢ = γ·x̂ᵢ + β
+    </div>
+    <p>
+      <code>γ</code> and <code>β</code> are per-channel learned parameters that let the network recover any scale/shift it actually needs (including undoing the normalization entirely if that's optimal), so BatchNorm never strictly reduces representational capacity. The original paper framed the benefit as reducing <strong>internal covariate shift</strong> — the idea that each layer's input distribution keeps drifting as earlier layers' weights update during training, forcing every layer to continually re-adapt. A widely cited later analysis (Santurkar et al., 2018) argued the real mechanism is different: BatchNorm smooths the loss landscape (bounds the Lipschitz constant of the loss and its gradients), which is why it tolerates much larger learning rates and converges faster — largely independent of whether covariate shift is actually reduced. Both framings are worth knowing for an interview; the practical effect either way is the same: deeper networks train faster, tolerate higher learning rates, and are less sensitive to weight initialization.
+    </p>
+    <p>
+      At <strong>training time</strong> BatchNorm uses the live mini-batch statistics; at <strong>inference time</strong> it uses a running (exponential moving) average of mean/variance accumulated during training — <code>torch.nn.BatchNorm2d</code> defaults to <code>momentum=0.1</code>, <code>eps=1e-5</code>. This train/eval statistic switch is, like dropout, gated by <code>model.eval()</code> — another reason that call is non-optional before serving.
+    </p>
+
+    <h3>Where Dropout and BatchNorm Conflict</h3>
+    <p>
+      Stacking dropout directly before batch normalization is a known anti-pattern: Li et al. (2018, "Understanding the Disharmony Between Dropout and Batch Normalization") showed that dropout's train/test behavior mismatch (units are masked at train time, all present at test time) shifts the <em>variance</em> of activations feeding into BatchNorm between the two phases, causing a train-test statistics mismatch that BatchNorm's running estimates don't correct for — sometimes hurting accuracy compared to using either technique alone. In practice, most modern CNN and ResNet architectures use BatchNorm and skip dropout in the convolutional trunk entirely, reserving dropout (if used at all) for the final fully-connected classifier head, placed <em>after</em> any BatchNorm layer, not before.
+    </p>
+
+    <h3>Production Reality</h3>
+    <p>
+      BatchNorm's per-batch statistics make it batch-size dependent: at batch size 4–8 the estimates get noisy and accuracy degrades, which is why object detection/segmentation pipelines constrained to tiny batches (large images) often swap in <strong>GroupNorm</strong> or <strong>LayerNorm</strong>, both of which normalize within a single example instead of across the batch. Transformers use LayerNorm almost universally for the same reason — variable sequence lengths and batch-size-1 autoregressive decoding make batch statistics meaningless. Distributed multi-GPU training needs <code>SyncBatchNorm</code> to aggregate statistics across devices, since per-GPU mini-batches alone give biased, high-variance estimates. And because BatchNorm itself has a mild regularizing effect (the noise from mini-batch statistics acts similarly to dropout's noise injection), many modern architectures — ResNets, EfficientNets — use little or no dropout at all and rely on BatchNorm plus weight decay and data augmentation for regularization instead.
+    </p>
+  </section>
+
+  <!-- ── VISUALIZATION ── -->
+  <section id="visualization">
+    <h2>Interactive Visualization</h2>
+
+    <div class="viz-card">
+      <div class="viz-title">Dropout: Live Bernoulli Masking on a Forward Pass</div>
+      <div class="viz-desc">
+        A 5→7→7→3 feedforward network. In <strong>Train</strong> mode, each hidden unit is independently dropped with probability <code>p</code> on every forward pass (inverted dropout — surviving activations are scaled by <code>1/(1−p)</code>). Click <strong>Resample forward pass</strong> to redraw the Bernoulli mask; grayed nodes and faded edges are the units zeroed this pass. Switch to <strong>Eval</strong> mode to see all units active with no scaling — the real difference between train-time and inference-time dropout.
+      </div>
+
+      <div class="controls">
+        <div class="slider-row">
+          <label>Dropout rate p</label>
+          <input type="range" id="p-slider" min="0" max="0.8" step="0.05" value="0.5"/>
+          <span class="slider-val" id="p-val">0.50</span>
+        </div>
+        <button class="ctrl-btn" id="resample-btn">↻ Resample forward pass</button>
+        <button class="ctrl-btn ghost" id="mode-btn">Mode: Train</button>
+      </div>
+
+      <canvas id="nn-canvas" width="700" height="340"></canvas>
+
+      <div class="legend">
+        <div class="legend-item"><div class="legend-dot" style="background:#00ff88"></div>Active unit</div>
+        <div class="legend-item"><div class="legend-dot" style="background:#3a3f52"></div>Dropped unit (this pass)</div>
+      </div>
+
+      <div class="side-panel">
+        <h4>Live layer readout</h4>
+        <div class="readout-row" id="dropout-readout"></div>
+        <p class="hint">In Eval mode every unit stays active — that's the "average of 2ⁿ sub-networks" approximation dropout relies on at inference.</p>
+      </div>
+    </div>
+
+    <div class="viz-card">
+      <div class="viz-title">Batch Normalization: Activation Drift Across a Deep Stack</div>
+      <div class="viz-desc">
+        A 400-sample batch is pushed through 6 stacked linear layers, each with a different weight scale and bias — deliberately mimicking uncontrolled internal covariate shift. Toggle <strong>Batch Norm OFF/ON</strong>: without it the per-layer mean and standard deviation drift and compound layer over layer (watch the range explode); with it, every layer's batch statistics are re-centered to ≈0 mean / ≈1 std (<code>γ=1, β=0</code>) before the signal is passed on, exactly as <code>x̂ = (x − μ_batch)/√(σ²_batch+ε)</code> computes live on this batch each redraw.
+      </div>
+
+      <div class="controls">
+        <button class="ctrl-btn" id="bn-toggle">Batch Norm: OFF</button>
+        <button class="ctrl-btn ghost" id="bn-resample">↻ New batch</button>
+      </div>
+
+      <canvas id="bn-canvas" width="700" height="300"></canvas>
+
+      <div class="legend">
+        <div class="legend-item"><div class="legend-swatch" style="background:#7c3aed"></div>Per-layer activation histogram</div>
+      </div>
+
+      <div class="side-panel">
+        <h4>Live per-layer statistics (mean ± std)</h4>
+        <div class="readout-row" id="bn-readout"></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ── TAKEAWAYS ── -->
+  <section id="takeaways">
+    <h2>Key Takeaways</h2>
+    <ul>
+      <li>
+        <strong>Inverted dropout scales survivors by <code>1/(1−p)</code> at train time so inference needs zero modification</strong> — <code>torch.nn.Dropout</code>/<code>tf.keras.layers.Dropout</code> both implement this; forgetting <code>model.eval()</code> leaves dropout (and BatchNorm's batch statistics) active at serving time, a top cause of "my model gives different outputs for the same input in production."
+      </li>
+      <li>
+        <strong>Dropout approximates averaging <code>2ⁿ</code> weight-shared sub-networks</strong> — the ensemble interpretation, not just "adds noise," is the mechanism worth stating on a whiteboard; Monte Carlo Dropout (keeping dropout on at inference and sampling repeatedly) reuses the same mechanism to get free uncertainty estimates.
+      </li>
+      <li>
+        <strong>BatchNorm's benefit is debated but its effect is not</strong> — Ioffe & Szegedy's original "reduces internal covariate shift" claim was challenged by Santurkar et al. (2018), who showed the real driver is a smoother loss landscape (bounded Lipschitz gradients) that tolerates much higher learning rates; know both framings for an interview.
+      </li>
+      <li>
+        <strong>Dropout directly before BatchNorm is a known anti-pattern</strong> (Li et al., 2018) — the train/test variance mismatch dropout introduces corrupts BatchNorm's running statistics; most CNN/ResNet architectures use BatchNorm throughout the trunk and skip dropout, or place it only after the last BatchNorm in the classifier head.
+      </li>
+      <li>
+        <strong>BatchNorm degrades at small batch sizes (≈4–8)</strong> and is meaningless at batch size 1 — detection/segmentation models with large-image small-batch training, and all transformer architectures, use <strong>GroupNorm</strong> or <strong>LayerNorm</strong> instead, which normalize within a single example rather than across the batch.
+      </li>
+      <li>
+        <strong>BatchNorm itself is a mild regularizer</strong> (mini-batch statistic noise plays a role similar to dropout's noise injection) — this is part of why modern architectures like ResNets and EfficientNets use BatchNorm plus weight decay and augmentation and largely skip dropout in the convolutional layers.
+      </li>
+    </ul>
+  </section>
+
+</main>
+
+<!-- ── NAV ── -->
+<nav class="concept-nav">
+  <a class="nav-link" href="./26-regularization-l1-l2.html">
+    <span class="nav-dir">← Previous</span>
+    <span class="nav-title">L1 vs L2 Regularization</span>
+  </a>
+  <a class="nav-link" href="./28-backpropagation.html">
+    <span class="nav-dir">Next →</span>
+    <span class="nav-title">Backpropagation</span>
+  </a>
+</nav>
+
+<script>
+// ══════════════════════════════════════════════════════════════════════
+// PART 1 — Dropout network diagram
+// ══════════════════════════════════════════════════════════════════════
+const LAYER_SIZES = [5, 7, 7, 3];
+const LAYER_NAMES = ['Input', 'Hidden 1', 'Hidden 2', 'Output'];
+const DROPPABLE = [false, true, true, false]; // dropout applied to hidden layers only
+
+function setupCanvas(canvas) {
+  const dpr = window.devicePixelRatio || 1;
+  if (!canvas.getAttribute('data-css-w')) {
+    canvas.setAttribute('data-css-w', canvas.width);
+    canvas.setAttribute('data-css-h', canvas.height);
+  }
+  const W = +canvas.getAttribute('data-css-w'), H = +canvas.getAttribute('data-css-h');
+  canvas.style.width = W + 'px';
+  canvas.style.height = H + 'px';
+  canvas.width = W * dpr;
+  canvas.height = H * dpr;
+  const ctx = canvas.getContext('2d');
+  ctx.scale(dpr, dpr);
+  return { ctx, W, H };
+}
+
+const nnCanvas = document.getElementById('nn-canvas');
+const { ctx: nctx, W: nW, H: nH } = setupCanvas(nnCanvas);
+
+let dropoutP = 0.5;
+let trainMode = true;
+let masks = LAYER_SIZES.map((n, li) => new Array(n).fill(1)); // 1 = active, 0 = dropped
+
+function resampleMask() {
+  masks = LAYER_SIZES.map((n, li) => {
+    if (!trainMode || !DROPPABLE[li]) return new Array(n).fill(1);
+    return Array.from({ length: n }, () => (Math.random() < dropoutP ? 0 : 1));
+  });
+}
+
+function nodePositions() {
+  const marginX = 70, marginY = 30;
+  const usableW = nW - marginX * 2;
+  const usableH = nH - marginY * 2 - 30;
+  const positions = [];
+  LAYER_SIZES.forEach((n, li) => {
+    const x = marginX + (usableW * li) / (LAYER_SIZES.length - 1);
+    const layerPos = [];
+    for (let i = 0; i < n; i++) {
+      const y = marginY + (usableH * (i + 0.5)) / n;
+      layerPos.push([x, y]);
+    }
+    positions.push(layerPos);
+  });
+  return positions;
+}
+
+function drawNN() {
+  nctx.clearRect(0, 0, nW, nH);
+  nctx.fillStyle = '#141720';
+  nctx.fillRect(0, 0, nW, nH);
+
+  const pos = nodePositions();
+
+  // edges
+  for (let li = 0; li < LAYER_SIZES.length - 1; li++) {
+    for (let i = 0; i < LAYER_SIZES[li]; i++) {
+      for (let j = 0; j < LAYER_SIZES[li + 1]; j++) {
+        const aActive = masks[li][i], bActive = masks[li + 1][j];
+        const alive = aActive && bActive;
+        nctx.strokeStyle = alive ? 'rgba(0, 212, 255, 0.22)' : 'rgba(120, 128, 148, 0.06)';
+        nctx.lineWidth = alive ? 1 : 0.6;
+        nctx.beginPath();
+        nctx.moveTo(pos[li][i][0], pos[li][i][1]);
+        nctx.lineTo(pos[li + 1][j][0], pos[li + 1][j][1]);
+        nctx.stroke();
+      }
+    }
+  }
+
+  // nodes
+  const r = 11;
+  LAYER_SIZES.forEach((n, li) => {
+    for (let i = 0; i < n; i++) {
+      const [x, y] = pos[li][i];
+      const active = masks[li][i];
+      nctx.beginPath();
+      nctx.arc(x, y, r, 0, Math.PI * 2);
+      nctx.fillStyle = active ? '#00ff88' : '#3a3f52';
+      nctx.fill();
+      nctx.strokeStyle = '#0d0f17';
+      nctx.lineWidth = 2;
+      nctx.stroke();
+    }
+    // layer label
+    nctx.fillStyle = '#8892a4';
+    nctx.font = '11px "JetBrains Mono", monospace';
+    nctx.textAlign = 'center';
+    nctx.fillText(LAYER_NAMES[li], pos[li][0][0], nH - 8);
+  });
+
+  updateDropoutReadout();
+}
+
+function updateDropoutReadout() {
+  const box = document.getElementById('dropout-readout');
+  const scale = trainMode ? 1 / (1 - dropoutP) : 1;
+  box.innerHTML = LAYER_SIZES.map((n, li) => {
+    const active = masks[li].reduce((a, b) => a + b, 0);
+    const border = DROPPABLE[li] ? '#00d4ff' : '#252a3d';
+    return `<div class="readout" style="border-left-color:${border}">
+      <span>${LAYER_NAMES[li]} active units</span>
+      <strong>${active} / ${n}</strong>
+    </div>`;
+  }).join('') + `<div class="readout" style="border-left-color:#ffd700">
+      <span>Inverted-dropout scale (train)</span>
+      <strong>${trainMode ? '×' + scale.toFixed(2) : '×1.00 (eval)'}</strong>
+    </div>`;
+}
+
+document.getElementById('p-slider').addEventListener('input', (e) => {
+  dropoutP = parseFloat(e.target.value);
+  document.getElementById('p-val').textContent = dropoutP.toFixed(2);
+  if (trainMode) { resampleMask(); drawNN(); }
+});
+
+document.getElementById('resample-btn').addEventListener('click', () => {
+  resampleMask();
+  drawNN();
+});
+
+document.getElementById('mode-btn').addEventListener('click', (e) => {
+  trainMode = !trainMode;
+  e.target.textContent = 'Mode: ' + (trainMode ? 'Train' : 'Eval');
+  e.target.classList.toggle('active-on', !trainMode);
+  document.getElementById('resample-btn').disabled = !trainMode;
+  resampleMask();
+  drawNN();
+});
+
+resampleMask();
+drawNN();
+
+// ══════════════════════════════════════════════════════════════════════
+// PART 2 — Batch normalization activation drift across layers
+// ══════════════════════════════════════════════════════════════════════
+const bnCanvas = document.getElementById('bn-canvas');
+const { ctx: bctx, W: bW, H: bH } = setupCanvas(bnCanvas);
+
+const N_SAMPLES = 400;
+const LAYER_SCALES = [1.6, 0.55, 1.9, 1.3, 2.0, 0.6];
+const LAYER_BIASES = [0.4, -0.6, 0.9, -0.3, 0.7, -0.5];
+
+let bnOn = false;
+let batchSeed = [];
+
+function gaussianSample() {
+  // Box-Muller
+  let u = 0, v = 0;
+  while (u === 0) u = Math.random();
+  while (v === 0) v = Math.random();
+  return Math.sqrt(-2 * Math.log(u)) * Math.cos(2 * Math.PI * v);
+}
+
+function newBatch() {
+  batchSeed = Array.from({ length: N_SAMPLES }, gaussianSample);
+}
+
+function mean(arr) { return arr.reduce((a, b) => a + b, 0) / arr.length; }
+function std(arr, m) {
+  const v = arr.reduce((a, b) => a + (b - m) * (b - m), 0) / arr.length;
+  return Math.sqrt(v);
+}
+
+function computeLayers(useBN) {
+  let x = batchSeed.slice();
+  const layers = [x.slice()];
+  LAYER_SCALES.forEach((scale, li) => {
+    let z = x.map(v => v * scale + LAYER_BIASES[li]);
+    if (useBN) {
+      const m = mean(z), s = std(z, m) + 1e-5;
+      z = z.map(v => (v - m) / s); // gamma=1, beta=0
+    }
+    layers.push(z.slice());
+    x = z;
+  });
+  return layers;
+}
+
+function histogram(arr, nbins, lo, hi) {
+  const bins = new Array(nbins).fill(0);
+  const width = (hi - lo) / nbins || 1;
+  arr.forEach(v => {
+    let idx = Math.floor((v - lo) / width);
+    idx = Math.max(0, Math.min(nbins - 1, idx));
+    bins[idx]++;
+  });
+  return bins;
+}
+
+function drawBN() {
+  bctx.clearRect(0, 0, bW, bH);
+  bctx.fillStyle = '#141720';
+  bctx.fillRect(0, 0, bW, bH);
+
+  const layers = computeLayers(bnOn);
+  const nLayers = layers.length; // 7 (input + 6 transformed)
+  const colW = bW / nLayers;
+  const plotTop = 20, plotBottom = bH - 40;
+  const plotH = plotBottom - plotTop;
+
+  const stats = [];
+
+  for (let li = 0; li < nLayers; li++) {
+    const data = layers[li];
+    const m = mean(data);
+    const s = std(data, m);
+    stats.push({ m, s, min: Math.min(...data), max: Math.max(...data) });
+
+    const lo = m - 4 * (s || 1), hi = m + 4 * (s || 1);
+    const bins = histogram(data, 16, lo, hi);
+    const maxCount = Math.max(...bins, 1);
+
+    const cx0 = li * colW + 6;
+    const usableW = colW - 12;
+    const binW = usableW / bins.length;
+
+    bctx.fillStyle = 'rgba(124, 58, 237, 0.75)';
+    bins.forEach((count, bi) => {
+      const h = (count / maxCount) * (plotH - 10);
+      const x = cx0 + bi * binW;
+      const y = plotBottom - h;
+      bctx.fillRect(x, y, Math.max(binW - 1, 1), h);
+    });
+
+    // baseline
+    bctx.strokeStyle = 'rgba(255,255,255,0.15)';
+    bctx.lineWidth = 1;
+    bctx.beginPath();
+    bctx.moveTo(li * colW + 3, plotBottom);
+    bctx.lineTo(li * colW + colW - 3, plotBottom);
+    bctx.stroke();
+
+    // label
+    bctx.fillStyle = '#8892a4';
+    bctx.font = '10px "JetBrains Mono", monospace';
+    bctx.textAlign = 'center';
+    const label = li === 0 ? 'in' : 'L' + li;
+    bctx.fillText(label, li * colW + colW / 2, bH - 24);
+    bctx.fillStyle = '#e2e8f0';
+    bctx.fillText(`μ=${m.toFixed(1)}`, li * colW + colW / 2, bH - 12);
+    bctx.fillText(`σ=${s.toFixed(1)}`, li * colW + colW / 2, bH - 2);
+
+    // separator
+    if (li > 0) {
+      bctx.strokeStyle = 'rgba(255,255,255,0.06)';
+      bctx.beginPath();
+      bctx.moveTo(li * colW, plotTop);
+      bctx.lineTo(li * colW, plotBottom);
+      bctx.stroke();
+    }
+  }
+
+  updateBNReadout(stats);
+}
+
+function updateBNReadout(stats) {
+  const box = document.getElementById('bn-readout');
+  const first = stats[0], last = stats[stats.length - 1];
+  box.innerHTML = `
+    <div class="readout" style="border-left-color:#7c3aed">
+      <span>Input batch</span>
+      <strong>μ=${first.m.toFixed(2)}, σ=${first.s.toFixed(2)}</strong>
+    </div>
+    <div class="readout" style="border-left-color:${bnOn ? '#00ff88' : '#ff4757'}">
+      <span>Layer 6 output (${bnOn ? 'with' : 'without'} BN)</span>
+      <strong>μ=${last.m.toFixed(2)}, σ=${last.s.toFixed(2)}</strong>
+    </div>
+    <div class="readout" style="border-left-color:#ffd700">
+      <span>Layer 6 range</span>
+      <strong>${last.min.toFixed(1)} … ${last.max.toFixed(1)}</strong>
+    </div>
+  `;
+}
+
+document.getElementById('bn-toggle').addEventListener('click', (e) => {
+  bnOn = !bnOn;
+  e.target.textContent = 'Batch Norm: ' + (bnOn ? 'ON' : 'OFF');
+  e.target.classList.toggle('active-on', bnOn);
+  drawBN();
+});
+
+document.getElementById('bn-resample').addEventListener('click', () => {
+  newBatch();
+  drawBN();
+});
+
+newBatch();
+drawBN();
+
+window.addEventListener('resize', () => { drawNN(); drawBN(); });
+document.fonts.ready.then(() => { drawNN(); drawBN(); });
+</script>
+</body>
+</html>

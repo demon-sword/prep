@@ -1,0 +1,838 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1.0"/>
+<title>Rate Limiting — Backend Concepts</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #0d0f17;
+    --surface: #141720;
+    --card: #1a1e2e;
+    --border: #252a3d;
+    --accent: #00d4ff;
+    --purple: #7c3aed;
+    --green: #00ff88;
+    --yellow: #ffd700;
+    --red: #ff4757;
+    --orange: #ff9500;
+    --text: #e2e8f0;
+    --text-dim: #8892a4;
+    --mono: 'JetBrains Mono', monospace;
+    --sans: 'Inter', system-ui, sans-serif;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--sans);
+    line-height: 1.6;
+  }
+  header {
+    padding: 48px 24px 32px;
+    max-width: 920px;
+    margin: 0 auto;
+    border-bottom: 1px solid var(--border);
+  }
+  .badge {
+    display: inline-block;
+    font-family: var(--mono);
+    font-size: 12px;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--accent);
+    background: rgba(0,212,255,0.08);
+    border: 1px solid rgba(0,212,255,0.3);
+    padding: 4px 10px;
+    border-radius: 4px;
+    margin-bottom: 14px;
+  }
+  h1 {
+    font-size: 32px;
+    margin: 0 0 12px;
+    font-weight: 700;
+    letter-spacing: -0.01em;
+  }
+  header p.desc {
+    color: var(--text-dim);
+    font-size: 16px;
+    max-width: 720px;
+    margin: 0;
+  }
+  main {
+    max-width: 920px;
+    margin: 0 auto;
+    padding: 0 24px 60px;
+  }
+  section {
+    margin-top: 48px;
+  }
+  h2 {
+    font-size: 13px;
+    font-family: var(--mono);
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    color: var(--purple);
+    margin-bottom: 20px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+  h2::after {
+    content: '';
+    flex: 1;
+    height: 1px;
+    background: var(--border);
+  }
+  h3 {
+    font-size: 18px;
+    color: var(--accent);
+    margin: 28px 0 10px;
+  }
+  h3:first-child { margin-top: 0; }
+  p { color: var(--text); margin: 8px 0; }
+  ul { padding-left: 22px; }
+  li { margin: 6px 0; }
+  code {
+    font-family: var(--mono);
+    background: rgba(124,58,237,0.12);
+    color: var(--purple);
+    padding: 2px 6px;
+    border-radius: 4px;
+    font-size: 0.9em;
+  }
+  .aside {
+    margin-top: 10px;
+    font-size: 13.5px;
+    color: var(--text-dim);
+    border-left: 2px solid var(--border);
+    padding-left: 12px;
+    font-style: italic;
+  }
+  .card {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 22px 24px;
+  }
+  .fail-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+    gap: 14px;
+    margin-top: 12px;
+  }
+  .fail-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-left: 3px solid var(--accent);
+    border-radius: 8px;
+    padding: 14px 16px;
+  }
+  .fail-card h4 {
+    margin: 0 0 6px;
+    font-size: 14.5px;
+    color: var(--accent);
+  }
+  .fail-card p { font-size: 13.5px; color: var(--text-dim); margin: 0; }
+  .fail-card.danger { border-left-color: var(--red); }
+  .fail-card.danger h4 { color: var(--red); }
+
+  /* Visualization shared */
+  .viz-card {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 24px;
+    margin-bottom: 24px;
+  }
+  .viz-intro { color: var(--text-dim); font-size: 14.5px; margin-bottom: 18px; }
+  .btn-row { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; margin-top: 14px; }
+  .run-btn {
+    font-family: var(--mono);
+    font-size: 13px;
+    background: var(--purple);
+    color: white;
+    border: none;
+    padding: 10px 18px;
+    border-radius: 6px;
+    cursor: pointer;
+    font-weight: 600;
+  }
+  .run-btn:hover { opacity: 0.88; }
+  .run-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+  .run-btn.secondary { background: var(--surface); border: 1px solid var(--border); color: var(--text-dim); }
+  .run-btn.secondary:hover { color: var(--text); border-color: var(--accent); }
+  .run-btn.active { background: var(--accent); color: #0d0f17; }
+
+  .slider-row { margin-top: 14px; }
+  .slider-row label { font-family: var(--mono); font-size: 12.5px; color: var(--text-dim); display: block; margin-bottom: 8px; }
+  .slider-row label b { color: var(--yellow); }
+  input[type="range"] { width: 100%; accent-color: var(--accent); }
+
+  .flow-log {
+    margin-top: 14px;
+    font-family: var(--mono);
+    font-size: 13px;
+    color: var(--green);
+    min-height: 40px;
+    white-space: pre-line;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 10px 12px;
+  }
+
+  .stat-row {
+    display: flex;
+    gap: 24px;
+    margin-top: 16px;
+    flex-wrap: wrap;
+  }
+  .stat {
+    font-family: var(--mono);
+    font-size: 13px;
+    color: var(--text-dim);
+  }
+  .stat b { color: var(--yellow); font-size: 18px; display: block; }
+  .stat b.danger { color: var(--red); }
+  .stat b.good { color: var(--green); }
+
+  /* Token bucket viz */
+  .bucket-wrap {
+    display: flex;
+    gap: 28px;
+    align-items: flex-end;
+    margin-top: 18px;
+    flex-wrap: wrap;
+  }
+  .bucket-shell {
+    width: 90px;
+    height: 200px;
+    border: 2px solid var(--border);
+    border-top: none;
+    border-radius: 0 0 12px 12px;
+    position: relative;
+    background: var(--surface);
+    overflow: hidden;
+  }
+  .bucket-fill {
+    position: absolute;
+    bottom: 0; left: 0; right: 0;
+    background: linear-gradient(180deg, rgba(0,212,255,0.85), rgba(0,212,255,0.35));
+    transition: height 0.12s linear;
+  }
+  .bucket-label { text-align: center; font-family: var(--mono); font-size: 12px; color: var(--text-dim); margin-top: 8px; }
+  #tb-canvas { flex: 1; min-width: 260px; height: 200px; background: var(--surface); border: 1px solid var(--border); border-radius: 8px; }
+
+  /* algorithm selector */
+  .algo-select { display: flex; gap: 8px; flex-wrap: wrap; }
+  #rl-canvas { width: 100%; height: 180px; background: var(--surface); border: 1px solid var(--border); border-radius: 8px; margin-top: 14px; }
+  .algo-state-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+    gap: 12px;
+    margin-top: 14px;
+  }
+  .algo-state-cell {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 10px 12px;
+    font-family: var(--mono);
+    font-size: 12.5px;
+    color: var(--text-dim);
+  }
+  .algo-state-cell b { color: var(--accent); display: block; font-size: 15px; margin-top: 2px; }
+
+  .divider { height: 1px; background: var(--border); margin: 32px 0; }
+
+  blockquote#interview-quote {
+    background: linear-gradient(135deg, rgba(0,212,255,0.06), rgba(124,58,237,0.06));
+    border-left: 4px solid var(--accent);
+    border-radius: 8px;
+    margin: 0;
+    padding: 22px 26px;
+    font-size: 16.5px;
+    color: var(--text);
+    font-style: italic;
+    position: relative;
+  }
+  blockquote#interview-quote::before {
+    content: '\201C';
+    font-size: 48px;
+    color: var(--accent);
+    opacity: 0.3;
+    position: absolute;
+    top: -6px;
+    left: 10px;
+    font-style: normal;
+  }
+  #takeaways ul { list-style: none; padding: 0; }
+  #takeaways li {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-left: 3px solid var(--green);
+    border-radius: 8px;
+    padding: 12px 16px;
+    margin-bottom: 10px;
+    font-size: 14.5px;
+  }
+  #takeaways li b { color: var(--green); }
+
+  nav.concept-nav {
+    max-width: 920px;
+    margin: 0 auto;
+    padding: 24px 24px 60px;
+    display: flex;
+    justify-content: space-between;
+    font-family: var(--mono);
+    font-size: 13.5px;
+  }
+  nav.concept-nav a {
+    color: var(--accent);
+    text-decoration: none;
+    border: 1px solid var(--border);
+    padding: 10px 16px;
+    border-radius: 6px;
+  }
+  nav.concept-nav a:hover { border-color: var(--accent); }
+  nav.concept-nav span.disabled {
+    color: var(--text-dim);
+    border: 1px solid var(--border);
+    padding: 10px 16px;
+    border-radius: 6px;
+    opacity: 0.4;
+  }
+  @media (max-width: 600px) {
+    h1 { font-size: 24px; }
+    .btn-row { flex-direction: column; align-items: flex-start; }
+    .bucket-wrap { flex-direction: column; align-items: stretch; }
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <span class="badge">traffic-management</span>
+  <h1>Rate Limiting</h1>
+  <p class="desc">Protection vs compliance limiting, algorithm comparison (token bucket, leaky bucket, fixed/sliding window), distributed rate limiting across a fleet, and cost-based limiting for variable-cost requests.</p>
+</header>
+
+<main>
+
+  <section id="theory">
+    <h2>Theory</h2>
+    <div class="card">
+      <h3>Two distinct purposes</h3>
+      <p>Rate limiting solves two different problems that get lumped together but need different designs:</p>
+      <ul>
+        <li><b>Protection</b> — stop any one client from exhausting shared capacity. Inward-facing. It's about you defending your own service.</li>
+        <li><b>Compliance</b> — respect a downstream provider's limits so you don't get throttled or banned. Outward-facing. It's about you behaving as a good client of someone else's service.</li>
+      </ul>
+      <p>These need different designs. Protection is per-client and can reject — a 429 is an acceptable, even correct, outcome. Compliance is global across your <i>whole fleet</i> and usually needs to <b>queue</b> rather than reject, because the work still has to happen; you can't tell your own users "no" just because your vendor has a budget.</p>
+
+      <h3>Algorithms</h3>
+      <div class="fail-grid">
+        <div class="fail-card">
+          <h4>Token bucket</h4>
+          <p>A bucket holds up to <code>B</code> tokens, refilled at <code>R</code> per second. Each request takes a token; no token, no service. <b>Allows bursts up to B while enforcing an average of R.</b> The most common choice and usually the right default, because real traffic is bursty and pure smoothing is unnecessarily harsh.</p>
+        </div>
+        <div class="fail-card">
+          <h4>Leaky bucket</h4>
+          <p>Requests enter a queue and drain at a fixed rate. Output is perfectly smooth. Good when the downstream genuinely cannot tolerate bursts. Adds latency by design — you're trading burst tolerance for a flat output rate.</p>
+        </div>
+        <div class="fail-card danger">
+          <h4>Fixed window</h4>
+          <p>Count requests per calendar minute, reset at the boundary. Trivial to implement, but has the <b>boundary problem</b>: a client can send the full limit at 11:59:59 and again at 12:00:00, achieving <b>2x</b> the intended rate in under two seconds.</p>
+        </div>
+        <div class="fail-card">
+          <h4>Sliding window log</h4>
+          <p>Store a timestamp per request, count those within the trailing window. Exact — no boundary exploit — but memory scales with request volume, which is the trade you're making for exactness.</p>
+        </div>
+        <div class="fail-card">
+          <h4>Sliding window counter</h4>
+          <p>Interpolate between the previous and current fixed windows. Approximates the sliding window with fixed-window memory cost. The usual production compromise: cheap to store, close enough to exact.</p>
+        </div>
+      </div>
+
+      <h3>Distributed rate limiting</h3>
+      <p>The hard part. With N instances, a naive per-instance limit of <code>limit/N</code> breaks under uneven load balancing and wastes capacity — one hot instance hits its share while others sit idle under the global limit.</p>
+      <ul>
+        <li><b>Centralised counter (Redis)</b> — accurate, but adds a network hop to every request and makes Redis a dependency on the hot path. Use atomic operations or a Lua script; a read-then-write is a race — two instances can both read "9 of 10 used" and both admit the 10th and 11th request.</li>
+        <li><b>Local buckets with periodic sync</b> — each instance holds a portion and reconciles periodically. Fast, approximate, can overshoot briefly between syncs.</li>
+        <li><b>Gossip / lease-based</b> — instances lease portions of the global budget from a coordinator, returning unused capacity. More complex, better utilisation than a static split.</li>
+      </ul>
+      <p><b>In an interview, the honest answer is that approximate distributed rate limiting is usually fine</b> — you're protecting against 10x, not enforcing an exact count. Say that; over-engineering exactness is a common trap that turns a rate limiter into the new bottleneck.</p>
+
+      <h3>Design decisions to state</h3>
+      <ul>
+        <li><b>What's the key?</b> Per user, per API key, per IP, per tenant, per endpoint, or a combination. Per-IP alone is weak (NAT, proxies) and can punish shared networks — an office or a mobile carrier's NAT pool looks like one very aggressive client.</li>
+        <li><b>Reject or queue?</b> Rejecting returns 429 and is honest. Queueing preserves the work but converts a throughput problem into a latency problem — and needs its own bound (see <code>02-queues-backpressure</code>).</li>
+        <li><b>Tiered limits</b> — different quotas per plan, or per priority class.</li>
+        <li><b>Cost-based limiting</b> — not all requests are equal. An LLM call costing 50k tokens shouldn't count the same as a health check. Rate limit on estimated cost rather than request count where the variance is large.</li>
+      </ul>
+
+      <h3>Client-side behaviour</h3>
+      <p>When you're on the receiving end of a 429: <b>respect <code>Retry-After</code></b> if present, back off exponentially with <b>jitter</b>, and cap total retries with a budget. Retrying a rate limit aggressively is how a throttle becomes a ban — the same jitter discipline that keeps circuit-breaker retries from synchronizing (<code>06-circuit-breakers-bulkheads</code>) applies here too.</p>
+
+      <h3>Communicating limits</h3>
+      <p>Return <code>X-RateLimit-Limit</code>, <code>X-RateLimit-Remaining</code>, <code>X-RateLimit-Reset</code> headers, and <code>429 Too Many Requests</code> with <code>Retry-After</code> when limited. Clients can only behave well if you tell them the rules.</p>
+
+      <p class="aside">Backpressure and rate limiting are the same instinct applied at different boundaries — one internal (protect your own queue/thread pool from your own producers), one external (protect a shared resource, or a vendor's budget, from all your clients or instances combined).</p>
+    </div>
+  </section>
+
+  <section id="visualization">
+    <h2>Visualization</h2>
+
+    <div class="viz-card">
+      <p class="viz-intro"><b>1. Token bucket — burst absorption.</b> The bucket refills continuously at <b>R tokens/sec</b> up to capacity <b>B</b>. Adjust the sliders, then fire single requests or a burst and watch the bucket drain and refill in real time. Burst absorption is the whole feature: a burst up to B is allowed instantly, but the bucket needs real time to refill before it can absorb the next one.</p>
+
+      <div class="slider-row">
+        <label>Bucket size (B): <b id="tb-size-val">10</b> tokens</label>
+        <input type="range" id="tb-size" min="2" max="30" value="10">
+      </div>
+      <div class="slider-row">
+        <label>Refill rate (R): <b id="tb-rate-val">2.0</b> tokens/sec</label>
+        <input type="range" id="tb-rate" min="1" max="100" value="20">
+      </div>
+
+      <div class="bucket-wrap">
+        <div>
+          <div class="bucket-shell"><div class="bucket-fill" id="tb-fill" style="height:100%"></div></div>
+          <div class="bucket-label" id="tb-fill-label">10.0 / 10 tokens</div>
+        </div>
+        <canvas id="tb-canvas" width="600" height="200"></canvas>
+      </div>
+
+      <div class="btn-row">
+        <button class="run-btn" id="tb-send1">Send 1 request</button>
+        <button class="run-btn secondary" id="tb-burst">Send burst (×15)</button>
+        <button class="run-btn secondary" id="tb-reset">Reset bucket</button>
+      </div>
+
+      <div class="flow-log" id="tb-log">Bucket starts full. Each request costs 1 token; refill happens continuously, not in discrete ticks.</div>
+
+      <div class="stat-row">
+        <div class="stat">Requests sent<b id="tb-stat-sent">0</b></div>
+        <div class="stat">Allowed<b id="tb-stat-ok" class="good">0</b></div>
+        <div class="stat">Denied (no token)<b id="tb-stat-denied" class="danger">0</b></div>
+      </div>
+    </div>
+
+    <div class="viz-card">
+      <p class="viz-intro"><b>2. Algorithm comparison — the boundary exploit.</b> Pick an algorithm. Limit is <b>5 requests per 5-second window</b> for every algorithm here (token bucket: B=5, R=1/s; leaky bucket: capacity 5, drains at 1/s). Send a burst of 5, then click <b>"Jump to just after next window boundary"</b> to fast-forward the clock, then send another burst of 5. Fixed window lets both bursts through — 10 requests inside ~5 seconds against a "5 per 5s" limit. Sliding window counter and token bucket don't.</p>
+
+      <div class="algo-select btn-row">
+        <button class="run-btn active" data-algo="token">Token Bucket</button>
+        <button class="run-btn secondary" data-algo="leaky">Leaky Bucket</button>
+        <button class="run-btn secondary" data-algo="fixed">Fixed Window</button>
+        <button class="run-btn secondary" data-algo="sliding">Sliding Window Counter</button>
+      </div>
+
+      <canvas id="rl-canvas" width="820" height="180"></canvas>
+
+      <div class="btn-row">
+        <button class="run-btn" id="rl-send1">Send 1 request</button>
+        <button class="run-btn secondary" id="rl-burst">Send burst (×5)</button>
+        <button class="run-btn secondary" id="rl-jump">Jump to just after next window boundary →</button>
+        <button class="run-btn secondary" id="rl-reset">Reset</button>
+      </div>
+
+      <div class="flow-log" id="rl-log">Token bucket selected. Green ticks = allowed, red ticks = denied. Dashed lines mark 5s calendar-window boundaries.</div>
+
+      <div class="algo-state-grid" id="rl-state"></div>
+
+      <div class="stat-row">
+        <div class="stat">Allowed<b id="rl-stat-ok" class="good">0</b></div>
+        <div class="stat">Denied<b id="rl-stat-denied" class="danger">0</b></div>
+        <div class="stat">Allowed within last 5s of sim-time<b id="rl-stat-window">0</b></div>
+      </div>
+    </div>
+  </section>
+
+  <section id="interview-line">
+    <h2>Interview Line</h2>
+    <blockquote id="interview-quote">
+      "The limiter has to be shared across the fleet, not per-instance, because the vendor's limit is global. I'd use a token bucket in Redis with an atomic decrement — it allows bursts up to the bucket size, which matches real traffic, while holding the average. And for LLM calls I'd rate limit on estimated tokens rather than request count, because a 50k-token investigation and a health check aren't the same load."
+    </blockquote>
+  </section>
+
+  <section id="takeaways">
+    <h2>Key Takeaways</h2>
+    <ul>
+      <li><b>Token bucket is the default</b> — it's the only one of the five algorithms that both tolerates real bursty traffic and holds a strict average, which is why it's the standard choice absent a reason to pick something else.</li>
+      <li><b>Fixed window's boundary problem is a 2x exploit, not a rounding error</b> — a client can legitimately send the full limit at the last second of one window and the first second of the next, doubling the intended rate in under two seconds. Sliding window counter closes this for roughly the memory cost of fixed window.</li>
+      <li><b>A read-then-write counter in a distributed limiter is a race</b> — two instances can both read "9 of 10 used" and both admit past the limit. Use an atomic Redis <code>INCR</code> with TTL or a Lua script, not a GET-then-SET.</li>
+      <li><b>Approximate distributed rate limiting is usually the right call</b> — you're protecting against a 10x spike, not enforcing an audit-grade exact count. Reaching for a lease-based/gossip scheme before you need it is over-engineering the wrong dimension.</li>
+      <li><b>Cost-based limiting matters when request cost varies wildly</b> — rate limit LLM calls on estimated tokens, not request count; a health check and a 50k-token investigation are not the same load, and counting them equally either starves the expensive path or lets it blow the budget alone.</li>
+      <li>Rate limiting and backpressure (<code>02-queues-backpressure</code>) are the same instinct at different boundaries — one protects a shared resource from many external clients, the other protects a queue from its own producers — and both share the same client-side discipline: jittered backoff, same as circuit breaker retries (<code>06-circuit-breakers-bulkheads</code>).</li>
+    </ul>
+  </section>
+
+</main>
+
+<nav class="concept-nav">
+  <a href="../concepts/07-change-data-capture.html">← Previous: Change Data Capture (CDC)</a>
+  <a href="../concepts/09-load-balancing.html">Next: Load Balancing →</a>
+</nav>
+
+<script>
+(function() {
+  // ============ 1. Token bucket burst absorption ============
+  const tbSizeInput = document.getElementById('tb-size');
+  const tbRateInput = document.getElementById('tb-rate');
+  const tbSizeVal = document.getElementById('tb-size-val');
+  const tbRateVal = document.getElementById('tb-rate-val');
+  const tbFill = document.getElementById('tb-fill');
+  const tbFillLabel = document.getElementById('tb-fill-label');
+  const tbLog = document.getElementById('tb-log');
+  const tbCanvas = document.getElementById('tb-canvas');
+  const tbCtx = tbCanvas.getContext('2d');
+
+  function tbBucketSize() { return parseInt(tbSizeInput.value, 10); }
+  function tbRefillRate() { return parseInt(tbRateInput.value, 10) / 10; } // 0.1 - 10.0 tokens/sec
+
+  let tbTokens = tbBucketSize();
+  let tbLastTs = performance.now();
+  let tbStats = { sent: 0, ok: 0, denied: 0 };
+  let tbHistory = []; // { t, tokens }
+  const TB_HISTORY_WINDOW = 15000; // ms
+
+  function tbRefill() {
+    const now = performance.now();
+    const dt = (now - tbLastTs) / 1000;
+    tbLastTs = now;
+    const size = tbBucketSize();
+    tbTokens = Math.min(size, tbTokens + dt * tbRefillRate());
+    tbHistory.push({ t: now, tokens: tbTokens });
+    while (tbHistory.length && now - tbHistory[0].t > TB_HISTORY_WINDOW) tbHistory.shift();
+  }
+
+  function tbUpdateDisplay() {
+    const size = tbBucketSize();
+    const pct = Math.max(0, Math.min(1, tbTokens / size));
+    tbFill.style.height = (pct * 100).toFixed(1) + '%';
+    tbFillLabel.textContent = tbTokens.toFixed(1) + ' / ' + size + ' tokens';
+    document.getElementById('tb-stat-sent').textContent = tbStats.sent;
+    document.getElementById('tb-stat-ok').textContent = tbStats.ok;
+    document.getElementById('tb-stat-denied').textContent = tbStats.denied;
+  }
+
+  function tbDrawGraph() {
+    const w = tbCanvas.width, h = tbCanvas.height;
+    tbCtx.clearRect(0, 0, w, h);
+    tbCtx.fillStyle = '#141720';
+    tbCtx.fillRect(0, 0, w, h);
+    const size = tbBucketSize();
+    // gridlines
+    tbCtx.strokeStyle = '#252a3d';
+    tbCtx.lineWidth = 1;
+    for (let i = 0; i <= 4; i++) {
+      const y = h - (i / 4) * (h - 20) - 10;
+      tbCtx.beginPath();
+      tbCtx.moveTo(0, y);
+      tbCtx.lineTo(w, y);
+      tbCtx.stroke();
+    }
+    if (tbHistory.length < 2) return;
+    const now = performance.now();
+    tbCtx.strokeStyle = '#00d4ff';
+    tbCtx.lineWidth = 2;
+    tbCtx.beginPath();
+    tbHistory.forEach((pt, i) => {
+      const x = w - ((now - pt.t) / TB_HISTORY_WINDOW) * w;
+      const y = h - (pt.tokens / size) * (h - 20) - 10;
+      if (i === 0) tbCtx.moveTo(x, y); else tbCtx.lineTo(x, y);
+    });
+    tbCtx.stroke();
+    tbCtx.fillStyle = '#8892a4';
+    tbCtx.font = '11px monospace';
+    tbCtx.fillText('tokens over last 15s (right = now)', 8, 16);
+  }
+
+  function tbSend() {
+    tbRefill();
+    tbStats.sent++;
+    if (tbTokens >= 1) {
+      tbTokens -= 1;
+      tbStats.ok++;
+      tbLog.textContent = 'Request allowed. Token consumed → ' + tbTokens.toFixed(1) + ' remaining.';
+    } else {
+      tbStats.denied++;
+      tbLog.textContent = 'Request DENIED — bucket empty (0 tokens). Refilling at ' + tbRefillRate().toFixed(1) + '/sec.';
+    }
+    tbUpdateDisplay();
+  }
+
+  tbSizeInput.addEventListener('input', () => {
+    tbSizeVal.textContent = tbBucketSize();
+    tbRefill();
+    tbUpdateDisplay();
+  });
+  tbRateInput.addEventListener('input', () => {
+    tbRateVal.textContent = tbRefillRate().toFixed(1);
+    tbRefill();
+    tbUpdateDisplay();
+  });
+  document.getElementById('tb-send1').addEventListener('click', tbSend);
+  document.getElementById('tb-burst').addEventListener('click', () => {
+    for (let i = 0; i < 15; i++) tbSend();
+    tbLog.textContent = 'Burst of 15 sent at once. ' + tbStats.ok + ' allowed / ' + tbStats.denied + ' denied so far — the bucket absorbs a burst up to its size, then throttles to the refill rate.';
+  });
+  document.getElementById('tb-reset').addEventListener('click', () => {
+    tbTokens = tbBucketSize();
+    tbStats = { sent: 0, ok: 0, denied: 0 };
+    tbHistory = [];
+    tbLog.textContent = 'Bucket reset to full.';
+    tbUpdateDisplay();
+  });
+
+  function tbTick() {
+    tbRefill();
+    tbUpdateDisplay();
+    tbDrawGraph();
+    requestAnimationFrame(tbTick);
+  }
+  tbUpdateDisplay();
+  requestAnimationFrame(tbTick);
+
+  // ============ 2. Algorithm comparison ============
+  // This viz runs on a fully virtual clock that only advances when the user
+  // acts (send / burst / jump) — deliberately NOT tied to wall-clock time.
+  // That's what makes the boundary-exploit demo deterministic regardless of
+  // how long someone pauses between clicks to read the log.
+  const LIMIT = 5;
+  const WINDOW_MS = 5000;
+  let algo = 'token';
+  let vTime = 0; // virtual milliseconds elapsed
+  let events = []; // { simT, allowed }
+  let rlStats = { ok: 0, denied: 0 };
+
+  // per-algorithm state
+  let tokenState = { tokens: LIMIT, lastT: 0 };
+  let leakyState = { level: 0, lastT: 0 };
+  let fixedState = { windowIdx: -1, count: 0 };
+  let slidingState = { prevIdx: -1, prevCount: 0, curIdx: -1, curCount: 0 };
+
+  function simNow() { return vTime; }
+
+  function resetAlgoState() {
+    const t = simNow();
+    tokenState = { tokens: LIMIT, lastT: t };
+    leakyState = { level: 0, lastT: t };
+    fixedState = { windowIdx: Math.floor(t / WINDOW_MS), count: 0 };
+    const idx = Math.floor(t / WINDOW_MS);
+    slidingState = { prevIdx: idx - 1, prevCount: 0, curIdx: idx, curCount: 0 };
+  }
+
+  function evalToken(t) {
+    const rate = LIMIT / WINDOW_MS; // tokens per ms, refills to LIMIT over WINDOW_MS
+    const dt = t - tokenState.lastT;
+    tokenState.lastT = t;
+    tokenState.tokens = Math.min(LIMIT, tokenState.tokens + dt * rate);
+    if (tokenState.tokens >= 1) { tokenState.tokens -= 1; return true; }
+    return false;
+  }
+
+  function evalLeaky(t) {
+    const drain = LIMIT / WINDOW_MS; // capacity units drained per ms
+    const dt = t - leakyState.lastT;
+    leakyState.lastT = t;
+    leakyState.level = Math.max(0, leakyState.level - dt * drain);
+    if (leakyState.level < LIMIT) { leakyState.level += 1; return true; }
+    return false;
+  }
+
+  function evalFixed(t) {
+    const idx = Math.floor(t / WINDOW_MS);
+    if (idx !== fixedState.windowIdx) { fixedState.windowIdx = idx; fixedState.count = 0; }
+    if (fixedState.count < LIMIT) { fixedState.count++; return true; }
+    return false;
+  }
+
+  function evalSliding(t) {
+    const idx = Math.floor(t / WINDOW_MS);
+    if (idx !== slidingState.curIdx) {
+      slidingState.prevIdx = slidingState.curIdx;
+      slidingState.prevCount = slidingState.curCount;
+      slidingState.curIdx = idx;
+      slidingState.curCount = 0;
+      if (idx - slidingState.prevIdx !== 1) { slidingState.prevCount = 0; }
+    }
+    const posInWindow = (t % WINDOW_MS) / WINDOW_MS;
+    const weight = 1 - posInWindow;
+    const estimate = slidingState.curCount + slidingState.prevCount * weight;
+    if (estimate < LIMIT) { slidingState.curCount++; return true; }
+    return false;
+  }
+
+  function evalRequest() {
+    const t = simNow();
+    let allowed;
+    if (algo === 'token') allowed = evalToken(t);
+    else if (algo === 'leaky') allowed = evalLeaky(t);
+    else if (algo === 'fixed') allowed = evalFixed(t);
+    else allowed = evalSliding(t);
+    events.push({ simT: t, allowed });
+    if (allowed) rlStats.ok++; else rlStats.denied++;
+    return allowed;
+  }
+
+  function rlLog(msg) { document.getElementById('rl-log').textContent = msg; }
+
+  function updateRLStats() {
+    document.getElementById('rl-stat-ok').textContent = rlStats.ok;
+    document.getElementById('rl-stat-denied').textContent = rlStats.denied;
+    const t = simNow();
+    const recentOk = events.filter(e => e.allowed && (t - e.simT) <= WINDOW_MS).length;
+    document.getElementById('rl-stat-window').textContent = recentOk;
+  }
+
+  function updateAlgoStateReadout() {
+    const grid = document.getElementById('rl-state');
+    grid.innerHTML = '';
+    function cell(label, value) {
+      const d = document.createElement('div');
+      d.className = 'algo-state-cell';
+      d.innerHTML = label + '<b>' + value + '</b>';
+      grid.appendChild(d);
+    }
+    if (algo === 'token') {
+      cell('Tokens available', tokenState.tokens.toFixed(2) + ' / ' + LIMIT);
+    } else if (algo === 'leaky') {
+      cell('Queue level', leakyState.level.toFixed(2) + ' / ' + LIMIT);
+    } else if (algo === 'fixed') {
+      cell('Current window count', fixedState.count + ' / ' + LIMIT);
+      cell('Window index', String(fixedState.windowIdx));
+    } else {
+      cell('Current window count', slidingState.curCount + ' / ' + LIMIT);
+      cell('Prev window count', String(slidingState.prevCount));
+      const t = simNow();
+      const posInWindow = (t % WINDOW_MS) / WINDOW_MS;
+      const weight = (1 - posInWindow).toFixed(2);
+      cell('Weighted estimate', (slidingState.curCount + slidingState.prevCount * (1 - posInWindow)).toFixed(2) + ' (weight ' + weight + ')');
+    }
+  }
+
+  function drawRLCanvas() {
+    const canvas = document.getElementById('rl-canvas');
+    const ctx = canvas.getContext('2d');
+    const w = canvas.width, h = canvas.height;
+    ctx.clearRect(0, 0, w, h);
+    ctx.fillStyle = '#141720';
+    ctx.fillRect(0, 0, w, h);
+    const t = simNow();
+    const SPAN = 16000; // show last 16s of sim time
+    const tMin = t - SPAN;
+
+    // window boundary dashed lines for fixed/sliding
+    if (algo === 'fixed' || algo === 'sliding') {
+      ctx.strokeStyle = '#ffd700';
+      ctx.setLineDash([4, 4]);
+      ctx.lineWidth = 1;
+      let firstBoundary = Math.ceil(tMin / WINDOW_MS) * WINDOW_MS;
+      for (let b = firstBoundary; b <= t; b += WINDOW_MS) {
+        const x = ((b - tMin) / SPAN) * w;
+        ctx.beginPath();
+        ctx.moveTo(x, 0);
+        ctx.lineTo(x, h);
+        ctx.stroke();
+      }
+      ctx.setLineDash([]);
+    }
+
+    // baseline
+    ctx.strokeStyle = '#252a3d';
+    ctx.beginPath();
+    ctx.moveTo(0, h / 2);
+    ctx.lineTo(w, h / 2);
+    ctx.stroke();
+
+    // events as ticks
+    events.forEach(e => {
+      if (e.simT < tMin) return;
+      const x = ((e.simT - tMin) / SPAN) * w;
+      ctx.strokeStyle = e.allowed ? '#00ff88' : '#ff4757';
+      ctx.lineWidth = 3;
+      ctx.beginPath();
+      ctx.moveTo(x, h / 2 - 30);
+      ctx.lineTo(x, h / 2 + 30);
+      ctx.stroke();
+    });
+
+    ctx.fillStyle = '#8892a4';
+    ctx.font = '11px monospace';
+    ctx.fillText('last 16s of sim-time · green = allowed · red = denied' + ((algo === 'fixed' || algo === 'sliding') ? ' · yellow dashed = 5s window boundary' : ''), 8, 16);
+  }
+
+  function setAlgo(next) {
+    algo = next;
+    document.querySelectorAll('.algo-select button').forEach(b => {
+      b.classList.toggle('active', b.dataset.algo === next);
+      b.classList.toggle('secondary', b.dataset.algo !== next);
+    });
+    events = [];
+    rlStats = { ok: 0, denied: 0 };
+    vTime = 0;
+    resetAlgoState();
+    rlLog(labelFor(next) + ' selected. Limit is 5 requests per 5-second window.');
+    updateRLStats();
+    updateAlgoStateReadout();
+    drawRLCanvas();
+  }
+
+  function labelFor(a) {
+    return a === 'token' ? 'Token Bucket' : a === 'leaky' ? 'Leaky Bucket' : a === 'fixed' ? 'Fixed Window' : 'Sliding Window Counter';
+  }
+
+  document.querySelectorAll('.algo-select button').forEach(btn => {
+    btn.addEventListener('click', () => setAlgo(btn.dataset.algo));
+  });
+
+  document.getElementById('rl-send1').addEventListener('click', () => {
+    vTime += 400; // simulate ~400ms since the last action
+    const allowed = evalRequest();
+    rlLog('Request ' + (allowed ? 'ALLOWED' : 'DENIED') + ' at t=' + (simNow() / 1000).toFixed(2) + 's.');
+    updateRLStats();
+    updateAlgoStateReadout();
+    drawRLCanvas();
+  });
+
+  document.getElementById('rl-burst').addEventListener('click', () => {
+    let ok = 0, denied = 0;
+    for (let i = 0; i < 5; i++) {
+      vTime += 20; // a "burst" — requests land close together, not simultaneous
+      if (evalRequest()) ok++; else denied++;
+    }
+    rlLog('Burst of 5 sent at t=' + (simNow() / 1000).toFixed(2) + 's: ' + ok + ' allowed, ' + denied + ' denied.');
+    updateRLStats();
+    updateAlgoStateReadout();
+    drawRLCanvas();
+  });
+
+  document.getElementById('rl-jump').addEventListener('click', () => {
+    const t = simNow();
+    const nextBoundary = (Math.floor(t / WINDOW_MS) + 1) * WINDOW_MS;
+    const jumpBy = (nextBoundary - t) + 50; // land just after the boundary
+    vTime += jumpBy;
+    rlLog('Jumped clock forward ' + (jumpBy / 1000).toFixed(2) + 's to just past the next window boundary (t=' + (simNow() / 1000).toFixed(2) + 's). Try "Send burst (×5)" again.');
+    updateRLStats();
+    updateAlgoStateReadout();
+    drawRLCanvas();
+  });
+
+  document.getElementById('rl-reset').addEventListener('click', () => { vTime = 0; setAlgo(algo); });
+
+  resetAlgoState();
+  updateRLStats();
+  updateAlgoStateReadout();
+  drawRLCanvas();
+})();
+</script>
+</body>
+</html>

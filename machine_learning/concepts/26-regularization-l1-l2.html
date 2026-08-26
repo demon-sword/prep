@@ -1,0 +1,719 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1.0"/>
+  <title>L1 vs L2 Regularization — Machine Learning Concepts</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com"/>
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet"/>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg:        #0d0f17;
+      --surface:   #141720;
+      --card:      #1a1e2e;
+      --border:    #252a3d;
+      --accent:    #00d4ff;
+      --purple:    #7c3aed;
+      --green:     #00ff88;
+      --yellow:    #ffd700;
+      --red:       #ff4757;
+      --orange:    #ff9500;
+      --text:      #e2e8f0;
+      --text-dim:  #8892a4;
+      --mono:      'JetBrains Mono', monospace;
+      --sans:      'Inter', system-ui, sans-serif;
+    }
+
+    html { scroll-behavior: smooth; }
+
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: var(--sans);
+      font-size: 16px;
+      line-height: 1.7;
+      min-height: 100vh;
+    }
+
+    header {
+      background: var(--surface);
+      border-bottom: 1px solid var(--border);
+      padding: 2rem 2rem 1.5rem;
+      max-width: 1100px;
+      margin: 0 auto;
+    }
+
+    .group-badge {
+      display: inline-block;
+      font-family: var(--mono);
+      font-size: 0.7rem;
+      font-weight: 700;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      color: var(--accent);
+      background: rgba(0, 212, 255, 0.1);
+      border: 1px solid rgba(0, 212, 255, 0.3);
+      padding: 0.2em 0.7em;
+      border-radius: 4px;
+      margin-bottom: 0.75rem;
+    }
+
+    header h1 {
+      font-size: clamp(1.6rem, 4vw, 2.4rem);
+      font-weight: 700;
+      color: var(--text);
+      line-height: 1.2;
+      margin-bottom: 0.5rem;
+    }
+
+    header h1 span.id {
+      color: var(--text-dim);
+      font-size: 0.55em;
+      font-family: var(--mono);
+      margin-right: 0.5rem;
+      vertical-align: middle;
+    }
+
+    header p.desc {
+      color: var(--text-dim);
+      font-size: 1.05rem;
+      max-width: 700px;
+    }
+
+    main {
+      max-width: 1100px;
+      margin: 0 auto;
+      padding: 0 2rem 4rem;
+    }
+
+    section { margin-top: 3rem; }
+
+    section > h2 {
+      font-size: 1.4rem;
+      font-weight: 700;
+      color: var(--accent);
+      border-bottom: 1px solid var(--border);
+      padding-bottom: 0.5rem;
+      margin-bottom: 1.5rem;
+    }
+
+    h3 {
+      font-size: 1.1rem;
+      font-weight: 600;
+      color: var(--yellow);
+      margin: 1.5rem 0 0.6rem;
+    }
+
+    p { margin-bottom: 1rem; color: var(--text); }
+
+    ul, ol { padding-left: 1.5rem; margin-bottom: 1rem; }
+    li { margin-bottom: 0.4rem; }
+
+    code {
+      font-family: var(--mono);
+      font-size: 0.85em;
+      background: rgba(0, 212, 255, 0.08);
+      color: var(--accent);
+      padding: 0.1em 0.35em;
+      border-radius: 3px;
+    }
+
+    .formula-block {
+      background: var(--card);
+      border-left: 3px solid var(--purple);
+      border-radius: 0 8px 8px 0;
+      padding: 0.8rem 1.2rem;
+      margin: 1rem 0;
+      font-family: var(--mono);
+      font-size: 0.95rem;
+      color: var(--text);
+    }
+
+    .callout {
+      background: rgba(124, 58, 237, 0.08);
+      border: 1px solid rgba(124, 58, 237, 0.3);
+      border-radius: 8px;
+      padding: 1rem 1.2rem;
+      margin: 1rem 0;
+    }
+
+    .callout strong { color: var(--purple); }
+
+    /* ── Visualization ── */
+    #visualization .viz-card {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 1.5rem;
+      margin-bottom: 1.5rem;
+    }
+
+    .viz-title { font-weight: 600; font-size: 1rem; color: var(--text); margin-bottom: 0.3rem; }
+    .viz-desc { font-size: 0.88rem; color: var(--text-dim); margin-bottom: 1.2rem; }
+
+    .controls {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 1.25rem;
+      align-items: center;
+      margin-bottom: 1.2rem;
+    }
+
+    .slider-row { display: flex; align-items: center; gap: 0.75rem; }
+
+    .slider-row label {
+      font-size: 0.82rem;
+      color: var(--text-dim);
+      white-space: nowrap;
+    }
+
+    .slider-row input[type="range"] {
+      accent-color: var(--accent);
+      width: 240px;
+    }
+
+    .slider-val {
+      font-family: var(--mono);
+      font-size: 0.85rem;
+      color: var(--accent);
+      min-width: 2.8rem;
+      display: inline-block;
+    }
+
+    .ctrl-btn {
+      font-family: var(--mono);
+      font-size: 0.8rem;
+      padding: 0.45em 1.1em;
+      border-radius: 6px;
+      border: 1px solid var(--accent);
+      background: rgba(0, 212, 255, 0.08);
+      color: var(--accent);
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+
+    .ctrl-btn:hover { background: rgba(0, 212, 255, 0.2); }
+    .ctrl-btn:active { transform: scale(0.97); }
+    .ctrl-btn.ghost { border-color: var(--border); background: transparent; color: var(--text-dim); }
+    .ctrl-btn.ghost:hover { border-color: var(--text-dim); }
+
+    canvas {
+      display: block;
+      border-radius: 8px;
+      background: var(--surface);
+      max-width: 100%;
+      margin: 0 auto;
+    }
+
+    .legend {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 1rem;
+      margin-top: 0.8rem;
+      justify-content: center;
+    }
+
+    .legend-item {
+      display: flex;
+      align-items: center;
+      gap: 0.4rem;
+      font-size: 0.78rem;
+      color: var(--text-dim);
+    }
+
+    .legend-dot { width: 10px; height: 10px; border-radius: 50%; }
+    .legend-line { width: 16px; height: 0; border-top: 2px dashed; }
+
+    .side-panel {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 1.1rem;
+      margin-top: 1.2rem;
+    }
+
+    .side-panel h4 {
+      font-size: 0.85rem;
+      font-weight: 700;
+      color: var(--text);
+      margin-bottom: 0.8rem;
+      letter-spacing: 0.02em;
+    }
+
+    .readout-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.6rem;
+      margin-top: 0.4rem;
+    }
+
+    .readout {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 0.55rem 0.9rem;
+      font-size: 0.78rem;
+      color: var(--text-dim);
+      flex: 1;
+      min-width: 150px;
+      border-left: 3px solid var(--border);
+    }
+
+    .readout strong { display: block; font-family: var(--mono); font-size: 1.05rem; margin-top: 0.2rem; color: var(--text); }
+    .readout strong.zero { color: var(--red); }
+
+    .hint {
+      font-size: 0.78rem;
+      color: var(--text-dim);
+      margin-top: 0.8rem;
+      font-style: italic;
+      text-align: center;
+    }
+
+    /* ── Takeaways ── */
+    #takeaways ul { list-style: none; padding: 0; }
+
+    #takeaways li {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 1rem 1.2rem;
+      margin-bottom: 0.75rem;
+      padding-left: 3rem;
+      position: relative;
+    }
+
+    #takeaways li::before {
+      content: '→';
+      position: absolute;
+      left: 1rem;
+      color: var(--accent);
+      font-weight: 700;
+    }
+
+    /* ── Nav ── */
+    .concept-nav {
+      max-width: 1100px;
+      margin: 0 auto;
+      padding: 1.5rem 2rem 3rem;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      border-top: 1px solid var(--border);
+    }
+
+    .nav-link {
+      display: flex;
+      flex-direction: column;
+      gap: 0.2rem;
+      text-decoration: none;
+      padding: 0.6rem 1rem;
+      border-radius: 8px;
+      border: 1px solid var(--border);
+      background: var(--surface);
+      transition: all 0.2s;
+      max-width: 220px;
+    }
+
+    .nav-link:hover { border-color: var(--accent); background: rgba(0, 212, 255, 0.06); }
+    .nav-link.disabled { opacity: 0.3; pointer-events: none; }
+
+    .nav-dir {
+      font-size: 0.7rem;
+      font-family: var(--mono);
+      color: var(--text-dim);
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+    }
+
+    .nav-title { font-size: 0.88rem; color: var(--text); font-weight: 500; }
+
+    @media (max-width: 640px) {
+      header, main { padding-left: 1rem; padding-right: 1rem; }
+      .concept-nav { padding-left: 1rem; padding-right: 1rem; flex-direction: column; gap: 0.75rem; }
+      .nav-link { max-width: 100%; width: 100%; }
+      .slider-row input[type="range"] { width: 140px; }
+    }
+  </style>
+</head>
+<body>
+
+<header>
+  <div class="group-badge">Optimization</div>
+  <h1><span class="id">26</span>L1 vs L2 Regularization</h1>
+  <p class="desc">L1 (Lasso) vs L2 (Ridge) penalties — why L1's diamond constraint region produces sparse weights while L2's circular region shrinks smoothly.</p>
+</header>
+
+<main>
+
+  <!-- ── THEORY ── -->
+  <section id="theory">
+    <h2>Theory</h2>
+
+    <h3>Why Regularize at All</h3>
+    <p>
+      A model trained to minimize training loss alone will happily exploit noise: with enough features (or enough parameters relative to samples), it can drive training error to zero while generalizing terribly — the high-variance end of the <code>bias-variance tradeoff</code>. Regularization fights this by adding a penalty on model complexity to the objective, trading a little bias for a large reduction in variance. For linear models the two workhorses are <strong>L2 (Ridge)</strong>, <code>J(w) = Loss(w) + λ·Σwᵢ²</code>, and <strong>L1 (Lasso)</strong>, <code>J(w) = Loss(w) + λ·Σ|wᵢ|</code>. Both shrink weights toward zero as <code>λ</code> grows, but they get there through very different geometry, and that difference has large practical consequences.
+    </p>
+
+    <h3>The Geometric Story: Circle vs Diamond</h3>
+    <p>
+      The Lagrangian penalty form is equivalent to a constrained optimization: minimize the loss subject to <code>Σwᵢ² ≤ t</code> (L2) or <code>Σ|wᵢ| ≤ t</code> (L1) for some budget <code>t</code> tied to <code>λ</code>. Geometrically, L2's constraint region is a smooth circle (hypersphere in higher dimensions); L1's is a diamond (a cross-polytope) with sharp corners sitting exactly on the coordinate axes. The unconstrained OLS solution sits at the center of a family of elliptical loss contours; the regularized solution is the point where the smallest loss contour first touches the constraint region's boundary. Because the diamond has corners on the axes, that first point of contact is disproportionately likely to land exactly <em>on</em> an axis — meaning one or more coordinates are exactly zero. A circle has no corners, so the tangency point almost never lands exactly on an axis; L2 shrinks every weight toward zero but essentially never sets one to exactly zero. This is the entire reason L1 performs implicit feature selection and L2 doesn't.
+    </p>
+
+    <h3>The Algebraic Story: Constant vs Proportional Gradient</h3>
+    <p>
+      The same fact falls out of the subgradients. L2's penalty gradient is <code>2λwᵢ</code> — proportional to the weight itself, so as <code>wᵢ</code> shrinks, the pull toward zero weakens too; it's a smooth exponential decay (literally called <strong>weight decay</strong> in deep learning: each SGD step multiplies the weight by <code>(1 − ηλ)</code> before applying the data gradient) that asymptotically approaches but never reaches zero. L1's penalty gradient is <code>λ·sign(wᵢ)</code> — a <em>constant</em> magnitude regardless of how small <code>wᵢ</code> already is, so it keeps pushing at full strength until the data gradient can no longer counteract it, at which point the coordinate-wise optimum is exactly zero. This is the closed-form <strong>soft-thresholding</strong> operator that Lasso solvers apply at each coordinate: <code>wⱼ* = sign(w_ls)·max(|w_ls| − λ/(2a), 0)</code>, where <code>w_ls</code> is the unregularized least-squares solution for that coordinate holding others fixed.
+    </p>
+
+    <h3>Bayesian Interpretation</h3>
+    <p>
+      Both penalties are MAP estimation with a specific prior on the weights (see <em>MLE vs MAP</em>): L2 corresponds to a zero-mean Gaussian prior, <code>wᵢ ~ N(0, σ²/λ)</code> — Gaussians have light-but-smooth tails, matching L2's gentle, never-quite-zero shrinkage. L1 corresponds to a zero-mean Laplace (double-exponential) prior, <code>p(w) ∝ exp(−λ|w|/σ²)</code>, whose sharp peak at zero puts substantially more prior mass exactly at zero than a Gaussian does — matching L1's tendency to snap coordinates to exactly zero.
+    </p>
+
+    <h3>Correlated Features and Elastic Net</h3>
+    <p>
+      When two features are highly correlated, Ridge distributes weight between them roughly evenly (it prefers many small coefficients over one large one, because the squared penalty punishes large values disproportionately). Lasso, in the same situation, tends to arbitrarily pick one of the correlated features and zero out the other — the selection is unstable, flipping between the two features under small perturbations of the data. <strong>Elastic Net</strong> (<code>λ₁Σ|wᵢ| + λ₂Σwᵢ²</code>, <code>sklearn.linear_model.ElasticNet</code> with an <code>l1_ratio</code> mixing parameter) fixes this "grouping effect" problem by blending both penalties — sparse but stable under correlated features.
+    </p>
+
+    <h3>Production Reality</h3>
+    <p>
+      Ridge has a closed-form solution, <code>w = (XᵀX + λI)⁻¹Xᵀy</code>, so <code>sklearn.linear_model.Ridge</code> solves it directly via Cholesky/SVD — no iterative optimizer needed for small-to-medium feature counts. Lasso has no closed form (the absolute value isn't differentiable at zero) so <code>sklearn.linear_model.Lasso</code> uses <strong>cyclic coordinate descent</strong>, solving one coordinate at a time via soft-thresholding while holding the others fixed, sweeping repeatedly until convergence — the exact update used in the visualization below. <strong>LARS</strong> (Least Angle Regression) is a faster alternative that computes the entire regularization path in one shot, useful when you need Lasso solutions across many <code>λ</code> values (<code>sklearn.linear_model.lasso_path</code>/<code>LassoLars</code>). In practice <code>λ</code> (sklearn calls it <code>alpha</code>) is tuned by cross-validation over a log-spaced grid — <code>RidgeCV</code>/<code>LassoCV</code> default to something like <code>np.logspace(-4, 1, 100)</code> — and features <strong>must be standardized first</strong>, since the penalty is scale-dependent: an unscaled feature measured in millimeters vs meters would get a wildly different effective penalty. In deep learning, L2/weight decay is applied per-step in the optimizer; note that naive L2-as-added-loss interacts incorrectly with Adam's adaptive per-parameter scaling, which is why <code>AdamW</code> decouples weight decay from the gradient update (see <em>Gradient Descent Variants</em>). L1 regularization in neural nets is rare — dropout and L2/weight decay dominate — because true sparsity in a dense layer doesn't translate into a compute speedup without specialized sparse kernels.
+    </p>
+  </section>
+
+  <!-- ── VISUALIZATION ── -->
+  <section id="visualization">
+    <h2>Interactive Visualization</h2>
+
+    <div class="viz-card">
+      <div class="viz-title">Constraint Geometry: Where the Loss Contour Meets the Penalty Region</div>
+      <div class="viz-desc">
+        The ellipses are real contour lines of a quadratic loss <code>(w − w₀)ᵀH(w − w₀)</code> for two correlated features (off-diagonal <code>H</code>), with unconstrained OLS optimum <code>w₀</code> marked by the gold star. Drag the <code>λ</code> slider: the <strong>cyan circle</strong> is the L2 constraint region (radius = ‖w_ridge‖₂, solved in closed form via <code>(H+λI)⁻¹Hw₀</code> every frame) and the <strong>orange diamond</strong> is the L1 constraint region (radius = ‖w_lasso‖₁, solved via real cyclic coordinate descent with soft-thresholding — the same algorithm <code>sklearn.linear_model.Lasso</code> uses). Watch how the diamond's corner catches a coefficient at exactly zero as λ grows, while the circle's solution shrinks smoothly without ever hitting an axis.
+      </div>
+
+      <div class="controls">
+        <div class="slider-row">
+          <label>Regularization strength λ</label>
+          <input type="range" id="lambda-slider" min="0" max="8" step="0.05" value="0"/>
+          <span class="slider-val" id="lambda-val">0.00</span>
+        </div>
+        <button class="ctrl-btn" id="animate-btn">▶ Animate λ sweep</button>
+        <button class="ctrl-btn ghost" id="reset-btn">⟳ Reset</button>
+      </div>
+
+      <canvas id="reg-canvas" width="720" height="420"></canvas>
+
+      <div class="legend">
+        <div class="legend-item"><div class="legend-dot" style="background:#ffd700"></div>OLS optimum w₀ (λ=0)</div>
+        <div class="legend-item"><div class="legend-line" style="border-color:#00d4ff"></div>L2 constraint circle</div>
+        <div class="legend-item"><div class="legend-line" style="border-color:#ff9500"></div>L1 constraint diamond</div>
+        <div class="legend-item"><div class="legend-dot" style="background:#00d4ff"></div>Ridge solution</div>
+        <div class="legend-item"><div class="legend-dot" style="background:#ff9500"></div>Lasso solution</div>
+      </div>
+
+      <div class="side-panel">
+        <h4>Live weight readout</h4>
+        <div class="readout-row">
+          <div class="readout" style="border-left-color:#00d4ff"><span>Ridge w₁, w₂</span><strong id="ridge-w">—</strong></div>
+          <div class="readout" style="border-left-color:#ff9500"><span>Lasso w₁, w₂</span><strong id="lasso-w">—</strong></div>
+          <div class="readout" style="border-left-color:#7c3aed"><span>‖w‖ (L2-norm / L1-norm)</span><strong id="norms">—</strong></div>
+        </div>
+        <p class="hint">Push λ past ~3 and watch a Lasso coefficient snap to exactly 0.000 (highlighted red) — the diamond's corner is doing that, not a rounding artifact. Ridge's two coefficients keep shrinking together and never hit zero.</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- ── TAKEAWAYS ── -->
+  <section id="takeaways">
+    <h2>Key Takeaways</h2>
+    <ul>
+      <li>
+        <strong>L1 zeroes coefficients because its constraint region has corners on the axes; L2's circular region doesn't</strong> — this is a geometric fact, not a tuning accident, and it's the entire mechanism behind Lasso's implicit feature selection.
+      </li>
+      <li>
+        <strong>Ridge has a closed-form solution (<code>(XᵀX+λI)⁻¹Xᵀy</code>); Lasso does not</strong> — sklearn's <code>Lasso</code> solves it with cyclic coordinate descent and per-coordinate soft-thresholding, the same update the visualization above runs live; <code>LassoLars</code>/<code>lasso_path</code> computes the whole regularization path more efficiently when you need many λ values at once.
+      </li>
+      <li>
+        <strong>Always standardize features before regularizing</strong> — the penalty term is scale-dependent, so an unscaled feature gets an arbitrary effective penalty relative to others; <code>StandardScaler</code> before <code>Ridge</code>/<code>Lasso</code> is non-negotiable in production pipelines.
+      </li>
+      <li>
+        <strong>Under correlated features, Lasso's selection is unstable</strong> — it arbitrarily picks one of two correlated predictors and zeroes the other, flipping under small data perturbations; <strong>Elastic Net</strong> (<code>l1_ratio</code> blend of both penalties) restores a "grouping effect" that keeps correlated features together.
+      </li>
+      <li>
+        <strong>L2 = Gaussian prior, L1 = Laplace prior on the weights</strong> under a MAP interpretation — the Laplace distribution's sharp peak at zero is exactly why L1 puts real probability mass on exact sparsity while the smooth Gaussian never does.
+      </li>
+      <li>
+        <strong>In deep learning, L2/weight decay is the default (not L1)</strong> — true weight sparsity from L1 doesn't speed up dense matrix multiplies without specialized sparse kernels, and naive L2-as-loss interacts badly with Adam's per-parameter adaptive scaling, which is why <code>AdamW</code> decouples decay from the gradient update instead of adding <code>λ‖w‖²</code> to the loss.
+      </li>
+    </ul>
+  </section>
+
+</main>
+
+<!-- ── NAV ── -->
+<nav class="concept-nav">
+  <a class="nav-link" href="./25-gradient-descent-variants.html">
+    <span class="nav-dir">← Previous</span>
+    <span class="nav-title">Gradient Descent Variants</span>
+  </a>
+  <a class="nav-link" href="./27-dropout-batchnorm.html">
+    <span class="nav-dir">Next →</span>
+    <span class="nav-title">Dropout & Batch Normalization</span>
+  </a>
+</nav>
+
+<script>
+// ─── Loss: (w - w0)^T H (w - w0), correlated 2D quadratic ─────────────────────
+const H = [[2.0, 0.9], [0.9, 1.2]];   // symmetric PD "feature covariance"
+const W0 = [2.4, 1.3];                 // unconstrained OLS optimum
+const C = [ H[0][0]*W0[0] + H[0][1]*W0[1], H[1][0]*W0[0] + H[1][1]*W0[1] ]; // H*w0
+
+function loss(w1, w2) {
+  const d1 = w1 - W0[0], d2 = w2 - W0[1];
+  return d1*(H[0][0]*d1 + H[0][1]*d2) + d2*(H[1][0]*d1 + H[1][1]*d2);
+}
+
+// eigen-decomposition of symmetric 2x2 H, for exact ellipse contours
+function eig2x2(a, b, d) {
+  const tr = a + d, det = a*d - b*b;
+  const disc = Math.sqrt(Math.max(0, (tr/2)*(tr/2) - det));
+  const l1 = tr/2 + disc, l2 = tr/2 - disc;
+  function vecFor(l) {
+    if (Math.abs(b) > 1e-9) {
+      const vx = l - d, vy = b;
+      const n = Math.hypot(vx, vy);
+      return [vx/n, vy/n];
+    }
+    return Math.abs(a - l) < 1e-9 ? [1, 0] : [0, 1];
+  }
+  return { l1, l2, v1: vecFor(l1), v2: vecFor(l2) };
+}
+const EIG = eig2x2(H[0][0], H[0][1], H[1][1]);
+
+// ─── Ridge: closed-form (H + lambda*I)^-1 * C ──────────────────────────────────
+function solveRidge(lambda) {
+  const a = H[0][0] + lambda, b = H[0][1], c = H[1][0], d = H[1][1] + lambda;
+  const det = a*d - b*c;
+  const w1 = (d*C[0] - b*C[1]) / det;
+  const w2 = (a*C[1] - c*C[0]) / det;
+  return [w1, w2];
+}
+
+// ─── Lasso: cyclic coordinate descent with soft-thresholding ──────────────────
+function softThresh(x, t) { return Math.sign(x) * Math.max(Math.abs(x) - t, 0); }
+
+function solveLasso(lambda, warmStart) {
+  let w = warmStart ? warmStart.slice() : [W0[0], W0[1]];
+  for (let sweep = 0; sweep < 60; sweep++) {
+    for (let j = 0; j < 2; j++) {
+      const k = 1 - j;
+      const a = H[j][j];
+      const wls = (C[j] - H[j][k]*w[k]) / a;
+      w[j] = softThresh(wls, lambda / (2*a));
+    }
+  }
+  // snap near-zero numerical noise to exact zero for display clarity
+  w = w.map(v => Math.abs(v) < 1e-4 ? 0 : v);
+  return w;
+}
+
+// ─── Canvas setup ────────────────────────────────────────────────────────────
+function setupCanvas(canvas) {
+  const dpr = window.devicePixelRatio || 1;
+  if (!canvas.getAttribute('data-css-w')) {
+    canvas.setAttribute('data-css-w', canvas.width);
+    canvas.setAttribute('data-css-h', canvas.height);
+  }
+  const W = +canvas.getAttribute('data-css-w'), H2 = +canvas.getAttribute('data-css-h');
+  canvas.style.width = W + 'px';
+  canvas.style.height = H2 + 'px';
+  canvas.width = W * dpr;
+  canvas.height = H2 * dpr;
+  const ctx = canvas.getContext('2d');
+  ctx.scale(dpr, dpr);
+  return { ctx, W, H: H2 };
+}
+
+const canvas = document.getElementById('reg-canvas');
+const { ctx, W, H: CH } = setupCanvas(canvas);
+const PAD = { l: 20, r: 20, t: 20, b: 20 };
+const plotW = W - PAD.l - PAD.r, plotH = CH - PAD.t - PAD.b;
+
+const X_MIN = -1.5, X_MAX = 3.5, Y_MIN = -1.8, Y_MAX = 3.0;
+
+function worldToPx(x, y) {
+  const px = PAD.l + ((x - X_MIN) / (X_MAX - X_MIN)) * plotW;
+  const py = PAD.t + (1 - (y - Y_MIN) / (Y_MAX - Y_MIN)) * plotH;
+  return [px, py];
+}
+
+// ─── State ───────────────────────────────────────────────────────────────────
+let lambda = 0;
+let lassoWarm = [W0[0], W0[1]];
+let animating = false;
+let animDir = 1;
+
+function draw() {
+  ctx.clearRect(0, 0, W, CH);
+  ctx.fillStyle = '#141720';
+  ctx.fillRect(0, 0, W, CH);
+
+  // axes
+  ctx.strokeStyle = 'rgba(255,255,255,0.15)';
+  ctx.lineWidth = 1;
+  const [ox, oy0] = worldToPx(X_MIN, 0), [ox2] = worldToPx(X_MAX, 0);
+  ctx.beginPath(); ctx.moveTo(worldToPx(X_MIN,0)[0], worldToPx(X_MIN,0)[1]); ctx.lineTo(worldToPx(X_MAX,0)[0], worldToPx(X_MAX,0)[1]); ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(worldToPx(0,Y_MIN)[0], worldToPx(0,Y_MIN)[1]); ctx.lineTo(worldToPx(0,Y_MAX)[0], worldToPx(0,Y_MAX)[1]); ctx.stroke();
+
+  // loss contour ellipses (exact, via eigendecomposition)
+  const levels = [0.4, 1.2, 2.5, 4.5, 7, 10.5];
+  ctx.strokeStyle = 'rgba(124, 58, 237, 0.5)';
+  ctx.lineWidth = 1.3;
+  levels.forEach(L => {
+    ctx.beginPath();
+    for (let i = 0; i <= 100; i++) {
+      const theta = (i / 100) * Math.PI * 2;
+      const u1 = Math.sqrt(L / EIG.l1) * Math.cos(theta);
+      const u2 = Math.sqrt(L / EIG.l2) * Math.sin(theta);
+      const wx = W0[0] + u1*EIG.v1[0] + u2*EIG.v2[0];
+      const wy = W0[1] + u1*EIG.v1[1] + u2*EIG.v2[1];
+      const [px, py] = worldToPx(wx, wy);
+      if (i === 0) ctx.moveTo(px, py); else ctx.lineTo(px, py);
+    }
+    ctx.stroke();
+  });
+
+  const wRidge = solveRidge(lambda);
+  const wLasso = solveLasso(lambda, lassoWarm);
+  lassoWarm = wLasso;
+
+  const l2norm = Math.hypot(wRidge[0], wRidge[1]);
+  const l1norm = Math.abs(wLasso[0]) + Math.abs(wLasso[1]);
+
+  // L2 constraint circle
+  ctx.strokeStyle = '#00d4ff';
+  ctx.fillStyle = 'rgba(0, 212, 255, 0.06)';
+  ctx.lineWidth = 2;
+  ctx.setLineDash([6, 4]);
+  ctx.beginPath();
+  for (let i = 0; i <= 80; i++) {
+    const theta = (i/80) * Math.PI * 2;
+    const [px, py] = worldToPx(l2norm*Math.cos(theta), l2norm*Math.sin(theta));
+    if (i === 0) ctx.moveTo(px, py); else ctx.lineTo(px, py);
+  }
+  ctx.closePath();
+  ctx.fill();
+  ctx.stroke();
+
+  // L1 constraint diamond
+  ctx.strokeStyle = '#ff9500';
+  ctx.fillStyle = 'rgba(255, 149, 0, 0.07)';
+  ctx.beginPath();
+  const diamondPts = [[l1norm,0],[0,l1norm],[-l1norm,0],[0,-l1norm]];
+  diamondPts.forEach((p, i) => {
+    const [px, py] = worldToPx(p[0], p[1]);
+    if (i === 0) ctx.moveTo(px, py); else ctx.lineTo(px, py);
+  });
+  ctx.closePath();
+  ctx.fill();
+  ctx.stroke();
+  ctx.setLineDash([]);
+
+  // OLS optimum star
+  const [ow0x, ow0y] = worldToPx(W0[0], W0[1]);
+  drawStar(ow0x, ow0y, 8, '#ffd700');
+
+  // ridge solution
+  const [rx, ry] = worldToPx(wRidge[0], wRidge[1]);
+  drawDot(rx, ry, 6, '#00d4ff');
+
+  // lasso solution
+  const [lx, ly] = worldToPx(wLasso[0], wLasso[1]);
+  drawDot(lx, ly, 6, '#ff9500');
+
+  // readouts
+  document.getElementById('ridge-w').textContent = `${wRidge[0].toFixed(3)}, ${wRidge[1].toFixed(3)}`;
+  const lassoEl = document.getElementById('lasso-w');
+  lassoEl.innerHTML = `${fmtCoef(wLasso[0])}, ${fmtCoef(wLasso[1])}`;
+  document.getElementById('norms').textContent = `${l2norm.toFixed(3)} / ${l1norm.toFixed(3)}`;
+}
+
+function fmtCoef(v) {
+  const isZero = Math.abs(v) < 1e-4;
+  return isZero ? `<span style="color:#ff4757">0.000</span>` : v.toFixed(3);
+}
+
+function drawDot(x, y, r, color) {
+  ctx.fillStyle = color;
+  ctx.beginPath();
+  ctx.arc(x, y, r, 0, Math.PI*2);
+  ctx.fill();
+  ctx.strokeStyle = '#0d0f17';
+  ctx.lineWidth = 1.5;
+  ctx.stroke();
+}
+
+function drawStar(cx, cy, r, color) {
+  ctx.fillStyle = color;
+  ctx.beginPath();
+  for (let i = 0; i < 10; i++) {
+    const rad = i % 2 === 0 ? r : r*0.45;
+    const ang = (Math.PI/5)*i - Math.PI/2;
+    const x = cx + rad*Math.cos(ang), y = cy + rad*Math.sin(ang);
+    if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+  }
+  ctx.closePath();
+  ctx.fill();
+  ctx.strokeStyle = '#0d0f17';
+  ctx.lineWidth = 1;
+  ctx.stroke();
+}
+
+// ─── Controls ────────────────────────────────────────────────────────────────
+const slider = document.getElementById('lambda-slider');
+const lambdaVal = document.getElementById('lambda-val');
+
+slider.addEventListener('input', (e) => {
+  lambda = parseFloat(e.target.value);
+  lambdaVal.textContent = lambda.toFixed(2);
+  draw();
+});
+
+document.getElementById('reset-btn').addEventListener('click', () => {
+  animating = false;
+  document.getElementById('animate-btn').textContent = '▶ Animate λ sweep';
+  lambda = 0;
+  slider.value = 0;
+  lambdaVal.textContent = '0.00';
+  lassoWarm = [W0[0], W0[1]];
+  draw();
+});
+
+document.getElementById('animate-btn').addEventListener('click', () => {
+  animating = !animating;
+  document.getElementById('animate-btn').textContent = animating ? '⏸ Pause' : '▶ Animate λ sweep';
+  if (animating) requestAnimationFrame(animTick);
+});
+
+function animTick() {
+  if (!animating) return;
+  lambda += animDir * 0.035;
+  if (lambda >= 8) { lambda = 8; animDir = -1; }
+  if (lambda <= 0) { lambda = 0; animDir = 1; }
+  slider.value = lambda;
+  lambdaVal.textContent = lambda.toFixed(2);
+  draw();
+  requestAnimationFrame(animTick);
+}
+
+window.addEventListener('resize', draw);
+
+// ─── Init ───────────────────────────────────────────────────────────────────
+draw();
+document.fonts.ready.then(draw);
+</script>
+</body>
+</html>

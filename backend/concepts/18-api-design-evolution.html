@@ -1,0 +1,717 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1.0"/>
+<title>API Design and Evolution — Backend Concepts</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #0d0f17;
+    --surface: #141720;
+    --card: #1a1e2e;
+    --border: #252a3d;
+    --accent: #00d4ff;
+    --purple: #7c3aed;
+    --green: #00ff88;
+    --yellow: #ffd700;
+    --red: #ff4757;
+    --orange: #ff9500;
+    --text: #e2e8f0;
+    --text-dim: #8892a4;
+    --mono: 'JetBrains Mono', monospace;
+    --sans: 'Inter', system-ui, sans-serif;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--sans);
+    line-height: 1.6;
+  }
+  header {
+    padding: 48px 24px 32px;
+    max-width: 920px;
+    margin: 0 auto;
+    border-bottom: 1px solid var(--border);
+  }
+  .badge {
+    display: inline-block;
+    font-family: var(--mono);
+    font-size: 12px;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--accent);
+    background: rgba(0,212,255,0.08);
+    border: 1px solid rgba(0,212,255,0.3);
+    padding: 4px 10px;
+    border-radius: 4px;
+    margin-bottom: 14px;
+  }
+  h1 {
+    font-size: 32px;
+    margin: 0 0 12px;
+    font-weight: 700;
+    letter-spacing: -0.01em;
+  }
+  header p.desc {
+    color: var(--text-dim);
+    font-size: 16px;
+    max-width: 720px;
+    margin: 0;
+  }
+  main {
+    max-width: 920px;
+    margin: 0 auto;
+    padding: 0 24px 60px;
+  }
+  section { margin-top: 48px; }
+  h2 {
+    font-size: 13px;
+    font-family: var(--mono);
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    color: var(--purple);
+    margin-bottom: 20px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+  h2::after {
+    content: '';
+    flex: 1;
+    height: 1px;
+    background: var(--border);
+  }
+  h3 {
+    font-size: 18px;
+    color: var(--accent);
+    margin: 28px 0 10px;
+  }
+  h3:first-child { margin-top: 0; }
+  p { color: var(--text); margin: 8px 0; }
+  ul { padding-left: 22px; }
+  li { margin: 6px 0; }
+  code {
+    font-family: var(--mono);
+    background: rgba(124,58,237,0.12);
+    color: var(--purple);
+    padding: 2px 6px;
+    border-radius: 4px;
+    font-size: 0.9em;
+  }
+  .card {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 22px 24px;
+  }
+  .fail-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+    gap: 14px;
+    margin-top: 12px;
+  }
+  .fail-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-left: 3px solid var(--accent);
+    border-radius: 8px;
+    padding: 14px 16px;
+  }
+  .fail-card h4 { margin: 0 0 6px; font-size: 14.5px; color: var(--accent); }
+  .fail-card p { font-size: 13.5px; color: var(--text-dim); margin: 0; }
+  .fail-card.danger { border-left-color: var(--red); }
+  .fail-card.danger h4 { color: var(--red); }
+
+  /* Visualization shared */
+  .viz-card {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 24px;
+    margin-bottom: 24px;
+  }
+  .viz-intro { color: var(--text-dim); font-size: 14.5px; margin-bottom: 18px; }
+  .btn-row { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; margin-top: 14px; }
+  .run-btn {
+    font-family: var(--mono);
+    font-size: 13px;
+    background: var(--purple);
+    color: white;
+    border: none;
+    padding: 10px 18px;
+    border-radius: 6px;
+    cursor: pointer;
+    font-weight: 600;
+  }
+  .run-btn:hover { opacity: 0.88; }
+  .run-btn:disabled { opacity: 0.35; cursor: not-allowed; }
+  .run-btn.secondary { background: var(--surface); border: 1px solid var(--border); color: var(--text-dim); }
+  .run-btn.secondary:hover { color: var(--text); border-color: var(--accent); }
+  .run-btn.active { background: var(--accent); color: #04121a; }
+  .run-btn.danger-btn { background: var(--red); color: #1a0000; }
+
+  .slider-label { font-family: var(--mono); font-size: 13px; color: var(--text-dim); }
+
+  .flow-log {
+    margin-top: 14px;
+    font-family: var(--mono);
+    font-size: 12.5px;
+    color: var(--green);
+    min-height: 60px;
+    max-height: 170px;
+    overflow-y: auto;
+    white-space: pre-line;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 10px 12px;
+  }
+
+  .stat-row { display: flex; gap: 24px; margin-top: 16px; flex-wrap: wrap; }
+  .stat { font-family: var(--mono); font-size: 13px; color: var(--text-dim); }
+  .stat b { color: var(--yellow); font-size: 18px; display: block; }
+  .stat b.danger { color: var(--red); }
+  .stat b.good { color: var(--green); }
+
+  /* API style comparison */
+  .api-tabs { display: flex; gap: 8px; }
+  .code-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 16px;
+    margin-top: 16px;
+  }
+  .code-pane {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 14px 16px;
+    overflow-x: auto;
+  }
+  .code-pane h4 { margin: 0 0 8px; font-size: 12px; font-family: var(--mono); text-transform: uppercase; letter-spacing: 0.06em; color: var(--text-dim); }
+  .code-pane pre { margin: 0; font-family: var(--mono); font-size: 12.5px; color: var(--text); white-space: pre-wrap; word-break: break-word; }
+  .code-pane pre .kw { color: var(--purple); }
+  .code-pane pre .str { color: var(--green); }
+  .code-pane pre .num { color: var(--yellow); }
+  .code-pane pre .cm { color: var(--text-dim); }
+
+  /* Schema evolution */
+  .field-chips { display: flex; flex-wrap: wrap; gap: 8px; margin: 10px 0; }
+  .field-chip {
+    font-family: var(--mono);
+    font-size: 12.5px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 20px;
+    padding: 5px 12px;
+    color: var(--text);
+  }
+  .field-chip.new { border-color: var(--green); color: var(--green); }
+  .client-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-top: 16px; }
+  .client-panel {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 14px 16px;
+    text-align: center;
+  }
+  .client-panel h4 { margin: 0 0 6px; font-size: 13px; font-family: var(--mono); color: var(--text-dim); text-transform: uppercase; letter-spacing: 0.05em; }
+  .client-status { font-family: var(--mono); font-size: 15px; font-weight: 700; padding: 8px; border-radius: 6px; margin-top: 4px; }
+  .client-status.ok { background: rgba(0,255,136,0.1); color: var(--green); }
+  .client-status.fail { background: rgba(255,71,87,0.1); color: var(--red); }
+  .client-status.pending { background: rgba(136,146,164,0.1); color: var(--text-dim); }
+
+  /* Pagination */
+  .page-list { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 14px; min-height: 42px; }
+  .page-chip {
+    font-family: var(--mono);
+    font-size: 12.5px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 8px 10px;
+    color: var(--text);
+  }
+  .page-chip.dup { border-color: var(--red); background: rgba(255,71,87,0.1); color: var(--red); }
+  .page-chip.fresh { border-color: var(--green); }
+
+  .divider { height: 1px; background: var(--border); margin: 32px 0; }
+
+  blockquote#interview-quote {
+    background: linear-gradient(135deg, rgba(0,212,255,0.06), rgba(124,58,237,0.06));
+    border-left: 4px solid var(--accent);
+    border-radius: 8px;
+    margin: 0;
+    padding: 22px 26px;
+    font-size: 16.5px;
+    color: var(--text);
+    font-style: italic;
+    position: relative;
+  }
+  blockquote#interview-quote::before {
+    content: '\201C';
+    font-size: 48px;
+    color: var(--accent);
+    opacity: 0.3;
+    position: absolute;
+    top: -6px;
+    left: 10px;
+    font-style: normal;
+  }
+  #takeaways ul { list-style: none; padding: 0; }
+  #takeaways li {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-left: 3px solid var(--green);
+    border-radius: 8px;
+    padding: 12px 16px;
+    margin-bottom: 10px;
+    font-size: 14.5px;
+  }
+  #takeaways li b { color: var(--green); }
+
+  nav.concept-nav {
+    max-width: 920px;
+    margin: 0 auto;
+    padding: 24px 24px 60px;
+    display: flex;
+    justify-content: space-between;
+    font-family: var(--mono);
+    font-size: 13.5px;
+  }
+  nav.concept-nav a {
+    color: var(--accent);
+    text-decoration: none;
+    border: 1px solid var(--border);
+    padding: 10px 16px;
+    border-radius: 6px;
+  }
+  nav.concept-nav a:hover { border-color: var(--accent); }
+  nav.concept-nav span.disabled {
+    color: var(--text-dim);
+    border: 1px solid var(--border);
+    padding: 10px 16px;
+    border-radius: 6px;
+    opacity: 0.4;
+  }
+  @media (max-width: 700px) {
+    h1 { font-size: 24px; }
+    .btn-row { flex-direction: column; align-items: flex-start; }
+    .code-grid { grid-template-columns: 1fr; }
+    .client-grid { grid-template-columns: 1fr; }
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <span class="badge">api-design</span>
+  <h1>API Design and Evolution</h1>
+  <p class="desc">REST vs gRPC vs GraphQL tradeoffs, backward-compatible schema evolution, and pagination strategies (offset vs cursor-based) — designing APIs that can change without breaking existing clients.</p>
+</header>
+
+<main>
+
+  <section id="theory">
+    <h2>Theory</h2>
+    <div class="card">
+      <h3>REST, gRPC, GraphQL: three answers to "how does a client ask for data"</h3>
+      <p>These three aren't tiers of sophistication, they're optimized for different coupling assumptions. <b>REST</b> models the API as resources (<code>/users/42/orders</code>) manipulated with HTTP verbs, transported as JSON — its win is universality: any HTTP client, any language, cacheable by intermediaries via standard HTTP semantics, human-debuggable with curl. Its cost is that the response shape is fixed by the server, so a client that only needs an order's total still gets the full object — classic <b>over-fetching</b> — and a client that needs an order plus its items either gets a hand-rolled <code>?expand=items</code> query param or makes a second round trip (<b>under-fetching</b>, N+1 at the network level). <b>gRPC</b> defines a strict typed contract with Protocol Buffers, transports over HTTP/2, and gets you binary encoding (smaller payloads than JSON), multiplexed streaming (server-streaming, client-streaming, bidirectional), and generated client/server stubs so a type mismatch is a compile error, not a 3am incident. The trade is that the response shape is still server-defined — gRPC doesn't let a client pick fields — and it's a much worse fit for public/browser-facing APIs (no native browser gRPC, tooling is heavier), so it's overwhelmingly an internal service-to-service choice where you control both ends of the wire. <b>GraphQL</b> flips the shape question to the client: one endpoint, the client sends a query describing exactly the fields it wants across a graph of types, and the server resolves each field, often fanning out to multiple backends. It kills over-fetching and under-fetching by construction — but it moves the N+1 problem server-side, into resolvers (fetching an order's items one row at a time per order unless you batch with something like Dataloader), and it makes HTTP-layer caching much harder since every query is technically a different request against the same POST endpoint.</p>
+
+      <h3>The real hard problem: clients you don't control</h3>
+      <p>Picking a transport is a one-time decision; evolving the schema afterward is the decision you live with for years, because a client and server API are two independently deployed processes, not two functions in the same binary — the same reason distributed transactions and consensus are hard applies here in a milder form. Once a mobile app version or a partner's integration is out in the world, you cannot force it to redeploy on your timeline, so the API is a contract with unknown, unversioned parties on the other end. The only reliably safe change is <b>additive</b>: add a new optional field, add a new endpoint, add a new enum value at the end — never remove a field, never repurpose a field's meaning, never make an optional field required. This only works if clients practice the <b>tolerant reader</b> pattern (a corollary of Postel's Law) — deserialize by field name and silently ignore anything unrecognized rather than failing on an unknown key; a client written to strictly validate the full response shape turns every additive, otherwise-safe change into a breaking one. When a field genuinely must go away, the pattern is a deprecation window, not a flag day: mark it deprecated in docs/schema, dual-write or dual-serve both old and new fields for a negotiated period (weeks to months depending on how well you can measure client version adoption), monitor usage of the old field via access logs, and only remove it once usage drops to zero or a hard EOL date passes with comms sent. This is the same expand-contract shape used for zero-downtime schema migrations (<code>20-zero-downtime-deployments</code>) — expand to support both old and new, migrate consumers, then contract by removing the old path — just applied to a public contract instead of a database column.</p>
+
+      <h3>Pagination: offset looks simple and lies under concurrent writes</h3>
+      <p><b>Offset pagination</b> (<code>LIMIT 20 OFFSET 40</code>, or <code>?page=3</code>) is trivial to implement and lets a client jump straight to page 40 — but the offset is a position in a list that keeps changing. If 3 new rows get inserted at the top between a client's page-1 and page-2 request (a live feed, a leaderboard, anything sorted by recency), the whole list shifts, and offset 20 now points at different rows than it did a moment ago: the client re-sees 3 items it already had (duplicates) and silently skips 3 it never saw. Deep pages are also expensive — the database still has to scan and discard the first 39,980 rows to serve <code>OFFSET 40000 LIMIT 20</code>, so cost grows with page depth even though the page size is constant. <b>Cursor (keyset) pagination</b> replaces the position with an anchor: the client passes the last item it saw (typically an opaque, base64-encoded composite of the sort key plus a tiebreaker ID, e.g. <code>(created_at, id) &gt; (last_created_at, last_id)</code>), and the server does a direct indexed range scan from that anchor — <code>WHERE (created_at, id) &lt; (?, ?) ORDER BY created_at DESC, id DESC LIMIT 20</code>. Because the anchor is a value, not a position, inserts anywhere else in the list don't shift it — the client stays correct regardless of concurrent writes, and the query stays index-fast at any depth. The cost: you give up random access to "page 40" (you can only walk forward/backward from where you are), and the sort key needs a stable, indexed tiebreaker or ties can produce the same duplicate/skip bug offset has.</p>
+
+      <div class="fail-grid">
+        <div class="fail-card danger">
+          <h4>Non-additive breaking change</h4>
+          <p>Removing, renaming, or repurposing a field breaks every client still parsing the old shape, silently, with no compile-time signal on the server side — the failure shows up as a spike in client-side parse errors or crashes days later, often for a client version the server team forgot existed.</p>
+        </div>
+        <div class="fail-card danger">
+          <h4>Offset pagination skew under concurrent inserts</h4>
+          <p>A live, frequently-inserted-into list paged by numeric offset duplicates or drops rows whenever the underlying set changes between page requests — the classic symptom is a user reporting "I saw this item twice" or "an item just vanished" while scrolling a feed.</p>
+        </div>
+        <div class="fail-card">
+          <h4>GraphQL N+1 in resolvers</h4>
+          <p>A naive per-field resolver fetching one row at a time (e.g. an order's items resolved one order at a time in a loop) turns a single client query into hundreds of DB round trips — fixed with request-scoped batching/caching (Dataloader pattern), not by avoiding GraphQL.</p>
+        </div>
+        <div class="fail-card">
+          <h4>Strict client defeats additive evolution</h4>
+          <p>A client that fails on an unrecognized field (instead of the tolerant-reader pattern of ignoring unknown keys) makes even a fully additive, spec-compliant server change a breaking one in practice — the contract violation is really on the client's parsing discipline, not the server's change.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section id="visualization">
+    <h2>Visualization</h2>
+
+    <div class="viz-card">
+      <p class="viz-intro"><b>1 — Same request, three transports.</b> Switch between REST, gRPC, and GraphQL to see how each represents "get user 42's 5 most recent orders with item names," and the resulting round-trip / payload-shape trade-off.</p>
+
+      <div class="api-tabs btn-row">
+        <button class="run-btn active" id="tab-rest">REST</button>
+        <button class="run-btn secondary" id="tab-grpc">gRPC</button>
+        <button class="run-btn secondary" id="tab-graphql">GraphQL</button>
+      </div>
+
+      <div class="code-grid">
+        <div class="code-pane">
+          <h4>Request</h4>
+          <pre id="api-request"></pre>
+        </div>
+        <div class="code-pane">
+          <h4>Response shape</h4>
+          <pre id="api-response"></pre>
+        </div>
+      </div>
+
+      <div class="stat-row">
+        <div class="stat">Round trips<b id="stat-trips" class="good">1</b></div>
+        <div class="stat">Approx payload<b id="stat-bytes" class="good">1.8 KB</b></div>
+        <div class="stat">Field selection<b id="stat-select" class="danger">Server-fixed</b></div>
+      </div>
+    </div>
+
+    <div class="viz-card">
+      <p class="viz-intro"><b>2 — Schema evolution.</b> The server currently returns <code>id</code>, <code>name</code>, <code>email</code>. Apply a change and watch whether a v1 client (parsed against the original shape, fails on missing expected fields) and a v2 client (only requires <code>id</code>, ignores unknown fields — the tolerant-reader pattern) survive it.</p>
+
+      <div class="btn-row">
+        <button class="run-btn" id="btn-add-field">Add optional field: loyalty_tier</button>
+        <button class="run-btn danger-btn" id="btn-remove-field">Remove field: email</button>
+        <button class="run-btn danger-btn" id="btn-rename-field">Rename: name → full_name</button>
+        <button class="run-btn secondary" id="btn-schema-reset">Reset schema</button>
+      </div>
+
+      <p class="slider-label">Current server response fields:</p>
+      <div class="field-chips" id="schema-fields"></div>
+
+      <div class="client-grid">
+        <div class="client-panel">
+          <h4>v1 client (strict, deployed 2 years ago)</h4>
+          <div class="client-status pending" id="client-v1-status">not yet re-checked</div>
+        </div>
+        <div class="client-panel">
+          <h4>v2 client (tolerant reader, current)</h4>
+          <div class="client-status pending" id="client-v2-status">not yet re-checked</div>
+        </div>
+      </div>
+
+      <div class="flow-log" id="schema-log">Apply a change to see how each client parses the new response.</div>
+    </div>
+
+    <div class="viz-card">
+      <p class="viz-intro"><b>3 — Offset vs cursor pagination under concurrent inserts.</b> Page forward through a feed sorted newest-first, then insert new items mid-scroll and page again. Offset mode re-derives the window from a raw numeric offset (drifts under inserts); cursor mode anchors on the last item's ID (stays correct).</p>
+
+      <div class="btn-row">
+        <button class="run-btn active" id="mode-offset">Offset pagination</button>
+        <button class="run-btn secondary" id="mode-cursor">Cursor pagination</button>
+        <button class="run-btn secondary" id="btn-next-page">Next Page</button>
+        <button class="run-btn secondary" id="btn-insert">Insert 3 new items at top</button>
+        <button class="run-btn secondary" id="btn-page-reset">Reset</button>
+      </div>
+
+      <p class="slider-label" id="page-pointer">Page 0 — no requests yet</p>
+      <div class="page-list" id="page-list"></div>
+
+      <div class="stat-row">
+        <div class="stat">Duplicates in this page<b id="stat-dups" class="good">0</b></div>
+        <div class="stat">Items silently skipped so far<b id="stat-skipped" class="good">0</b></div>
+      </div>
+
+      <div class="flow-log" id="page-log">Page forward, then insert items, then page forward again to see the difference.</div>
+    </div>
+  </section>
+
+  <section id="interview-line">
+    <h2>Interview Line</h2>
+    <blockquote id="interview-quote">
+      "REST vs gRPC vs GraphQL is a smaller decision than people treat it as — REST for public APIs where you don't control the client and want HTTP-native caching and debuggability, gRPC for internal service-to-service where you control both ends and want a strict typed contract plus binary encoding and streaming over HTTP/2, GraphQL when you've got many client shapes reading an overlapping graph and over/under-fetching is a real cost. The problem that actually bites in production is evolution, because the client and server deploy independently — you can't force an old mobile build to upgrade — so schema changes have to be additive-only: add optional fields, never remove or repurpose one, and give a deprecated field a real dual-write window before it goes away, not a flag day. That only works if the client is a tolerant reader that ignores fields it doesn't recognize instead of failing closed. Pagination has the same shape of bug: offset pagination is a position in a list that keeps moving, so concurrent inserts make a client duplicate or silently skip rows between page requests; cursor pagination anchors on the last item's actual key, so it stays correct no matter what gets inserted around it — the cost is you lose the ability to jump straight to page 40."
+    </blockquote>
+  </section>
+
+  <section id="takeaways">
+    <h2>Key Takeaways</h2>
+    <ul>
+      <li><b>Pick the transport by coupling, not by fashion</b> — REST for unknown/public clients and HTTP-layer caching, gRPC for internal typed contracts and streaming, GraphQL for many overlapping client shapes; gRPC and GraphQL both still leave the N+1 problem somewhere (client round trips for REST, resolver fan-out for GraphQL) — batching (Dataloader) doesn't disappear, it moves.</li>
+      <li><b>Additive-only evolution is the only safe default</b> — new optional fields are fine, removing/renaming/repurposing a field is not; treat a deprecated field like a database column migration and give it an expand-then-contract window, the same pattern used for zero-downtime schema changes (<code>20-zero-downtime-deployments</code>).</li>
+      <li><b>The tolerant reader pattern is what makes additive changes actually safe</b> — a client that strictly validates the full response shape converts every additive, spec-compliant server change into a breaking one; this is a client-side discipline problem as much as a server-side design problem.</li>
+      <li><b>Offset pagination breaks under concurrent writes, cursor pagination doesn't</b> — offset is a moving position re-derived on every request, so inserts between page requests cause duplicate or skipped rows; cursor/keyset anchors on a value (typically <code>(sort_key, id)</code>) and stays correct regardless of what's inserted elsewhere, at the cost of random page access.</li>
+      <li><b>Deep offset pages get slower with depth even at constant page size</b> — <code>OFFSET 40000</code> still means the database scans and discards 40,000 rows before returning 20; cursor pagination's indexed range scan stays roughly constant-cost regardless of how deep the client has paged.</li>
+      <li><b>An API is a distributed-systems contract, not a function signature</b> — server and client deploy independently and you don't control the client's redeploy timeline, which is the same "who do you trust and for how long" problem that shows up in distributed locking (<code>15-distributed-locking</code>) and consensus, just applied to a schema instead of a lock.</li>
+    </ul>
+  </section>
+
+</main>
+
+<nav class="concept-nav">
+  <a href="../concepts/17-observability.html">← Previous: Observability (Metrics, Logs, Traces)</a>
+  <a href="../concepts/19-indexing-storage-engines.html">Next: Indexing and Storage Engines →</a>
+</nav>
+
+<script>
+(function() {
+  // ---------- 1. API style comparison ----------
+  const apiStyles = {
+    rest: {
+      request: '<span class="kw">GET</span> /users/42/orders?limit=5&expand=items <span class="cm">HTTP/1.1</span>\nHost: api.example.com\nAuthorization: Bearer &lt;token&gt;',
+      response: '{\n  <span class="str">"orders"</span>: [\n    {\n      <span class="str">"id"</span>: <span class="num">991</span>,\n      <span class="str">"status"</span>: <span class="str">"shipped"</span>,\n      <span class="str">"currency"</span>: <span class="str">"USD"</span>,\n      <span class="str">"total_cents"</span>: <span class="num">4200</span>,\n      <span class="str">"billing_address"</span>: { <span class="cm">...</span> },\n      <span class="str">"items"</span>: [{ <span class="str">"name"</span>: <span class="str">"Widget"</span> }]\n    }\n    <span class="cm">// ...4 more, full objects</span>\n  ]\n}',
+      trips: '1–2', bytes: '~1.8 KB', select: 'Server-fixed', selectClass: 'danger'
+    },
+    grpc: {
+      request: '<span class="kw">service</span> OrderService {\n  <span class="kw">rpc</span> GetRecentOrders(OrderRequest)\n    <span class="kw">returns</span> (<span class="kw">stream</span> Order);\n}\n\n<span class="kw">message</span> OrderRequest {\n  int32 user_id = <span class="num">1</span>;\n  int32 limit = <span class="num">2</span>;\n}',
+      response: '<span class="cm">// binary protobuf, streamed over HTTP/2</span>\n<span class="kw">message</span> Order {\n  int64 id = <span class="num">1</span>;\n  int64 total_cents = <span class="num">2</span>;\n  <span class="kw">repeated</span> Item items = <span class="num">3</span>;\n}\n<span class="cm">// 5 Order messages streamed, ~340B total</span>',
+      trips: '1 (streamed)', bytes: '~340 B', select: 'Server-fixed, typed', selectClass: 'danger'
+    },
+    graphql: {
+      request: '<span class="kw">query</span> {\n  user(id: <span class="num">42</span>) {\n    orders(limit: <span class="num">5</span>) {\n      id\n      total_cents\n      items { name }\n    }\n  }\n}',
+      response: '{\n  <span class="str">"data"</span>: {\n    <span class="str">"user"</span>: {\n      <span class="str">"orders"</span>: [\n        { <span class="str">"id"</span>: <span class="num">991</span>, <span class="str">"total_cents"</span>: <span class="num">4200</span>,\n          <span class="str">"items"</span>: [{ <span class="str">"name"</span>: <span class="str">"Widget"</span> }] }\n        <span class="cm">// ...4 more, exactly this shape</span>\n      ]\n    }\n  }\n}',
+      trips: '1', bytes: '~420 B', select: 'Client-chosen', selectClass: 'good'
+    }
+  };
+
+  function setApiStyle(styleKey) {
+    const s = apiStyles[styleKey];
+    document.getElementById('api-request').innerHTML = s.request;
+    document.getElementById('api-response').innerHTML = s.response;
+    document.getElementById('stat-trips').textContent = s.trips;
+    document.getElementById('stat-bytes').textContent = s.bytes;
+    const selEl = document.getElementById('stat-select');
+    selEl.textContent = s.select;
+    selEl.className = s.selectClass;
+
+    ['rest', 'grpc', 'graphql'].forEach(k => {
+      const btn = document.getElementById('tab-' + k);
+      btn.classList.toggle('active', k === styleKey);
+      btn.classList.toggle('secondary', k !== styleKey);
+    });
+  }
+  document.getElementById('tab-rest').addEventListener('click', () => setApiStyle('rest'));
+  document.getElementById('tab-grpc').addEventListener('click', () => setApiStyle('grpc'));
+  document.getElementById('tab-graphql').addEventListener('click', () => setApiStyle('graphql'));
+  setApiStyle('rest');
+
+  // ---------- 2. Schema evolution ----------
+  let fields = ['id', 'name', 'email'];
+  let lastAdded = null;
+  const schemaLogEl = document.getElementById('schema-log');
+  const schemaLogLines = [];
+  function schemaLog(msg) {
+    schemaLogLines.push(msg);
+    if (schemaLogLines.length > 20) schemaLogLines.shift();
+    schemaLogEl.textContent = schemaLogLines.join('\n');
+    schemaLogEl.scrollTop = schemaLogEl.scrollHeight;
+  }
+
+  function renderSchema() {
+    const chipsEl = document.getElementById('schema-fields');
+    chipsEl.innerHTML = '';
+    fields.forEach(f => {
+      const chip = document.createElement('span');
+      chip.className = 'field-chip' + (f === lastAdded ? ' new' : '');
+      chip.textContent = f;
+      chipsEl.appendChild(chip);
+    });
+  }
+
+  function checkClients() {
+    const v1Required = ['id', 'name', 'email'];
+    const v1Ok = v1Required.every(f => fields.includes(f));
+    const v2Ok = fields.includes('id'); // tolerant reader, only needs id
+
+    const v1El = document.getElementById('client-v1-status');
+    v1El.textContent = v1Ok ? 'Parses OK' : 'FAILS — missing expected field';
+    v1El.className = 'client-status ' + (v1Ok ? 'ok' : 'fail');
+
+    const v2El = document.getElementById('client-v2-status');
+    v2El.textContent = v2Ok ? 'Parses OK (ignores unknowns)' : 'FAILS — missing id';
+    v2El.className = 'client-status ' + (v2Ok ? 'ok' : 'fail');
+  }
+
+  document.getElementById('btn-add-field').addEventListener('click', () => {
+    if (!fields.includes('loyalty_tier')) {
+      fields.push('loyalty_tier');
+      lastAdded = 'loyalty_tier';
+      schemaLog('+ Added optional field "loyalty_tier". Additive change — both clients should be fine.');
+    }
+    renderSchema();
+    checkClients();
+  });
+  document.getElementById('btn-remove-field').addEventListener('click', () => {
+    if (fields.includes('email')) {
+      fields = fields.filter(f => f !== 'email');
+      lastAdded = null;
+      schemaLog('- Removed "email". Non-additive — v1 client expected it and will now fail to parse.');
+    }
+    renderSchema();
+    checkClients();
+  });
+  document.getElementById('btn-rename-field').addEventListener('click', () => {
+    if (fields.includes('name')) {
+      fields = fields.map(f => f === 'name' ? 'full_name' : f);
+      lastAdded = 'full_name';
+      schemaLog('~ Renamed "name" → "full_name". Same as a remove+add from the old client\'s view — v1 fails.');
+    }
+    renderSchema();
+    checkClients();
+  });
+  document.getElementById('btn-schema-reset').addEventListener('click', () => {
+    fields = ['id', 'name', 'email'];
+    lastAdded = null;
+    schemaLog('Schema reset to original shape: id, name, email.');
+    renderSchema();
+    document.getElementById('client-v1-status').className = 'client-status pending';
+    document.getElementById('client-v1-status').textContent = 'not yet re-checked';
+    document.getElementById('client-v2-status').className = 'client-status pending';
+    document.getElementById('client-v2-status').textContent = 'not yet re-checked';
+  });
+  renderSchema();
+
+  // ---------- 3. Pagination ----------
+  let mode = 'offset';
+  let allItems = []; // index 0 = newest
+  let nextId = 130;
+  const PAGE_SIZE = 5;
+  let offsetPointer = 0;
+  let cursorId = null; // null = start from top
+  let seenIds = new Set();
+  let totalSkipped = 0;
+  let pageNum = 0;
+
+  const pageLogEl = document.getElementById('page-log');
+  const pageLogLines = [];
+  function pageLog(msg) {
+    pageLogLines.push(msg);
+    if (pageLogLines.length > 20) pageLogLines.shift();
+    pageLogEl.textContent = pageLogLines.join('\n');
+    pageLogEl.scrollTop = pageLogEl.scrollHeight;
+  }
+
+  function seedItems() {
+    allItems = [];
+    for (let i = 0; i < 30; i++) {
+      allItems.push({ id: nextId - i, ts: 't' + (nextId - i) });
+    }
+    nextId = allItems[0].id;
+  }
+
+  function resetPagination() {
+    seedItems();
+    offsetPointer = 0;
+    cursorId = null;
+    seenIds = new Set();
+    totalSkipped = 0;
+    pageNum = 0;
+    document.getElementById('page-pointer').textContent = 'Page 0 — no requests yet';
+    document.getElementById('page-list').innerHTML = '';
+    document.getElementById('stat-dups').textContent = '0';
+    document.getElementById('stat-dups').className = 'good';
+    document.getElementById('stat-skipped').textContent = '0';
+    document.getElementById('stat-skipped').className = 'good';
+    pageLogLines.length = 0;
+    pageLog('Feed reset: 30 items, ids ' + allItems[allItems.length-1].id + '..' + allItems[0].id + ', newest first.');
+  }
+
+  function fetchOffsetPage() {
+    const page = allItems.slice(offsetPointer, offsetPointer + PAGE_SIZE);
+    offsetPointer += PAGE_SIZE;
+    return page;
+  }
+
+  function fetchCursorPage() {
+    let startIdx = 0;
+    if (cursorId !== null) {
+      const idx = allItems.findIndex(it => it.id === cursorId);
+      startIdx = idx === -1 ? 0 : idx + 1;
+    }
+    const page = allItems.slice(startIdx, startIdx + PAGE_SIZE);
+    if (page.length) cursorId = page[page.length - 1].id;
+    return page;
+  }
+
+  function renderPage(page) {
+    pageNum += 1;
+    const listEl = document.getElementById('page-list');
+    listEl.innerHTML = '';
+    let dupCount = 0;
+    page.forEach(item => {
+      const isDup = seenIds.has(item.id);
+      if (isDup) dupCount++;
+      const chip = document.createElement('span');
+      chip.className = 'page-chip ' + (isDup ? 'dup' : 'fresh');
+      chip.textContent = '#' + item.id;
+      listEl.appendChild(chip);
+      seenIds.add(item.id);
+    });
+    document.getElementById('stat-dups').textContent = String(dupCount);
+    document.getElementById('stat-dups').className = dupCount > 0 ? 'danger' : 'good';
+    document.getElementById('stat-skipped').textContent = String(totalSkipped);
+    document.getElementById('stat-skipped').className = totalSkipped > 0 ? 'danger' : 'good';
+
+    const pointerLabel = mode === 'offset'
+      ? 'Page ' + pageNum + ' — offset ' + (offsetPointer - PAGE_SIZE) + '-' + (offsetPointer - 1)
+      : 'Page ' + pageNum + ' — cursor after id #' + (page.length ? page[0] && cursorId : '—');
+    document.getElementById('page-pointer').textContent = pointerLabel;
+
+    if (page.length === 0) {
+      pageLog('No more items in this page window.');
+    } else if (dupCount > 0) {
+      pageLog('Page ' + pageNum + ' (' + mode + '): ' + dupCount + ' of ' + page.length + ' items were already shown — offset drifted after the insert.');
+    } else {
+      pageLog('Page ' + pageNum + ' (' + mode + '): ' + page.length + ' fresh items, ids ' + page.map(p => p.id).join(', ') + '.');
+    }
+  }
+
+  document.getElementById('btn-next-page').addEventListener('click', () => {
+    const page = mode === 'offset' ? fetchOffsetPage() : fetchCursorPage();
+    renderPage(page);
+  });
+
+  document.getElementById('btn-insert').addEventListener('click', () => {
+    const inserted = [];
+    for (let i = 0; i < 3; i++) {
+      nextId += 1;
+      inserted.push({ id: nextId, ts: 't' + nextId });
+    }
+    allItems = inserted.reverse().concat(allItems);
+    if (mode === 'offset') {
+      // the 3 new rows push everything else down by 3 — offsetPointer now
+      // points at a window that overlaps the previously-served one.
+      totalSkipped += 3;
+    }
+    pageLog('Inserted 3 new items (ids ' + inserted.map(x => x.id).join(', ') + ') at the top of the feed.' +
+      (mode === 'offset' ? ' Offset pointer is now stale — next page will overlap.' : ' Cursor is unaffected — it points at a specific id, not a position.'));
+  });
+
+  document.getElementById('mode-offset').addEventListener('click', () => {
+    if (mode === 'offset') return;
+    mode = 'offset';
+    document.getElementById('mode-offset').classList.add('active');
+    document.getElementById('mode-offset').classList.remove('secondary');
+    document.getElementById('mode-cursor').classList.add('secondary');
+    document.getElementById('mode-cursor').classList.remove('active');
+    resetPagination();
+  });
+  document.getElementById('mode-cursor').addEventListener('click', () => {
+    if (mode === 'cursor') return;
+    mode = 'cursor';
+    document.getElementById('mode-cursor').classList.add('active');
+    document.getElementById('mode-cursor').classList.remove('secondary');
+    document.getElementById('mode-offset').classList.add('secondary');
+    document.getElementById('mode-offset').classList.remove('active');
+    resetPagination();
+  });
+  document.getElementById('btn-page-reset').addEventListener('click', resetPagination);
+
+  resetPagination();
+})();
+</script>
+</body>
+</html>

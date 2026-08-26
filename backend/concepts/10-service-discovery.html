@@ -1,0 +1,675 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1.0"/>
+<title>Service Discovery — Backend Concepts</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #0d0f17;
+    --surface: #141720;
+    --card: #1a1e2e;
+    --border: #252a3d;
+    --accent: #00d4ff;
+    --purple: #7c3aed;
+    --green: #00ff88;
+    --yellow: #ffd700;
+    --red: #ff4757;
+    --orange: #ff9500;
+    --text: #e2e8f0;
+    --text-dim: #8892a4;
+    --mono: 'JetBrains Mono', monospace;
+    --sans: 'Inter', system-ui, sans-serif;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--sans);
+    line-height: 1.6;
+  }
+  header {
+    padding: 48px 24px 32px;
+    max-width: 920px;
+    margin: 0 auto;
+    border-bottom: 1px solid var(--border);
+  }
+  .badge {
+    display: inline-block;
+    font-family: var(--mono);
+    font-size: 12px;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--accent);
+    background: rgba(0,212,255,0.08);
+    border: 1px solid rgba(0,212,255,0.3);
+    padding: 4px 10px;
+    border-radius: 4px;
+    margin-bottom: 14px;
+  }
+  h1 {
+    font-size: 32px;
+    margin: 0 0 12px;
+    font-weight: 700;
+    letter-spacing: -0.01em;
+  }
+  header p.desc {
+    color: var(--text-dim);
+    font-size: 16px;
+    max-width: 720px;
+    margin: 0;
+  }
+  main {
+    max-width: 920px;
+    margin: 0 auto;
+    padding: 0 24px 60px;
+  }
+  section {
+    margin-top: 48px;
+  }
+  h2 {
+    font-size: 13px;
+    font-family: var(--mono);
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    color: var(--purple);
+    margin-bottom: 20px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+  h2::after {
+    content: '';
+    flex: 1;
+    height: 1px;
+    background: var(--border);
+  }
+  h3 {
+    font-size: 18px;
+    color: var(--accent);
+    margin: 28px 0 10px;
+  }
+  h3:first-child { margin-top: 0; }
+  p { color: var(--text); margin: 8px 0; }
+  ul { padding-left: 22px; }
+  li { margin: 6px 0; }
+  code {
+    font-family: var(--mono);
+    background: rgba(124,58,237,0.12);
+    color: var(--purple);
+    padding: 2px 6px;
+    border-radius: 4px;
+    font-size: 0.9em;
+  }
+  .aside {
+    margin-top: 10px;
+    font-size: 13.5px;
+    color: var(--text-dim);
+    border-left: 2px solid var(--border);
+    padding-left: 12px;
+    font-style: italic;
+  }
+  .card {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 22px 24px;
+  }
+  .fail-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+    gap: 14px;
+    margin-top: 12px;
+  }
+  .fail-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-left: 3px solid var(--accent);
+    border-radius: 8px;
+    padding: 14px 16px;
+  }
+  .fail-card h4 {
+    margin: 0 0 6px;
+    font-size: 14.5px;
+    color: var(--accent);
+  }
+  .fail-card p { font-size: 13.5px; color: var(--text-dim); margin: 0; }
+  .fail-card.danger { border-left-color: var(--red); }
+  .fail-card.danger h4 { color: var(--red); }
+
+  /* Visualization shared */
+  .viz-card {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 24px;
+    margin-bottom: 24px;
+  }
+  .viz-intro { color: var(--text-dim); font-size: 14.5px; margin-bottom: 18px; }
+  .btn-row { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; margin-top: 14px; }
+  .run-btn {
+    font-family: var(--mono);
+    font-size: 13px;
+    background: var(--purple);
+    color: white;
+    border: none;
+    padding: 10px 18px;
+    border-radius: 6px;
+    cursor: pointer;
+    font-weight: 600;
+  }
+  .run-btn:hover { opacity: 0.88; }
+  .run-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+  .run-btn.secondary { background: var(--surface); border: 1px solid var(--border); color: var(--text-dim); }
+  .run-btn.secondary:hover { color: var(--text); border-color: var(--accent); }
+  .run-btn.active { background: var(--accent); color: #0d0f17; }
+  .run-btn.danger-btn { background: var(--red); }
+
+  .slider-row { margin-top: 14px; }
+  .slider-row label { font-family: var(--mono); font-size: 12.5px; color: var(--text-dim); display: block; margin-bottom: 8px; }
+  .slider-row label b { color: var(--yellow); }
+  input[type="range"] { width: 100%; accent-color: var(--accent); }
+
+  .flow-log {
+    margin-top: 14px;
+    font-family: var(--mono);
+    font-size: 13px;
+    color: var(--green);
+    min-height: 40px;
+    white-space: pre-line;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 10px 12px;
+  }
+
+  .stat-row {
+    display: flex;
+    gap: 24px;
+    margin-top: 16px;
+    flex-wrap: wrap;
+  }
+  .stat {
+    font-family: var(--mono);
+    font-size: 13px;
+    color: var(--text-dim);
+  }
+  .stat b { color: var(--yellow); font-size: 18px; display: block; }
+  .stat b.danger { color: var(--red); }
+  .stat b.good { color: var(--green); }
+
+  .algo-select { display: flex; gap: 8px; flex-wrap: wrap; }
+
+  /* registry pool */
+  .pool-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+    gap: 12px;
+    margin-top: 16px;
+  }
+  .inst-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 12px 14px;
+    transition: border-color 0.15s, opacity 0.15s;
+  }
+  .inst-card .inst-name { font-family: var(--mono); font-size: 13px; color: var(--text); font-weight: 600; }
+  .inst-card .inst-state { font-family: var(--mono); font-size: 11px; margin-top: 4px; text-transform: uppercase; letter-spacing: 0.05em; }
+  .inst-card .inst-bar-shell { height: 8px; border-radius: 4px; background: var(--bg); margin-top: 10px; overflow: hidden; }
+  .inst-card .inst-bar-fill { height: 100%; background: var(--accent); width: 100%; transition: width 0.2s linear; }
+  .inst-card .inst-meta { font-family: var(--mono); font-size: 11px; color: var(--text-dim); margin-top: 8px; }
+  .inst-card.state-live { border-left: 3px solid var(--green); }
+  .inst-card.state-stale { border-left: 3px solid var(--orange); }
+  .inst-card.state-stale .inst-bar-fill { background: var(--orange); }
+  .inst-card.state-stale .inst-name::after { content: ' 🔥'; }
+  .inst-card.state-gone { opacity: 0.3; border-left: 3px solid var(--border); }
+
+  /* discovery path diagram */
+  .path-diagram { display: flex; align-items: center; justify-content: center; gap: 8px; margin-top: 18px; flex-wrap: wrap; }
+  .path-node {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 14px 18px;
+    text-align: center;
+    font-family: var(--mono);
+    font-size: 12.5px;
+    color: var(--text-dim);
+    min-width: 110px;
+    transition: border-color 0.25s, color 0.25s, background 0.25s;
+  }
+  .path-node .node-sub { font-size: 10.5px; color: var(--text-dim); margin-top: 4px; }
+  .path-node.active { border-color: var(--accent); color: var(--accent); background: rgba(0,212,255,0.08); }
+  .path-node.success { border-color: var(--green); color: var(--green); background: rgba(0,255,136,0.08); }
+  .path-node.fail { border-color: var(--red); color: var(--red); background: rgba(255,71,87,0.08); }
+  .path-arrow { color: var(--text-dim); font-size: 18px; }
+  .path-arrow.active { color: var(--accent); }
+
+  .divider { height: 1px; background: var(--border); margin: 32px 0; }
+
+  blockquote#interview-quote {
+    background: linear-gradient(135deg, rgba(0,212,255,0.06), rgba(124,58,237,0.06));
+    border-left: 4px solid var(--accent);
+    border-radius: 8px;
+    margin: 0;
+    padding: 22px 26px;
+    font-size: 16.5px;
+    color: var(--text);
+    font-style: italic;
+    position: relative;
+  }
+  blockquote#interview-quote::before {
+    content: '\201C';
+    font-size: 48px;
+    color: var(--accent);
+    opacity: 0.3;
+    position: absolute;
+    top: -6px;
+    left: 10px;
+    font-style: normal;
+  }
+  #takeaways ul { list-style: none; padding: 0; }
+  #takeaways li {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-left: 3px solid var(--green);
+    border-radius: 8px;
+    padding: 12px 16px;
+    margin-bottom: 10px;
+    font-size: 14.5px;
+  }
+  #takeaways li b { color: var(--green); }
+
+  nav.concept-nav {
+    max-width: 920px;
+    margin: 0 auto;
+    padding: 24px 24px 60px;
+    display: flex;
+    justify-content: space-between;
+    font-family: var(--mono);
+    font-size: 13.5px;
+  }
+  nav.concept-nav a {
+    color: var(--accent);
+    text-decoration: none;
+    border: 1px solid var(--border);
+    padding: 10px 16px;
+    border-radius: 6px;
+  }
+  nav.concept-nav a:hover { border-color: var(--accent); }
+  nav.concept-nav span.disabled {
+    color: var(--text-dim);
+    border: 1px solid var(--border);
+    padding: 10px 16px;
+    border-radius: 6px;
+    opacity: 0.4;
+  }
+  @media (max-width: 600px) {
+    h1 { font-size: 24px; }
+    .btn-row { flex-direction: column; align-items: flex-start; }
+    .path-diagram { flex-direction: column; }
+    .path-arrow { transform: rotate(90deg); }
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <span class="badge">traffic-management</span>
+  <h1>Service Discovery</h1>
+  <p class="desc">Client-side vs server-side service discovery, DNS-based discovery, and service registries (Consul, etcd, ZooKeeper) — how services find each other as instances scale up and down.</p>
+</header>
+
+<main>
+
+  <section id="theory">
+    <h2>Theory</h2>
+    <div class="card">
+      <h3>The problem discovery solves</h3>
+      <p>In a static world you hardcode <code>payments-service.internal:8080</code> and move on. In an autoscaled, container-orchestrated world, instances come and go constantly — a deploy replaces every instance, a scale-up adds ten more, a crash removes one without warning — and IPs are ephemeral. Service discovery is the answer to one question asked continuously: <b>"given a service name, what set of addresses can I send a request to right now?"</b> Get the answer late and you route into a hole; get it wrong and you never notice until users do.</p>
+
+      <h3>Client-side vs server-side discovery</h3>
+      <div class="fail-grid">
+        <div class="fail-card">
+          <h4>Client-side discovery</h4>
+          <p>The client queries the registry directly (or holds a periodically-refreshed cache of it) and picks an instance itself, often with an embedded load-balancing library. Classic example: Netflix Eureka + Ribbon. One fewer network hop than going through a proxy, and the client can make locality-aware choices (same-AZ instance) with full context. The cost: every client in every language needs the discovery + LB logic, and every client is now trusting a registry snapshot that may already be stale by the time it dials.</p>
+        </div>
+        <div class="fail-card">
+          <h4>Server-side discovery</h4>
+          <p>The client calls a fixed, stable endpoint — a load balancer, a Kubernetes <code>Service</code>, or a sidecar proxy (Envoy) — and that intermediary owns the registry lookup and the routing decision. The client's code is trivial: one DNS name, no registry client, no LB library to keep in sync across every service's tech stack. The cost is an extra hop, and the intermediary itself becomes a piece of infrastructure that must scale and stay available. This is also usually the safer default for staleness: the intermediary is exactly where active health checks live (see <code>09-load-balancing</code>), so it can eject a dead instance faster than the registry's own lease would expire.</p>
+        </div>
+      </div>
+
+      <h3>DNS-based discovery</h3>
+      <p>The simplest version: resolve a service name to a set of A/SRV records that change as instances scale. It costs nothing extra to adopt — every language already has a DNS resolver — but it inherits DNS's baggage: <b>TTL-driven caching</b> means clients (and every resolver, forwarder, and OS cache in between) hold stale answers for as long as the TTL says, regardless of whether the instance behind that IP is now dead. Some resolvers also ignore TTL entirely and cache until process restart. DNS has no way to signal "half of these are unhealthy right now" — it hands back a set and stops caring. This is why DNS-based discovery is common for coarse-grained, slow-changing topology (which cluster, which region) and rare as the sole mechanism for fast-changing pod-level routing.</p>
+
+      <h3>Service registries: heartbeats, TTLs, and health</h3>
+      <p>A registry (Consul, etcd, ZooKeeper, or Kubernetes' own <code>etcd</code>-backed API) is the general-purpose version of DNS-based discovery: instances explicitly <b>register</b> on startup and hold a <b>lease</b> that they must renew with periodic heartbeats. Stop heartbeating and the lease expires after its TTL, and the registry evicts the entry. This is the same lease/TTL idea as a distributed lock (<code>15-distributed-locking</code>) applied to liveness instead of mutual exclusion — the registry isn't told "I died," it just stops hearing from you and assumes it after a timeout.</p>
+      <p>That timeout is the crux of the mechanism: a shorter TTL means faster eviction of dead instances but more heartbeat chatter and more registry writes at scale; a longer TTL means less overhead but a longer window where a crashed instance still looks live to anyone reading the registry. This window has a name worth using out loud: the <b>stale-registry window</b>, and it's structurally identical to the health-check detection-lag window in load balancing — both are "how long can a dead node keep receiving traffic because nobody has proven it's dead yet."</p>
+      <p>Because a registry is itself a piece of distributed state that many clients read and write concurrently, the registries used in production are typically backed by a consensus protocol — etcd runs Raft, ZooKeeper runs ZAB, Consul runs Raft internally too. That's a direct link to <code>11-consensus-algorithms</code>: the registry needs its own writes (register, heartbeat, deregister) to be linearizable across a cluster of registry nodes, or two registry replicas could disagree about who's alive.</p>
+
+      <h3>The trade-off that matters</h3>
+      <p>Every discovery mechanism is trading <b>staleness window</b> against <b>overhead</b>. Push the TTL down and heartbeat interval down, and you get fresher answers at the cost of more writes hammering the registry (and a registry that itself becomes a bottleneck under enough churn). Push them up and the registry gets cheap and simple, but you're accepting that a nontrivial fraction of "live" answers are lies for a few seconds after any crash. No registry design closes this window to zero — the fix is layering a second, faster signal (active health checks at the LB/sidecar, per <code>09-load-balancing</code>) on top of the registry's slower liveness signal, rather than trusting registry freshness alone.</p>
+      <p class="aside">Load balancing and service discovery are two halves of the same problem: discovery answers "who's alive," load balancing answers "which of them gets this request." A registry with stale entries makes even the smartest routing algorithm route into a hole — which is exactly what the visualization below demonstrates directly.</p>
+    </div>
+  </section>
+
+  <section id="visualization">
+    <h2>Visualization</h2>
+
+    <div class="viz-card">
+      <p class="viz-intro"><b>1. Service registry with heartbeats and TTL.</b> Instances heartbeat every ~2s to keep their lease alive (the bar drains, then refills on each heartbeat). <b>Crash</b> an instance to stop its heartbeats without deregistering it — it stays visible as <span style="color:var(--orange)">STALE</span> in the registry, looking alive, until its lease TTL expires and the registry evicts it. <b>Graceful shutdown</b> deregisters immediately, no stale window at all. Adjust the TTL to see the stale window grow or shrink.</p>
+
+      <div class="slider-row">
+        <label>Registry lease TTL: <b id="ttl-val">6.0</b>s (how long a crashed instance keeps looking live)</label>
+        <input type="range" id="ttl-slider" min="2" max="14" step="0.5" value="6">
+      </div>
+
+      <div class="pool-grid" id="registry-pool"></div>
+
+      <div class="btn-row">
+        <button class="run-btn" id="add-inst">Add instance</button>
+        <button class="run-btn danger-btn" id="crash-inst">Crash a random live instance</button>
+        <button class="run-btn secondary" id="shutdown-inst">Graceful shutdown a random live instance</button>
+        <button class="run-btn secondary" id="reset-registry">Reset</button>
+      </div>
+
+      <div class="flow-log" id="registry-log">3 instances registered and heartbeating. Crash one to see the stale-registry window in action.</div>
+    </div>
+
+    <div class="viz-card">
+      <p class="viz-intro"><b>2. Discovery path: client-side vs server-side.</b> Same registry state as above. Pick a mode and send requests — client-side calls the registry directly and dials whatever it returns, even a stale entry. Server-side routes through an LB/sidecar that runs its own fast active health probe (every ~1s, 2 consecutive fails to eject) independent of the registry's slower TTL, so it routes around a crashed instance sooner.</p>
+
+      <div class="algo-select btn-row">
+        <button class="run-btn active" data-mode="client">Client-side discovery</button>
+        <button class="run-btn secondary" data-mode="server">Server-side discovery (LB/sidecar)</button>
+      </div>
+
+      <div class="path-diagram" id="path-diagram">
+        <div class="path-node" id="node-client">Client</div>
+        <div class="path-arrow" id="arrow-1">→</div>
+        <div class="path-node" id="node-mid">Registry<div class="node-sub" id="node-mid-sub">direct lookup</div></div>
+        <div class="path-arrow" id="arrow-2">→</div>
+        <div class="path-node" id="node-target">Target<div class="node-sub" id="node-target-sub">—</div></div>
+      </div>
+
+      <div class="btn-row">
+        <button class="run-btn" id="send-req">Send request</button>
+        <button class="run-btn secondary" id="send-burst">Send burst (×10)</button>
+      </div>
+
+      <div class="flow-log" id="path-log">Client-side mode: the client will call the registry, then dial whatever instance comes back — including a stale one.</div>
+
+      <div class="stat-row">
+        <div class="stat">Client-side requests<b id="stat-client-sent">0</b></div>
+        <div class="stat">Client-side failures (hit a stale entry)<b id="stat-client-fail" class="danger">0</b></div>
+        <div class="stat">Server-side requests<b id="stat-server-sent">0</b></div>
+        <div class="stat">Server-side failures (hit a stale entry)<b id="stat-server-fail" class="danger">0</b></div>
+      </div>
+    </div>
+  </section>
+
+  <section id="interview-line">
+    <h2>Interview Line</h2>
+    <blockquote id="interview-quote">
+      "The question I actually care about is who's doing the health checking and how stale can their answer be. A registry's TTL/heartbeat mechanism only tells you 'this instance hasn't explicitly told me it's gone' — it does not tell you it's actually healthy, and that gap is a real window where dead instances keep receiving traffic. That's why I lean server-side discovery through an LB or sidecar by default: it gives me a second, faster active-health signal on top of the registry's slower lease expiry, instead of every client trusting a possibly-stale registry snapshot directly. And because the registry itself is shared mutable state read by every client, it's backed by a consensus protocol under the hood — Raft in etcd and Consul, ZAB in ZooKeeper — so 'is the registry consistent' quietly becomes a consensus question too."
+    </blockquote>
+  </section>
+
+  <section id="takeaways">
+    <h2>Key Takeaways</h2>
+    <ul>
+      <li><b>TTL/heartbeat is a liveness guess, not a health check</b> — a crashed instance that never deregisters looks LIVE in the registry until its lease expires. That stale window is structurally the same problem as LB health-check detection lag (<code>09-load-balancing</code>), just measured against a different clock.</li>
+      <li><b>Client-side discovery trades a network hop for staleness risk</b> — one fewer hop than going through a proxy, but every client language needs its own discovery + LB logic, and every client dials directly off a registry snapshot that can already be lying.</li>
+      <li><b>Server-side discovery pushes staleness mitigation into one place</b> — the LB/sidecar can run active health checks far faster than any registry TTL, so it's usually the safer default even though it costs an extra hop and makes the intermediary itself a scaling concern.</li>
+      <li><b>DNS-based discovery inherits DNS's caching problem</b> — TTLs are honored inconsistently across resolvers, and DNS has no concept of "half of these records are unhealthy." Fine for coarse, slow-changing topology; risky as the only mechanism for pod-level routing that changes every deploy.</li>
+      <li><b>Registries are consensus systems wearing a directory-service costume</b> — etcd (Raft), Consul (Raft), ZooKeeper (ZAB) all need a majority quorum to agree on registry writes, which ties discovery directly back to <code>11-consensus-algorithms</code>: it's the same "who's allowed to say what's true" problem, applied to service liveness instead of leader election.</li>
+      <li><b>Shrinking TTL to fix staleness has a ceiling</b> — push heartbeat interval down far enough and the registry itself becomes the bottleneck under heartbeat write volume at fleet scale; the real fix is a second, faster signal (active health checks), not chasing a zero-staleness registry.</li>
+    </ul>
+  </section>
+
+</main>
+
+<nav class="concept-nav">
+  <a href="../concepts/09-load-balancing.html">← Previous: Load Balancing</a>
+  <a href="../concepts/11-consensus-algorithms.html">Next: Consensus Algorithms (Raft/Paxos) →</a>
+</nav>
+
+<script>
+(function() {
+  // ============ Shared registry state ============
+  let nextId = 3;
+  let instances = [
+    { id: 'inst-0', name: 'inst-a', crashed: false, deregistered: false, lastHeartbeat: performance.now() },
+    { id: 'inst-1', name: 'inst-b', crashed: false, deregistered: false, lastHeartbeat: performance.now() },
+    { id: 'inst-2', name: 'inst-c', crashed: false, deregistered: false, lastHeartbeat: performance.now() }
+  ];
+
+  const ttlSlider = document.getElementById('ttl-slider');
+  const ttlVal = document.getElementById('ttl-val');
+  function ttlMs() { return parseFloat(ttlSlider.value) * 1000; }
+  ttlSlider.addEventListener('input', () => { ttlVal.textContent = parseFloat(ttlSlider.value).toFixed(1); });
+
+  function registryLog(msg) { document.getElementById('registry-log').textContent = msg; }
+
+  // registry-visible status: live | stale | gone
+  function statusOf(inst) {
+    if (inst.deregistered) return 'gone';
+    const age = performance.now() - inst.lastHeartbeat;
+    if (age >= ttlMs()) return 'gone';
+    if (inst.crashed) return 'stale'; // ground truth is dead, registry doesn't know yet
+    return 'live';
+  }
+
+  function renderRegistry() {
+    const wrap = document.getElementById('registry-pool');
+    wrap.innerHTML = '';
+    instances.forEach(inst => {
+      const st = statusOf(inst);
+      if (st === 'gone' && (inst.deregistered || performance.now() - inst.lastHeartbeat >= ttlMs())) {
+        // fade briefly then actually remove on next filter pass; render as gone meanwhile
+      }
+      const age = performance.now() - inst.lastHeartbeat;
+      const remaining = Math.max(0, ttlMs() - age);
+      const pct = Math.max(0, Math.min(100, (remaining / ttlMs()) * 100));
+      const card = document.createElement('div');
+      card.className = 'inst-card state-' + st;
+      const label = st === 'live' ? 'LIVE' : st === 'stale' ? 'STALE (crashed, lease not expired)' : 'EVICTED';
+      card.innerHTML =
+        '<div class="inst-name">' + inst.name + '</div>' +
+        '<div class="inst-state">' + label + '</div>' +
+        '<div class="inst-bar-shell"><div class="inst-bar-fill" style="width:' + pct + '%"></div></div>' +
+        '<div class="inst-meta">lease remaining: ' + (remaining / 1000).toFixed(1) + 's</div>';
+      wrap.appendChild(card);
+    });
+  }
+
+  function purgeExpired() {
+    const before = instances.length;
+    instances = instances.filter(inst => {
+      const age = performance.now() - inst.lastHeartbeat;
+      const expired = inst.deregistered || age >= ttlMs();
+      if (expired && inst.crashed && !inst.deregistered) {
+        registryLog(inst.name + "'s lease expired — the registry finally evicted it. Stale window closed.");
+      }
+      return !expired;
+    });
+    return instances.length !== before;
+  }
+
+  // heartbeat tick: healthy (non-crashed, non-deregistered) instances refresh their lease
+  setInterval(() => {
+    instances.forEach(inst => {
+      if (!inst.crashed && !inst.deregistered) inst.lastHeartbeat = performance.now();
+    });
+  }, 2000);
+
+  setInterval(() => {
+    purgeExpired();
+    renderRegistry();
+  }, 200);
+
+  document.getElementById('add-inst').addEventListener('click', () => {
+    const name = 'inst-' + String.fromCharCode(97 + (nextId % 26));
+    instances.push({ id: 'inst-' + nextId, name, crashed: false, deregistered: false, lastHeartbeat: performance.now() });
+    nextId++;
+    registryLog(name + ' registered and started heartbeating.');
+    renderRegistry();
+  });
+
+  document.getElementById('crash-inst').addEventListener('click', () => {
+    const alive = instances.filter(i => !i.crashed && !i.deregistered);
+    if (!alive.length) { registryLog('No live instances left to crash.'); return; }
+    const target = alive[Math.floor(Math.random() * alive.length)];
+    target.crashed = true;
+    registryLog(target.name + ' crashed (stopped heartbeating) without deregistering — it will look LIVE/STALE until its lease expires.');
+    renderRegistry();
+  });
+
+  document.getElementById('shutdown-inst').addEventListener('click', () => {
+    const alive = instances.filter(i => !i.crashed && !i.deregistered);
+    if (!alive.length) { registryLog('No live instances left to shut down.'); return; }
+    const target = alive[Math.floor(Math.random() * alive.length)];
+    target.deregistered = true;
+    registryLog(target.name + ' performed a graceful shutdown — explicitly deregistered, zero stale window.');
+    renderRegistry();
+  });
+
+  document.getElementById('reset-registry').addEventListener('click', () => {
+    nextId = 3;
+    instances = [
+      { id: 'inst-0', name: 'inst-a', crashed: false, deregistered: false, lastHeartbeat: performance.now() },
+      { id: 'inst-1', name: 'inst-b', crashed: false, deregistered: false, lastHeartbeat: performance.now() },
+      { id: 'inst-2', name: 'inst-c', crashed: false, deregistered: false, lastHeartbeat: performance.now() }
+    ];
+    registryLog('Registry reset — 3 instances live and heartbeating.');
+    renderRegistry();
+  });
+
+  renderRegistry();
+
+  // ============ Discovery path: client-side vs server-side ============
+  let mode = 'client';
+  let lbKnownDown = {}; // id -> consecutive failed probe count (server-side active health check, independent of registry TTL)
+  let stats = { clientSent: 0, clientFail: 0, serverSent: 0, serverFail: 0 };
+
+  document.querySelectorAll('.algo-select button').forEach(btn => {
+    btn.addEventListener('click', () => {
+      mode = btn.dataset.mode;
+      document.querySelectorAll('.algo-select button').forEach(b => {
+        b.classList.toggle('active', b === btn);
+        b.classList.toggle('secondary', b !== btn);
+      });
+      const midLabel = mode === 'client' ? 'direct lookup' : 'via LB/sidecar (active health checks)';
+      document.getElementById('node-mid').firstChild.textContent = mode === 'client' ? 'Registry' : 'LB / Sidecar';
+      document.getElementById('node-mid-sub').textContent = midLabel;
+      pathLog(mode === 'client'
+        ? 'Client-side mode: the client will call the registry, then dial whatever instance comes back — including a stale one.'
+        : 'Server-side mode: the client always dials the LB/sidecar, which probes instances itself every ~1s (2 fails to eject) on top of the registry.');
+    });
+  });
+
+  // Server-side active health probe: faster and independent of registry TTL
+  setInterval(() => {
+    instances.forEach(inst => {
+      const alive = !inst.crashed && !inst.deregistered;
+      if (alive) {
+        lbKnownDown[inst.id] = 0;
+      } else {
+        lbKnownDown[inst.id] = (lbKnownDown[inst.id] || 0) + 1;
+      }
+    });
+  }, 1000);
+
+  function pathLog(msg) { document.getElementById('path-log').textContent = msg; }
+
+  function registryVisibleTargets() {
+    return instances.filter(inst => statusOf(inst) !== 'gone');
+  }
+
+  function flashNode(id, cls, ms) {
+    const el = document.getElementById(id);
+    el.classList.add(cls);
+    setTimeout(() => el.classList.remove(cls), ms);
+  }
+
+  function animateStep(nodeId, arrowId) {
+    return new Promise(resolve => {
+      const arrow = arrowId ? document.getElementById(arrowId) : null;
+      if (arrow) arrow.classList.add('active');
+      document.getElementById(nodeId).classList.add('active');
+      setTimeout(() => {
+        if (arrow) arrow.classList.remove('active');
+        document.getElementById(nodeId).classList.remove('active');
+        resolve();
+      }, 260);
+    });
+  }
+
+  async function sendOne() {
+    const targets = registryVisibleTargets();
+    if (!targets.length) { pathLog('No instances registered — nothing to route to.'); return; }
+
+    await animateStep('node-client', null);
+    await animateStep('node-mid', 'arrow-1');
+
+    let candidate;
+    let failed = false;
+
+    if (mode === 'client') {
+      // client-side: picks directly from raw registry list, no active health filter
+      candidate = targets[Math.floor(Math.random() * targets.length)];
+      const st = statusOf(candidate);
+      failed = st === 'stale';
+      stats.clientSent++;
+      if (failed) stats.clientFail++;
+    } else {
+      // server-side: LB filters out anything its own probe has flagged (2+ consecutive fails)
+      const healthy = targets.filter(t => (lbKnownDown[t.id] || 0) < 2);
+      const pool = healthy.length ? healthy : targets;
+      candidate = pool[Math.floor(Math.random() * pool.length)];
+      const st = statusOf(candidate);
+      failed = st === 'stale' && !healthy.length ? true : (st === 'stale' && (lbKnownDown[candidate.id] || 0) < 2);
+      stats.serverSent++;
+      if (failed) stats.serverFail++;
+    }
+
+    await animateStep('node-target', 'arrow-2');
+    const targetNode = document.getElementById('node-target');
+    const targetSub = document.getElementById('node-target-sub');
+    targetSub.textContent = candidate.name;
+
+    if (failed) {
+      flashNode('node-target', 'fail', 500);
+      pathLog((mode === 'client' ? 'Client-side' : 'Server-side') + ' request routed to ' + candidate.name + ' — connection FAILED (stale registry entry, instance is actually dead).');
+    } else {
+      flashNode('node-target', 'success', 500);
+      pathLog((mode === 'client' ? 'Client-side' : 'Server-side') + ' request routed to ' + candidate.name + ' — succeeded.');
+    }
+    updatePathStats();
+  }
+
+  function updatePathStats() {
+    document.getElementById('stat-client-sent').textContent = stats.clientSent;
+    document.getElementById('stat-client-fail').textContent = stats.clientFail;
+    document.getElementById('stat-server-sent').textContent = stats.serverSent;
+    document.getElementById('stat-server-fail').textContent = stats.serverFail;
+  }
+
+  document.getElementById('send-req').addEventListener('click', sendOne);
+  document.getElementById('send-burst').addEventListener('click', async () => {
+    for (let i = 0; i < 10; i++) {
+      await sendOne();
+    }
+  });
+
+  updatePathStats();
+})();
+</script>
+</body>
+</html>

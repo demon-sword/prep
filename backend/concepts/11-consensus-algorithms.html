@@ -1,0 +1,673 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1.0"/>
+<title>Consensus Algorithms (Raft/Paxos) — Backend Concepts</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #0d0f17;
+    --surface: #141720;
+    --card: #1a1e2e;
+    --border: #252a3d;
+    --accent: #00d4ff;
+    --purple: #7c3aed;
+    --green: #00ff88;
+    --yellow: #ffd700;
+    --red: #ff4757;
+    --orange: #ff9500;
+    --text: #e2e8f0;
+    --text-dim: #8892a4;
+    --mono: 'JetBrains Mono', monospace;
+    --sans: 'Inter', system-ui, sans-serif;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--sans);
+    line-height: 1.6;
+  }
+  header {
+    padding: 48px 24px 32px;
+    max-width: 920px;
+    margin: 0 auto;
+    border-bottom: 1px solid var(--border);
+  }
+  .badge {
+    display: inline-block;
+    font-family: var(--mono);
+    font-size: 12px;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--accent);
+    background: rgba(0,212,255,0.08);
+    border: 1px solid rgba(0,212,255,0.3);
+    padding: 4px 10px;
+    border-radius: 4px;
+    margin-bottom: 14px;
+  }
+  h1 {
+    font-size: 32px;
+    margin: 0 0 12px;
+    font-weight: 700;
+    letter-spacing: -0.01em;
+  }
+  header p.desc {
+    color: var(--text-dim);
+    font-size: 16px;
+    max-width: 720px;
+    margin: 0;
+  }
+  main {
+    max-width: 920px;
+    margin: 0 auto;
+    padding: 0 24px 60px;
+  }
+  section { margin-top: 48px; }
+  h2 {
+    font-size: 13px;
+    font-family: var(--mono);
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    color: var(--purple);
+    margin-bottom: 20px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+  h2::after {
+    content: '';
+    flex: 1;
+    height: 1px;
+    background: var(--border);
+  }
+  h3 {
+    font-size: 18px;
+    color: var(--accent);
+    margin: 28px 0 10px;
+  }
+  h3:first-child { margin-top: 0; }
+  p { color: var(--text); margin: 8px 0; }
+  ul { padding-left: 22px; }
+  li { margin: 6px 0; }
+  code {
+    font-family: var(--mono);
+    background: rgba(124,58,237,0.12);
+    color: var(--purple);
+    padding: 2px 6px;
+    border-radius: 4px;
+    font-size: 0.9em;
+  }
+  .aside {
+    margin-top: 10px;
+    font-size: 13.5px;
+    color: var(--text-dim);
+    border-left: 2px solid var(--border);
+    padding-left: 12px;
+    font-style: italic;
+  }
+  .card {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 22px 24px;
+  }
+  .fail-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+    gap: 14px;
+    margin-top: 12px;
+  }
+  .fail-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-left: 3px solid var(--accent);
+    border-radius: 8px;
+    padding: 14px 16px;
+  }
+  .fail-card h4 { margin: 0 0 6px; font-size: 14.5px; color: var(--accent); }
+  .fail-card p { font-size: 13.5px; color: var(--text-dim); margin: 0; }
+  .fail-card.danger { border-left-color: var(--red); }
+  .fail-card.danger h4 { color: var(--red); }
+
+  /* Visualization shared */
+  .viz-card {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 24px;
+    margin-bottom: 24px;
+  }
+  .viz-intro { color: var(--text-dim); font-size: 14.5px; margin-bottom: 18px; }
+  .btn-row { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; margin-top: 14px; }
+  .run-btn {
+    font-family: var(--mono);
+    font-size: 13px;
+    background: var(--purple);
+    color: white;
+    border: none;
+    padding: 10px 18px;
+    border-radius: 6px;
+    cursor: pointer;
+    font-weight: 600;
+  }
+  .run-btn:hover { opacity: 0.88; }
+  .run-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+  .run-btn.secondary { background: var(--surface); border: 1px solid var(--border); color: var(--text-dim); }
+  .run-btn.secondary:hover { color: var(--text); border-color: var(--accent); }
+  .run-btn.active { background: var(--accent); color: #0d0f17; }
+  .run-btn.danger-btn { background: var(--red); }
+
+  .flow-log {
+    margin-top: 14px;
+    font-family: var(--mono);
+    font-size: 12.5px;
+    color: var(--green);
+    min-height: 60px;
+    max-height: 140px;
+    overflow-y: auto;
+    white-space: pre-line;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 10px 12px;
+  }
+
+  .stat-row { display: flex; gap: 24px; margin-top: 16px; flex-wrap: wrap; }
+  .stat { font-family: var(--mono); font-size: 13px; color: var(--text-dim); }
+  .stat b { color: var(--yellow); font-size: 18px; display: block; }
+  .stat b.danger { color: var(--red); }
+  .stat b.good { color: var(--green); }
+
+  /* Raft cluster ring */
+  .ring-wrap {
+    position: relative;
+    width: 100%;
+    max-width: 460px;
+    height: 380px;
+    margin: 20px auto 0;
+  }
+  .raft-node {
+    position: absolute;
+    width: 108px;
+    height: 88px;
+    margin-left: -54px;
+    margin-top: -44px;
+    background: var(--surface);
+    border: 2px solid var(--border);
+    border-radius: 10px;
+    text-align: center;
+    padding: 8px 6px;
+    font-family: var(--mono);
+    transition: border-color 0.25s, background 0.25s, transform 0.2s;
+  }
+  .raft-node .n-name { font-size: 13px; font-weight: 700; color: var(--text); }
+  .raft-node .n-role { font-size: 10.5px; margin-top: 4px; text-transform: uppercase; letter-spacing: 0.05em; color: var(--text-dim); }
+  .raft-node .n-term { font-size: 10px; color: var(--text-dim); margin-top: 4px; }
+  .raft-node .n-log { font-size: 10px; color: var(--text-dim); margin-top: 2px; }
+  .raft-node.follower { border-color: var(--border); }
+  .raft-node.candidate { border-color: var(--yellow); background: rgba(255,215,0,0.08); }
+  .raft-node.candidate .n-role { color: var(--yellow); }
+  .raft-node.leader { border-color: var(--green); background: rgba(0,255,136,0.1); transform: scale(1.06); }
+  .raft-node.leader .n-role { color: var(--green); }
+  .raft-node.crashed { opacity: 0.28; border-style: dashed; }
+  .raft-node.crashed .n-role::after { content: ' (down)'; }
+  .raft-node.minority { box-shadow: 0 0 0 2px rgba(255,71,87,0.35); }
+  .partition-line {
+    position: absolute;
+    background: var(--red);
+    opacity: 0.5;
+    z-index: 0;
+  }
+
+  .divider { height: 1px; background: var(--border); margin: 32px 0; }
+
+  blockquote#interview-quote {
+    background: linear-gradient(135deg, rgba(0,212,255,0.06), rgba(124,58,237,0.06));
+    border-left: 4px solid var(--accent);
+    border-radius: 8px;
+    margin: 0;
+    padding: 22px 26px;
+    font-size: 16.5px;
+    color: var(--text);
+    font-style: italic;
+    position: relative;
+  }
+  blockquote#interview-quote::before {
+    content: '\201C';
+    font-size: 48px;
+    color: var(--accent);
+    opacity: 0.3;
+    position: absolute;
+    top: -6px;
+    left: 10px;
+    font-style: normal;
+  }
+  #takeaways ul { list-style: none; padding: 0; }
+  #takeaways li {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-left: 3px solid var(--green);
+    border-radius: 8px;
+    padding: 12px 16px;
+    margin-bottom: 10px;
+    font-size: 14.5px;
+  }
+  #takeaways li b { color: var(--green); }
+
+  nav.concept-nav {
+    max-width: 920px;
+    margin: 0 auto;
+    padding: 24px 24px 60px;
+    display: flex;
+    justify-content: space-between;
+    font-family: var(--mono);
+    font-size: 13.5px;
+  }
+  nav.concept-nav a {
+    color: var(--accent);
+    text-decoration: none;
+    border: 1px solid var(--border);
+    padding: 10px 16px;
+    border-radius: 6px;
+  }
+  nav.concept-nav a:hover { border-color: var(--accent); }
+  nav.concept-nav span.disabled {
+    color: var(--text-dim);
+    border: 1px solid var(--border);
+    padding: 10px 16px;
+    border-radius: 6px;
+    opacity: 0.4;
+  }
+  @media (max-width: 600px) {
+    h1 { font-size: 24px; }
+    .btn-row { flex-direction: column; align-items: flex-start; }
+    .ring-wrap { height: 460px; }
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <span class="badge">coordination</span>
+  <h1>Consensus Algorithms (Raft/Paxos)</h1>
+  <p class="desc">Leader election and distributed consensus — how a cluster agrees on a single value despite node failures, why majority quorums prevent split-brain, and why consensus is expensive and reserved for metadata rather than data-plane traffic.</p>
+</header>
+
+<main>
+
+  <section id="theory">
+    <h2>Theory</h2>
+    <div class="card">
+      <h3>The problem consensus solves</h3>
+      <p>A single node can always tell you the truth about its own state — the problem starts the moment you have several nodes and need them to agree on <em>one</em> value (who's the leader, what the next log entry is, whether a transaction committed) even though nodes crash, restart, and messages get delayed or dropped. Consensus is the protocol that gets a cluster to agree on that one value with a guarantee that once agreement is reached, it can't be silently overwritten by another node that missed the memo. It's the mechanism underneath almost every "who's in charge" and "what's the authoritative log" question in a distributed system — leader election for a database cluster, the source-of-truth log for a coordination service like etcd, the commit decision in some transaction coordinators.</p>
+
+      <h3>Majority quorums and why they prevent split-brain</h3>
+      <p>The core trick every practical consensus protocol uses is the <b>majority quorum</b>: with N nodes, a decision is only valid once more than half — <code>⌊N/2⌋ + 1</code> — have agreed to it. That single arithmetic fact is what makes split-brain structurally impossible: any two majorities out of the same N nodes must overlap by at least one node, so two different values can never both get a majority in the same term/round — there's always a node in the intersection that would have to agree to both, and it can't. This is why cluster sizes are almost always odd (3 or 5, rarely more) — 3 nodes tolerate 1 failure, 5 tolerate 2, and going from 3 to 4 buys you nothing (you still only tolerate 1 failure) while adding write latency, since a 4-node majority is <code>⌊4/2⌋+1 = 3</code>, the same fault-tolerance ceiling as 3-node's majority of 2 but strictly more replication work per commit. This is also precisely why a network partition doesn't cause split-brain in a correctly implemented consensus cluster: the minority side of the partition can never reach a majority of the <em>whole</em> cluster, so it can never elect a leader or commit anything — it just stalls, unable to make progress, while the majority side proceeds normally. Consensus trades unavailability of the minority partition for correctness everywhere else — that's a direct CP choice in CAP terms (<code>03-consistency-tradeoffs</code>).</p>
+
+      <h3>Raft mechanism: leader election + log replication</h3>
+      <p>Raft (designed explicitly to be "Paxos, but understandable") splits consensus into two coupled sub-protocols:</p>
+      <ul>
+        <li><b>Leader election.</b> Time is divided into <b>terms</b>, each with at most one leader. Every follower runs a randomized election timeout (Raft's paper uses 150–300ms); if it hears no heartbeat from a leader before that timeout fires, it becomes a <b>candidate</b>, increments its term, votes for itself, and requests votes from every other node. A node grants at most one vote per term, and only to a candidate whose log is at least as up to date as its own (this is what stops a node that missed recent commits from becoming leader and rewriting history). Get votes from a majority and you're the leader for that term; the randomized timeout is specifically there to make it unlikely that two nodes become candidates simultaneously and split the vote — a real, named failure mode — and if it does happen, the term's election is void and everyone tries again after their (re-randomized) timeout, which converges quickly in practice.</li>
+        <li><b>Log replication.</b> Once elected, the leader is the only node accepting writes. Every write becomes a log entry the leader appends locally and sends to followers via <code>AppendEntries</code>. The entry is <b>committed</b> — safe to apply and safe to acknowledge to the client — only once a majority of nodes (leader included) have persisted it, not merely once the leader has it. This is the same "write must survive a majority" idea as a quorum write in Dynamo-style systems (<code>03-consistency-tradeoffs</code>), just applied to an ordered log instead of a key. A stale or partitioned-away leader that still thinks it's in charge can keep appending to its own log all day — those entries never commit because it can't reach a majority, and the moment it reconnects and sees a higher term from the real leader, it steps down and truncates its uncommitted tail.</li>
+      </ul>
+
+      <h3>Paxos, ZAB, and the rest of the family</h3>
+      <p>Paxos came first and solves the same problem with a two-phase (prepare/promise, then accept/accepted) protocol per value — it's provably correct but notoriously hard to reason about and extend to a replicated log without extra machinery (Multi-Paxos), which most descriptions leave as an exercise. Raft was designed to make the same guarantees explicit and implementable by separating leader election from log replication and requiring a strong leader (no other node accepts client writes directly), which is why almost every consensus library built since 2014 — etcd, Consul, CockroachDB's range replication, TiKV — is Raft, not Paxos. ZooKeeper predates Raft and uses its own protocol, ZAB (ZooKeeper Atomic Broadcast), which is conceptually similar — leader-based, majority-ack for commit — but ZK-specific. Google's Chubby and Spanner use Paxos variants internally. For interview purposes, the family resemblance matters more than protocol trivia: they all reduce to "elect one writer per epoch, commit only with a majority ack."</p>
+
+      <h3>The trade-off that matters</h3>
+      <p>Consensus is correct but expensive: every committed write needs a network round trip to a majority of nodes before it can be acknowledged, which is real added latency (and real cross-AZ cost if the cluster spans zones/regions) compared to a single node just writing to its own disk. That's why consensus is deliberately reserved for <b>low-volume, high-value control-plane decisions</b> — who's the leader, what's the current cluster membership, what's the authoritative config — and not run on the data plane's hot path. A service registry (<code>10-service-discovery</code>) runs Raft internally to keep its own directory consistent across replicas, but the millions of ordinary reads and writes that flow through the systems it coordinates never touch that consensus round trip directly. Distributed transaction coordinators lean on the same idea: 2PC (<code>13-distributed-transactions</code>) needs its own coordinator to be highly available, and that coordinator is often itself backed by a consensus system, because "can the coordinator's state survive a crash without losing the commit decision" is exactly the problem consensus was built to solve.</p>
+      <p class="aside">Where this shows up in practice: etcd (Raft) as Kubernetes' entire cluster state store, Consul (Raft) and ZooKeeper (ZAB) as service registries and distributed locks, CockroachDB and TiDB using per-range Raft groups so consensus cost stays local to the data actually being written, not global to the whole cluster.</p>
+    </div>
+  </section>
+
+  <section id="visualization">
+    <h2>Visualization</h2>
+
+    <div class="viz-card">
+      <p class="viz-intro"><b>Live 5-node Raft cluster.</b> Each node runs a real (simplified) randomized election timeout — watch a follower's timer lapse, become a <span style="color:var(--yellow)">candidate</span>, request votes, and win a majority to become <span style="color:var(--green)">leader</span>. The leader sends heartbeats to keep followers from timing out. Use the controls below to crash the leader, partition the network, or drive a client write through majority-commit log replication.</p>
+
+      <div class="ring-wrap" id="ring-wrap"></div>
+
+      <div class="btn-row">
+        <button class="run-btn danger-btn" id="crash-leader">Crash current leader</button>
+        <button class="run-btn secondary" id="revive-node">Revive a crashed node</button>
+        <button class="run-btn" id="toggle-partition">Partition network (3 | 2 split)</button>
+        <button class="run-btn secondary" id="reset-cluster">Reset cluster</button>
+      </div>
+      <div class="btn-row">
+        <button class="run-btn" id="client-write">Client write (append log entry)</button>
+      </div>
+
+      <div class="flow-log" id="raft-log">Cluster booting — 5 followers, no leader yet. Watch an election timeout fire.</div>
+
+      <div class="stat-row">
+        <div class="stat">Current term<b id="stat-term">0</b></div>
+        <div class="stat">Leader<b id="stat-leader">none</b></div>
+        <div class="stat">Committed entries<b id="stat-committed" class="good">0</b></div>
+        <div class="stat">Split votes seen<b id="stat-splitvotes" class="danger">0</b></div>
+      </div>
+    </div>
+  </section>
+
+  <section id="interview-line">
+    <h2>Interview Line</h2>
+    <blockquote id="interview-quote">
+      "Consensus isn't magic — it's arithmetic. A majority quorum out of N nodes always overlaps with any other majority of the same N, so two conflicting values can never both get a majority in the same term, and that's the whole reason split-brain can't happen. That's also exactly why it's expensive: every committed write is a round trip to a majority before you can tell the client it's durable, so I don't run consensus on the data plane's hot path — I reserve it for low-volume, high-value decisions like leader election and cluster membership, and let the actual reads and writes flow through whatever that consensus-elected leader owns. If someone asks Raft versus Paxos, the honest answer is they're the same idea — elect one writer per epoch, commit only with a majority ack — and Raft just made the machinery explicit enough that you can actually implement it correctly, which is why etcd, Consul, and CockroachDB all ship it instead of raw Paxos."
+    </blockquote>
+  </section>
+
+  <section id="takeaways">
+    <h2>Key Takeaways</h2>
+    <ul>
+      <li><b>Majority quorum is the whole mechanism</b> — any two majorities of the same N nodes must overlap by at least one node, which is the arithmetic reason split-brain is structurally impossible, not just unlikely.</li>
+      <li><b>Odd cluster sizes are deliberate</b> — 3 nodes tolerate 1 failure, 5 tolerate 2; going 3→4 buys zero extra fault tolerance while adding replication cost, which is why you almost never see 4- or 6-node consensus clusters in production.</li>
+      <li><b>A network partition doesn't cause split-brain, it causes unavailability</b> — the minority side can never reach a majority of the whole cluster, so it stalls rather than electing a rogue leader; that's the CP choice made explicit (<code>03-consistency-tradeoffs</code>).</li>
+      <li><b>Randomized election timeouts exist to avoid split votes</b> — a named Raft failure mode where two nodes become candidates in the same term and neither gets a majority; randomization makes simultaneous timeouts unlikely and the retry converges fast when it does happen.</li>
+      <li><b>Consensus is a control-plane tool, not a data-plane one</b> — every commit costs a majority round trip, so it's reserved for leader election, cluster membership, and config, not ordinary application writes; per-range Raft groups (CockroachDB, TiKV) exist specifically to keep that cost local instead of global.</li>
+      <li><b>Registries and lock services are consensus systems in disguise</b> — etcd and Consul run Raft, ZooKeeper runs ZAB, precisely because their own directory state (<code>10-service-discovery</code>) needs the same majority-agreement guarantee, and 2PC coordinators (<code>13-distributed-transactions</code>) are often themselves backed by consensus so the commit decision survives a coordinator crash.</li>
+    </ul>
+  </section>
+
+</main>
+
+<nav class="concept-nav">
+  <a href="../concepts/10-service-discovery.html">← Previous: Service Discovery</a>
+  <a href="../concepts/12-database-replication.html">Next: Database Replication →</a>
+</nav>
+
+<script>
+(function() {
+  const NAMES = ['A', 'B', 'C', 'D', 'E'];
+  const N = 5;
+  const MAJORITY = Math.floor(N / 2) + 1; // 3
+  const HEARTBEAT_MS = 1000;
+  const ELECTION_MIN = 2200, ELECTION_MAX = 4200;
+
+  let nodes = [];
+  let term = 0;
+  let leaderId = null;
+  let partitionOn = false;
+  let splitVotes = 0;
+  let logEntries = []; // {term, index, acks:Set}
+  let nextIndex = 1;
+  let now = performance.now();
+
+  const wrap = document.getElementById('ring-wrap');
+  const logEl = document.getElementById('raft-log');
+  const logLines = [];
+
+  function pushLog(msg) {
+    logLines.push(msg);
+    if (logLines.length > 30) logLines.shift();
+    logEl.textContent = logLines.join('\n');
+    logEl.scrollTop = logEl.scrollHeight;
+  }
+
+  function randTimeout() {
+    return ELECTION_MIN + Math.random() * (ELECTION_MAX - ELECTION_MIN);
+  }
+
+  function groupOf(nodeId) {
+    if (!partitionOn) return 'all';
+    return nodeId < 3 ? 'majA' : 'minB'; // A,B,C = majority(3); D,E = minority(2)
+  }
+
+  function sameReachableGroup(a, b) {
+    if (!partitionOn) return true;
+    return groupOf(a) === groupOf(b);
+  }
+
+  function initCluster() {
+    nodes = NAMES.map((name, i) => ({
+      id: i,
+      name,
+      state: 'follower',
+      term: 0,
+      votedFor: null,
+      crashed: false,
+      log: [],
+      electionDeadline: performance.now() + randTimeout(),
+      lastHeartbeatSent: 0
+    }));
+    term = 0;
+    leaderId = null;
+    partitionOn = false;
+    splitVotes = 0;
+    logEntries = [];
+    nextIndex = 1;
+    logLines.length = 0;
+    pushLog('Cluster reset — 5 followers (A–E), no leader. Majority needed to win: ' + MAJORITY + '/5.');
+    updateStats();
+    render();
+  }
+
+  function alive(n) { return !n.crashed; }
+
+  function becomeCandidate(node) {
+    node.state = 'candidate';
+    node.term += 1;
+    node.votedFor = node.id;
+    node.electionDeadline = now + randTimeout();
+    let votes = 1; // votes for self
+    const voters = [];
+    nodes.forEach(other => {
+      if (other.id === node.id || !alive(other)) return;
+      if (!sameReachableGroup(node.id, other.id)) return;
+      // grant vote if candidate's term is newer, and hasn't already voted this term for someone else
+      if (node.term > other.term || (node.term === other.term && (other.votedFor === null || other.votedFor === node.id))) {
+        other.term = node.term;
+        other.votedFor = node.id;
+        other.state = 'follower';
+        other.electionDeadline = now + randTimeout();
+        votes++;
+        voters.push(other.name);
+      }
+    });
+    pushLog(node.name + ' timed out, became candidate for term ' + node.term + ', got votes from [' + voters.join(', ') + '] (' + votes + '/' + N + ').');
+    if (votes >= MAJORITY) {
+      becomeLeader(node);
+    } else {
+      pushLog(node.name + ' did not reach majority (' + MAJORITY + ') in term ' + node.term + (partitionOn ? ' — partitioned, can\'t reach enough nodes.' : ' — will retry after timeout.'));
+      if (nodes.filter(n2 => n2.state === 'candidate' && alive(n2)).length > 1) {
+        splitVotes++;
+      }
+    }
+    term = Math.max(term, node.term);
+  }
+
+  function becomeLeader(node) {
+    node.state = 'leader';
+    leaderId = node.id;
+    node.lastHeartbeatSent = now;
+    nodes.forEach(other => {
+      if (other.id !== node.id && alive(other) && sameReachableGroup(node.id, other.id)) {
+        other.state = 'follower';
+        other.term = node.term;
+        other.electionDeadline = now + randTimeout();
+      }
+    });
+    pushLog(node.name + ' won the election — LEADER for term ' + node.term + '.');
+  }
+
+  function stepDownIfStale() {
+    // any leader partitioned away from majority, or seeing a higher term elsewhere, steps down
+    nodes.forEach(n => {
+      if (n.state === 'leader' && alive(n)) {
+        const reachableAlive = nodes.filter(o => alive(o) && sameReachableGroup(n.id, o.id));
+        if (reachableAlive.length < MAJORITY) {
+          n.state = 'follower';
+          n.electionDeadline = now + randTimeout();
+          if (leaderId === n.id) leaderId = null;
+          pushLog(n.name + ' can no longer reach a majority (partitioned) — stepping down from leadership.');
+        }
+      }
+    });
+  }
+
+  function leaderHeartbeat() {
+    nodes.forEach(n => {
+      if (n.state === 'leader' && alive(n) && now - n.lastHeartbeatSent >= HEARTBEAT_MS) {
+        n.lastHeartbeatSent = now;
+        let reached = 0;
+        nodes.forEach(other => {
+          if (other.id !== n.id && alive(other) && sameReachableGroup(n.id, other.id)) {
+            other.electionDeadline = now + randTimeout();
+            if (other.term < n.term) other.term = n.term;
+            if (other.state !== 'follower') other.state = 'follower';
+            reached++;
+          }
+        });
+      }
+    });
+  }
+
+  function checkTimeouts() {
+    nodes.forEach(n => {
+      if (!alive(n)) return;
+      if (n.state === 'leader') return;
+      if (now >= n.electionDeadline) {
+        becomeCandidate(n);
+      }
+    });
+  }
+
+  function tick() {
+    now = performance.now();
+    stepDownIfStale();
+    leaderHeartbeat();
+    checkTimeouts();
+    updateStats();
+    render();
+    requestAnimationFrame(tick);
+  }
+
+  // ---------- layout / render ----------
+  function layoutPositions() {
+    const w = wrap.clientWidth || 460;
+    const h = 380;
+    const cx = w / 2, cy = h / 2, r = Math.min(w, h) / 2 - 60;
+    return nodes.map((n, i) => {
+      const angle = (i / N) * Math.PI * 2 - Math.PI / 2;
+      return { x: cx + r * Math.cos(angle), y: cy + r * Math.sin(angle) };
+    });
+  }
+
+  let elCache = null;
+  function render() {
+    const positions = layoutPositions();
+    if (!elCache) {
+      wrap.innerHTML = '';
+      elCache = nodes.map((n, i) => {
+        const div = document.createElement('div');
+        div.className = 'raft-node';
+        div.style.left = positions[i].x + 'px';
+        div.style.top = positions[i].y + 'px';
+        wrap.appendChild(div);
+        return div;
+      });
+    }
+    nodes.forEach((n, i) => {
+      const div = elCache[i];
+      div.style.left = positions[i].x + 'px';
+      div.style.top = positions[i].y + 'px';
+      const cls = ['raft-node', n.crashed ? 'crashed' : n.state];
+      if (partitionOn && groupOf(n.id) === 'minB') cls.push('minority');
+      div.className = cls.join(' ');
+      const commitCount = n.log.filter(e => e.committed).length;
+      div.innerHTML =
+        '<div class="n-name">' + n.name + (partitionOn ? (groupOf(n.id) === 'majA' ? ' (maj)' : ' (min)') : '') + '</div>' +
+        '<div class="n-role">' + (n.crashed ? 'crashed' : n.state) + '</div>' +
+        '<div class="n-term">term ' + n.term + '</div>' +
+        '<div class="n-log">log: ' + n.log.length + ' (' + commitCount + ' committed)</div>';
+    });
+  }
+
+  function updateStats() {
+    document.getElementById('stat-term').textContent = String(term);
+    const leader = nodes.find(n => n.state === 'leader' && alive(n));
+    document.getElementById('stat-leader').textContent = leader ? leader.name : 'none';
+    const committed = logEntries.filter(e => e.acks.size >= MAJORITY).length;
+    document.getElementById('stat-committed').textContent = String(committed);
+    document.getElementById('stat-splitvotes').textContent = String(splitVotes);
+  }
+
+  // ---------- controls ----------
+  document.getElementById('crash-leader').addEventListener('click', () => {
+    const leader = nodes.find(n => n.state === 'leader' && alive(n));
+    if (!leader) { pushLog('No current leader to crash.'); return; }
+    leader.crashed = true;
+    leader.state = 'follower';
+    if (leaderId === leader.id) leaderId = null;
+    pushLog(leader.name + ' crashed. Remaining nodes will time out and elect a new leader for a higher term.');
+    render();
+  });
+
+  document.getElementById('revive-node').addEventListener('click', () => {
+    const crashed = nodes.filter(n => n.crashed);
+    if (!crashed.length) { pushLog('No crashed nodes to revive.'); return; }
+    const n = crashed[Math.floor(Math.random() * crashed.length)];
+    n.crashed = false;
+    n.state = 'follower';
+    n.electionDeadline = now + randTimeout();
+    pushLog(n.name + ' revived as a follower — it will catch up to the current term via the next heartbeat/vote it sees.');
+    render();
+  });
+
+  document.getElementById('toggle-partition').addEventListener('click', (e) => {
+    partitionOn = !partitionOn;
+    e.target.classList.toggle('active', partitionOn);
+    e.target.textContent = partitionOn ? 'Heal partition' : 'Partition network (3 | 2 split)';
+    if (partitionOn) {
+      pushLog('Network partitioned: {A,B,C} majority side | {D,E} minority side. Minority can never reach ' + MAJORITY + '/5 votes — it will stall, not split-brain.');
+    } else {
+      pushLog('Partition healed. Any stale leader on the old minority side will see a higher term on next contact and step down.');
+    }
+    render();
+  });
+
+  document.getElementById('reset-cluster').addEventListener('click', initCluster);
+
+  document.getElementById('client-write').addEventListener('click', () => {
+    const leader = nodes.find(n => n.state === 'leader' && alive(n));
+    if (!leader) { pushLog('Client write rejected — no leader elected right now.'); return; }
+    const entry = { term: leader.term, index: nextIndex++, acks: new Set([leader.id]) };
+    leader.log.push({ term: entry.term, index: entry.index, committed: false });
+    logEntries.push(entry);
+    let acked = [leader.name];
+    nodes.forEach(other => {
+      if (other.id !== leader.id && alive(other) && sameReachableGroup(leader.id, other.id)) {
+        other.log.push({ term: entry.term, index: entry.index, committed: false });
+        entry.acks.add(other.id);
+        acked.push(other.name);
+      }
+    });
+    const committed = entry.acks.size >= MAJORITY;
+    if (committed) {
+      nodes.forEach(n => {
+        if (entry.acks.has(n.id)) {
+          const e2 = n.log.find(le => le.index === entry.index);
+          if (e2) e2.committed = true;
+        }
+      });
+    }
+    pushLog('Client write: leader ' + leader.name + ' appended entry #' + entry.index + ', replicated to [' + acked.join(', ') + '] (' + entry.acks.size + '/' + N + ') — ' +
+      (committed ? 'COMMITTED (majority reached).' : 'NOT committed yet (no majority — partitioned minority can\'t commit).'));
+    updateStats();
+    render();
+  });
+
+  initCluster();
+  requestAnimationFrame(tick);
+
+  window.addEventListener('resize', () => { elCache = null; render(); });
+})();
+</script>
+</body>
+</html>
+</content>

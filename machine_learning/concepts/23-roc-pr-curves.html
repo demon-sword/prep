@@ -1,0 +1,789 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1.0"/>
+  <title>ROC vs Precision-Recall Curves — Machine Learning Concepts</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com"/>
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet"/>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg:        #0d0f17;
+      --surface:   #141720;
+      --card:      #1a1e2e;
+      --border:    #252a3d;
+      --accent:    #00d4ff;
+      --purple:    #7c3aed;
+      --green:     #00ff88;
+      --yellow:    #ffd700;
+      --red:       #ff4757;
+      --orange:    #ff9500;
+      --text:      #e2e8f0;
+      --text-dim:  #8892a4;
+      --mono:      'JetBrains Mono', monospace;
+      --sans:      'Inter', system-ui, sans-serif;
+    }
+
+    html { scroll-behavior: smooth; }
+
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: var(--sans);
+      font-size: 16px;
+      line-height: 1.7;
+      min-height: 100vh;
+    }
+
+    header {
+      background: var(--surface);
+      border-bottom: 1px solid var(--border);
+      padding: 2rem 2rem 1.5rem;
+      max-width: 1100px;
+      margin: 0 auto;
+    }
+
+    .group-badge {
+      display: inline-block;
+      font-family: var(--mono);
+      font-size: 0.7rem;
+      font-weight: 700;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      color: var(--accent);
+      background: rgba(0, 212, 255, 0.1);
+      border: 1px solid rgba(0, 212, 255, 0.3);
+      padding: 0.2em 0.7em;
+      border-radius: 4px;
+      margin-bottom: 0.75rem;
+    }
+
+    header h1 {
+      font-size: clamp(1.6rem, 4vw, 2.4rem);
+      font-weight: 700;
+      color: var(--text);
+      line-height: 1.2;
+      margin-bottom: 0.5rem;
+    }
+
+    header h1 span.id {
+      color: var(--text-dim);
+      font-size: 0.55em;
+      font-family: var(--mono);
+      margin-right: 0.5rem;
+      vertical-align: middle;
+    }
+
+    header p.desc {
+      color: var(--text-dim);
+      font-size: 1.05rem;
+      max-width: 700px;
+    }
+
+    main {
+      max-width: 1100px;
+      margin: 0 auto;
+      padding: 0 2rem 4rem;
+    }
+
+    section { margin-top: 3rem; }
+
+    section > h2 {
+      font-size: 1.4rem;
+      font-weight: 700;
+      color: var(--accent);
+      border-bottom: 1px solid var(--border);
+      padding-bottom: 0.5rem;
+      margin-bottom: 1.5rem;
+    }
+
+    h3 {
+      font-size: 1.1rem;
+      font-weight: 600;
+      color: var(--yellow);
+      margin: 1.5rem 0 0.6rem;
+    }
+
+    p { margin-bottom: 1rem; color: var(--text); }
+
+    ul, ol { padding-left: 1.5rem; margin-bottom: 1rem; }
+    li { margin-bottom: 0.4rem; }
+
+    code {
+      font-family: var(--mono);
+      font-size: 0.85em;
+      background: rgba(0, 212, 255, 0.08);
+      color: var(--accent);
+      padding: 0.1em 0.35em;
+      border-radius: 3px;
+    }
+
+    .formula-block {
+      background: var(--card);
+      border-left: 3px solid var(--purple);
+      border-radius: 0 8px 8px 0;
+      padding: 0.8rem 1.2rem;
+      margin: 1rem 0;
+      font-family: var(--mono);
+      font-size: 0.95rem;
+      color: var(--text);
+    }
+
+    .callout {
+      background: rgba(124, 58, 237, 0.08);
+      border: 1px solid rgba(124, 58, 237, 0.3);
+      border-radius: 8px;
+      padding: 1rem 1.2rem;
+      margin: 1rem 0;
+    }
+
+    .callout strong { color: var(--purple); }
+
+    /* ── Visualization ── */
+    #visualization .viz-card {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 1.5rem;
+      margin-bottom: 1.5rem;
+    }
+
+    .viz-title { font-weight: 600; font-size: 1rem; color: var(--text); margin-bottom: 0.3rem; }
+    .viz-desc { font-size: 0.88rem; color: var(--text-dim); margin-bottom: 1.2rem; }
+
+    .controls {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 1.25rem;
+      align-items: center;
+      margin-bottom: 1.2rem;
+    }
+
+    .slider-row { display: flex; align-items: center; gap: 0.75rem; }
+
+    .slider-row label {
+      font-size: 0.82rem;
+      color: var(--text-dim);
+      white-space: nowrap;
+    }
+
+    .slider-row input[type="range"] {
+      accent-color: var(--accent);
+      width: 220px;
+    }
+
+    .slider-val {
+      font-family: var(--mono);
+      font-size: 0.85rem;
+      color: var(--accent);
+      min-width: 2.6rem;
+      display: inline-block;
+    }
+
+    .ctrl-btn {
+      font-family: var(--mono);
+      font-size: 0.8rem;
+      padding: 0.45em 1.1em;
+      border-radius: 6px;
+      border: 1px solid var(--accent);
+      background: rgba(0, 212, 255, 0.08);
+      color: var(--accent);
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+
+    .ctrl-btn:hover { background: rgba(0, 212, 255, 0.2); }
+    .ctrl-btn:active { transform: scale(0.97); }
+    .ctrl-btn.ghost { border-color: var(--border); background: transparent; color: var(--text-dim); }
+    .ctrl-btn.ghost:hover { border-color: var(--text-dim); }
+    .ctrl-btn.toggle-on { background: rgba(0, 255, 136, 0.14); border-color: var(--green); color: var(--green); }
+
+    canvas {
+      display: block;
+      border-radius: 8px;
+      background: var(--surface);
+      max-width: 100%;
+    }
+
+    .curve-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 1.5rem;
+      margin-top: 1rem;
+    }
+
+    .curve-panel { text-align: center; }
+
+    .panel-label {
+      font-family: var(--mono);
+      font-size: 0.75rem;
+      color: var(--text-dim);
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      margin-bottom: 0.5rem;
+    }
+
+    .side-panel {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 1.1rem;
+      margin-top: 1.2rem;
+    }
+
+    .side-panel h4 {
+      font-size: 0.85rem;
+      font-weight: 700;
+      color: var(--text);
+      margin-bottom: 0.8rem;
+      letter-spacing: 0.02em;
+    }
+
+    .legend {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 1rem;
+      margin-top: 0.8rem;
+      justify-content: center;
+    }
+
+    .legend-item {
+      display: flex;
+      align-items: center;
+      gap: 0.4rem;
+      font-size: 0.78rem;
+      color: var(--text-dim);
+    }
+
+    .legend-dot { width: 10px; height: 10px; border-radius: 50%; }
+    .legend-line { width: 16px; height: 2px; }
+
+    .readout-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.6rem;
+      margin-top: 1rem;
+    }
+
+    .readout {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 0.55rem 0.9rem;
+      font-size: 0.78rem;
+      color: var(--text-dim);
+      flex: 1;
+      min-width: 100px;
+      transition: border-color 0.2s;
+    }
+
+    .readout strong { display: block; font-family: var(--mono); font-size: 1.15rem; margin-top: 0.2rem; }
+    .readout.hi strong { color: var(--red); }
+    .readout.lo strong { color: var(--green); }
+    .readout.mid strong { color: var(--accent); }
+    .readout.yl strong { color: var(--yellow); }
+
+    .hint {
+      font-size: 0.78rem;
+      color: var(--text-dim);
+      margin-top: 0.6rem;
+      font-style: italic;
+      text-align: center;
+    }
+
+    /* ── Takeaways ── */
+    #takeaways ul { list-style: none; padding: 0; }
+
+    #takeaways li {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 1rem 1.2rem;
+      margin-bottom: 0.75rem;
+      padding-left: 3rem;
+      position: relative;
+    }
+
+    #takeaways li::before {
+      content: '→';
+      position: absolute;
+      left: 1rem;
+      color: var(--accent);
+      font-weight: 700;
+    }
+
+    /* ── Nav ── */
+    .concept-nav {
+      max-width: 1100px;
+      margin: 0 auto;
+      padding: 1.5rem 2rem 3rem;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      border-top: 1px solid var(--border);
+    }
+
+    .nav-link {
+      display: flex;
+      flex-direction: column;
+      gap: 0.2rem;
+      text-decoration: none;
+      padding: 0.6rem 1rem;
+      border-radius: 8px;
+      border: 1px solid var(--border);
+      background: var(--surface);
+      transition: all 0.2s;
+      max-width: 220px;
+    }
+
+    .nav-link:hover { border-color: var(--accent); background: rgba(0, 212, 255, 0.06); }
+    .nav-link.disabled { opacity: 0.3; pointer-events: none; }
+
+    .nav-dir {
+      font-size: 0.7rem;
+      font-family: var(--mono);
+      color: var(--text-dim);
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+    }
+
+    .nav-title { font-size: 0.88rem; color: var(--text); font-weight: 500; }
+
+    @media (max-width: 900px) {
+      .curve-grid { grid-template-columns: 1fr; }
+    }
+
+    @media (max-width: 640px) {
+      header, main { padding-left: 1rem; padding-right: 1rem; }
+      .concept-nav { padding-left: 1rem; padding-right: 1rem; flex-direction: column; gap: 0.75rem; }
+      .nav-link { max-width: 100%; width: 100%; }
+      .slider-row input[type="range"] { width: 130px; }
+    }
+  </style>
+</head>
+<body>
+
+<header>
+  <div class="group-badge">Evaluation</div>
+  <h1><span class="id">23</span>ROC vs Precision-Recall Curves</h1>
+  <p class="desc">ROC-AUC vs precision-recall AUC — why PR curves are more informative than ROC on imbalanced classes, and how to read both.</p>
+</header>
+
+<main>
+
+  <!-- ── THEORY ── -->
+  <section id="theory">
+    <h2>Theory</h2>
+
+    <h3>Two Threshold-Sweep Curves, Two Different Questions</h3>
+    <p>
+      Both the ROC curve and the precision-recall (PR) curve are built the same mechanical way: take a classifier's continuous score (a probability or a raw margin), sweep the decision threshold from 1 down to 0, and at every threshold recompute a confusion matrix and plot two rates against each other. The <strong>ROC curve</strong> plots <strong>true positive rate</strong> (recall, <code>TP/(TP+FN)</code>) on the y-axis against <strong>false positive rate</strong> (<code>FP/(FP+TN)</code>) on the x-axis. The <strong>PR curve</strong> plots <strong>precision</strong> (<code>TP/(TP+FP)</code>) against <strong>recall</strong> on the x-axis. They are two projections of the same underlying ranking of scored examples, but they answer structurally different questions: ROC asks "as I relax the threshold, how much do I trade off catching more true positives against wrongly flagging negatives, <em>as a fraction of all negatives</em>?" PR asks "as I relax the threshold, how much do I trade off catching more true positives against <em>diluting my positive predictions with false alarms</em>?"
+    </p>
+
+    <h3>Why FPR Lies to You When Negatives Are Abundant</h3>
+    <p>
+      The false positive rate has TN in its denominator. On a balanced dataset TN and TP are comparable in scale, so FPR behaves intuitively. But on an imbalanced dataset — say 0.5% fraud — the negative class is so large that even a large absolute number of false positives is a tiny fraction of all negatives, so FPR stays near zero and the ROC curve looks deceptively good (hugging the top-left corner, ROC-AUC ≈ 0.95+) even for a model that is, in absolute terms, flooding the fraud queue with false alarms. Precision has FP in its denominator alongside TP — both of which are drawn from the tiny positive-adjacent region of score-space — so it directly reflects "of the alerts I'm generating, what fraction are real," which is exactly what a fraud-review team or an on-call engineer cares about. This is the core reason senior practitioners default to <strong>PR curves on imbalanced problems</strong> (fraud, rare disease, click-through, defect detection) and reserve ROC for roughly balanced problems or when the negative class size genuinely doesn't matter to the downstream cost function.
+    </p>
+
+    <h3>Baselines Differ Too</h3>
+    <p>
+      A random classifier's ROC curve is the diagonal from (0,0) to (1,1), independent of class balance — ROC-AUC = 0.5 always for chance. A random classifier's PR curve, however, is a <em>flat horizontal line at precision = prevalence</em> (the positive class base rate): with 0.5% positives, random guessing gives precision ≈ 0.005 at every recall level, and PR-AUC (formally the <strong>average precision</strong>, <code>AP = Σₙ (Rₙ − Rₙ₋₁)·Pₙ</code>, the area under the precision-recall step function) for a random model equals the prevalence. This means PR-AUC values are not comparable across datasets with different base rates the way ROC-AUC roughly is — a PR-AUC of 0.3 is excellent at 0.5% prevalence and mediocre at 40% prevalence, so always report it alongside the base rate, and prefer a lift-over-baseline framing (<code>AP / prevalence</code>) when comparing across problems.
+    </p>
+
+    <h3>Reading and Using Both Curves</h3>
+    <p>
+      A perfect classifier hugs the top-left corner on ROC (FPR=0, TPR=1) and the top-right corner on PR (recall=1, precision=1); ROC-AUC and PR-AUC both max out at 1.0. In practice, look at the curve's <em>shape</em>, not just the scalar AUC: a PR curve that craters sharply past a certain recall tells you exactly where the model runs out of confidently-separable positives — that's often the natural operating recall to ship at. ROC-AUC has a clean probabilistic interpretation worth memorizing for interviews: it equals the probability that a randomly chosen positive example is ranked (scored) higher than a randomly chosen negative example — this is also exactly the statistic the Mann-Whitney U test computes, which is why ROC-AUC is sometimes called the "concordance statistic" (C-statistic) in the biostatistics literature. Because ROC-AUC is a pure ranking metric, it's threshold-independent and label-imbalance-somewhat-robust for <em>ranking quality</em>, which is why it's still useful even on skewed data for comparing two models' ability to separate classes — just don't use it alone to judge deployability of a fixed threshold on rare-event data.
+    </p>
+
+    <h3>Production Reality</h3>
+    <p>
+      scikit-learn's <code>roc_curve</code>/<code>roc_auc_score</code> and <code>precision_recall_curve</code>/<code>average_precision_score</code> are the standard tools; <code>average_precision_score</code> is preferred over naively trapezoidal-integrating <code>precision_recall_curve</code> because AP handles the curve's non-monotonicity correctly. A common production pattern: report both AUCs during model selection (ROC-AUC is more stable across bootstrap resamples and comparable across retrains), but pick the <em>deployment threshold</em> off the PR curve because that's the curve whose axes map onto business cost (alert volume vs miss rate). Watch for a subtle trap: if your training pipeline undersamples or oversamples the majority class to "balance" the data, PR-AUC and precision figures computed on that resampled set are not representative of production — always evaluate PR/ROC on a held-out set with the <em>true</em> production class distribution, then recalibrate the resampled model's probabilities (e.g. via Platt scaling or isotonic regression, or simply correcting for the prior shift analytically) before setting a threshold.
+    </p>
+  </section>
+
+  <!-- ── VISUALIZATION ── -->
+  <section id="visualization">
+    <h2>Interactive Visualization</h2>
+
+    <div class="viz-card">
+      <div class="viz-title">Threshold Sweep Across ROC and PR Curves, Side by Side</div>
+      <div class="viz-desc">
+        120 simulated scored examples with a true class and predicted probability. Drag the threshold slider — the operating point (yellow dot) moves along <em>both</em> curves simultaneously, and the confusion-matrix-derived metrics below update live. Toggle class balance to see the ROC curve barely move while the PR curve and its no-skill baseline collapse toward zero as positives become rare — the exact effect the theory above describes.
+      </div>
+
+      <div class="controls">
+        <div class="slider-row">
+          <label>Threshold</label>
+          <input type="range" id="thresh-slider" min="0" max="1" step="0.01" value="0.5"/>
+          <span class="slider-val" id="thresh-val">0.50</span>
+        </div>
+        <button class="ctrl-btn" id="balance-btn">⚖ Class balance: Balanced (50/50)</button>
+        <button class="ctrl-btn ghost" id="regen-btn">⟳ New data sample</button>
+      </div>
+
+      <div class="curve-grid">
+        <div class="curve-panel">
+          <div class="panel-label">ROC Curve — TPR vs FPR</div>
+          <canvas id="roc-canvas" width="320" height="290"></canvas>
+        </div>
+        <div class="curve-panel">
+          <div class="panel-label">Precision-Recall Curve</div>
+          <canvas id="pr-canvas" width="320" height="290"></canvas>
+        </div>
+      </div>
+
+      <div class="legend">
+        <div class="legend-item"><div class="legend-line" style="background:#00d4ff;height:3px;"></div>ROC / PR curve</div>
+        <div class="legend-item"><div class="legend-line" style="background:#8892a4;height:2px;"></div>Random-chance baseline</div>
+        <div class="legend-item"><div class="legend-dot" style="background:#ffd700"></div>Current operating point</div>
+      </div>
+
+      <div class="side-panel">
+        <h4>Live Readouts at Threshold = <span id="thresh-label">0.50</span></h4>
+        <div class="readout-row">
+          <div class="readout hi"><span>Precision</span><strong id="metric-precision">—</strong></div>
+          <div class="readout lo"><span>Recall (TPR)</span><strong id="metric-recall">—</strong></div>
+          <div class="readout yl"><span>False Positive Rate</span><strong id="metric-fpr">—</strong></div>
+        </div>
+        <div class="readout-row">
+          <div class="readout mid"><span>ROC-AUC</span><strong id="metric-roc-auc">—</strong></div>
+          <div class="readout mid"><span>PR-AUC (Avg. Precision)</span><strong id="metric-pr-auc">—</strong></div>
+          <div class="readout"><span>Positive prevalence</span><strong id="metric-prevalence">—</strong></div>
+        </div>
+        <p class="hint" id="hint-text">Drag the slider to the far left or right to see the curves' endpoint behavior; toggle class balance to see PR-AUC (but not ROC-AUC) collapse toward the prevalence baseline.</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- ── TAKEAWAYS ── -->
+  <section id="takeaways">
+    <h2>Key Takeaways</h2>
+    <ul>
+      <li>
+        <strong>ROC-AUC has a clean probabilistic reading worth memorizing:</strong> it equals the probability that a randomly chosen positive example scores higher than a randomly chosen negative one — identical to the Mann-Whitney U statistic, which is why it's called the "concordance" or "C-statistic" in biostatistics.
+      </li>
+      <li>
+        <strong>On imbalanced data (fraud, rare disease, CTR, defect detection), prefer the PR curve — ROC-AUC can look great while precision is terrible.</strong> Because FPR's denominator is dominated by the huge negative class, a model flooding the alert queue with false positives can still post ROC-AUC ≈ 0.95+; precision directly exposes that the alerts are mostly noise.
+      </li>
+      <li>
+        <strong>PR-AUC baselines are not comparable across datasets — a random classifier's PR curve sits flat at the positive prevalence, not at 0.5.</strong> A PR-AUC of 0.3 is excellent at 0.5% prevalence and mediocre at 40%; always quote PR-AUC alongside base rate, or normalize with <code>AP / prevalence</code> ("lift over baseline") when comparing across problems.
+      </li>
+      <li>
+        <strong>Use <code>average_precision_score</code>, not a naive trapezoidal integral of <code>precision_recall_curve</code>.</strong> Precision is not monotonic in recall (it can bounce up and down as the threshold moves), and AP's step-function weighting handles that correctly; plain trapezoidal integration can overestimate the area.
+      </li>
+      <li>
+        <strong>If training used class-balancing (undersampling, SMOTE, class weights), evaluate PR/ROC on a held-out set with the true production prior — not the resampled distribution.</strong> Resampled-set precision figures are systematically inflated relative to production; recalibrate probabilities (Platt scaling, isotonic regression, or analytic prior correction) before picking a deployment threshold.
+      </li>
+      <li>
+        <strong>Use ROC-AUC for model comparison/ranking quality (it's more stable across bootstrap resamples and threshold-independent), but set the actual deployment threshold off the PR curve</strong> — its axes (precision = alert quality, recall = miss rate) map directly onto the business cost function that a fixed threshold has to satisfy.
+      </li>
+    </ul>
+  </section>
+
+</main>
+
+<!-- ── NAV ── -->
+<nav class="concept-nav">
+  <a class="nav-link" href="./22-confusion-matrix-metrics.html">
+    <span class="nav-dir">← Previous</span>
+    <span class="nav-title">Confusion Matrix & Metrics</span>
+  </a>
+  <a class="nav-link" href="./24-learning-curves.html">
+    <span class="nav-dir">Next →</span>
+    <span class="nav-title">Learning Curves Diagnosis</span>
+  </a>
+</nav>
+
+<script>
+// ─── Seeded RNG (mulberry32) ────────────────────────────────────────────────
+function mulberry32(seed) {
+  return function() {
+    seed |= 0; seed = (seed + 0x6D2B79F5) | 0;
+    let t = Math.imul(seed ^ (seed >>> 15), 1 | seed);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+
+function gaussian(rng) {
+  const u1 = Math.max(rng(), 1e-9), u2 = rng();
+  return Math.sqrt(-2 * Math.log(u1)) * Math.cos(2 * Math.PI * u2);
+}
+
+function clamp(v, lo, hi) { return Math.max(lo, Math.min(hi, v)); }
+
+// ─── Data generation ─────────────────────────────────────────────────────────
+const N = 120;
+let DATA_SEED = 11;
+let BALANCED = true;
+let POINTS = []; // { prob, cls }
+
+function generateData(seed, balanced) {
+  const rng = mulberry32(seed);
+  const pts = [];
+  const nPos = balanced ? 56 : 14;
+  const nNeg = balanced ? 64 : 106;
+  for (let i = 0; i < nNeg; i++) {
+    pts.push({ prob: clamp(0.30 + gaussian(rng) * 0.20, 0.01, 0.99), cls: 0 });
+  }
+  for (let i = 0; i < nPos; i++) {
+    pts.push({ prob: clamp(0.68 + gaussian(rng) * 0.22, 0.01, 0.99), cls: 1 });
+  }
+  return pts;
+}
+
+// ─── Confusion matrix computation ───────────────────────────────────────────
+function computeConfusion(points, threshold) {
+  let tp = 0, fp = 0, fn = 0, tn = 0;
+  points.forEach(p => {
+    const predPos = p.prob >= threshold;
+    if (p.cls === 1 && predPos) tp++;
+    else if (p.cls === 0 && predPos) fp++;
+    else if (p.cls === 1 && !predPos) fn++;
+    else tn++;
+  });
+  const precision = (tp + fp) > 0 ? tp / (tp + fp) : 1; // by convention at threshold=1
+  const recall = (tp + fn) > 0 ? tp / (tp + fn) : 0;
+  const fpr = (fp + tn) > 0 ? fp / (fp + tn) : 0;
+  return { tp, fp, fn, tn, precision, recall, fpr };
+}
+
+// ─── Curve construction: sweep every distinct score as a threshold ─────────
+function buildCurves(points) {
+  const thresholds = [1.001, ...points.map(p => p.prob).sort((a, b) => b - a), -0.001];
+  const rocPts = []; // {fpr, tpr}
+  const prPts = [];  // {recall, precision}
+  thresholds.forEach(t => {
+    const m = computeConfusion(points, t);
+    rocPts.push({ fpr: m.fpr, tpr: m.recall });
+    prPts.push({ recall: m.recall, precision: m.precision });
+  });
+  return { rocPts, prPts };
+}
+
+function trapAUC(pts, xKey, yKey) {
+  const sorted = [...pts].sort((a, b) => a[xKey] - b[xKey]);
+  let area = 0;
+  for (let i = 1; i < sorted.length; i++) {
+    const dx = sorted[i][xKey] - sorted[i - 1][xKey];
+    area += dx * (sorted[i][yKey] + sorted[i - 1][yKey]) / 2;
+  }
+  return area;
+}
+
+// average precision: sum over recall steps of P(n) * delta-recall, recall ascending
+function averagePrecision(prPts) {
+  const sorted = [...prPts].sort((a, b) => a.recall - b.recall);
+  let ap = 0;
+  for (let i = 1; i < sorted.length; i++) {
+    const dr = sorted[i].recall - sorted[i - 1].recall;
+    ap += dr * sorted[i].precision;
+  }
+  return ap;
+}
+
+// ─── Canvas setup helper ────────────────────────────────────────────────────
+function setupCanvas(canvas) {
+  const dpr = window.devicePixelRatio || 1;
+  if (!canvas.getAttribute('data-css-w')) {
+    canvas.setAttribute('data-css-w', canvas.width);
+    canvas.setAttribute('data-css-h', canvas.height);
+  }
+  const W = +canvas.getAttribute('data-css-w'), H = +canvas.getAttribute('data-css-h');
+  canvas.style.width = W + 'px';
+  canvas.style.height = H + 'px';
+  canvas.width = W * dpr;
+  canvas.height = H * dpr;
+  const ctx = canvas.getContext('2d');
+  ctx.scale(dpr, dpr);
+  return { ctx, W, H };
+}
+
+const PAD = { l: 38, r: 14, t: 14, b: 30 };
+
+function toPx(W, H, x, y) {
+  const chartW = W - PAD.l - PAD.r;
+  const chartH = H - PAD.t - PAD.b;
+  return { px: PAD.l + x * chartW, py: PAD.t + (1 - y) * chartH };
+}
+
+function drawAxes(ctx, W, H, xLabel, yLabel) {
+  ctx.fillStyle = '#141720';
+  ctx.fillRect(0, 0, W, H);
+  ctx.strokeStyle = '#252a3d';
+  ctx.strokeRect(0.5, 0.5, W - 1, H - 1);
+
+  ctx.fillStyle = '#8892a4';
+  ctx.font = '9px monospace';
+  for (let t = 0; t <= 10; t += 2) {
+    const v = t / 10;
+    const { px, py } = toPx(W, H, v, v); // just to get coordinate mapping
+    const xPx = toPx(W, H, v, 0).px;
+    const yPy = toPx(W, H, 0, v).py;
+    ctx.strokeStyle = 'rgba(37,42,61,0.6)';
+    ctx.beginPath();
+    ctx.moveTo(xPx, PAD.t);
+    ctx.lineTo(xPx, H - PAD.b);
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.moveTo(PAD.l, yPy);
+    ctx.lineTo(W - PAD.r, yPy);
+    ctx.stroke();
+    ctx.fillStyle = '#8892a4';
+    ctx.fillText(v.toFixed(1), xPx - 8, H - PAD.b + 12);
+    ctx.fillText(v.toFixed(1), PAD.l - 26, yPy + 3);
+  }
+
+  ctx.fillStyle = '#8892a4';
+  ctx.font = '10px sans-serif';
+  ctx.fillText(xLabel, W / 2 - 20, H - 4);
+  ctx.save();
+  ctx.translate(10, H / 2 + 20);
+  ctx.rotate(-Math.PI / 2);
+  ctx.fillText(yLabel, 0, 0);
+  ctx.restore();
+}
+
+function drawCurve(ctx, W, H, pts, xKey, yKey, color) {
+  const sorted = [...pts].sort((a, b) => a[xKey] - b[xKey]);
+  ctx.strokeStyle = color;
+  ctx.lineWidth = 2.5;
+  ctx.beginPath();
+  sorted.forEach((p, i) => {
+    const { px, py } = toPx(W, H, p[xKey], p[yKey]);
+    if (i === 0) ctx.moveTo(px, py); else ctx.lineTo(px, py);
+  });
+  ctx.stroke();
+}
+
+function drawPoint(ctx, W, H, x, y, color) {
+  const { px, py } = toPx(W, H, x, y);
+  ctx.fillStyle = color;
+  ctx.beginPath();
+  ctx.arc(px, py, 5.5, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.strokeStyle = '#0d0f17';
+  ctx.lineWidth = 1.5;
+  ctx.stroke();
+}
+
+let CURVES = null;
+
+function drawROC() {
+  const canvas = document.getElementById('roc-canvas');
+  const { ctx, W, H } = setupCanvas(canvas);
+  drawAxes(ctx, W, H, 'False Positive Rate', 'True Positive Rate');
+
+  // diagonal baseline
+  ctx.strokeStyle = '#8892a4';
+  ctx.lineWidth = 1.5;
+  ctx.setLineDash([4, 4]);
+  ctx.beginPath();
+  const a = toPx(W, H, 0, 0), b = toPx(W, H, 1, 1);
+  ctx.moveTo(a.px, a.py);
+  ctx.lineTo(b.px, b.py);
+  ctx.stroke();
+  ctx.setLineDash([]);
+
+  drawCurve(ctx, W, H, CURVES.rocPts, 'fpr', 'tpr', '#00d4ff');
+
+  const m = computeConfusion(POINTS, THRESHOLD);
+  drawPoint(ctx, W, H, m.fpr, m.recall, '#ffd700');
+}
+
+function drawPR() {
+  const canvas = document.getElementById('pr-canvas');
+  const { ctx, W, H } = setupCanvas(canvas);
+  drawAxes(ctx, W, H, 'Recall', 'Precision');
+
+  const prevalence = POINTS.filter(p => p.cls === 1).length / POINTS.length;
+  ctx.strokeStyle = '#8892a4';
+  ctx.lineWidth = 1.5;
+  ctx.setLineDash([4, 4]);
+  ctx.beginPath();
+  const a = toPx(W, H, 0, prevalence), b = toPx(W, H, 1, prevalence);
+  ctx.moveTo(a.px, a.py);
+  ctx.lineTo(b.px, b.py);
+  ctx.stroke();
+  ctx.setLineDash([]);
+
+  drawCurve(ctx, W, H, CURVES.prPts, 'recall', 'precision', '#00d4ff');
+
+  const m = computeConfusion(POINTS, THRESHOLD);
+  drawPoint(ctx, W, H, m.recall, m.precision, '#ffd700');
+}
+
+// ─── Readouts ────────────────────────────────────────────────────────────────
+let THRESHOLD = 0.5;
+
+function pct(v) { return (v * 100).toFixed(1) + '%'; }
+
+function updateReadouts() {
+  const m = computeConfusion(POINTS, THRESHOLD);
+  document.getElementById('thresh-val').textContent = THRESHOLD.toFixed(2);
+  document.getElementById('thresh-label').textContent = THRESHOLD.toFixed(2);
+  document.getElementById('thresh-slider').value = THRESHOLD;
+
+  document.getElementById('metric-precision').textContent = pct(m.precision);
+  document.getElementById('metric-recall').textContent = pct(m.recall);
+  document.getElementById('metric-fpr').textContent = pct(m.fpr);
+
+  const rocAuc = trapAUC(CURVES.rocPts, 'fpr', 'tpr');
+  const prAuc = averagePrecision(CURVES.prPts);
+  document.getElementById('metric-roc-auc').textContent = rocAuc.toFixed(3);
+  document.getElementById('metric-pr-auc').textContent = prAuc.toFixed(3);
+
+  const prevalence = POINTS.filter(p => p.cls === 1).length / POINTS.length;
+  document.getElementById('metric-prevalence').textContent = pct(prevalence);
+
+  const hint = document.getElementById('hint-text');
+  if (THRESHOLD > 0.9) {
+    hint.textContent = 'Near threshold 1: both curves sit near the origin — almost nothing is called positive, so recall ≈ 0 on both axes.';
+  } else if (THRESHOLD < 0.1) {
+    hint.textContent = 'Near threshold 0: everything is called positive — recall = 100% on both, but PR precision collapses to the prevalence while ROC FPR maxes to 1.';
+  } else {
+    hint.textContent = `Prevalence is ${pct(prevalence)} — notice the PR baseline (dashed) sits at that level while the ROC baseline stays fixed at the diagonal regardless of balance.`;
+  }
+}
+
+function renderAll() {
+  CURVES = buildCurves(POINTS);
+  drawROC();
+  drawPR();
+  updateReadouts();
+}
+
+// ─── Controls ────────────────────────────────────────────────────────────────
+document.getElementById('thresh-slider').addEventListener('input', (e) => {
+  THRESHOLD = parseFloat(e.target.value);
+  drawROC();
+  drawPR();
+  updateReadouts();
+});
+
+document.getElementById('balance-btn').addEventListener('click', (e) => {
+  BALANCED = !BALANCED;
+  e.target.textContent = BALANCED ? '⚖ Class balance: Balanced (50/50)' : '⚖ Class balance: Imbalanced (~12/88)';
+  e.target.classList.toggle('toggle-on', !BALANCED);
+  POINTS = generateData(DATA_SEED, BALANCED);
+  renderAll();
+});
+
+document.getElementById('regen-btn').addEventListener('click', () => {
+  DATA_SEED += 97;
+  POINTS = generateData(DATA_SEED, BALANCED);
+  renderAll();
+});
+
+window.addEventListener('resize', renderAll);
+
+// ─── Init ───────────────────────────────────────────────────────────────────
+POINTS = generateData(DATA_SEED, BALANCED);
+renderAll();
+document.fonts.ready.then(renderAll);
+</script>
+</body>
+</html>

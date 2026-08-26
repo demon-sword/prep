@@ -1,0 +1,547 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1.0"/>
+<title>Connection Pooling and Resource Exhaustion — Backend Concepts</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #0d0f17;
+    --surface: #141720;
+    --card: #1a1e2e;
+    --border: #252a3d;
+    --accent: #00d4ff;
+    --purple: #7c3aed;
+    --green: #00ff88;
+    --yellow: #ffd700;
+    --red: #ff4757;
+    --orange: #ff9500;
+    --text: #e2e8f0;
+    --text-dim: #8892a4;
+    --mono: 'JetBrains Mono', monospace;
+    --sans: 'Inter', system-ui, sans-serif;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--sans);
+    line-height: 1.6;
+  }
+  header {
+    padding: 48px 24px 32px;
+    max-width: 920px;
+    margin: 0 auto;
+    border-bottom: 1px solid var(--border);
+  }
+  .badge {
+    display: inline-block;
+    font-family: var(--mono);
+    font-size: 12px;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--accent);
+    background: rgba(0,212,255,0.08);
+    border: 1px solid rgba(0,212,255,0.3);
+    padding: 4px 10px;
+    border-radius: 4px;
+    margin-bottom: 14px;
+  }
+  h1 {
+    font-size: 32px;
+    margin: 0 0 12px;
+    font-weight: 700;
+    letter-spacing: -0.01em;
+  }
+  header p.desc {
+    color: var(--text-dim);
+    font-size: 16px;
+    max-width: 720px;
+    margin: 0;
+  }
+  main {
+    max-width: 920px;
+    margin: 0 auto;
+    padding: 0 24px 60px;
+  }
+  section { margin-top: 48px; }
+  h2 {
+    font-size: 13px;
+    font-family: var(--mono);
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    color: var(--purple);
+    margin-bottom: 20px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+  h2::after {
+    content: '';
+    flex: 1;
+    height: 1px;
+    background: var(--border);
+  }
+  h3 {
+    font-size: 18px;
+    color: var(--accent);
+    margin: 28px 0 10px;
+  }
+  h3:first-child { margin-top: 0; }
+  p { color: var(--text); margin: 8px 0; }
+  ul { padding-left: 22px; }
+  li { margin: 6px 0; }
+  code {
+    font-family: var(--mono);
+    background: rgba(124,58,237,0.12);
+    color: var(--purple);
+    padding: 2px 6px;
+    border-radius: 4px;
+    font-size: 0.9em;
+  }
+  .card {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 22px 24px;
+  }
+  .fail-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+    gap: 14px;
+    margin-top: 12px;
+  }
+  .fail-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-left: 3px solid var(--accent);
+    border-radius: 8px;
+    padding: 14px 16px;
+  }
+  .fail-card h4 { margin: 0 0 6px; font-size: 14.5px; color: var(--accent); }
+  .fail-card p { font-size: 13.5px; color: var(--text-dim); margin: 0; }
+  .fail-card.danger { border-left-color: var(--red); }
+  .fail-card.danger h4 { color: var(--red); }
+
+  .aside {
+    margin-top: 14px;
+    font-size: 13px;
+    color: var(--text-dim);
+    border-left: 2px solid var(--border);
+    padding-left: 12px;
+    font-style: italic;
+  }
+
+  /* Visualization shared */
+  .viz-card {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 24px;
+    margin-bottom: 24px;
+  }
+  .viz-intro { color: var(--text-dim); font-size: 14.5px; margin-bottom: 18px; }
+  .btn-row { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; margin-top: 14px; }
+  .run-btn {
+    font-family: var(--mono);
+    font-size: 13px;
+    background: var(--purple);
+    color: white;
+    border: none;
+    padding: 10px 18px;
+    border-radius: 6px;
+    cursor: pointer;
+    font-weight: 600;
+  }
+  .run-btn:hover { opacity: 0.88; }
+  .run-btn:disabled { opacity: 0.35; cursor: not-allowed; }
+  .run-btn.secondary { background: var(--surface); border: 1px solid var(--border); color: var(--text-dim); }
+  .run-btn.secondary:hover { color: var(--text); border-color: var(--accent); }
+  .run-btn.active { background: var(--accent); color: #04121a; }
+
+  .slider-label { font-family: var(--mono); font-size: 13px; color: var(--text-dim); display: flex; align-items: center; gap: 6px; flex: 1; min-width: 260px; }
+  .slider-label input[type="range"] { flex: 1; }
+  input[type="range"] { accent-color: var(--accent); }
+
+  .flow-log {
+    margin-top: 14px;
+    font-family: var(--mono);
+    font-size: 12.5px;
+    color: var(--green);
+    min-height: 40px;
+    max-height: 140px;
+    overflow-y: auto;
+    white-space: pre-line;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 10px 12px;
+  }
+
+  .stat-row { display: flex; gap: 24px; margin-top: 16px; flex-wrap: wrap; }
+  .stat { font-family: var(--mono); font-size: 13px; color: var(--text-dim); }
+  .stat b { color: var(--yellow); font-size: 18px; display: block; }
+  .stat b.danger { color: var(--red); }
+  .stat b.good { color: var(--green); }
+
+  .chart-wrap {
+    margin-top: 20px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 12px;
+  }
+  canvas { display: block; width: 100%; height: auto; }
+  .legend { display: flex; gap: 20px; flex-wrap: wrap; margin-top: 10px; font-family: var(--mono); font-size: 12.5px; color: var(--text-dim); }
+  .legend span.sw { display: inline-block; width: 12px; height: 12px; border-radius: 3px; margin-right: 6px; vertical-align: -1px; }
+
+  .divider { height: 1px; background: var(--border); margin: 32px 0; }
+
+  blockquote#interview-quote {
+    background: linear-gradient(135deg, rgba(0,212,255,0.06), rgba(124,58,237,0.06));
+    border-left: 4px solid var(--accent);
+    border-radius: 8px;
+    margin: 0;
+    padding: 22px 26px;
+    font-size: 16.5px;
+    color: var(--text);
+    font-style: italic;
+    position: relative;
+  }
+  blockquote#interview-quote::before {
+    content: '\201C';
+    font-size: 48px;
+    color: var(--accent);
+    opacity: 0.3;
+    position: absolute;
+    top: -6px;
+    left: 10px;
+    font-style: normal;
+  }
+  #takeaways ul { list-style: none; padding: 0; }
+  #takeaways li {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-left: 3px solid var(--green);
+    border-radius: 8px;
+    padding: 12px 16px;
+    margin-bottom: 10px;
+    font-size: 14.5px;
+  }
+  #takeaways li b { color: var(--green); }
+
+  nav.concept-nav {
+    max-width: 920px;
+    margin: 0 auto;
+    padding: 24px 24px 60px;
+    display: flex;
+    justify-content: space-between;
+    font-family: var(--mono);
+    font-size: 13.5px;
+  }
+  nav.concept-nav a {
+    color: var(--accent);
+    text-decoration: none;
+    border: 1px solid var(--border);
+    padding: 10px 16px;
+    border-radius: 6px;
+  }
+  nav.concept-nav a:hover { border-color: var(--accent); }
+  nav.concept-nav span.disabled {
+    color: var(--text-dim);
+    border: 1px solid var(--border);
+    padding: 10px 16px;
+    border-radius: 6px;
+    opacity: 0.4;
+  }
+  @media (max-width: 700px) {
+    h1 { font-size: 24px; }
+    .btn-row { flex-direction: column; align-items: flex-start; }
+    .slider-label { min-width: 0; width: 100%; }
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <span class="badge">operations</span>
+  <h1>Connection Pooling and Resource Exhaustion</h1>
+  <p class="desc">Connection pool sizing, exhaustion, and the counterintuitive failure mode where increasing pool size makes an overloaded database worse — pool-per-dependency as a bulkhead, and external pooling (PgBouncer-style).</p>
+</header>
+
+<main>
+
+  <section id="theory">
+    <h2>Theory</h2>
+    <div class="card">
+      <h3>Why a pool exists at all</h3>
+      <p>Opening a database connection is not free. For Postgres it means forking (or, on newer versions, spawning) a whole backend process, allocating its own memory (shared buffers aside, each backend still costs several MB of process/connection overhead), and running the TCP + optionally TLS handshake before a single query executes — commonly single-digit to tens of milliseconds, and that's before authentication. Doing that per request is a non-starter under any real load, so a <b>connection pool</b> keeps a set of already-established connections warm and hands them out to callers on checkout, returning them to the pool on release instead of closing them. The pool converts "open a connection" (slow, stateful, expensive) into "acquire from a pool" (fast, usually just a semaphore wait).</p>
+
+      <h3>Sizing the pool: it's not "as big as possible"</h3>
+      <p>The instinct — pool exhausted under load, so make the pool bigger — is wrong more often than it's right, and the reasoning is <b>Little's Law</b>: the number of connections you need in flight is <code>L = λ × W</code> (concurrency = arrival rate × time each request holds a connection). If your service does 200 req/s and each request holds a connection for 15ms, you need roughly <code>200 × 0.015 = 3</code> connections at steady state — anything past that is idle capacity, not headroom, because the real bottleneck usually isn't "not enough connection objects," it's the database's actual ability to execute concurrently. HikariCP's own sizing guidance — a widely cited formula — is <code>connections = ((core_count × 2) + effective_spindle_count)</code>, which is really just Little's Law's insight stated for the database side: a machine with 8 cores and modern SSDs (spindle count effectively ~1) wants on the order of ~17 concurrent connections doing real work, not 200. Past that number, the database isn't short on connection slots, it's short on CPU and lock-free time to actually run them.</p>
+
+      <h3>The counterintuitive collapse: more connections, worse latency</h3>
+      <p>This is the failure mode that actually bites teams in production and is worth internalizing precisely, because "just bump max pool size" is the default first reaction to any connection-related incident. Once the number of connections executing concurrently against the database exceeds its real hardware concurrency (CPU cores, I/O parallelism, lock capacity), extra connections don't add throughput — they add <b>contention</b>: more context switching between backend processes, more lock waiting, more buffer-cache thrashing as each connection's working set evicts another's. The database's per-query service time goes up because the machine is doing more scheduling and less useful work, and that slower service time means each connection holds itself longer, which increases the very queueing pressure the bigger pool was supposed to relieve. The system doesn't plateau, it gets measurably worse past a certain pool size — latency that was improving as you raised the pool from 5 to 20 starts climbing again at 40, 80, 150, because you've traded "queueing for a pool slot" (cheap, bounded, first-come-first-served) for "queueing inside an overloaded database" (expensive, uncontrolled, invisible from the app's perspective until timeouts start firing). This is the same "adding capacity makes things worse" shape as thundering herd on a cache (<code>01-caching-strategies</code>) — past the resource's real ceiling, extra concurrent demand competes for the same fixed capacity instead of adding to it.</p>
+
+      <h3>Pool-per-dependency: sizing is also a bulkhead</h3>
+      <p>A single shared pool across every downstream call is a resource-exhaustion accident waiting to happen: if one dependency (a slow reporting query, a degraded read replica) starts holding connections longer, it can consume the entire pool and starve requests to healthy dependencies that share it — the connection-pool version of the thread-pool bulkhead problem (<code>06-circuit-breakers-bulkheads</code>). Sizing a dedicated pool per dependency, or per query class (OLTP vs. reporting/analytics), means one slow consumer exhausts only its own allocation and the rest of the system keeps serving traffic. This costs some idle capacity (a small pool sitting unused most of the time) in exchange for blast-radius containment — the standard bulkhead trade.</p>
+
+      <h3>External pooling: decoupling app-side pools from real DB connections</h3>
+      <p>Once you're running many application instances, each with its own in-process pool, the real number of database backend connections is <code>N instances × pool size per instance</code> — and that number can blow past Postgres's <code>max_connections</code> (often a few hundred by default) surprisingly fast during a scale-out event, well before any single instance's pool feels "full." <b>PgBouncer</b> (and similar proxies — ProxySQL for MySQL, RDS Proxy) sits between the fleet and the database as a shared external pool: application instances connect to PgBouncer, which multiplexes many app-side connections onto a much smaller, fixed set of real backend connections capped at what the database can actually execute concurrently. In <b>transaction pooling mode</b> (the common choice), a real backend connection is only held for the duration of a single transaction, then returned to the pool for the next waiting client — decoupling "how many app-side connections exist" from "how many backends Postgres has to schedule," at the cost of losing session-level state (prepared statements, session variables, advisory locks) that don't survive across transactions unless explicitly handled. <b>Session pooling</b> preserves that session state but ties up a real backend for the client's whole session, giving back most of the multiplexing benefit.</p>
+
+      <h3>The trade-off that actually matters</h3>
+      <p>The instinct to size a pool for peak imagined concurrency is backwards: the pool should be sized close to what the downstream resource can genuinely execute in parallel, with excess demand queueing briefly at the pool boundary (cheap, bounded, observable as a wait-time metric) rather than being admitted into the database and causing contention (expensive, unbounded, indistinguishable from a real outage until it's already one). The senior framing: a connection pool is not a cache of "capacity," it's an admission control valve — its whole job is to protect a fixed-capacity resource from a request rate that fluctuates, and sizing it too generously defeats that purpose entirely.</p>
+
+      <h3>Named failure modes</h3>
+      <div class="fail-grid">
+        <div class="fail-card danger">
+          <h4>Connection leak</h4>
+          <p>A code path that acquires a connection and doesn't release it on every exception path (missing <code>finally</code>/<code>try-with-resources</code>) slowly drains the pool over hours until every request blocks on checkout — the classic slow-burn incident that looks like "random" latency degradation until someone graphs pool-in-use over time.</p>
+        </div>
+        <div class="fail-card danger">
+          <h4>N × pool-size explosion during scale-out</h4>
+          <p>Autoscaling from 10 to 50 instances, each holding a pool of 20, turns 200 real DB connections into 1,000 overnight — often exceeding <code>max_connections</code> and causing new connections to be refused fleet-wide, which is precisely the problem PgBouncer-style external pooling exists to prevent.</p>
+        </div>
+        <div class="fail-card">
+          <h4>Thundering herd on cold start</h4>
+          <p>Every instance in a fleet restarting simultaneously (a bad deploy, a config reload) tries to fill its pool to the configured minimum at once, hitting the database with a burst of new-connection overhead exactly when it's least able to absorb it — mitigated with pool warm-up jitter, same instinct as jittered retry backoff (<code>06-circuit-breakers-bulkheads</code>).</p>
+        </div>
+        <div class="fail-card">
+          <h4>Checkout timeout cascades</h4>
+          <p>Once the pool is saturated, callers start timing out on checkout rather than getting a connection — and if that timeout is longer than the caller's own upstream deadline, the request has already been abandoned by its caller while still holding a slot, compounding the exhaustion instead of shedding it.</p>
+        </div>
+      </div>
+      <p class="aside">Where this shows up in practice: RDS Proxy, PgBouncer, and ProxySQL all exist because "add a pool per app instance" doesn't scale past a modest fleet size — the fix is almost never a bigger per-instance pool, it's a shared external pooler capping real backend connections at what the database can actually do.</p>
+    </div>
+  </section>
+
+  <section id="visualization">
+    <h2>Visualization</h2>
+
+    <div class="viz-card">
+      <p class="viz-intro"><b>Drag the pool-size slider and watch latency, not just "capacity."</b> The database has a fixed real concurrency capacity (20 — think 8 cores × 2 + a couple of spindles). Below that, a bigger pool genuinely helps: less queueing for a connection slot. Past it, extra connections don't add throughput — they add contention, so per-query service time rises and total latency <em>gets worse</em>, not just plateaus. Toggle external pooling to see how a PgBouncer-style proxy caps real DB concurrency at 20 regardless of how big the app-side pool gets, flattening the curve instead of letting it collapse.</p>
+
+      <div class="btn-row">
+        <button class="run-btn active" id="btn-naive" data-mode="naive">Naive in-process pool</button>
+        <button class="run-btn secondary" id="btn-pooled" data-mode="pooled">External pooling (PgBouncer-style)</button>
+      </div>
+
+      <div class="btn-row">
+        <label class="slider-label">App-side pool size: <b id="pool-val" style="color:var(--accent)">20</b>
+          <input type="range" id="pool-slider" min="1" max="150" step="1" value="20"/>
+        </label>
+      </div>
+
+      <div class="chart-wrap">
+        <canvas id="chart" width="880" height="300"></canvas>
+      </div>
+      <div class="legend">
+        <span><span class="sw" style="background:var(--red)"></span>Naive pool → real latency</span>
+        <span><span class="sw" style="background:var(--green)"></span>External pool → real latency</span>
+        <span><span class="sw" style="background:var(--text-dim)"></span>DB true capacity (20 concurrent)</span>
+      </div>
+
+      <div class="stat-row">
+        <div class="stat">Latency at current pool size<b id="stat-latency">—</b></div>
+        <div class="stat">Real DB connections in use<b id="stat-realconn">—</b></div>
+        <div class="stat">Per-query service time<b id="stat-service">—</b></div>
+        <div class="stat">DB utilization (ρ)<b id="stat-util">—</b></div>
+      </div>
+
+      <div class="flow-log" id="viz-log"></div>
+    </div>
+  </section>
+
+  <section id="interview-line">
+    <h2>Interview Line</h2>
+    <blockquote id="interview-quote">
+      "A connection pool isn't a bucket of capacity, it's admission control for a fixed-capacity resource, and I size it with Little's Law and something close to HikariCP's core-count formula, not by guessing at peak concurrency. The counterintuitive part interviewers actually want to hear is that past the database's real concurrency ceiling — cores, I/O parallelism, lock capacity — a bigger pool makes latency worse, not just flat, because extra concurrent connections cause contention that slows down every query's service time, which increases queueing pressure faster than the extra pool slots relieve it. That's also why I size pools per-dependency as a bulkhead, so one slow downstream can't drain the whole shared pool and starve everyone else, and why past a modest fleet size I'd rather run PgBouncer in transaction-pooling mode than let N instances each keep their own pool, because N times pool-size blowing past max_connections during a scale-out event is a much more common outage than anyone expects."
+    </blockquote>
+  </section>
+
+  <section id="takeaways">
+    <h2>Key Takeaways</h2>
+    <ul>
+      <li><b>Size for Little's Law, not for peak imagined load</b> — concurrency needed ≈ arrival rate × hold time; HikariCP's <code>(cores × 2) + spindles</code> formula is the same idea restated for the database side, and it usually lands surprisingly small (10-30, not hundreds).</li>
+      <li><b>Past the DB's true concurrency ceiling, more pool slots make latency worse, not flat</b> — contention (lock waits, context switching, cache thrashing) raises per-query service time, which raises queueing pressure faster than added slots relieve it; this is the same "extra demand competing for fixed capacity" shape as thundering herd (<code>01-caching-strategies</code>).</li>
+      <li><b>Pool-per-dependency is a bulkhead</b> — a shared pool lets one slow downstream (a reporting query, a degraded replica) starve every other caller; dedicated pools per dependency contain the blast radius, the same trade circuit breakers and thread-pool bulkheads make (<code>06-circuit-breakers-bulkheads</code>).</li>
+      <li><b>N instances × pool size is the real connection count the DB sees</b> — autoscaling from 10 to 50 instances at pool-size 20 turns 200 real connections into 1,000, which blows past <code>max_connections</code> long before any single instance's pool looks exhausted.</li>
+      <li><b>PgBouncer/RDS Proxy decouple app-side pool size from real backend connections</b> — transaction-pooling mode multiplexes many app connections onto a small fixed set of real backends capped at what the database can execute, at the cost of losing session-scoped state (prepared statements, advisory locks) across transaction boundaries.</li>
+      <li><b>A connection leak and a checkout-timeout cascade look identical from the outside</b> — both present as "random" latency degradation; the fix is graphing pool-in-use and checkout-wait-time as first-class metrics, not just DB CPU, the same observability instinct that catches queue lag before it becomes an outage (<code>17-observability</code>).</li>
+    </ul>
+  </section>
+
+</main>
+
+<nav class="concept-nav">
+  <a href="../concepts/21-multi-region-architecture.html">← Previous: Multi-Region Architecture</a>
+  <span class="disabled">Next: — (last concept)</span>
+</nav>
+
+<script>
+(function() {
+  const CAPACITY = 20;         // DB's true concurrent-execution capacity
+  const LAMBDA = 400;          // arrival rate, requests/sec
+  const BASE_SERVICE_MS = 8;   // per-query service time when concurrency <= capacity
+  const K = 0.15;              // contention penalty per connection past capacity
+
+  let mode = 'naive';
+  let poolSize = 20;
+
+  const canvas = document.getElementById('chart');
+  const ctx = canvas.getContext('2d');
+  const logEl = document.getElementById('viz-log');
+  const logLines = [];
+
+  function log(msg) {
+    logLines.push(msg);
+    if (logLines.length > 8) logLines.shift();
+    logEl.textContent = logLines.join('\n');
+  }
+
+  // Simplified queueing model (illustrative, not a rigorous M/M/c derivation):
+  // serviceTime grows once concurrency exceeds the DB's real capacity (contention),
+  // and total latency = serviceTime + queueing delay driven by utilization rho.
+  function serviceTimeFor(effectiveConcurrency) {
+    const overshoot = Math.max(0, effectiveConcurrency - CAPACITY);
+    return BASE_SERVICE_MS * (1 + K * overshoot);
+  }
+
+  function latencyFor(mode, pool) {
+    const effectiveConcurrency = mode === 'pooled' ? Math.min(pool, CAPACITY) : pool;
+    const serviceMs = serviceTimeFor(effectiveConcurrency);
+    const throughputCap = (effectiveConcurrency / serviceMs) * 1000; // req/s this concurrency can sustain
+    const rho = Math.min(0.995, LAMBDA / throughputCap);
+    const waitMs = serviceMs * (rho / (1 - rho));
+    return {
+      latency: serviceMs + waitMs,
+      serviceMs,
+      rho,
+      realConnections: effectiveConcurrency
+    };
+  }
+
+  function fmtMs(v) {
+    return v >= 1000 ? (v / 1000).toFixed(2) + 's' : v.toFixed(1) + 'ms';
+  }
+
+  function drawChart() {
+    const w = canvas.width, h = canvas.height;
+    const padL = 50, padR = 16, padT = 16, padB = 34;
+    const plotW = w - padL - padR, plotH = h - padT - padB;
+    ctx.clearRect(0, 0, w, h);
+
+    const xMax = 150;
+    const yMax = 320; // ms cap for chart display
+
+    function xPix(pool) { return padL + (pool / xMax) * plotW; }
+    function yPix(ms) { return padT + plotH - (Math.min(ms, yMax) / yMax) * plotH; }
+
+    // gridlines
+    ctx.strokeStyle = '#252a3d';
+    ctx.lineWidth = 1;
+    ctx.font = '11px "JetBrains Mono", monospace';
+    ctx.fillStyle = '#8892a4';
+    for (let ms = 0; ms <= yMax; ms += 80) {
+      const y = yPix(ms);
+      ctx.beginPath(); ctx.moveTo(padL, y); ctx.lineTo(w - padR, y); ctx.stroke();
+      ctx.fillText(ms + 'ms', 6, y + 4);
+    }
+    for (let p = 0; p <= xMax; p += 25) {
+      const x = xPix(p);
+      ctx.beginPath(); ctx.moveTo(x, padT); ctx.lineTo(x, h - padB); ctx.stroke();
+      ctx.fillText(String(p), x - 8, h - padB + 16);
+    }
+    ctx.fillText('pool size →', w - padR - 70, h - 6);
+
+    // capacity marker
+    const capX = xPix(CAPACITY);
+    ctx.strokeStyle = '#8892a4';
+    ctx.setLineDash([4, 4]);
+    ctx.beginPath(); ctx.moveTo(capX, padT); ctx.lineTo(capX, h - padB); ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.fillStyle = '#8892a4';
+    ctx.fillText('DB capacity', capX + 4, padT + 12);
+
+    // curves
+    function drawCurve(color, modeName) {
+      ctx.strokeStyle = color;
+      ctx.lineWidth = 2.5;
+      ctx.beginPath();
+      for (let p = 1; p <= xMax; p++) {
+        const r = latencyFor(modeName, p);
+        const x = xPix(p), y = yPix(r.latency);
+        if (p === 1) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+      }
+      ctx.stroke();
+    }
+    drawCurve('#ff4757', 'naive');
+    drawCurve('#00ff88', 'pooled');
+
+    // current point marker
+    const activeColor = mode === 'naive' ? '#ff4757' : '#00ff88';
+    const r = latencyFor(mode, poolSize);
+    const px = xPix(poolSize), py = yPix(r.latency);
+    ctx.fillStyle = activeColor;
+    ctx.beginPath(); ctx.arc(px, py, 6, 0, Math.PI * 2); ctx.fill();
+    ctx.strokeStyle = '#0d0f17';
+    ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.arc(px, py, 6, 0, Math.PI * 2); ctx.stroke();
+  }
+
+  function updateStats() {
+    const r = latencyFor(mode, poolSize);
+    document.getElementById('stat-latency').textContent = fmtMs(r.latency);
+    document.getElementById('stat-latency').className = r.latency > 60 ? 'danger' : 'good';
+    document.getElementById('stat-realconn').textContent = r.realConnections;
+    document.getElementById('stat-service').textContent = fmtMs(r.serviceMs);
+    document.getElementById('stat-util').textContent = (r.rho * 100).toFixed(0) + '%';
+  }
+
+  function render() {
+    document.getElementById('pool-val').textContent = poolSize;
+    drawChart();
+    updateStats();
+  }
+
+  function setMode(m) {
+    mode = m;
+    document.getElementById('btn-naive').classList.toggle('active', m === 'naive');
+    document.getElementById('btn-naive').classList.toggle('secondary', m !== 'naive');
+    document.getElementById('btn-pooled').classList.toggle('active', m === 'pooled');
+    document.getElementById('btn-pooled').classList.toggle('secondary', m !== 'pooled');
+
+    const r = latencyFor(m, poolSize);
+    if (m === 'pooled') {
+      log('[PgBouncer-style] app pool=' + poolSize + ' → real DB connections capped at min(' + poolSize + ', ' + CAPACITY + ') = ' + r.realConnections + '.');
+      if (poolSize > CAPACITY) {
+        log('[PgBouncer-style] extra ' + (poolSize - CAPACITY) + ' app-side connections queue at the proxy, not inside Postgres — latency stays flat at ~' + fmtMs(r.latency) + '.');
+      }
+    } else {
+      if (poolSize > CAPACITY) {
+        log('[naive] all ' + poolSize + ' app-side connections map 1:1 to real Postgres backends — ' + (poolSize - CAPACITY) + ' past capacity, contention rising.');
+        log('[naive] service time inflated to ' + fmtMs(r.serviceMs) + ' (was ' + BASE_SERVICE_MS + 'ms at/under capacity) — latency now ' + fmtMs(r.latency) + '.');
+      } else {
+        log('[naive] pool size ' + poolSize + ' ≤ DB capacity (' + CAPACITY + ') — no contention yet, latency ' + fmtMs(r.latency) + '.');
+      }
+    }
+    render();
+  }
+
+  document.getElementById('btn-naive').addEventListener('click', () => setMode('naive'));
+  document.getElementById('btn-pooled').addEventListener('click', () => setMode('pooled'));
+
+  document.getElementById('pool-slider').addEventListener('input', (e) => {
+    poolSize = parseInt(e.target.value, 10);
+    setMode(mode);
+  });
+
+  setMode('naive');
+})();
+</script>
+</body>
+</html>

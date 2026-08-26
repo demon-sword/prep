@@ -1,0 +1,777 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1.0"/>
+<title>Load Balancing — Backend Concepts</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #0d0f17;
+    --surface: #141720;
+    --card: #1a1e2e;
+    --border: #252a3d;
+    --accent: #00d4ff;
+    --purple: #7c3aed;
+    --green: #00ff88;
+    --yellow: #ffd700;
+    --red: #ff4757;
+    --orange: #ff9500;
+    --text: #e2e8f0;
+    --text-dim: #8892a4;
+    --mono: 'JetBrains Mono', monospace;
+    --sans: 'Inter', system-ui, sans-serif;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--sans);
+    line-height: 1.6;
+  }
+  header {
+    padding: 48px 24px 32px;
+    max-width: 920px;
+    margin: 0 auto;
+    border-bottom: 1px solid var(--border);
+  }
+  .badge {
+    display: inline-block;
+    font-family: var(--mono);
+    font-size: 12px;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--accent);
+    background: rgba(0,212,255,0.08);
+    border: 1px solid rgba(0,212,255,0.3);
+    padding: 4px 10px;
+    border-radius: 4px;
+    margin-bottom: 14px;
+  }
+  h1 {
+    font-size: 32px;
+    margin: 0 0 12px;
+    font-weight: 700;
+    letter-spacing: -0.01em;
+  }
+  header p.desc {
+    color: var(--text-dim);
+    font-size: 16px;
+    max-width: 720px;
+    margin: 0;
+  }
+  main {
+    max-width: 920px;
+    margin: 0 auto;
+    padding: 0 24px 60px;
+  }
+  section {
+    margin-top: 48px;
+  }
+  h2 {
+    font-size: 13px;
+    font-family: var(--mono);
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    color: var(--purple);
+    margin-bottom: 20px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+  h2::after {
+    content: '';
+    flex: 1;
+    height: 1px;
+    background: var(--border);
+  }
+  h3 {
+    font-size: 18px;
+    color: var(--accent);
+    margin: 28px 0 10px;
+  }
+  h3:first-child { margin-top: 0; }
+  p { color: var(--text); margin: 8px 0; }
+  ul { padding-left: 22px; }
+  li { margin: 6px 0; }
+  code {
+    font-family: var(--mono);
+    background: rgba(124,58,237,0.12);
+    color: var(--purple);
+    padding: 2px 6px;
+    border-radius: 4px;
+    font-size: 0.9em;
+  }
+  .aside {
+    margin-top: 10px;
+    font-size: 13.5px;
+    color: var(--text-dim);
+    border-left: 2px solid var(--border);
+    padding-left: 12px;
+    font-style: italic;
+  }
+  .card {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 22px 24px;
+  }
+  .fail-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+    gap: 14px;
+    margin-top: 12px;
+  }
+  .fail-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-left: 3px solid var(--accent);
+    border-radius: 8px;
+    padding: 14px 16px;
+  }
+  .fail-card h4 {
+    margin: 0 0 6px;
+    font-size: 14.5px;
+    color: var(--accent);
+  }
+  .fail-card p { font-size: 13.5px; color: var(--text-dim); margin: 0; }
+  .fail-card.danger { border-left-color: var(--red); }
+  .fail-card.danger h4 { color: var(--red); }
+
+  /* Visualization shared */
+  .viz-card {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 24px;
+    margin-bottom: 24px;
+  }
+  .viz-intro { color: var(--text-dim); font-size: 14.5px; margin-bottom: 18px; }
+  .btn-row { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; margin-top: 14px; }
+  .run-btn {
+    font-family: var(--mono);
+    font-size: 13px;
+    background: var(--purple);
+    color: white;
+    border: none;
+    padding: 10px 18px;
+    border-radius: 6px;
+    cursor: pointer;
+    font-weight: 600;
+  }
+  .run-btn:hover { opacity: 0.88; }
+  .run-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+  .run-btn.secondary { background: var(--surface); border: 1px solid var(--border); color: var(--text-dim); }
+  .run-btn.secondary:hover { color: var(--text); border-color: var(--accent); }
+  .run-btn.active { background: var(--accent); color: #0d0f17; }
+
+  .slider-row { margin-top: 14px; }
+  .slider-row label { font-family: var(--mono); font-size: 12.5px; color: var(--text-dim); display: block; margin-bottom: 8px; }
+  .slider-row label b { color: var(--yellow); }
+  input[type="range"] { width: 100%; accent-color: var(--accent); }
+
+  .flow-log {
+    margin-top: 14px;
+    font-family: var(--mono);
+    font-size: 13px;
+    color: var(--green);
+    min-height: 40px;
+    white-space: pre-line;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 10px 12px;
+  }
+
+  .stat-row {
+    display: flex;
+    gap: 24px;
+    margin-top: 16px;
+    flex-wrap: wrap;
+  }
+  .stat {
+    font-family: var(--mono);
+    font-size: 13px;
+    color: var(--text-dim);
+  }
+  .stat b { color: var(--yellow); font-size: 18px; display: block; }
+  .stat b.danger { color: var(--red); }
+  .stat b.good { color: var(--green); }
+
+  /* algorithm selector */
+  .algo-select { display: flex; gap: 8px; flex-wrap: wrap; }
+
+  /* instance pool */
+  .pool-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+    gap: 12px;
+    margin-top: 16px;
+  }
+  .inst-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 12px 14px;
+    cursor: pointer;
+    user-select: none;
+    transition: border-color 0.15s, opacity 0.15s;
+  }
+  .inst-card:hover { border-color: var(--accent); }
+  .inst-card .inst-name { font-family: var(--mono); font-size: 13px; color: var(--text); font-weight: 600; }
+  .inst-card .inst-state { font-family: var(--mono); font-size: 11px; margin-top: 4px; text-transform: uppercase; letter-spacing: 0.05em; }
+  .inst-card .inst-bar-shell { height: 8px; border-radius: 4px; background: var(--bg); margin-top: 10px; overflow: hidden; }
+  .inst-card .inst-bar-fill { height: 100%; background: var(--accent); width: 0%; transition: width 0.1s linear; }
+  .inst-card .inst-meta { font-family: var(--mono); font-size: 11px; color: var(--text-dim); margin-top: 8px; }
+  .inst-card.state-healthy { border-left: 3px solid var(--green); }
+  .inst-card.state-slow { border-left: 3px solid var(--orange); }
+  .inst-card.state-slow .inst-bar-fill { background: var(--orange); }
+  .inst-card.state-down { border-left: 3px solid var(--red); opacity: 0.55; }
+  .inst-card.state-down .inst-bar-fill { background: var(--red); }
+  .inst-card.ejected { opacity: 0.35; }
+  .inst-card .inst-state.healthy { color: var(--green); }
+  .inst-card .inst-state.slow { color: var(--orange); }
+  .inst-card .inst-state.down { color: var(--red); }
+
+  /* rolling restart pool */
+  .rr-pool { display: flex; gap: 14px; flex-wrap: wrap; margin-top: 16px; }
+  .rr-card {
+    flex: 1;
+    min-width: 130px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 12px 14px;
+    text-align: center;
+    transition: background 0.2s, border-color 0.2s;
+  }
+  .rr-card .rr-name { font-family: var(--mono); font-size: 12.5px; font-weight: 600; }
+  .rr-card .rr-state { font-family: var(--mono); font-size: 11px; margin-top: 6px; text-transform: uppercase; letter-spacing: 0.05em; }
+  .rr-card .rr-inflight { font-family: var(--mono); font-size: 20px; color: var(--yellow); margin-top: 8px; }
+  .rr-card.accepting { border-left: 3px solid var(--green); }
+  .rr-card.draining { border-left: 3px solid var(--orange); background: rgba(255,149,0,0.06); }
+  .rr-card.terminated { border-left: 3px solid var(--border); opacity: 0.3; }
+  .rr-card.new { border-left: 3px solid var(--accent); }
+
+  .divider { height: 1px; background: var(--border); margin: 32px 0; }
+
+  blockquote#interview-quote {
+    background: linear-gradient(135deg, rgba(0,212,255,0.06), rgba(124,58,237,0.06));
+    border-left: 4px solid var(--accent);
+    border-radius: 8px;
+    margin: 0;
+    padding: 22px 26px;
+    font-size: 16.5px;
+    color: var(--text);
+    font-style: italic;
+    position: relative;
+  }
+  blockquote#interview-quote::before {
+    content: '\201C';
+    font-size: 48px;
+    color: var(--accent);
+    opacity: 0.3;
+    position: absolute;
+    top: -6px;
+    left: 10px;
+    font-style: normal;
+  }
+  #takeaways ul { list-style: none; padding: 0; }
+  #takeaways li {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-left: 3px solid var(--green);
+    border-radius: 8px;
+    padding: 12px 16px;
+    margin-bottom: 10px;
+    font-size: 14.5px;
+  }
+  #takeaways li b { color: var(--green); }
+
+  nav.concept-nav {
+    max-width: 920px;
+    margin: 0 auto;
+    padding: 24px 24px 60px;
+    display: flex;
+    justify-content: space-between;
+    font-family: var(--mono);
+    font-size: 13.5px;
+  }
+  nav.concept-nav a {
+    color: var(--accent);
+    text-decoration: none;
+    border: 1px solid var(--border);
+    padding: 10px 16px;
+    border-radius: 6px;
+  }
+  nav.concept-nav a:hover { border-color: var(--accent); }
+  nav.concept-nav span.disabled {
+    color: var(--text-dim);
+    border: 1px solid var(--border);
+    padding: 10px 16px;
+    border-radius: 6px;
+    opacity: 0.4;
+  }
+  @media (max-width: 600px) {
+    h1 { font-size: 24px; }
+    .btn-row { flex-direction: column; align-items: flex-start; }
+    .rr-pool { flex-direction: column; }
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <span class="badge">traffic-management</span>
+  <h1>Load Balancing</h1>
+  <p class="desc">L4 vs L7 load balancing, algorithm choice (round robin, least connections, consistent hashing, weighted), health checks, and connection draining during deploys.</p>
+</header>
+
+<main>
+
+  <section id="theory">
+    <h2>Theory</h2>
+    <div class="card">
+      <h3>L4 vs L7</h3>
+      <p>A load balancer sits at one of two layers, and the layer decides what it's allowed to know:</p>
+      <ul>
+        <li><b>L4 (transport)</b> — routes on IP/port, never parses HTTP. It sees packets, not requests. Fast, cheap in CPU, protocol-agnostic (works for raw TCP, gRPC, anything). Examples: AWS NLB, IPVS, HAProxy in <code>tcp</code> mode. It can't do anything content-aware — no path routing, no header inspection, no per-request retries.</li>
+        <li><b>L7 (application)</b> — terminates the connection, parses HTTP, and routes on path, host header, cookie, or method. This is what enables path-based routing (<code>/api/*</code> to one fleet, <code>/static/*</code> to another), TLS termination at the edge, and request-level retries. Examples: AWS ALB, nginx, Envoy. The cost is real: terminating TLS and parsing HTTP per request is strictly more work than shuffling packets, and an L7 balancer is itself a stateful thing that can become the bottleneck.</li>
+      </ul>
+      <p>The trade-off to state out loud: L4 is faster and simpler but blind; L7 is slower and more expensive per request but lets the balancer make smart decisions instead of pushing that logic into every backend.</p>
+
+      <h3>Routing algorithms</h3>
+      <div class="fail-grid">
+        <div class="fail-card">
+          <h4>Round robin</h4>
+          <p>Cycle through backends in order. Trivial, stateless, and <b>blind to actual load</b> — if request cost varies (one backend is mid-query on an expensive report while another is idle), round robin still hands them equal shares and the slow one falls behind.</p>
+        </div>
+        <div class="fail-card">
+          <h4>Weighted round robin</h4>
+          <p>Same cycle, but each backend gets a static weight proportional to its known capacity (bigger instance type gets more traffic). Fixes <i>known</i> capacity differences, still blind to <i>live</i> load.</p>
+        </div>
+        <div class="fail-card danger">
+          <h4>Least connections</h4>
+          <p>Route to whichever healthy backend currently has the fewest in-flight requests. Adapts to real load — a backend stuck on a slow query naturally receives fewer new requests because its count stays high. The right default when request duration varies.</p>
+        </div>
+        <div class="fail-card">
+          <h4>Consistent hashing</h4>
+          <p>Hash a request key (client ID, session ID, cache key) onto a ring shared with backend positions; route to the nearest node clockwise. Gives you <b>session affinity</b> and cache locality — same client keeps hitting the same backend — with the same minimal-remap property as <code>04-sharding-partitioning</code>'s ring: adding/removing a node only reshuffles the keys adjacent to it, not the whole keyspace.</p>
+        </div>
+        <div class="fail-card">
+          <h4>Power of two choices (P2C)</h4>
+          <p>Pick two backends at random, route to whichever has fewer active connections. Approximates least-connections' quality without scanning the whole fleet on every request — the algorithm behind Envoy's default LB policy at scale, because true least-connections needs a global view that gets expensive with thousands of backends.</p>
+        </div>
+      </div>
+
+      <h3>Health checks</h3>
+      <p>Two flavors, usually run together:</p>
+      <ul>
+        <li><b>Active</b> — the balancer polls a health endpoint (<code>GET /healthz</code>) on an interval, independent of real traffic. Detects a dead backend before a user request has to.</li>
+        <li><b>Passive (outlier detection)</b> — the balancer watches real traffic: a backend returning a run of 5xx or timing out gets ejected without a dedicated probe. Envoy's outlier detection works this way. Cheaper (no extra polling load) but only detects failure <i>after</i> real requests already hit it.</li>
+      </ul>
+      <p>Both need <b>thresholds, not single-sample decisions</b> — eject after N consecutive failures (commonly 3), re-admit after M consecutive successes (commonly 2, and usually M ≥ N to avoid flapping a backend back in too eagerly). A single dropped health check is noise; three in a row is signal. This threshold creates an unavoidable <b>detection-lag window</b>: with a 5s check interval and a 3-fail threshold, a backend can be dead for up to 15 seconds while still receiving traffic. That gap is exactly why client-side circuit breakers (<code>06-circuit-breakers-bulkheads</code>) exist as defense-in-depth — the LB's health check is not fast enough to be your only protection.</p>
+
+      <h3>Connection draining</h3>
+      <p>During a deploy or scale-down, an instance being removed must stop receiving <i>new</i> requests but be allowed to finish the requests already in flight — that's <b>draining</b>, not killing. The balancer marks the instance "not accepting," waits for its in-flight count to hit zero (or a bounded <b>drain timeout</b> expires, forcing termination), then removes it. Skip this and a rolling restart looks green on every dashboard while silently cutting live connections mid-response. This is the load-balancer-level half of what <code>20-zero-downtime-deployments</code> needs; the other half is the app not shutting down until its own in-flight work is done. In Kubernetes terms, this is exactly the job split between the <b>readiness probe</b> (flip to not-ready, get removed from the Service's endpoint list, keep running) and the <b>liveness probe</b> (actually kill the process) — conflating the two is a common way to get exactly this bug.</p>
+
+      <h3>The trade-off that matters</h3>
+      <p>Every step up in routing intelligence costs bookkeeping: round robin needs no state, least-connections needs a live counter per backend, consistent hashing needs the ring maintained across scale events. Pick the cheapest algorithm that's still blind to the failure mode you actually have. If request cost is uniform, round robin is fine and anything smarter is wasted complexity. If request cost varies by 10x (an LLM call vs a health check), round robin actively creates the imbalance and least-connections or P2C is the correct default, not a nice-to-have.</p>
+      <p class="aside">Load balancing and service discovery (<code>10-service-discovery</code>) are two halves of the same problem: discovery answers "who's alive," load balancing answers "which of them gets this request." A registry with stale entries makes even the smartest routing algorithm route into a hole.</p>
+    </div>
+  </section>
+
+  <section id="visualization">
+    <h2>Visualization</h2>
+
+    <div class="viz-card">
+      <p class="viz-intro"><b>1. Traffic distribution + health-check ejection.</b> Pick an algorithm, then send requests. Click an instance to cycle its state: <b>healthy → slow (900ms service time) → down (failing health checks) → healthy</b>. A "down" instance keeps receiving traffic until it has failed <b>3 consecutive</b> simulated health checks (ticking every ~1.5s) — watch the detection lag before it's actually ejected. Bring it back to healthy and it needs <b>2 consecutive</b> passing checks before it's re-admitted.</p>
+
+      <div class="algo-select btn-row">
+        <button class="run-btn active" data-algo="rr">Round Robin</button>
+        <button class="run-btn secondary" data-algo="lc">Least Connections</button>
+        <button class="run-btn secondary" data-algo="ch">Consistent Hash (sticky client)</button>
+      </div>
+
+      <div class="pool-grid" id="lb-pool"></div>
+
+      <div class="btn-row">
+        <button class="run-btn" id="lb-send1">Send 1 request</button>
+        <button class="run-btn secondary" id="lb-burst">Send burst (×20)</button>
+        <button class="run-btn secondary" id="lb-reset">Reset pool</button>
+      </div>
+
+      <div class="flow-log" id="lb-log">Round robin selected. Click any instance card to cycle its state (healthy → slow → down → healthy).</div>
+
+      <div class="stat-row">
+        <div class="stat">Requests sent<b id="lb-stat-sent">0</b></div>
+        <div class="stat">Ejected instances<b id="lb-stat-ejected" class="danger">0</b></div>
+        <div class="stat">Routed to slow/down instances<b id="lb-stat-badroute" class="danger">0</b></div>
+      </div>
+    </div>
+
+    <div class="viz-card">
+      <p class="viz-intro"><b>2. Connection draining during a rolling restart.</b> Background traffic arrives continuously and is round-robin routed to whichever v1 instances are still <span style="color:var(--green)">accepting</span>. Click <b>"Start rolling restart"</b> to drain and replace instances one at a time: each instance stops accepting new requests, finishes its in-flight work (or gets force-killed after the drain timeout), then is replaced by a v2 instance before the next one starts draining.</p>
+
+      <div class="slider-row">
+        <label>Drain timeout: <b id="rr-timeout-val">4.0</b>s (in-flight requests still running after this are force-killed)</label>
+        <input type="range" id="rr-timeout" min="10" max="80" value="40">
+      </div>
+
+      <div class="rr-pool" id="rr-pool"></div>
+
+      <div class="btn-row">
+        <button class="run-btn" id="rr-start">Start rolling restart</button>
+        <button class="run-btn secondary" id="rr-reset">Reset</button>
+      </div>
+
+      <div class="flow-log" id="rr-log">v1-a, v1-b, v1-c are live and accepting traffic. Background requests are arriving on their own.</div>
+
+      <div class="stat-row">
+        <div class="stat">Requests completed cleanly<b id="rr-stat-ok" class="good">0</b></div>
+        <div class="stat">Requests force-killed by drain timeout<b id="rr-stat-killed" class="danger">0</b></div>
+      </div>
+    </div>
+  </section>
+
+  <section id="interview-line">
+    <h2>Interview Line</h2>
+    <blockquote id="interview-quote">
+      "I'd default to L7 with least-connections or power-of-two-choices whenever request cost is uneven — round robin actively creates imbalance the moment one backend is doing something 10x more expensive than another. Health checks need consecutive-failure thresholds, not single-sample decisions, and that threshold times the check interval is a real detection-lag window your client-side timeouts and circuit breakers have to cover, not the load balancer alone. And connection draining is non-negotiable during deploys — readiness-false has to mean 'stop sending new traffic' while in-flight requests still get to finish, otherwise your rolling restart is dropping live connections while every dashboard says green."
+    </blockquote>
+  </section>
+
+  <section id="takeaways">
+    <h2>Key Takeaways</h2>
+    <ul>
+      <li><b>Round robin is blind to load, not just naive</b> — with uniform request cost it's fine; with variable cost (an LLM call next to a health check) it actively creates the imbalance it's supposed to prevent. Least-connections or P2C is the correct default the moment cost varies.</li>
+      <li><b>Health check thresholds trade detection speed for stability</b> — a 5s interval with a 3-fail-to-eject threshold means a dead backend can eat traffic for up to 15s. That gap is exactly why circuit breakers (<code>06-circuit-breakers-bulkheads</code>) exist on the client side as a second layer, not a redundant one.</li>
+      <li><b>Consistent hashing at the LB layer is the same ring math as sharding</b> (<code>04-sharding-partitioning</code>), just applied to request routing instead of data partitioning — same minimal-remap property, same hot-key risk if the key distribution is skewed.</li>
+      <li><b>Connection draining is the LB half of zero-downtime deploys</b> (<code>20-zero-downtime-deployments</code>) — readiness probes pull an instance out of rotation without killing it; liveness probes kill it. Conflating the two turns a rolling restart into silent dropped connections.</li>
+      <li><b>Load balancing needs service discovery to know who's even in the pool</b> (<code>10-service-discovery</code>) — the smartest routing algorithm is worthless against a registry with stale entries pointing at dead instances.</li>
+      <li><b>A newly re-admitted instance shouldn't get a full traffic share instantly</b> — a cold JVM/JIT or empty local cache getting slammed at full weight right after passing health checks is its own mini thundering-herd; production LBs support a slow-start ramp for exactly this.</li>
+    </ul>
+  </section>
+
+</main>
+
+<nav class="concept-nav">
+  <a href="../concepts/08-rate-limiting.html">← Previous: Rate Limiting</a>
+  <a href="../concepts/10-service-discovery.html">Next: Service Discovery →</a>
+</nav>
+
+<script>
+(function() {
+  // ============ 1. Traffic distribution + health-check ejection ============
+  const NUM_INSTANCES = 5;
+  const CLIENT_KEYS = ['user-A', 'user-B', 'user-C', 'user-D', 'user-E'];
+  let algo = 'rr';
+  let rrIndex = 0;
+  let clientRotation = 0;
+  let lbStats = { sent: 0, badroute: 0 };
+
+  function makeInstance(i) {
+    return {
+      id: 'inst-' + i,
+      name: 'Instance ' + i,
+      state: 'healthy', // healthy | slow | down
+      ejected: false,
+      failStreak: 0,
+      okStreak: 0,
+      activeConns: 0,
+      totalHandled: 0
+    };
+  }
+  let instances = Array.from({ length: NUM_INSTANCES }, (_, i) => makeInstance(i));
+
+  function serviceTimeFor(inst) {
+    if (inst.state === 'slow') return 900;
+    if (inst.state === 'down') return 400; // still "answers" while not yet ejected
+    return 120 + Math.random() * 80;
+  }
+
+  function eligiblePool() {
+    return instances.filter(inst => !inst.ejected);
+  }
+
+  function pickRoundRobin() {
+    const pool = eligiblePool();
+    if (!pool.length) return null;
+    rrIndex = (rrIndex + 1) % instances.length;
+    for (let i = 0; i < instances.length; i++) {
+      const idx = (rrIndex + i) % instances.length;
+      if (!instances[idx].ejected) { rrIndex = idx; return instances[idx]; }
+    }
+    return null;
+  }
+
+  function pickLeastConn() {
+    const pool = eligiblePool();
+    if (!pool.length) return null;
+    return pool.reduce((best, cur) => cur.activeConns < best.activeConns ? cur : best, pool[0]);
+  }
+
+  function hashStr(s) {
+    let h = 0;
+    for (let i = 0; i < s.length; i++) { h = (h * 31 + s.charCodeAt(i)) >>> 0; }
+    return h % 360;
+  }
+
+  function pickConsistentHash(clientKey) {
+    const pool = eligiblePool();
+    if (!pool.length) return null;
+    const keyPos = hashStr(clientKey);
+    // node ring positions derived from a stable per-index hash
+    const withPos = pool.map(inst => ({ inst, pos: hashStr(inst.id + '#ring') }));
+    withPos.sort((a, b) => a.pos - b.pos);
+    let chosen = withPos.find(w => w.pos >= keyPos);
+    if (!chosen) chosen = withPos[0]; // wrap around the ring
+    return chosen.inst;
+  }
+
+  function pickTarget() {
+    if (algo === 'rr') return pickRoundRobin();
+    if (algo === 'lc') return pickLeastConn();
+    clientRotation = (clientRotation + 1) % CLIENT_KEYS.length;
+    return pickConsistentHash(CLIENT_KEYS[clientRotation]);
+  }
+
+  function lbLog(msg) { document.getElementById('lb-log').textContent = msg; }
+
+  function sendOne() {
+    const target = pickTarget();
+    lbStats.sent++;
+    if (!target) {
+      lbLog('No healthy instance available — every instance is ejected.');
+      updateLBStats();
+      return;
+    }
+    target.activeConns++;
+    target.totalHandled++;
+    if (target.state !== 'healthy') lbStats.badroute++;
+    const label = algo === 'ch' ? (' (client ' + CLIENT_KEYS[clientRotation] + ')') : '';
+    lbLog('Routed to ' + target.name + label + (target.state !== 'healthy' ? '  ⚠ instance is ' + target.state : ''));
+    const dt = serviceTimeFor(target);
+    setTimeout(() => { target.activeConns = Math.max(0, target.activeConns - 1); renderPool(); }, dt);
+    updateLBStats();
+    renderPool();
+  }
+
+  function updateLBStats() {
+    document.getElementById('lb-stat-sent').textContent = lbStats.sent;
+    document.getElementById('lb-stat-ejected').textContent = instances.filter(i => i.ejected).length;
+    document.getElementById('lb-stat-badroute').textContent = lbStats.badroute;
+  }
+
+  function cycleState(inst) {
+    if (inst.state === 'healthy') inst.state = 'slow';
+    else if (inst.state === 'slow') inst.state = 'down';
+    else { inst.state = 'healthy'; }
+    // reset streaks whenever a human changes the underlying state
+    inst.failStreak = 0;
+    inst.okStreak = 0;
+    renderPool();
+  }
+
+  function renderPool() {
+    const wrap = document.getElementById('lb-pool');
+    wrap.innerHTML = '';
+    instances.forEach(inst => {
+      const card = document.createElement('div');
+      card.className = 'inst-card state-' + inst.state + (inst.ejected ? ' ejected' : '');
+      const pct = Math.min(100, inst.activeConns * 20);
+      card.innerHTML =
+        '<div class="inst-name">' + inst.name + '</div>' +
+        '<div class="inst-state ' + inst.state + '">' + inst.state.toUpperCase() + (inst.ejected ? ' · EJECTED' : '') + '</div>' +
+        '<div class="inst-bar-shell"><div class="inst-bar-fill" style="width:' + pct + '%"></div></div>' +
+        '<div class="inst-meta">active: ' + inst.activeConns + ' · handled: ' + inst.totalHandled + '</div>';
+      card.addEventListener('click', () => cycleState(inst));
+      wrap.appendChild(card);
+    });
+  }
+
+  // Simulated periodic active health checks
+  function runHealthCheckTick() {
+    instances.forEach(inst => {
+      const passing = inst.state !== 'down';
+      if (passing) {
+        inst.okStreak++;
+        inst.failStreak = 0;
+        if (inst.ejected && inst.okStreak >= 2) {
+          inst.ejected = false;
+          lbLog(inst.name + ' passed 2 consecutive health checks — re-admitted to the pool.');
+        }
+      } else {
+        inst.failStreak++;
+        inst.okStreak = 0;
+        if (!inst.ejected && inst.failStreak >= 3) {
+          inst.ejected = true;
+          lbLog(inst.name + ' failed 3 consecutive health checks — ejected from the pool.');
+        }
+      }
+    });
+    updateLBStats();
+    renderPool();
+  }
+  setInterval(runHealthCheckTick, 1500);
+
+  document.querySelectorAll('.algo-select button').forEach(btn => {
+    btn.addEventListener('click', () => {
+      algo = btn.dataset.algo;
+      document.querySelectorAll('.algo-select button').forEach(b => {
+        b.classList.toggle('active', b === btn);
+        b.classList.toggle('secondary', b !== btn);
+      });
+      const label = algo === 'rr' ? 'Round Robin' : algo === 'lc' ? 'Least Connections' : 'Consistent Hash';
+      lbLog(label + ' selected.');
+    });
+  });
+
+  document.getElementById('lb-send1').addEventListener('click', sendOne);
+  document.getElementById('lb-burst').addEventListener('click', () => {
+    for (let i = 0; i < 20; i++) sendOne();
+  });
+  document.getElementById('lb-reset').addEventListener('click', () => {
+    instances = Array.from({ length: NUM_INSTANCES }, (_, i) => makeInstance(i));
+    lbStats = { sent: 0, badroute: 0 };
+    rrIndex = 0;
+    clientRotation = 0;
+    lbLog('Pool reset — all instances healthy.');
+    updateLBStats();
+    renderPool();
+  });
+
+  renderPool();
+  updateLBStats();
+
+  // ============ 2. Connection draining during rolling restart ============
+  const rrTimeoutInput = document.getElementById('rr-timeout');
+  const rrTimeoutVal = document.getElementById('rr-timeout-val');
+  function drainTimeoutMs() { return parseInt(rrTimeoutInput.value, 10) * 100; }
+  rrTimeoutInput.addEventListener('input', () => {
+    rrTimeoutVal.textContent = (drainTimeoutMs() / 1000).toFixed(1);
+  });
+
+  let rrInstances = [
+    { name: 'v1-a', version: 'v1', state: 'accepting', inflight: [] },
+    { name: 'v1-b', version: 'v1', state: 'accepting', inflight: [] },
+    { name: 'v1-c', version: 'v1', state: 'accepting', inflight: [] }
+  ];
+  let rrStats = { ok: 0, killed: 0 };
+  let rrRunning = false;
+  let rrTrafficRR = 0;
+
+  function rrLog(msg) { document.getElementById('rr-log').textContent = msg; }
+
+  function renderRRPool() {
+    const wrap = document.getElementById('rr-pool');
+    wrap.innerHTML = '';
+    rrInstances.forEach(inst => {
+      const card = document.createElement('div');
+      card.className = 'rr-card ' + inst.state + (inst.version === 'v2' ? ' new' : '');
+      card.innerHTML =
+        '<div class="rr-name">' + inst.name + '</div>' +
+        '<div class="rr-state">' + inst.state + '</div>' +
+        '<div class="rr-inflight">' + inst.inflight.length + '</div>';
+      wrap.appendChild(card);
+    });
+  }
+
+  function spawnBackgroundRequest() {
+    const accepting = rrInstances.filter(i => i.state === 'accepting');
+    if (!accepting.length) return;
+    rrTrafficRR = (rrTrafficRR + 1) % accepting.length;
+    const target = accepting[rrTrafficRR];
+    const duration = 300 + Math.random() * 1200;
+    const req = { remaining: duration, killed: false };
+    target.inflight.push(req);
+  }
+
+  function tickRR(dtMs) {
+    rrInstances.forEach(inst => {
+      inst.inflight.forEach(req => { req.remaining -= dtMs; });
+      const finished = inst.inflight.filter(r => r.remaining <= 0);
+      finished.forEach(() => { rrStats.ok++; });
+      inst.inflight = inst.inflight.filter(r => r.remaining > 0);
+    });
+    document.getElementById('rr-stat-ok').textContent = rrStats.ok;
+    document.getElementById('rr-stat-killed').textContent = rrStats.killed;
+    renderRRPool();
+  }
+
+  let rrLastT = performance.now();
+  let rrSpawnAcc = 0;
+  function rrLoop() {
+    const now = performance.now();
+    const dt = now - rrLastT;
+    rrLastT = now;
+    rrSpawnAcc += dt;
+    if (rrSpawnAcc > 350) { rrSpawnAcc = 0; spawnBackgroundRequest(); }
+    tickRR(dt);
+    requestAnimationFrame(rrLoop);
+  }
+  requestAnimationFrame(rrLoop);
+
+  function sleep(ms) { return new Promise(res => setTimeout(res, ms)); }
+
+  async function drainInstance(inst, index, total) {
+    inst.state = 'draining';
+    rrLog('[' + (index + 1) + '/' + total + '] ' + inst.name + ' draining — no new traffic, waiting on ' + inst.inflight.length + ' in-flight request(s)...');
+    renderRRPool();
+    const deadline = performance.now() + drainTimeoutMs();
+    while (inst.inflight.length > 0 && performance.now() < deadline) {
+      await sleep(150);
+    }
+    if (inst.inflight.length > 0) {
+      rrStats.killed += inst.inflight.length;
+      rrLog(inst.name + ' hit its drain timeout with ' + inst.inflight.length + ' request(s) still running — force-killed.');
+      inst.inflight = [];
+    }
+    inst.state = 'terminated';
+    renderRRPool();
+    await sleep(300);
+    inst.version = 'v2';
+    inst.name = inst.name.replace('v1', 'v2');
+    inst.state = 'accepting';
+    rrLog(inst.name + ' is up and accepting traffic. Moving to next instance...');
+    renderRRPool();
+    await sleep(400);
+  }
+
+  async function startRollingRestart() {
+    if (rrRunning) return;
+    rrRunning = true;
+    document.getElementById('rr-start').disabled = true;
+    const v1Instances = rrInstances.filter(i => i.version === 'v1');
+    for (let i = 0; i < v1Instances.length; i++) {
+      await drainInstance(v1Instances[i], i, v1Instances.length);
+    }
+    rrLog('Rolling restart complete — all instances are v2 and accepting traffic.');
+    document.getElementById('rr-start').disabled = false;
+    rrRunning = false;
+  }
+
+  document.getElementById('rr-start').addEventListener('click', startRollingRestart);
+  document.getElementById('rr-reset').addEventListener('click', () => {
+    rrInstances = [
+      { name: 'v1-a', version: 'v1', state: 'accepting', inflight: [] },
+      { name: 'v1-b', version: 'v1', state: 'accepting', inflight: [] },
+      { name: 'v1-c', version: 'v1', state: 'accepting', inflight: [] }
+    ];
+    rrStats = { ok: 0, killed: 0 };
+    rrRunning = false;
+    document.getElementById('rr-start').disabled = false;
+    rrLog('Pool reset to v1-a, v1-b, v1-c, all accepting.');
+    document.getElementById('rr-stat-ok').textContent = 0;
+    document.getElementById('rr-stat-killed').textContent = 0;
+    renderRRPool();
+  });
+
+  renderRRPool();
+})();
+</script>
+</body>
+</html>

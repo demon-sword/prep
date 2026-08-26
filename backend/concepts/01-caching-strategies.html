@@ -1,0 +1,747 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1.0"/>
+<title>Caching Strategies — Backend Concepts</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #0d0f17;
+    --surface: #141720;
+    --card: #1a1e2e;
+    --border: #252a3d;
+    --accent: #00d4ff;
+    --purple: #7c3aed;
+    --green: #00ff88;
+    --yellow: #ffd700;
+    --red: #ff4757;
+    --orange: #ff9500;
+    --text: #e2e8f0;
+    --text-dim: #8892a4;
+    --mono: 'JetBrains Mono', monospace;
+    --sans: 'Inter', system-ui, sans-serif;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--sans);
+    line-height: 1.6;
+  }
+  header {
+    padding: 48px 24px 32px;
+    max-width: 920px;
+    margin: 0 auto;
+    border-bottom: 1px solid var(--border);
+  }
+  .badge {
+    display: inline-block;
+    font-family: var(--mono);
+    font-size: 12px;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--accent);
+    background: rgba(0,212,255,0.08);
+    border: 1px solid rgba(0,212,255,0.3);
+    padding: 4px 10px;
+    border-radius: 4px;
+    margin-bottom: 14px;
+  }
+  h1 {
+    font-size: 32px;
+    margin: 0 0 12px;
+    font-weight: 700;
+    letter-spacing: -0.01em;
+  }
+  header p.desc {
+    color: var(--text-dim);
+    font-size: 16px;
+    max-width: 720px;
+    margin: 0;
+  }
+  main {
+    max-width: 920px;
+    margin: 0 auto;
+    padding: 0 24px 60px;
+  }
+  section {
+    margin-top: 48px;
+  }
+  h2 {
+    font-size: 13px;
+    font-family: var(--mono);
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    color: var(--purple);
+    margin-bottom: 20px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+  h2::after {
+    content: '';
+    flex: 1;
+    height: 1px;
+    background: var(--border);
+  }
+  h3 {
+    font-size: 18px;
+    color: var(--accent);
+    margin: 28px 0 10px;
+  }
+  h3:first-child { margin-top: 0; }
+  p { color: var(--text); margin: 8px 0; }
+  ul { padding-left: 22px; }
+  li { margin: 6px 0; }
+  code {
+    font-family: var(--mono);
+    background: rgba(124,58,237,0.12);
+    color: var(--purple);
+    padding: 2px 6px;
+    border-radius: 4px;
+    font-size: 0.9em;
+  }
+  pre {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 16px;
+    overflow-x: auto;
+    font-family: var(--mono);
+    font-size: 13.5px;
+    color: var(--green);
+    line-height: 1.5;
+  }
+  .aside {
+    margin-top: 10px;
+    font-size: 13.5px;
+    color: var(--text-dim);
+    border-left: 2px solid var(--border);
+    padding-left: 12px;
+    font-style: italic;
+  }
+  .card {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 22px 24px;
+  }
+  .fail-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+    gap: 14px;
+    margin-top: 12px;
+  }
+  .fail-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-left: 3px solid var(--red);
+    border-radius: 8px;
+    padding: 14px 16px;
+  }
+  .fail-card h4 {
+    margin: 0 0 6px;
+    font-size: 14.5px;
+    color: var(--red);
+  }
+  .fail-card p { font-size: 13.5px; color: var(--text-dim); margin: 0; }
+
+  /* Visualization */
+  .viz-card {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 24px;
+  }
+  .viz-intro { color: var(--text-dim); font-size: 14.5px; margin-bottom: 18px; }
+  .mode-tabs {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-bottom: 18px;
+  }
+  .mode-tab {
+    font-family: var(--mono);
+    font-size: 12.5px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    color: var(--text-dim);
+    padding: 8px 14px;
+    border-radius: 6px;
+    cursor: pointer;
+    transition: all 0.15s;
+  }
+  .mode-tab:hover { color: var(--text); border-color: var(--accent); }
+  .mode-tab.active {
+    color: var(--bg);
+    background: var(--accent);
+    border-color: var(--accent);
+    font-weight: 600;
+  }
+  svg#flow-svg { width: 100%; height: 220px; background: var(--surface); border-radius: 8px; border: 1px solid var(--border); }
+  .flow-node-label { fill: var(--text); font-family: var(--mono); font-size: 13px; }
+  .flow-edge-label { fill: var(--text-dim); font-family: var(--mono); font-size: 11px; }
+  .flow-log {
+    margin-top: 14px;
+    font-family: var(--mono);
+    font-size: 13px;
+    color: var(--green);
+    min-height: 24px;
+  }
+  .run-btn {
+    margin-top: 12px;
+    font-family: var(--mono);
+    font-size: 13px;
+    background: var(--purple);
+    color: white;
+    border: none;
+    padding: 10px 18px;
+    border-radius: 6px;
+    cursor: pointer;
+    font-weight: 600;
+  }
+  .run-btn:hover { opacity: 0.88; }
+  .run-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+
+  .divider { height: 1px; background: var(--border); margin: 32px 0; }
+
+  .stampede-controls {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 22px;
+    align-items: center;
+    margin-bottom: 16px;
+  }
+  .control-group { display: flex; flex-direction: column; gap: 6px; }
+  .control-group label { font-family: var(--mono); font-size: 12px; color: var(--text-dim); }
+  input[type=range] { width: 200px; accent-color: var(--accent); }
+  .toggle-row { display: flex; align-items: center; gap: 10px; }
+  .switch {
+    position: relative;
+    width: 46px;
+    height: 24px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    cursor: pointer;
+  }
+  .switch::after {
+    content: '';
+    position: absolute;
+    width: 18px; height: 18px;
+    background: var(--text-dim);
+    border-radius: 50%;
+    top: 2px; left: 2px;
+    transition: all 0.18s;
+  }
+  .switch.on { background: rgba(0,255,136,0.15); border-color: var(--green); }
+  .switch.on::after { left: 23px; background: var(--green); }
+  canvas#stampede-canvas {
+    width: 100%;
+    height: 260px;
+    background: var(--surface);
+    border-radius: 8px;
+    border: 1px solid var(--border);
+  }
+  .stat-row {
+    display: flex;
+    gap: 24px;
+    margin-top: 14px;
+    flex-wrap: wrap;
+  }
+  .stat {
+    font-family: var(--mono);
+    font-size: 13px;
+    color: var(--text-dim);
+  }
+  .stat b { color: var(--yellow); font-size: 18px; display: block; }
+
+  blockquote#interview-quote {
+    background: linear-gradient(135deg, rgba(0,212,255,0.06), rgba(124,58,237,0.06));
+    border-left: 4px solid var(--accent);
+    border-radius: 8px;
+    margin: 0;
+    padding: 22px 26px;
+    font-size: 16.5px;
+    color: var(--text);
+    font-style: italic;
+    position: relative;
+  }
+  blockquote#interview-quote::before {
+    content: '“';
+    font-size: 48px;
+    color: var(--accent);
+    opacity: 0.3;
+    position: absolute;
+    top: -6px;
+    left: 10px;
+    font-style: normal;
+  }
+  #takeaways ul { list-style: none; padding: 0; }
+  #takeaways li {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-left: 3px solid var(--green);
+    border-radius: 8px;
+    padding: 12px 16px;
+    margin-bottom: 10px;
+    font-size: 14.5px;
+  }
+  #takeaways li b { color: var(--green); }
+
+  nav.concept-nav {
+    max-width: 920px;
+    margin: 0 auto;
+    padding: 24px 24px 60px;
+    display: flex;
+    justify-content: space-between;
+    font-family: var(--mono);
+    font-size: 13.5px;
+  }
+  nav.concept-nav a {
+    color: var(--accent);
+    text-decoration: none;
+    border: 1px solid var(--border);
+    padding: 10px 16px;
+    border-radius: 6px;
+  }
+  nav.concept-nav a:hover { border-color: var(--accent); }
+  nav.concept-nav span.disabled {
+    color: var(--text-dim);
+    border: 1px solid var(--border);
+    padding: 10px 16px;
+    border-radius: 6px;
+    opacity: 0.4;
+  }
+  @media (max-width: 600px) {
+    h1 { font-size: 24px; }
+    .stampede-controls { flex-direction: column; align-items: flex-start; }
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <span class="badge">data</span>
+  <h1>Caching Strategies</h1>
+  <p class="desc">Cache placement, read/write patterns (cache-aside, write-through, write-behind, write-around), invalidation approaches, and the three named failure modes: thundering herd, penetration, avalanche.</p>
+</header>
+
+<main>
+
+  <section id="theory">
+    <h2>Theory</h2>
+    <div class="card">
+      <h3>The core idea</h3>
+      <p>A cache trades <b>freshness for latency and load</b>. Everything about caching is downstream of that trade — every strategy is a different answer to "how stale am I willing to be, and who pays when I'm wrong?"</p>
+
+      <h3>Where caches live</h3>
+      <ul>
+        <li><b>Client-side</b> — browser, mobile app. Fastest, least controllable, hardest to invalidate.</li>
+        <li><b>CDN / edge</b> — static assets, sometimes API responses. Geographic.</li>
+        <li><b>Application-level</b> — in-process memory (fast, per-instance, doesn't scale horizontally, cold on deploy).</li>
+        <li><b>Distributed cache</b> — Redis, Memcached. Shared across instances. This is what people usually mean.</li>
+        <li><b>Database-level</b> — query cache, buffer pool. Mostly out of your hands.</li>
+      </ul>
+
+      <h3>Read patterns</h3>
+      <p><b>Cache-aside (lazy loading)</b> — the default, and what you should assume unless told otherwise.</p>
+      <pre>value = cache.get(key)
+if value is None:
+    value = db.read(key)
+    cache.set(key, value, ttl)
+return value</pre>
+      <p>Application owns the logic. Only requested data is cached. Downside: every cache miss is a full round trip, and the first request after expiry always pays. Also vulnerable to the thundering herd (below).</p>
+      <p><b>Read-through</b> — the cache itself knows how to fetch from the source. Application just asks the cache. Cleaner code, but you need a cache that supports it, and you've moved logic into infrastructure.</p>
+
+      <h3>Write patterns</h3>
+      <p><b>Write-through</b> — write to cache and DB synchronously, in one operation. Cache is never stale. Writes are slower because you pay both. Good when reads massively outnumber writes and staleness is unacceptable.</p>
+      <p><b>Write-behind (write-back)</b> — write to cache, acknowledge immediately, flush to DB asynchronously. Fast writes, absorbs bursts. <b>You can lose data if the cache dies before the flush.</b> Only acceptable when the data is reconstructible or the loss is tolerable.</p>
+      <p><b>Write-around</b> — write straight to the DB, bypass the cache, let the next read populate it. Avoids polluting the cache with write-once data that's never read. Common for logs and events.</p>
+
+      <h3>Invalidation</h3>
+      <p>The famous hard problem. Three approaches:</p>
+      <ul>
+        <li><b>TTL</b> — simplest, and usually right. Data is stale for at most N seconds by design. Pick the TTL from how much staleness the business can tolerate, not from a gut feeling.</li>
+        <li><b>Explicit invalidation</b> — delete the key on write. Correct but fragile: every write path must remember, and distributed caches can race (invalidate then repopulate with stale data from an in-flight read).</li>
+        <li><b>Versioned keys</b> — include a version or a hash in the key (<code>user:123:v7</code>). Old entries become unreachable and age out naturally. No invalidation race, at the cost of key churn.</li>
+      </ul>
+
+      <h3>The three failure modes to name</h3>
+      <div class="fail-grid">
+        <div class="fail-card">
+          <h4>Thundering herd (cache stampede)</h4>
+          <p>A hot key expires and a thousand concurrent requests all miss and all hit the DB simultaneously. Fixes: a lock/mutex so only one request repopulates while others wait; probabilistic early expiry (refresh slightly before TTL, randomised per request); or serving stale-while-revalidate.</p>
+        </div>
+        <div class="fail-card">
+          <h4>Cache penetration</h4>
+          <p>Requests for keys that don't exist anywhere, so they always miss and always hit the DB. Often malicious. Fix: cache the negative result (with a short TTL), or use a Bloom filter to reject known-absent keys cheaply.</p>
+        </div>
+        <div class="fail-card">
+          <h4>Cache avalanche</h4>
+          <p>A large number of keys expire at the same moment (e.g. everything was populated at deploy time with the same TTL). Fix: jitter the TTLs.</p>
+        </div>
+      </div>
+
+      <h3>Eviction policies</h3>
+      <p><b>LRU</b> (least recently used) is the default and usually fine. <b>LFU</b> (least frequently used) is better when access frequency is stable and you don't want a burst of one-off requests to evict your hot set. <b>FIFO</b> is rarely what you want. Know that Redis offers several <code>maxmemory-policy</code> options and that <code>allkeys-lru</code> vs <code>volatile-lru</code> (only keys with a TTL) is a real choice.</p>
+
+      <p class="aside">Where this appeared in the Simbian design: the dedup layer is a cache with a deliberately chosen TTL, and the LLM gateway uses prompt caching to cut cost on repeated context.</p>
+    </div>
+  </section>
+
+  <section id="visualization">
+    <h2>Visualization</h2>
+    <div class="viz-card">
+      <p class="viz-intro">Pick a read/write pattern and run a request to see the exact hop sequence between client, cache, and DB. Then drop into the stampede simulator below to see why cache-aside needs a single-flight lock on hot keys.</p>
+
+      <div class="mode-tabs">
+        <div class="mode-tab active" data-mode="aside">Cache-Aside</div>
+        <div class="mode-tab" data-mode="through">Write-Through</div>
+        <div class="mode-tab" data-mode="behind">Write-Behind</div>
+        <div class="mode-tab" data-mode="around">Write-Around</div>
+      </div>
+
+      <svg id="flow-svg" viewBox="0 0 700 220"></svg>
+      <div class="flow-log" id="flow-log">Click "Run request" to animate the flow.</div>
+      <button class="run-btn" id="run-flow">Run request →</button>
+
+      <div class="divider"></div>
+
+      <p class="viz-intro"><b style="color:var(--text)">Thundering herd simulator.</b> A hot key just expired. <code>N</code> concurrent requests arrive at the same instant. Toggle the single-flight lock and watch how many of them actually reach the database.</p>
+
+      <div class="stampede-controls">
+        <div class="control-group">
+          <label>Concurrent requests (N): <span id="n-val">20</span></label>
+          <input type="range" id="n-slider" min="2" max="40" value="20">
+        </div>
+        <div class="control-group">
+          <label>Single-flight lock</label>
+          <div class="toggle-row">
+            <div class="switch" id="lock-switch"></div>
+            <span id="lock-label" style="font-family:var(--mono); font-size:12.5px; color:var(--text-dim);">OFF</span>
+          </div>
+        </div>
+        <button class="run-btn" id="run-stampede" style="margin-top:0;">Expire key & simulate burst →</button>
+      </div>
+
+      <canvas id="stampede-canvas" width="700" height="260"></canvas>
+      <div class="stat-row">
+        <div class="stat">DB hits<b id="stat-dbhits">0</b></div>
+        <div class="stat">Requests served from cache<b id="stat-cachehits">0</b></div>
+        <div class="stat">Reduction<b id="stat-reduction">0%</b></div>
+      </div>
+    </div>
+  </section>
+
+  <section id="interview-line">
+    <h2>Interview Line</h2>
+    <blockquote id="interview-quote">
+      "I'd cache with a TTL rather than explicit invalidation here, because the staleness budget is N seconds and TTL removes a whole class of invalidation races. The risk is a stampede on hot keys, so I'd add jitter and a single-flight lock on repopulation."
+    </blockquote>
+  </section>
+
+  <section id="takeaways">
+    <h2>Key Takeaways</h2>
+    <ul>
+      <li><b>Cache-aside is the default</b> — assume it unless the interviewer specifies otherwise. It's the only pattern where the application fully controls what gets cached and when.</li>
+      <li><b>Write-behind trades durability for latency</b> — it's the one pattern where a cache crash before flush is real data loss, not just staleness. Only use it when the data is reconstructible.</li>
+      <li><b>TTL beats explicit invalidation in most designs</b> because it removes an entire class of races (invalidate-then-repopulate-with-stale-data). Pick the number from the business's staleness budget, not intuition.</li>
+      <li><b>Stampede, penetration, and avalanche are three different failure modes</b> with three different fixes — single-flight lock, negative caching / Bloom filter, and TTL jitter respectively. Naming the right one for the right symptom is what separates a senior answer.</li>
+      <li>The single-flight lock and TTL jitter used to fight stampede/avalanche are the same toolkit used in <b>rate limiting</b> — both are about smoothing concurrent demand against a slower backend (see <code>08-rate-limiting</code>).</li>
+      <li>Redis's <code>maxmemory-policy</code> choice (<code>allkeys-lru</code> vs <code>volatile-lru</code>) is a real production decision, not trivia — it determines whether keys without a TTL are eviction candidates at all.</li>
+    </ul>
+  </section>
+
+</main>
+
+<nav class="concept-nav">
+  <span class="disabled">← Previous</span>
+  <a href="../concepts/02-queues-backpressure.html">Next: Queues and Backpressure →</a>
+</nav>
+
+<script>
+(function() {
+  // ---------- Flow diagram ----------
+  const svg = document.getElementById('flow-svg');
+  const NS = 'http://www.w3.org/2000/svg';
+  const nodes = {
+    client: { x: 80, y: 110, label: 'Client' },
+    cache:  { x: 350, y: 110, label: 'Cache' },
+    db:     { x: 620, y: 110, label: 'DB' }
+  };
+
+  function el(tag, attrs) {
+    const e = document.createElementNS(NS, tag);
+    for (const k in attrs) e.setAttribute(k, attrs[k]);
+    return e;
+  }
+
+  function drawBase() {
+    svg.innerHTML = '';
+    // edges
+    svg.appendChild(el('line', { x1: nodes.client.x+30, y1: nodes.client.y, x2: nodes.cache.x-30, y2: nodes.cache.y, stroke: '#252a3d', 'stroke-width': 2 }));
+    svg.appendChild(el('line', { x1: nodes.cache.x+30, y1: nodes.cache.y, x2: nodes.db.x-30, y2: nodes.db.y, stroke: '#252a3d', 'stroke-width': 2 }));
+    // nodes
+    for (const key in nodes) {
+      const n = nodes[key];
+      const circle = el('circle', { cx: n.x, cy: n.y, r: 30, fill: '#1a1e2e', stroke: '#00d4ff', 'stroke-width': 2, id: 'node-' + key });
+      svg.appendChild(circle);
+      const text = el('text', { x: n.x, y: n.y + 5, 'text-anchor': 'middle', class: 'flow-node-label' });
+      text.textContent = n.label;
+      svg.appendChild(text);
+    }
+  }
+  drawBase();
+
+  const flowSteps = {
+    aside: [
+      { from: 'client', to: 'cache', label: '1. GET key (miss)' },
+      { from: 'cache', to: 'db', label: '2. read DB' },
+      { from: 'db', to: 'cache', label: '3. populate cache + ttl' },
+      { from: 'cache', to: 'client', label: '4. return value' }
+    ],
+    through: [
+      { from: 'client', to: 'cache', label: '1. write value' },
+      { from: 'cache', to: 'db', label: '2. write DB (sync, same op)' },
+      { from: 'db', to: 'client', label: '3. ack (both durable)' }
+    ],
+    behind: [
+      { from: 'client', to: 'cache', label: '1. write to cache' },
+      { from: 'cache', to: 'client', label: '2. ack immediately' },
+      { from: 'cache', to: 'db', label: '3. async flush later (risk: lost if cache dies first)' }
+    ],
+    around: [
+      { from: 'client', to: 'db', label: '1. write straight to DB' },
+      { from: 'db', to: 'client', label: '2. ack (cache untouched)' },
+      { from: 'client', to: 'cache', label: '3. (later) next read populates cache' }
+    ]
+  };
+
+  let currentMode = 'aside';
+  const tabs = document.querySelectorAll('.mode-tab');
+  tabs.forEach(t => t.addEventListener('click', () => {
+    tabs.forEach(x => x.classList.remove('active'));
+    t.classList.add('active');
+    currentMode = t.dataset.mode;
+    document.getElementById('flow-log').textContent = 'Click "Run request" to animate the flow.';
+    drawBase();
+  }));
+
+  let flowRunning = false;
+  document.getElementById('run-flow').addEventListener('click', () => {
+    if (flowRunning) return;
+    flowRunning = true;
+    drawBase();
+    const steps = flowSteps[currentMode];
+    const logEl = document.getElementById('flow-log');
+    let i = 0;
+    const runStep = () => {
+      if (i >= steps.length) {
+        flowRunning = false;
+        return;
+      }
+      const step = steps[i];
+      logEl.textContent = step.label;
+      const from = nodes[step.from], to = nodes[step.to];
+      const dot = el('circle', { r: 7, fill: '#00ff88', cx: from.x, cy: from.y });
+      svg.appendChild(dot);
+      const dur = 700;
+      const start = performance.now();
+      function frame(now) {
+        const t = Math.min(1, (now - start) / dur);
+        dot.setAttribute('cx', from.x + (to.x - from.x) * t);
+        dot.setAttribute('cy', from.y + (to.y - from.y) * t);
+        if (t < 1) {
+          requestAnimationFrame(frame);
+        } else {
+          svg.removeChild(dot);
+          document.getElementById('node-' + step.to).setAttribute('stroke', '#00ff88');
+          setTimeout(() => {
+            document.getElementById('node-' + step.to).setAttribute('stroke', '#00d4ff');
+            i++;
+            runStep();
+          }, 250);
+        }
+      }
+      requestAnimationFrame(frame);
+    };
+    runStep();
+  });
+
+  // ---------- Stampede simulator ----------
+  const nSlider = document.getElementById('n-slider');
+  const nVal = document.getElementById('n-val');
+  const lockSwitch = document.getElementById('lock-switch');
+  const lockLabel = document.getElementById('lock-label');
+  let lockOn = false;
+
+  nSlider.addEventListener('input', () => { nVal.textContent = nSlider.value; });
+  lockSwitch.addEventListener('click', () => {
+    lockOn = !lockOn;
+    lockSwitch.classList.toggle('on', lockOn);
+    lockLabel.textContent = lockOn ? 'ON' : 'OFF';
+  });
+
+  const canvas = document.getElementById('stampede-canvas');
+  const ctx = canvas.getContext('2d');
+  const W = canvas.width, H = canvas.height;
+  const cachePos = { x: 340, y: H / 2 };
+  const dbPos = { x: 600, y: H / 2 };
+
+  let particles = [];
+  let animId = null;
+  let dbHitCount = 0;
+  let cacheHitCount = 0;
+
+  function resetStats() {
+    document.getElementById('stat-dbhits').textContent = '0';
+    document.getElementById('stat-cachehits').textContent = '0';
+    document.getElementById('stat-reduction').textContent = '0%';
+  }
+  resetStats();
+
+  function updateStats() {
+    document.getElementById('stat-dbhits').textContent = dbHitCount;
+    document.getElementById('stat-cachehits').textContent = cacheHitCount;
+    const n = particles.length;
+    const reduction = n > 0 ? Math.round((1 - dbHitCount / n) * 100) : 0;
+    document.getElementById('stat-reduction').textContent = reduction + '%';
+  }
+
+  function draw() {
+    ctx.clearRect(0, 0, W, H);
+    // nodes
+    ctx.fillStyle = '#1a1e2e';
+    ctx.strokeStyle = '#00d4ff';
+    ctx.lineWidth = 2;
+    [cachePos, dbPos].forEach((p, idx) => {
+      ctx.beginPath();
+      ctx.arc(p.x, p.y, 32, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.stroke();
+      ctx.fillStyle = '#e2e8f0';
+      ctx.font = '13px JetBrains Mono';
+      ctx.textAlign = 'center';
+      ctx.fillText(idx === 0 ? 'Cache' : 'DB', p.x, p.y + 5);
+      ctx.fillStyle = '#1a1e2e';
+    });
+    ctx.textAlign = 'left';
+    // particles
+    particles.forEach(p => {
+      ctx.beginPath();
+      ctx.arc(p.x, p.y, 5, 0, Math.PI * 2);
+      ctx.fillStyle = p.color;
+      ctx.fill();
+    });
+  }
+
+  function stepParticles() {
+    let anyActive = false;
+    particles.forEach(p => {
+      if (p.state === 'done') return;
+      anyActive = true;
+      const target = p.target;
+      const dx = target.x - p.x, dy = target.y - p.y;
+      const dist = Math.hypot(dx, dy);
+      const speed = 4.2;
+      if (dist < speed) {
+        p.x = target.x; p.y = target.y;
+        onArrive(p);
+      } else {
+        p.x += (dx / dist) * speed;
+        p.y += (dy / dist) * speed;
+      }
+    });
+    draw();
+    updateStats();
+    if (anyActive) {
+      animId = requestAnimationFrame(stepParticles);
+    } else {
+      animId = null;
+    }
+  }
+
+  function onArrive(p) {
+    if (p.state === 'toCache') {
+      // arrived at cache — miss
+      if (!lockOn) {
+        // everyone independently goes to DB
+        p.state = 'toDB';
+        p.target = dbPos;
+        p.color = '#ff9500';
+        dbHitCount++;
+      } else {
+        if (!window.__leaderAssigned) {
+          window.__leaderAssigned = true;
+          p.state = 'toDB';
+          p.target = dbPos;
+          p.color = '#ff9500';
+          p.isLeader = true;
+          dbHitCount++;
+        } else {
+          // wait near cache, stack slightly
+          p.state = 'waiting';
+          p.color = '#ffd700';
+          p.x = cachePos.x - 55 - (p.waitIndex || 0) * 3;
+          p.y = cachePos.y + ((p.waitIndex || 0) % 10 - 5) * 8;
+        }
+      }
+    } else if (p.state === 'toDB') {
+      // arrived at DB
+      if (p.isLeader && lockOn) {
+        // leader returns, releasing all waiters
+        releaseWaiters();
+      }
+      p.state = 'returning';
+      p.target = { x: 60, y: p.origY };
+      p.color = '#00ff88';
+    } else if (p.state === 'returning') {
+      p.state = 'done';
+    } else if (p.state === 'releasedToClient') {
+      p.state = 'done';
+    }
+  }
+
+  function releaseWaiters() {
+    particles.forEach(p => {
+      if (p.state === 'waiting') {
+        cacheHitCount++;
+        p.state = 'releasedToClient';
+        p.target = { x: 60, y: p.origY };
+        p.color = '#00d4ff';
+      }
+    });
+  }
+
+  document.getElementById('run-stampede').addEventListener('click', () => {
+    if (animId) cancelAnimationFrame(animId);
+    const n = parseInt(nSlider.value, 10);
+    particles = [];
+    dbHitCount = 0;
+    cacheHitCount = 0;
+    window.__leaderAssigned = false;
+    for (let i = 0; i < n; i++) {
+      const y = 20 + (H - 40) * (i / Math.max(1, n - 1));
+      particles.push({
+        x: 60, y, origY: y,
+        target: cachePos,
+        state: 'toCache',
+        color: '#00d4ff',
+        waitIndex: i
+      });
+    }
+    resetStats();
+    draw();
+    animId = requestAnimationFrame(stepParticles);
+  });
+
+  draw();
+})();
+</script>
+</body>
+</html>

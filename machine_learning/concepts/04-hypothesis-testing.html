@@ -1,0 +1,769 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1.0"/>
+  <title>Hypothesis Testing &amp; A/B Significance — Machine Learning Concepts</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com"/>
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet"/>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg:        #0d0f17;
+      --surface:   #141720;
+      --card:      #1a1e2e;
+      --border:    #252a3d;
+      --accent:    #00d4ff;
+      --purple:    #7c3aed;
+      --green:     #00ff88;
+      --yellow:    #ffd700;
+      --red:       #ff4757;
+      --orange:    #ff9500;
+      --text:      #e2e8f0;
+      --text-dim:  #8892a4;
+      --mono:      'JetBrains Mono', monospace;
+      --sans:      'Inter', system-ui, sans-serif;
+    }
+
+    html { scroll-behavior: smooth; }
+
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: var(--sans);
+      font-size: 16px;
+      line-height: 1.7;
+      min-height: 100vh;
+    }
+
+    header {
+      background: var(--surface);
+      border-bottom: 1px solid var(--border);
+      padding: 2rem 2rem 1.5rem;
+      max-width: 1100px;
+      margin: 0 auto;
+    }
+
+    .group-badge {
+      display: inline-block;
+      font-family: var(--mono);
+      font-size: 0.7rem;
+      font-weight: 700;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      color: var(--accent);
+      background: rgba(0, 212, 255, 0.1);
+      border: 1px solid rgba(0, 212, 255, 0.3);
+      padding: 0.2em 0.7em;
+      border-radius: 4px;
+      margin-bottom: 0.75rem;
+    }
+
+    header h1 {
+      font-size: clamp(1.6rem, 4vw, 2.4rem);
+      font-weight: 700;
+      color: var(--text);
+      line-height: 1.2;
+      margin-bottom: 0.5rem;
+    }
+
+    header h1 span.id {
+      color: var(--text-dim);
+      font-size: 0.55em;
+      font-family: var(--mono);
+      margin-right: 0.5rem;
+      vertical-align: middle;
+    }
+
+    header p.desc {
+      color: var(--text-dim);
+      font-size: 1.05rem;
+      max-width: 700px;
+    }
+
+    main {
+      max-width: 1100px;
+      margin: 0 auto;
+      padding: 0 2rem 4rem;
+    }
+
+    section { margin-top: 3rem; }
+
+    section > h2 {
+      font-size: 1.4rem;
+      font-weight: 700;
+      color: var(--accent);
+      border-bottom: 1px solid var(--border);
+      padding-bottom: 0.5rem;
+      margin-bottom: 1.5rem;
+    }
+
+    h3 {
+      font-size: 1.1rem;
+      font-weight: 600;
+      color: var(--yellow);
+      margin: 1.5rem 0 0.6rem;
+    }
+
+    p { margin-bottom: 1rem; color: var(--text); }
+
+    ul, ol { padding-left: 1.5rem; margin-bottom: 1rem; }
+    li { margin-bottom: 0.4rem; }
+
+    code {
+      font-family: var(--mono);
+      font-size: 0.85em;
+      background: rgba(0, 212, 255, 0.08);
+      color: var(--accent);
+      padding: 0.1em 0.35em;
+      border-radius: 3px;
+    }
+
+    .formula-block {
+      background: var(--card);
+      border-left: 3px solid var(--purple);
+      border-radius: 0 8px 8px 0;
+      padding: 0.8rem 1.2rem;
+      margin: 1rem 0;
+      font-family: var(--mono);
+      font-size: 0.95rem;
+      color: var(--text);
+    }
+
+    .callout {
+      background: rgba(124, 58, 237, 0.08);
+      border: 1px solid rgba(124, 58, 237, 0.3);
+      border-radius: 8px;
+      padding: 1rem 1.2rem;
+      margin: 1rem 0;
+    }
+
+    .callout strong { color: var(--purple); }
+
+    table.knob-table {
+      width: 100%;
+      border-collapse: collapse;
+      margin: 1rem 0 1.5rem;
+      font-size: 0.9rem;
+    }
+
+    table.knob-table th, table.knob-table td {
+      border: 1px solid var(--border);
+      padding: 0.55em 0.8em;
+      text-align: left;
+    }
+
+    table.knob-table th {
+      background: var(--surface);
+      color: var(--accent);
+      font-family: var(--mono);
+      font-size: 0.78rem;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+    }
+
+    table.knob-table td { color: var(--text-dim); }
+    table.knob-table td:first-child { color: var(--text); font-weight: 600; }
+
+    /* ── Visualization ── */
+    #visualization .viz-card {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 1.5rem;
+      margin-bottom: 1.5rem;
+    }
+
+    .viz-title { font-weight: 600; font-size: 1rem; color: var(--text); margin-bottom: 0.3rem; }
+    .viz-desc { font-size: 0.88rem; color: var(--text-dim); margin-bottom: 1.2rem; }
+
+    .controls {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 1.25rem;
+      align-items: center;
+      margin-bottom: 1.2rem;
+    }
+
+    .slider-row { display: flex; align-items: center; gap: 0.75rem; }
+
+    .slider-row label {
+      font-size: 0.82rem;
+      color: var(--text-dim);
+      white-space: nowrap;
+    }
+
+    .slider-row input[type="range"] {
+      accent-color: var(--accent);
+      width: 220px;
+    }
+
+    .slider-val {
+      font-family: var(--mono);
+      font-size: 0.85rem;
+      color: var(--accent);
+      min-width: 3.5rem;
+    }
+
+    .ctrl-btn {
+      font-family: var(--mono);
+      font-size: 0.8rem;
+      padding: 0.45em 1.1em;
+      border-radius: 6px;
+      border: 1px solid var(--accent);
+      background: rgba(0, 212, 255, 0.08);
+      color: var(--accent);
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+
+    .ctrl-btn:hover { background: rgba(0, 212, 255, 0.2); }
+    .ctrl-btn:active { transform: scale(0.97); }
+    .ctrl-btn.alt { border-color: var(--purple); background: rgba(124,58,237,0.08); color: var(--purple); }
+    .ctrl-btn.alt:hover { background: rgba(124,58,237,0.2); }
+    .ctrl-btn.ghost { border-color: var(--border); background: transparent; color: var(--text-dim); }
+    .ctrl-btn.ghost:hover { border-color: var(--text-dim); }
+    .ctrl-btn.active { background: var(--accent); color: #04101a; }
+
+    canvas {
+      display: block;
+      border-radius: 8px;
+      background: var(--surface);
+      max-width: 100%;
+    }
+
+    .readout-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 1rem;
+      margin-top: 1rem;
+    }
+
+    .readout {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 0.6rem 1rem;
+      font-size: 0.85rem;
+      color: var(--text-dim);
+      flex: 1;
+      min-width: 140px;
+    }
+
+    .readout strong { display: block; font-family: var(--mono); font-size: 1.1rem; margin-top: 0.2rem; }
+    .readout.train strong { color: var(--accent); }
+    .readout.test strong { color: var(--orange); }
+    .readout.regime strong { color: var(--yellow); font-size: 0.95rem; }
+    .readout.hi strong { color: var(--green); }
+    .readout.lo strong { color: var(--red); }
+
+    .legend {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 1rem;
+      margin-top: 0.8rem;
+    }
+
+    .legend-item {
+      display: flex;
+      align-items: center;
+      gap: 0.4rem;
+      font-size: 0.8rem;
+      color: var(--text-dim);
+    }
+
+    .legend-dot { width: 10px; height: 10px; border-radius: 50%; }
+    .legend-line { width: 16px; height: 3px; border-radius: 2px; }
+    .legend-swatch { width: 14px; height: 14px; border-radius: 3px; }
+
+    /* ── Takeaways ── */
+    #takeaways ul { list-style: none; padding: 0; }
+
+    #takeaways li {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 1rem 1.2rem;
+      margin-bottom: 0.75rem;
+      padding-left: 3rem;
+      position: relative;
+    }
+
+    #takeaways li::before {
+      content: '→';
+      position: absolute;
+      left: 1rem;
+      color: var(--accent);
+      font-weight: 700;
+    }
+
+    /* ── Nav ── */
+    .concept-nav {
+      max-width: 1100px;
+      margin: 0 auto;
+      padding: 1.5rem 2rem 3rem;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      border-top: 1px solid var(--border);
+    }
+
+    .nav-link {
+      display: flex;
+      flex-direction: column;
+      gap: 0.2rem;
+      text-decoration: none;
+      padding: 0.6rem 1rem;
+      border-radius: 8px;
+      border: 1px solid var(--border);
+      background: var(--surface);
+      transition: all 0.2s;
+      max-width: 220px;
+    }
+
+    .nav-link:hover { border-color: var(--accent); background: rgba(0, 212, 255, 0.06); }
+    .nav-link.disabled { opacity: 0.3; pointer-events: none; }
+
+    .nav-dir {
+      font-size: 0.7rem;
+      font-family: var(--mono);
+      color: var(--text-dim);
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+    }
+
+    .nav-title { font-size: 0.88rem; color: var(--text); font-weight: 500; }
+
+    @media (max-width: 640px) {
+      header, main { padding-left: 1rem; padding-right: 1rem; }
+      .concept-nav { padding-left: 1rem; padding-right: 1rem; flex-direction: column; gap: 0.75rem; }
+      .nav-link { max-width: 100%; width: 100%; }
+      .slider-row input[type="range"] { width: 140px; }
+    }
+  </style>
+</head>
+<body>
+
+<header>
+  <div class="group-badge">Foundations</div>
+  <h1><span class="id">04</span>Hypothesis Testing &amp; A/B Significance</h1>
+  <p class="desc">Null vs alternative hypotheses, p-values, Type I/II errors, and statistical power — the inferential machinery that turns a raw conversion-rate difference into a defensible "ship it" or "kill it" call.</p>
+</header>
+
+<main>
+
+  <!-- ── THEORY ── -->
+  <section id="theory">
+    <h2>Theory</h2>
+
+    <h3>The Setup: Two Competing Stories</h3>
+    <p>
+      Hypothesis testing starts by fixing a <strong>null hypothesis</strong> <code>H₀</code> — the boring, skeptical default ("the treatment has no effect on conversion rate") — against an <strong>alternative hypothesis</strong> <code>H₁</code> ("the treatment changes conversion rate"). The test never proves <code>H₀</code> true; it only asks whether the observed data would be surprising <em>if</em> <code>H₀</code> were true. That asymmetry is the single most misunderstood idea in applied statistics: "failed to reject <code>H₀</code>" is not the same as "confirmed no effect," it just means the experiment didn't collect enough evidence to rule out chance.
+    </p>
+
+    <h3>The Test Statistic and the p-value</h3>
+    <p>
+      For an A/B test comparing conversion rates (or any two means), the standard approach is a <strong>two-sample z-test</strong> (large n) or <strong>Welch's t-test</strong> (unequal variances, safer default). Compute the standardized difference:
+    </p>
+    <div class="formula-block">
+      z = (x̄_treatment − x̄_control) / SE&nbsp;&nbsp;where&nbsp; SE = √(σ²_c/n_c + σ²_t/n_t)
+    </div>
+    <p>
+      The <strong>p-value</strong> is the probability of observing a test statistic at least as extreme as this one, <em>assuming <code>H₀</code> is true</em> — <code>p = 2·(1 − Φ(|z|))</code> for a two-sided test. It is <em>not</em> the probability that <code>H₀</code> is true, and it is <em>not</em> the probability your result is a fluke — both are among the most common misinterpretations cited by the ASA's 2016 statement on p-values. A small p-value means the observed gap would be rare under a "no effect" world; it says nothing about effect size or practical significance, which is why a p=0.001 result on a 0.02% lift with n=50M users can be statistically significant and business-irrelevant.
+    </p>
+
+    <h3>The Two Ways to Be Wrong</h3>
+    <table class="knob-table">
+      <tr><th>Decision</th><th>H₀ actually true</th><th>H₀ actually false</th></tr>
+      <tr><td>Reject H₀</td><td style="color:var(--red)">Type I error (α, false positive)</td><td style="color:var(--green)">Correct (power, 1−β)</td></tr>
+      <tr><td>Fail to reject H₀</td><td style="color:var(--green)">Correct (1−α)</td><td style="color:var(--orange)">Type II error (β, false negative)</td></tr>
+    </table>
+    <p>
+      <strong>α</strong> (significance level, conventionally 0.05) is a knob you set <em>before</em> the experiment — it's the false-positive rate you're willing to tolerate across many repeated tests of true nulls. <strong>β</strong> is the false-negative rate, and <strong>power = 1 − β</strong> is the probability of correctly detecting a real effect of a given size. Power depends jointly on effect size, sample size, variance, and α — shrink any one of the first three and power collapses, which is exactly what the visualization below lets you feel directly.
+    </p>
+
+    <h3>Sample Size and the Power Formula</h3>
+    <p>
+      For a two-sample z-test targeting power <code>1−β</code> at significance <code>α</code>, the required per-group sample size is:
+    </p>
+    <div class="formula-block">
+      n = 2·(z_{α/2} + z_β)² · σ² / δ²
+    </div>
+    <p>
+      where <code>δ</code> is the minimum detectable effect (MDE) and <code>σ</code> the standard deviation. For α=0.05, power=0.80: <code>z_{α/2}=1.96</code>, <code>z_β=0.8416</code>, so <code>(z_{α/2}+z_β)² ≈ 7.85</code>. This is why halving your MDE roughly <em>quadruples</em> required sample size — detecting a 1% lift instead of a 2% lift costs 4× the traffic and runtime, a fact that routinely blindsides teams scoping experiment timelines.
+    </p>
+
+    <h3>Multiple Testing and Peeking</h3>
+    <p>
+      Run 20 independent tests at α=0.05 on truly null effects and you expect roughly one false positive by chance alone — the <strong>family-wise error rate</strong> inflates as <code>1 − (1−α)^m</code>. Teams running dozens of simultaneous metrics per experiment (common in growth/product analytics) need corrections: <strong>Bonferroni</strong> (divide α by m, conservative), <strong>Benjamini-Hochberg FDR control</strong> (less conservative, controls expected proportion of false discoveries), or pre-registering a single primary metric. Separately, <strong>peeking</strong> — checking p-values repeatedly as data accumulates and stopping the moment p &lt; 0.05 — inflates the true false-positive rate to 20–30%+ even at nominal α=0.05, because you're implicitly running many correlated tests across time. The fix is either a fixed sample size decided in advance, or a proper <strong>sequential testing</strong> method (group sequential designs, alpha-spending functions, or Bayesian/always-valid p-values as used by Optimizely's Stats Engine and Statsig's sequential testing).
+    </p>
+
+    <h3>Production Reality</h3>
+    <p>
+      Real experimentation platforms rarely use a textbook z-test unmodified. Conversion-rate metrics use proportion tests (or logistic regression with a treatment indicator for covariate adjustment via CUPED, which can cut variance 30–50% by regressing out pre-experiment behavior). Ratio metrics (revenue per user) need the delta method or bootstrap because the naive variance formula for a ratio of two random variables is biased. Cluster-randomized experiments (randomizing by user but measuring session-level metrics) need cluster-robust standard errors or the data needs aggregating to the randomization unit first, or your effective sample size — and hence your p-value — is badly overstated. And crucially: statistical significance is not the same as a ship decision — teams should pre-register a minimum practically significant effect size, not just chase p &lt; 0.05 on noise.
+    </p>
+  </section>
+
+  <!-- ── VISUALIZATION ── -->
+  <section id="visualization">
+    <h2>Interactive Visualization</h2>
+
+    <div class="viz-card">
+      <div class="viz-title">Control vs Treatment: Sampling Distributions, Rejection Region &amp; Power</div>
+      <div class="viz-desc">
+        The two curves are the sampling distributions of the group-mean <em>difference</em> under <code>H₀</code> (cyan, centered at 0 — "no effect")
+        and under <code>H₁</code> (purple, centered at the true effect size you set). Adjust effect size and per-group sample size <code>n</code> and watch
+        the curves separate/narrow, the red rejection-region tails shift, and the live p-value / power readouts update in real time — computed directly
+        from the normal CDF, not looked up from a table.
+      </div>
+
+      <div class="controls">
+        <div class="slider-row">
+          <label>Effect size (Cohen's d)</label>
+          <input type="range" id="effect-slider" min="0" max="1.2" step="0.02" value="0.3"/>
+          <span class="slider-val" id="effect-val">0.30</span>
+        </div>
+        <div class="slider-row">
+          <label>Per-group sample size n</label>
+          <input type="range" id="n-slider" min="5" max="1000" step="5" value="100"/>
+          <span class="slider-val" id="n-val">100</span>
+        </div>
+      </div>
+
+      <div class="controls">
+        <div class="slider-row" style="gap:0.5rem;">
+          <label>Significance α</label>
+          <button class="ctrl-btn alpha-btn active" data-alpha="0.05">0.05</button>
+          <button class="ctrl-btn alpha-btn" data-alpha="0.01">0.01</button>
+          <button class="ctrl-btn alpha-btn" data-alpha="0.10">0.10</button>
+        </div>
+        <button class="ctrl-btn ghost" id="reset-btn">⟳ Reset to defaults</button>
+      </div>
+
+      <canvas id="dist-canvas" width="900" height="340"></canvas>
+
+      <div class="legend">
+        <div class="legend-item"><div class="legend-line" style="background:var(--accent)"></div>Sampling dist. under H₀ (no effect)</div>
+        <div class="legend-item"><div class="legend-line" style="background:var(--purple)"></div>Sampling dist. under H₁ (true effect)</div>
+        <div class="legend-item"><div class="legend-swatch" style="background:rgba(255,71,87,0.55)"></div>Rejection region (α, Type I risk)</div>
+        <div class="legend-item"><div class="legend-swatch" style="background:rgba(0,255,136,0.5)"></div>Power (1−β, correctly detected)</div>
+        <div class="legend-item"><div class="legend-swatch" style="background:rgba(255,149,0,0.45)"></div>Type II error (β, missed effect)</div>
+      </div>
+
+      <div class="readout-row">
+        <div class="readout regime">Observed z-statistic<strong id="z-stat">—</strong></div>
+        <div class="readout lo">p-value (two-sided)<strong id="p-val">—</strong></div>
+        <div class="readout hi">Statistical power (1−β)<strong id="power-val">—</strong></div>
+        <div class="readout train">n needed for 80% power<strong id="n-needed">—</strong></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ── TAKEAWAYS ── -->
+  <section id="takeaways">
+    <h2>Key Takeaways</h2>
+    <ul>
+      <li>
+        <strong>p &lt; 0.05 answers "would this be surprising under no-effect?", not "is the effect real/large."</strong> A statistically significant 0.03% lift on 50M users is real but often not worth shipping — always pair the p-value with a confidence interval on effect size and a pre-registered minimum practically significant effect.
+      </li>
+      <li>
+        <strong>Sample size scales with the inverse square of MDE.</strong> <code>n = 2(z_{α/2}+z_β)²σ²/δ²</code> means halving the minimum detectable effect requires ~4× the traffic. Teams that scope a 2-week test for a 1% MDE when they actually need to detect 0.25% are running an underpowered experiment that will almost always report "no significant difference" — not because there's no effect, but because β is enormous.
+      </li>
+      <li>
+        <strong>Peeking is the #1 practical way teams fool themselves.</strong> Checking a dashboard daily and stopping the moment p crosses 0.05 inflates the true false-positive rate to 20–30%+. Use a fixed pre-committed sample size, or a proper sequential/always-valid method (Optimizely Stats Engine, Statsig sequential testing, group-sequential alpha-spending) if you need to peek.
+      </li>
+      <li>
+        <strong>Multiple metrics need correction.</strong> Testing 20 secondary metrics at α=0.05 on a genuinely null experiment yields ~1 false "win" by chance. Apply Bonferroni for a handful of critical metrics or Benjamini-Hochberg FDR control for larger metric panels — and always designate one pre-registered primary metric for the ship decision.
+      </li>
+      <li>
+        <strong>CUPED and covariate adjustment aren't optional at scale.</strong> Regressing out each user's pre-experiment behavior (via CUPED or a simple ANCOVA) commonly cuts variance 30–50%, which is equivalent to running the experiment on far more traffic for free — this is standard in Microsoft's ExP platform and most mature experimentation stacks.
+      </li>
+      <li>
+        <strong>Ratio and clustered metrics need different variance estimators.</strong> Revenue-per-user needs the delta method or bootstrap (naive variance of a ratio is biased); randomizing by user but measuring per-session metrics needs cluster-robust SEs or aggregation to the unit of randomization, or your effective n — and p-value — is overstated. <code>statsmodels</code>' <code>DescrStatsW</code>, <code>scipy.stats.ttest_ind(equal_var=False)</code>, and bootstrap CIs are the common tools.
+      </li>
+    </ul>
+  </section>
+
+</main>
+
+<!-- ── NAV ── -->
+<nav class="concept-nav">
+  <a class="nav-link" href="./03-central-limit-theorem.html">
+    <span class="nav-dir">← Previous</span>
+    <span class="nav-title">Central Limit Theorem</span>
+  </a>
+  <a class="nav-link" href="./05-mle-vs-map.html">
+    <span class="nav-dir">Next →</span>
+    <span class="nav-title">MLE vs MAP Estimation</span>
+  </a>
+</nav>
+
+<script>
+// ─── Normal distribution helpers ────────────────────────────────────────
+function erf(x) {
+  // Abramowitz-Stegun approximation 7.1.26
+  const sign = x < 0 ? -1 : 1;
+  x = Math.abs(x);
+  const a1 = 0.254829592, a2 = -0.284496736, a3 = 1.421413741,
+        a4 = -1.453152027, a5 = 1.061405429, p = 0.3275911;
+  const t = 1 / (1 + p * x);
+  const y = 1 - (((((a5 * t + a4) * t) + a3) * t + a2) * t + a1) * t * Math.exp(-x * x);
+  return sign * y;
+}
+
+function normalCdf(x, mu, sigma) {
+  return 0.5 * (1 + erf((x - mu) / (sigma * Math.SQRT2)));
+}
+
+function normalPdf(x, mu, sigma) {
+  if (sigma <= 0) return 0;
+  return Math.exp(-0.5 * Math.pow((x - mu) / sigma, 2)) / (sigma * Math.sqrt(2 * Math.PI));
+}
+
+// inverse normal CDF (for z_alpha/2) via rational approximation (Acklam's algorithm, simplified)
+function invNormalCdf(p) {
+  if (p <= 0) return -Infinity;
+  if (p >= 1) return Infinity;
+  const a = [-3.969683028665376e+01, 2.209460984245205e+02, -2.759285104469687e+02,
+             1.383577518672690e+02, -3.066479806614716e+01, 2.506628277459239e+00];
+  const b = [-5.447609879822406e+01, 1.615858368580409e+02, -1.556989798598866e+02,
+             6.680131188771972e+01, -1.328068155288572e+01];
+  const c = [-7.784894002430293e-03, -3.223964580411365e-01, -2.400758277161838e+00,
+             -2.549732539343734e+00, 4.374664141464968e+00, 2.938163982698783e+00];
+  const d = [7.784695709041462e-03, 3.224671290700398e-01, 2.445134137142996e+00,
+             3.754408661907416e+00];
+  const pLow = 0.02425, pHigh = 1 - pLow;
+  let q, r;
+  if (p < pLow) {
+    q = Math.sqrt(-2 * Math.log(p));
+    return (((((c[0]*q+c[1])*q+c[2])*q+c[3])*q+c[4])*q+c[5]) /
+           ((((d[0]*q+d[1])*q+d[2])*q+d[3])*q+1);
+  } else if (p <= pHigh) {
+    q = p - 0.5; r = q * q;
+    return (((((a[0]*r+a[1])*r+a[2])*r+a[3])*r+a[4])*r+a[5]) * q /
+           (((((b[0]*r+b[1])*r+b[2])*r+b[3])*r+b[4])*r+1);
+  } else {
+    q = Math.sqrt(-2 * Math.log(1 - p));
+    return -(((((c[0]*q+c[1])*q+c[2])*q+c[3])*q+c[4])*q+c[5]) /
+            ((((d[0]*q+d[1])*q+d[2])*q+d[3])*q+1);
+  }
+}
+
+// ─── State ───────────────────────────────────────────────────────────────
+const SIGMA = 1; // per-observation standard deviation (both groups)
+let alpha = 0.05;
+
+function state() {
+  const effect = parseFloat(document.getElementById('effect-slider').value);
+  const n = parseInt(document.getElementById('n-slider').value);
+  const SE = SIGMA * Math.sqrt(2 / n); // SE of the difference in means
+  return { effect, n, SE };
+}
+
+function zAlphaHalf(a) { return invNormalCdf(1 - a / 2); }
+
+// ─── Drawing ─────────────────────────────────────────────────────────────
+function setupCanvas(canvas, displayH) {
+  const dpr = window.devicePixelRatio || 1;
+  const displayW = canvas.parentElement.clientWidth || 860;
+  canvas.style.width = displayW + 'px';
+  canvas.style.height = displayH + 'px';
+  canvas.width = displayW * dpr;
+  canvas.height = displayH * dpr;
+  const ctx = canvas.getContext('2d');
+  ctx.scale(dpr, dpr);
+  return { ctx, W: displayW, H: displayH };
+}
+
+function xToPx(x, xMin, xMax, pad, plotW) {
+  return pad.left + ((x - xMin) / (xMax - xMin)) * plotW;
+}
+
+function draw() {
+  const canvas = document.getElementById('dist-canvas');
+  const { ctx, W, H } = setupCanvas(canvas, 340);
+  const pad = { top: 16, right: 16, bottom: 30, left: 16 };
+  const plotW = W - pad.left - pad.right;
+  const plotH = H - pad.top - pad.bottom;
+
+  ctx.fillStyle = '#141720';
+  ctx.fillRect(0, 0, W, H);
+
+  const { effect, SE } = state();
+  const zCrit = zAlphaHalf(alpha);
+  const critVal = zCrit * SE;
+
+  const xMin = Math.min(-4 * SE, effect - 4 * SE) - 0.05;
+  const xMax = Math.max(4 * SE, effect + 4 * SE) + 0.05;
+
+  // axes
+  ctx.strokeStyle = '#252a3d';
+  ctx.fillStyle = '#8892a4';
+  ctx.font = "10px 'JetBrains Mono', monospace";
+  ctx.lineWidth = 1;
+  ctx.textAlign = 'center';
+  const nTicks = 6;
+  for (let i = 0; i <= nTicks; i++) {
+    const x = xMin + (xMax - xMin) * (i / nTicks);
+    const xPx = xToPx(x, xMin, xMax, pad, plotW);
+    ctx.beginPath();
+    ctx.moveTo(xPx, pad.top);
+    ctx.lineTo(xPx, H - pad.bottom);
+    ctx.stroke();
+    ctx.fillText(x.toFixed(2), xPx, H - pad.bottom + 14);
+  }
+
+  const peakH0 = normalPdf(0, 0, SE);
+  const peakH1 = normalPdf(effect, effect, SE);
+  const peakMax = Math.max(peakH0, peakH1);
+
+  function yForPdf(pdf) {
+    return pad.top + plotH - (pdf / peakMax) * plotH * 0.92;
+  }
+
+  const N = 300;
+  const step = (xMax - xMin) / N;
+
+  // ── shaded regions first (so curve lines draw on top) ──
+  // Type I error region: H0 curve beyond +-critVal
+  ctx.fillStyle = 'rgba(255, 71, 87, 0.5)';
+  [[xMin, -critVal], [critVal, xMax]].forEach(([a0, b0]) => {
+    if (b0 <= a0) return;
+    ctx.beginPath();
+    ctx.moveTo(xToPx(a0, xMin, xMax, pad, plotW), pad.top + plotH);
+    for (let x = a0; x <= b0; x += step) {
+      ctx.lineTo(xToPx(x, xMin, xMax, pad, plotW), yForPdf(normalPdf(x, 0, SE)));
+    }
+    ctx.lineTo(xToPx(b0, xMin, xMax, pad, plotW), pad.top + plotH);
+    ctx.closePath();
+    ctx.fill();
+  });
+
+  // Power region: H1 curve beyond critVal on the effect side (assume effect >= 0)
+  const powerLo = critVal, powerHi = xMax;
+  ctx.fillStyle = 'rgba(0, 255, 136, 0.45)';
+  ctx.beginPath();
+  ctx.moveTo(xToPx(powerLo, xMin, xMax, pad, plotW), pad.top + plotH);
+  for (let x = powerLo; x <= powerHi; x += step) {
+    ctx.lineTo(xToPx(x, xMin, xMax, pad, plotW), yForPdf(normalPdf(x, effect, SE)));
+  }
+  ctx.lineTo(xToPx(powerHi, xMin, xMax, pad, plotW), pad.top + plotH);
+  ctx.closePath();
+  ctx.fill();
+
+  // Type II (beta) region: H1 curve between -critVal and +critVal (missed detection)
+  ctx.fillStyle = 'rgba(255, 149, 0, 0.4)';
+  ctx.beginPath();
+  ctx.moveTo(xToPx(-critVal, xMin, xMax, pad, plotW), pad.top + plotH);
+  for (let x = -critVal; x <= critVal; x += step) {
+    ctx.lineTo(xToPx(x, xMin, xMax, pad, plotW), yForPdf(normalPdf(x, effect, SE)));
+  }
+  ctx.lineTo(xToPx(critVal, xMin, xMax, pad, plotW), pad.top + plotH);
+  ctx.closePath();
+  ctx.fill();
+
+  // ── curve lines ──
+  function strokeCurve(mu, color) {
+    ctx.beginPath();
+    ctx.strokeStyle = color;
+    ctx.lineWidth = 2.4;
+    for (let i = 0; i <= N; i++) {
+      const x = xMin + i * step;
+      const xPx = xToPx(x, xMin, xMax, pad, plotW);
+      const yPx = yForPdf(normalPdf(x, mu, SE));
+      if (i === 0) ctx.moveTo(xPx, yPx); else ctx.lineTo(xPx, yPx);
+    }
+    ctx.stroke();
+  }
+  strokeCurve(0, '#00d4ff');
+  strokeCurve(effect, '#7c3aed');
+
+  // critical value lines
+  ctx.setLineDash([5, 4]);
+  ctx.strokeStyle = '#ff4757';
+  ctx.lineWidth = 1.5;
+  [critVal, -critVal].forEach(cv => {
+    const xPx = xToPx(cv, xMin, xMax, pad, plotW);
+    ctx.beginPath();
+    ctx.moveTo(xPx, pad.top);
+    ctx.lineTo(xPx, pad.top + plotH);
+    ctx.stroke();
+  });
+  ctx.setLineDash([]);
+
+  // zero line
+  ctx.strokeStyle = '#8892a4';
+  ctx.lineWidth = 1;
+  const zeroPx = xToPx(0, xMin, xMax, pad, plotW);
+  ctx.beginPath();
+  ctx.moveTo(zeroPx, pad.top);
+  ctx.lineTo(zeroPx, pad.top + plotH);
+  ctx.stroke();
+}
+
+function updateReadouts() {
+  const { effect, n, SE } = state();
+  const zCrit = zAlphaHalf(alpha);
+  const z = effect / SE;
+  const pValue = 2 * (1 - normalCdf(Math.abs(z), 0, 1));
+  const power = normalCdf(z - zCrit, 0, 1) + normalCdf(-z - zCrit, 0, 1);
+
+  document.getElementById('z-stat').textContent = z.toFixed(3);
+  document.getElementById('p-val').textContent = pValue < 0.0001 ? '< 0.0001' : pValue.toFixed(4);
+  document.getElementById('power-val').textContent = (power * 100).toFixed(1) + '%';
+
+  // required n for 80% power given current effect size (Cohen's d convention, sigma=1)
+  const zBeta80 = invNormalCdf(0.80);
+  let nNeeded = '—';
+  if (effect > 0) {
+    const nCalc = 2 * Math.pow(zCrit + zBeta80, 2) * (SIGMA * SIGMA) / (effect * effect);
+    nNeeded = Math.ceil(nCalc).toLocaleString() + ' / group';
+  }
+  document.getElementById('n-needed').textContent = nNeeded;
+}
+
+function render() {
+  draw();
+  updateReadouts();
+}
+
+// ─── Wiring ──────────────────────────────────────────────────────────────
+document.getElementById('effect-slider').addEventListener('input', (e) => {
+  document.getElementById('effect-val').textContent = parseFloat(e.target.value).toFixed(2);
+  render();
+});
+
+document.getElementById('n-slider').addEventListener('input', (e) => {
+  document.getElementById('n-val').textContent = e.target.value;
+  render();
+});
+
+document.querySelectorAll('.alpha-btn').forEach(btn => {
+  btn.addEventListener('click', () => {
+    document.querySelectorAll('.alpha-btn').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    alpha = parseFloat(btn.dataset.alpha);
+    render();
+  });
+});
+
+document.getElementById('reset-btn').addEventListener('click', () => {
+  document.getElementById('effect-slider').value = 0.3;
+  document.getElementById('effect-val').textContent = '0.30';
+  document.getElementById('n-slider').value = 100;
+  document.getElementById('n-val').textContent = '100';
+  alpha = 0.05;
+  document.querySelectorAll('.alpha-btn').forEach(b => b.classList.remove('active'));
+  document.querySelector('.alpha-btn[data-alpha="0.05"]').classList.add('active');
+  render();
+});
+
+window.addEventListener('resize', render);
+
+render();
+document.fonts.ready.then(render);
+</script>
+</body>
+</html>

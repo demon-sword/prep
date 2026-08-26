@@ -1,0 +1,809 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1.0"/>
+  <title>Backpropagation — Machine Learning Concepts</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com"/>
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet"/>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg:        #0d0f17;
+      --surface:   #141720;
+      --card:      #1a1e2e;
+      --border:    #252a3d;
+      --accent:    #00d4ff;
+      --purple:    #7c3aed;
+      --green:     #00ff88;
+      --yellow:    #ffd700;
+      --red:       #ff4757;
+      --orange:    #ff9500;
+      --text:      #e2e8f0;
+      --text-dim:  #8892a4;
+      --mono:      'JetBrains Mono', monospace;
+      --sans:      'Inter', system-ui, sans-serif;
+    }
+
+    html { scroll-behavior: smooth; }
+
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: var(--sans);
+      font-size: 16px;
+      line-height: 1.7;
+      min-height: 100vh;
+    }
+
+    header {
+      background: var(--surface);
+      border-bottom: 1px solid var(--border);
+      padding: 2rem 2rem 1.5rem;
+      max-width: 1100px;
+      margin: 0 auto;
+    }
+
+    .group-badge {
+      display: inline-block;
+      font-family: var(--mono);
+      font-size: 0.7rem;
+      font-weight: 700;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      color: var(--accent);
+      background: rgba(0, 212, 255, 0.1);
+      border: 1px solid rgba(0, 212, 255, 0.3);
+      padding: 0.2em 0.7em;
+      border-radius: 4px;
+      margin-bottom: 0.75rem;
+    }
+
+    header h1 {
+      font-size: clamp(1.6rem, 4vw, 2.4rem);
+      font-weight: 700;
+      color: var(--text);
+      line-height: 1.2;
+      margin-bottom: 0.5rem;
+    }
+
+    header h1 span.id {
+      color: var(--text-dim);
+      font-size: 0.55em;
+      font-family: var(--mono);
+      margin-right: 0.5rem;
+      vertical-align: middle;
+    }
+
+    header p.desc {
+      color: var(--text-dim);
+      font-size: 1.05rem;
+      max-width: 700px;
+    }
+
+    main {
+      max-width: 1100px;
+      margin: 0 auto;
+      padding: 0 2rem 4rem;
+    }
+
+    section { margin-top: 3rem; }
+
+    section > h2 {
+      font-size: 1.4rem;
+      font-weight: 700;
+      color: var(--accent);
+      border-bottom: 1px solid var(--border);
+      padding-bottom: 0.5rem;
+      margin-bottom: 1.5rem;
+    }
+
+    h3 {
+      font-size: 1.1rem;
+      font-weight: 600;
+      color: var(--yellow);
+      margin: 1.5rem 0 0.6rem;
+    }
+
+    p { margin-bottom: 1rem; color: var(--text); }
+
+    ul, ol { padding-left: 1.5rem; margin-bottom: 1rem; }
+    li { margin-bottom: 0.4rem; }
+
+    code {
+      font-family: var(--mono);
+      font-size: 0.85em;
+      background: rgba(0, 212, 255, 0.08);
+      color: var(--accent);
+      padding: 0.1em 0.35em;
+      border-radius: 3px;
+    }
+
+    .formula-block {
+      background: var(--card);
+      border-left: 3px solid var(--purple);
+      border-radius: 0 8px 8px 0;
+      padding: 0.8rem 1.2rem;
+      margin: 1rem 0;
+      font-family: var(--mono);
+      font-size: 0.95rem;
+      color: var(--text);
+    }
+
+    .callout {
+      background: rgba(124, 58, 237, 0.08);
+      border: 1px solid rgba(124, 58, 237, 0.3);
+      border-radius: 8px;
+      padding: 1rem 1.2rem;
+      margin: 1rem 0;
+    }
+
+    .callout strong { color: var(--purple); }
+
+    /* ── Visualization ── */
+    #visualization .viz-card {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 1.5rem;
+      margin-bottom: 1.5rem;
+    }
+
+    .viz-title { font-weight: 600; font-size: 1rem; color: var(--text); margin-bottom: 0.3rem; }
+    .viz-desc { font-size: 0.88rem; color: var(--text-dim); margin-bottom: 1.2rem; }
+
+    .controls {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 1.25rem;
+      align-items: center;
+      margin-bottom: 1.2rem;
+    }
+
+    .slider-row { display: flex; align-items: center; gap: 0.75rem; }
+
+    .slider-row label {
+      font-size: 0.82rem;
+      color: var(--text-dim);
+      white-space: nowrap;
+    }
+
+    .slider-row input[type="range"] {
+      accent-color: var(--accent);
+      width: 180px;
+    }
+
+    .slider-val {
+      font-family: var(--mono);
+      font-size: 0.85rem;
+      color: var(--accent);
+      min-width: 2.8rem;
+      display: inline-block;
+    }
+
+    .ctrl-btn {
+      font-family: var(--mono);
+      font-size: 0.8rem;
+      padding: 0.45em 1.1em;
+      border-radius: 6px;
+      border: 1px solid var(--accent);
+      background: rgba(0, 212, 255, 0.08);
+      color: var(--accent);
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+
+    .ctrl-btn:hover { background: rgba(0, 212, 255, 0.2); }
+    .ctrl-btn:active { transform: scale(0.97); }
+    .ctrl-btn.ghost { border-color: var(--border); background: transparent; color: var(--text-dim); }
+    .ctrl-btn.ghost:hover { border-color: var(--text-dim); }
+    .ctrl-btn.active-on { background: rgba(0, 255, 136, 0.15); border-color: var(--green); color: var(--green); }
+    .ctrl-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+
+    canvas {
+      display: block;
+      border-radius: 8px;
+      background: var(--surface);
+      max-width: 100%;
+      margin: 0 auto;
+    }
+
+    .legend {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 1rem;
+      margin-top: 0.8rem;
+      justify-content: center;
+    }
+
+    .legend-item {
+      display: flex;
+      align-items: center;
+      gap: 0.4rem;
+      font-size: 0.78rem;
+      color: var(--text-dim);
+    }
+
+    .legend-dot { width: 10px; height: 10px; border-radius: 50%; }
+    .legend-swatch { width: 22px; height: 3px; border-radius: 2px; }
+
+    .side-panel {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 1.1rem;
+      margin-top: 1.2rem;
+    }
+
+    .side-panel h4 {
+      font-size: 0.85rem;
+      font-weight: 700;
+      color: var(--text);
+      margin-bottom: 0.8rem;
+      letter-spacing: 0.02em;
+    }
+
+    .readout-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.6rem;
+      margin-top: 0.4rem;
+    }
+
+    .readout {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 0.55rem 0.9rem;
+      font-size: 0.78rem;
+      color: var(--text-dim);
+      flex: 1;
+      min-width: 150px;
+      border-left: 3px solid var(--border);
+    }
+
+    .readout strong { display: block; font-family: var(--mono); font-size: 1.05rem; margin-top: 0.2rem; color: var(--text); }
+
+    .stage-label {
+      font-family: var(--mono);
+      font-size: 0.8rem;
+      color: var(--yellow);
+      text-align: center;
+      margin-top: 0.6rem;
+      min-height: 1.2em;
+    }
+
+    .hint {
+      font-size: 0.78rem;
+      color: var(--text-dim);
+      margin-top: 0.8rem;
+      font-style: italic;
+      text-align: center;
+    }
+
+    /* ── Takeaways ── */
+    #takeaways ul { list-style: none; padding: 0; }
+
+    #takeaways li {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 1rem 1.2rem;
+      margin-bottom: 0.75rem;
+      padding-left: 3rem;
+      position: relative;
+    }
+
+    #takeaways li::before {
+      content: '→';
+      position: absolute;
+      left: 1rem;
+      color: var(--accent);
+      font-weight: 700;
+    }
+
+    /* ── Nav ── */
+    .concept-nav {
+      max-width: 1100px;
+      margin: 0 auto;
+      padding: 1.5rem 2rem 3rem;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      border-top: 1px solid var(--border);
+    }
+
+    .nav-link {
+      display: flex;
+      flex-direction: column;
+      gap: 0.2rem;
+      text-decoration: none;
+      padding: 0.6rem 1rem;
+      border-radius: 8px;
+      border: 1px solid var(--border);
+      background: var(--surface);
+      transition: all 0.2s;
+      max-width: 220px;
+    }
+
+    .nav-link:hover { border-color: var(--accent); background: rgba(0, 212, 255, 0.06); }
+    .nav-link.disabled { opacity: 0.3; pointer-events: none; }
+
+    .nav-dir {
+      font-size: 0.7rem;
+      font-family: var(--mono);
+      color: var(--text-dim);
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+    }
+
+    .nav-title { font-size: 0.88rem; color: var(--text); font-weight: 500; }
+
+    @media (max-width: 640px) {
+      header, main { padding-left: 1rem; padding-right: 1rem; }
+      .concept-nav { padding-left: 1rem; padding-right: 1rem; flex-direction: column; gap: 0.75rem; }
+      .nav-link { max-width: 100%; width: 100%; }
+      .slider-row input[type="range"] { width: 130px; }
+    }
+  </style>
+</head>
+<body>
+
+<header>
+  <div class="group-badge">Deep Learning</div>
+  <h1><span class="id">28</span>Backpropagation</h1>
+  <p class="desc">The chain rule applied layer by layer to compute gradients — forward pass caching activations, backward pass propagating error signals to update weights.</p>
+</header>
+
+<main>
+
+  <!-- ── THEORY ── -->
+  <section id="theory">
+    <h2>Theory</h2>
+
+    <h3>The Chain Rule, Applied Layer by Layer</h3>
+    <p>
+      A neural network is a composition of functions: <code>ŷ = f_L(f_{L-1}(…f_1(x)))</code>. Training means minimizing a loss <code>L(ŷ, y)</code> over the weights of every layer, which requires <code>∂L/∂W</code> for every weight matrix in the network. Backpropagation is not a separate learning algorithm — it's the mechanical application of the multivariate chain rule to compute all of those partial derivatives in a single backward sweep, reusing intermediate results instead of recomputing them from scratch for every weight. For a layer computing <code>z = Wa + b</code> followed by a nonlinearity <code>a' = σ(z)</code>, the chain rule says the gradient flowing into that layer from upstream, <code>δ = ∂L/∂a'</code>, gets converted into the gradient with respect to that layer's own parameters as <code>∂L/∂W = (δ ⊙ σ'(z)) · aᵀ</code> and passed further backward as <code>∂L/∂a = Wᵀ(δ ⊙ σ'(z))</code>. Every layer performs exactly this same local computation — multiply the incoming error signal by the local derivative, then by the transpose of the weight matrix — which is why backprop generalizes to arbitrarily deep and arbitrarily shaped computational graphs without any layer needing global knowledge of the network.
+    </p>
+
+    <h3>Forward Pass: Caching What Backward Needs</h3>
+    <p>
+      Every layer's forward computation caches its inputs and pre-activation values (<code>z</code>) because the backward pass needs them to evaluate local derivatives like <code>σ'(z)</code> and to compute <code>∂L/∂W = δ · aᵀ</code> using the *previous* layer's activation <code>a</code>. This is the memory cost of training that inference doesn't pay: a forward-only pass can discard activations as soon as the next layer consumes them, but training must hold every layer's activations in memory until the corresponding backward step runs. For a batch size <code>B</code> and total activation memory <code>M</code> per example, training memory scales roughly as <code>O(B · M · L)</code> across <code>L</code> layers — this is precisely the bottleneck that motivates gradient checkpointing (recomputing activations during the backward pass instead of storing all of them, trading ~30% more compute for a large memory reduction) used in training large transformers.
+    </p>
+
+    <h3>Backward Pass: Propagating the Error Signal</h3>
+    <p>
+      The backward pass starts at the loss and works right-to-left: <code>δ_L = ∂L/∂ŷ</code> at the output layer, then each earlier layer's <code>δ</code> is derived from the next layer's <code>δ</code> via <code>δ_{k} = (W_{k+1}ᵀ δ_{k+1}) ⊙ σ'(z_k)</code>. Each weight's gradient is a local outer product, <code>∂L/∂W_k = δ_k · a_{k-1}ᵀ</code>, computed once <code>δ_k</code> is known — no weight's gradient needs information from any layer other than its own input activation and its own <code>δ</code>. This is what makes backprop <strong>O(1) passes</strong>, not <code>O(number of weights)</code>: naively perturbing each weight and re-running the forward pass (numerical differentiation) costs one forward pass *per parameter*, which is intractable for a network with billions of weights, whereas backprop computes the gradient for every parameter in roughly the same cost as two forward passes (one forward, one backward), regardless of parameter count.
+    </p>
+
+    <h3>Reverse-Mode Autodiff, Not Symbolic or Numerical Differentiation</h3>
+    <p>
+      Backpropagation is a special case of <strong>reverse-mode automatic differentiation</strong> applied to a computational graph. Reverse mode is efficient specifically when there are many inputs (parameters) and few outputs (a scalar loss) — the opposite regime favors forward-mode AD, which is why forward mode is rare in deep learning but common in physics simulations with few parameters and many outputs. Modern frameworks build this graph dynamically: PyTorch's <code>autograd</code> records every tensor operation on a directed acyclic graph as the forward pass executes (define-by-run), then <code>loss.backward()</code> walks that graph in reverse topological order, accumulating gradients into <code>.grad</code> on every leaf tensor with <code>requires_grad=True</code>. TensorFlow's <code>tf.GradientTape</code> does the same thing explicitly, recording operations only within the tape's context. Neither framework requires you to hand-derive a single gradient formula — every built-in op (matmul, conv, softmax, layer norm) ships a registered backward rule, and the chain rule composes them automatically.
+    </p>
+
+    <h3>Production Reality</h3>
+    <p>
+      Backprop's compounding of derivatives across many layers is the root cause of vanishing/exploding gradients — repeatedly multiplying by <code>σ'(z)</code> and <code>Wᵀ</code> shrinks or blows up the signal exponentially with depth if those factors are systematically &lt;1 or &gt;1 (see <em>Weight Init & Vanishing Gradients</em>). Production training pipelines defend against this with <strong>gradient clipping</strong> (<code>torch.nn.utils.clip_grad_norm_</code>, typically capping the global norm at 1.0–5.0) to stop exploding gradients from corrupting a step, and rely on residual connections, LayerNorm, and careful initialization to keep the vanishing side in check. Mixed-precision training (FP16/BF16 forward and backward with an FP32 master copy of weights) roughly halves activation memory and speeds up matmuls on tensor cores, but naive FP16 backward passes can underflow small gradients to zero — hence loss scaling in <code>torch.cuda.amp</code>. And because backward passes dominate training FLOPs (roughly 2× the forward pass cost), profiling tools like PyTorch Profiler almost always show the backward pass, not the forward pass, as the larger share of per-step wall-clock time.
+    </p>
+  </section>
+
+  <!-- ── VISUALIZATION ── -->
+  <section id="visualization">
+    <h2>Interactive Visualization</h2>
+
+    <div class="viz-card">
+      <div class="viz-title">Forward Pass → Backward Pass, Step by Step</div>
+      <div class="viz-desc">
+        A tiny 2→4→1 sigmoid network. Drag <strong>x₁</strong>, <strong>x₂</strong> and the <strong>target y</strong> sliders to change the input — the network recomputes instantly. Click <strong>▶ Animate forward + backward</strong> to watch it in stages: activations light up left-to-right on the forward pass, then error signal (δ) flows right-to-left on the backward pass, with edge thickness showing gradient magnitude <code>|∂L/∂W|</code>. Edge color: <span style="color:#00d4ff">cyan = positive weight/gradient</span>, <span style="color:#ff4757">red = negative</span>.
+      </div>
+
+      <div class="controls">
+        <div class="slider-row">
+          <label>x₁</label>
+          <input type="range" id="x1-slider" min="-2" max="2" step="0.1" value="1.0"/>
+          <span class="slider-val" id="x1-val">1.00</span>
+        </div>
+        <div class="slider-row">
+          <label>x₂</label>
+          <input type="range" id="x2-slider" min="-2" max="2" step="0.1" value="-0.5"/>
+          <span class="slider-val" id="x2-val">-0.50</span>
+        </div>
+        <div class="slider-row">
+          <label>target y</label>
+          <input type="range" id="y-slider" min="0" max="1" step="0.05" value="1.0"/>
+          <span class="slider-val" id="y-val">1.00</span>
+        </div>
+      </div>
+      <div class="controls">
+        <button class="ctrl-btn" id="animate-btn">▶ Animate forward + backward</button>
+        <button class="ctrl-btn ghost" id="reset-btn">↻ New random weights</button>
+      </div>
+
+      <canvas id="bp-canvas" width="760" height="380"></canvas>
+      <div class="stage-label" id="stage-label">Idle — full forward + backward state shown</div>
+
+      <div class="legend">
+        <div class="legend-item"><div class="legend-dot" style="background:#00ff88"></div>Node activation (brighter = higher)</div>
+        <div class="legend-item"><div class="legend-swatch" style="background:#00d4ff"></div>Positive weight / gradient</div>
+        <div class="legend-item"><div class="legend-swatch" style="background:#ff4757"></div>Negative weight / gradient</div>
+      </div>
+
+      <div class="side-panel">
+        <h4>Live readout</h4>
+        <div class="readout-row" id="bp-readout"></div>
+        <p class="hint">∂L/∂W at the input layer is the outer product of the input layer's δ (backprop'd error) and the raw inputs x — exactly the local rule every layer applies, recursively.</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- ── TAKEAWAYS ── -->
+  <section id="takeaways">
+    <h2>Key Takeaways</h2>
+    <ul>
+      <li>
+        <strong>Backprop computes gradients for every parameter in ~2× the cost of one forward pass</strong>, regardless of parameter count — this is the entire reason training billion-parameter networks is tractable at all; naive numerical differentiation (perturb-and-re-run) would need one forward pass <em>per weight</em>.
+      </li>
+      <li>
+        <strong>It's reverse-mode automatic differentiation, not symbolic or numerical differentiation</strong> — PyTorch's <code>autograd</code> and TF's <code>GradientTape</code> record a computational graph during the forward pass and walk it backward, composing each op's registered local gradient rule via the chain rule; you never hand-derive a gradient formula.
+      </li>
+      <li>
+        <strong>Training memory is dominated by cached forward activations, not weights</strong> — every layer must hold its input/pre-activation values until its backward step runs. <strong>Gradient checkpointing</strong> (<code>torch.utils.checkpoint</code>) trades ~30% more compute (recomputing activations on the fly) for a large memory cut, standard practice for training large transformers on limited GPU memory.
+      </li>
+      <li>
+        <strong>Backward pass FLOPs ≈ 2× forward pass FLOPs</strong> — profilers almost always show backward as the larger chunk of per-step wall-clock time; budget compute estimates accordingly (the common "6 × params × tokens" training-FLOPs rule of thumb bakes in roughly a 1:2 forward:backward ratio).
+      </li>
+      <li>
+        <strong>Repeated multiplication by <code>σ'(z)</code> and <code>Wᵀ</code> across layers is the root cause of vanishing/exploding gradients</strong> — production defenses are gradient clipping (<code>clip_grad_norm_</code>, typically 1.0–5.0), residual/skip connections, and normalization layers, not a fix to backprop itself.
+      </li>
+      <li>
+        <strong>Mixed-precision (FP16/BF16) backward passes can silently underflow small gradients to zero</strong> — <code>torch.cuda.amp</code>'s loss scaling multiplies the loss before backward and unscales gradients after, specifically to keep small gradient values representable in FP16's narrow exponent range.
+      </li>
+    </ul>
+  </section>
+
+</main>
+
+<!-- ── NAV ── -->
+<nav class="concept-nav">
+  <a class="nav-link" href="./27-dropout-batchnorm.html">
+    <span class="nav-dir">← Previous</span>
+    <span class="nav-title">Dropout & Batch Normalization</span>
+  </a>
+  <a class="nav-link" href="./29-cnn-convolution.html">
+    <span class="nav-dir">Next →</span>
+    <span class="nav-title">CNNs & Convolution</span>
+  </a>
+</nav>
+
+<script>
+// ══════════════════════════════════════════════════════════════════════
+// Network definition: 2 → 4 → 1, sigmoid everywhere, MSE loss
+// ══════════════════════════════════════════════════════════════════════
+const LAYER_SIZES = [2, 4, 1];
+const LAYER_NAMES = ['Input', 'Hidden', 'Output'];
+
+let W1, b1, W2, b2; // W1: 2x4 (in x out), b1: len4 ; W2: 4x1 (in x out), b2: scalar
+
+function randInit() {
+  W1 = Array.from({ length: 2 }, () => Array.from({ length: 4 }, () => (Math.random() * 2 - 1) * 1.1));
+  b1 = Array.from({ length: 4 }, () => (Math.random() * 2 - 1) * 0.3);
+  W2 = Array.from({ length: 4 }, () => (Math.random() * 2 - 1) * 1.1);
+  b2 = (Math.random() * 2 - 1) * 0.3;
+}
+
+// deterministic starting weights so the diagram looks good on first load
+W1 = [[0.85, -0.55, 0.35, 0.65], [-0.45, 0.75, 0.95, -0.25]];
+b1 = [0.10, -0.20, 0.05, 0.30];
+W2 = [0.60, -0.90, 0.45, 0.70];
+b2 = -0.10;
+
+function sigmoid(z) { return 1 / (1 + Math.exp(-z)); }
+
+function forwardBackward(x, target) {
+  // forward
+  const z1 = [0, 1, 2, 3].map(j => W1[0][j] * x[0] + W1[1][j] * x[1] + b1[j]);
+  const a1 = z1.map(sigmoid);
+  const z2 = a1.reduce((s, aj, j) => s + W2[j] * aj, 0) + b2;
+  const yhat = sigmoid(z2);
+  const loss = 0.5 * (yhat - target) * (yhat - target);
+
+  // backward
+  const dL_dyhat = (yhat - target);
+  const dyhat_dz2 = yhat * (1 - yhat);
+  const delta2 = dL_dyhat * dyhat_dz2; // dL/dz2
+  const gradW2 = a1.map(aj => delta2 * aj);
+  const gradB2 = delta2;
+
+  const delta1 = [0, 1, 2, 3].map(j => {
+    const dL_da1j = delta2 * W2[j];
+    const da1_dz1j = a1[j] * (1 - a1[j]);
+    return dL_da1j * da1_dz1j;
+  });
+  const gradW1 = [[0, 0, 0, 0], [0, 0, 0, 0]];
+  for (let j = 0; j < 4; j++) {
+    gradW1[0][j] = delta1[j] * x[0];
+    gradW1[1][j] = delta1[j] * x[1];
+  }
+  const gradB1 = delta1.slice();
+
+  return { x, target, z1, a1, z2, yhat, loss, delta2, gradW2, gradB2, delta1, gradW1, gradB1 };
+}
+
+// ══════════════════════════════════════════════════════════════════════
+// Canvas setup
+// ══════════════════════════════════════════════════════════════════════
+function setupCanvas(canvas) {
+  const dpr = window.devicePixelRatio || 1;
+  if (!canvas.getAttribute('data-css-w')) {
+    canvas.setAttribute('data-css-w', canvas.width);
+    canvas.setAttribute('data-css-h', canvas.height);
+  }
+  const W = +canvas.getAttribute('data-css-w'), H = +canvas.getAttribute('data-css-h');
+  canvas.style.width = W + 'px';
+  canvas.style.height = H + 'px';
+  canvas.width = W * dpr;
+  canvas.height = H * dpr;
+  const ctx = canvas.getContext('2d');
+  ctx.scale(dpr, dpr);
+  return { ctx, W, H };
+}
+
+const bpCanvas = document.getElementById('bp-canvas');
+const { ctx, W: cW, H: cH } = setupCanvas(bpCanvas);
+
+function nodePositions() {
+  const marginX = 90, marginY = 40;
+  const usableW = cW - marginX * 2;
+  const usableH = cH - marginY * 2;
+  const positions = [];
+  LAYER_SIZES.forEach((n, li) => {
+    const x = marginX + (usableW * li) / (LAYER_SIZES.length - 1);
+    const layerPos = [];
+    for (let i = 0; i < n; i++) {
+      const y = marginY + (usableH * (i + 0.5)) / n;
+      layerPos.push([x, y]);
+    }
+    positions.push(layerPos);
+  });
+  return positions;
+}
+
+function weightColor(v) {
+  const mag = Math.min(Math.abs(v), 1.5) / 1.5;
+  return v >= 0
+    ? `rgba(0, 212, 255, ${0.15 + 0.65 * mag})`
+    : `rgba(255, 71, 87, ${0.15 + 0.65 * mag})`;
+}
+
+function gradColor(v, maxAbs) {
+  const mag = Math.min(Math.abs(v) / (maxAbs || 1e-6), 1);
+  return v >= 0
+    ? `rgba(255, 215, 0, ${0.25 + 0.65 * mag})`
+    : `rgba(255, 149, 0, ${0.25 + 0.65 * mag})`;
+}
+
+// stage: -1/5 = idle (show everything), 0 = input lit, 1 = forward to hidden,
+// 2 = forward to output (+loss), 3 = backward at output, 4 = backward at hidden, 5 = done
+const STAGE_LABELS = [
+  'Forward: input values loaded',
+  'Forward: input → hidden (z₁ = W₁x + b₁, a₁ = σ(z₁))',
+  'Forward: hidden → output (ŷ = σ(z₂)), loss computed',
+  'Backward: δ at output propagated to hidden weights ∂L/∂W₂',
+  'Backward: δ propagated into input weights ∂L/∂W₁',
+  'Done — full forward + backward state'
+];
+
+function draw(cache, stage) {
+  ctx.clearRect(0, 0, cW, cH);
+  ctx.fillStyle = '#141720';
+  ctx.fillRect(0, 0, cW, cH);
+
+  const pos = nodePositions();
+  const s = stage < 0 ? 5 : stage;
+  const maxGrad1 = Math.max(...cache.gradW1[0].map(Math.abs), ...cache.gradW1[1].map(Math.abs), 1e-6);
+  const maxGrad2 = Math.max(...cache.gradW2.map(Math.abs), 1e-6);
+
+  const showForwardEdges01 = s >= 1;
+  const showForwardEdges12 = s >= 2;
+  const showBackEdges12 = s >= 3;
+  const showBackEdges01 = s >= 4;
+
+  // forward edges layer0->1
+  for (let i = 0; i < 2; i++) {
+    for (let j = 0; j < 4; j++) {
+      const [x0, y0] = pos[0][i], [x1p, y1] = pos[1][j];
+      ctx.strokeStyle = showForwardEdges01 ? weightColor(W1[i][j]) : 'rgba(120,128,148,0.10)';
+      ctx.lineWidth = showForwardEdges01 ? 1 + Math.min(Math.abs(W1[i][j]), 1.5) * 1.6 : 1;
+      ctx.beginPath();
+      ctx.moveTo(x0, y0);
+      ctx.lineTo(x1p, y1);
+      ctx.stroke();
+    }
+  }
+  // forward edges layer1->2
+  for (let j = 0; j < 4; j++) {
+    const [x0, y0] = pos[1][j], [x1p, y1] = pos[2][0];
+    ctx.strokeStyle = showForwardEdges12 ? weightColor(W2[j]) : 'rgba(120,128,148,0.10)';
+    ctx.lineWidth = showForwardEdges12 ? 1 + Math.min(Math.abs(W2[j]), 1.5) * 1.6 : 1;
+    ctx.beginPath();
+    ctx.moveTo(x0, y0);
+    ctx.lineTo(x1p, y1);
+    ctx.stroke();
+  }
+
+  // backward gradient overlay layer1->2 (dashed, drawn slightly offset)
+  if (showBackEdges12) {
+    ctx.setLineDash([5, 4]);
+    for (let j = 0; j < 4; j++) {
+      const [x0, y0] = pos[1][j], [x1p, y1] = pos[2][0];
+      ctx.strokeStyle = gradColor(cache.gradW2[j], maxGrad2);
+      ctx.lineWidth = 1.5 + (Math.abs(cache.gradW2[j]) / maxGrad2) * 3.5;
+      ctx.beginPath();
+      ctx.moveTo(x1p, y1);
+      ctx.lineTo(x0, y0);
+      ctx.stroke();
+    }
+    ctx.setLineDash([]);
+  }
+  // backward gradient overlay layer0->1
+  if (showBackEdges01) {
+    ctx.setLineDash([5, 4]);
+    for (let i = 0; i < 2; i++) {
+      for (let j = 0; j < 4; j++) {
+        const [x0, y0] = pos[0][i], [x1p, y1] = pos[1][j];
+        ctx.strokeStyle = gradColor(cache.gradW1[i][j], maxGrad1);
+        ctx.lineWidth = 1.5 + (Math.abs(cache.gradW1[i][j]) / maxGrad1) * 3.5;
+        ctx.beginPath();
+        ctx.moveTo(x1p, y1);
+        ctx.lineTo(x0, y0);
+        ctx.stroke();
+      }
+    }
+    ctx.setLineDash([]);
+  }
+
+  // nodes
+  const r = 15;
+  const activationsByLayer = [
+    cache.x,
+    cache.a1,
+    [cache.yhat]
+  ];
+  LAYER_SIZES.forEach((n, li) => {
+    const litUp = (li === 0 && s >= 0) || (li === 1 && s >= 1) || (li === 2 && s >= 2);
+    for (let i = 0; i < n; i++) {
+      const [x, y] = pos[li][i];
+      const val = activationsByLayer[li][i];
+      ctx.beginPath();
+      ctx.arc(x, y, r, 0, Math.PI * 2);
+      if (litUp) {
+        const norm = li === 0 ? Math.min(Math.abs(val) / 2, 1) : val; // input scale differs
+        const g = Math.round(60 + 140 * Math.min(Math.max(norm, 0), 1));
+        ctx.fillStyle = li === 0 ? '#2c8f66' : `rgb(0, ${g + 60}, ${Math.round(g * 0.6)})`;
+      } else {
+        ctx.fillStyle = '#2a2f42';
+      }
+      ctx.fill();
+      ctx.strokeStyle = (li === 2 && s >= 3) || (li === 1 && s >= 4) ? '#ffd700' : '#0d0f17';
+      ctx.lineWidth = 2.5;
+      ctx.stroke();
+
+      if (litUp) {
+        ctx.fillStyle = '#0d0f17';
+        ctx.font = 'bold 10px "JetBrains Mono", monospace';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText(val.toFixed(2), x, y);
+      }
+    }
+    ctx.fillStyle = '#8892a4';
+    ctx.font = '11px "JetBrains Mono", monospace';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'alphabetic';
+    ctx.fillText(LAYER_NAMES[li], pos[li][0][0], 22);
+  });
+
+  // loss annotation near output
+  if (s >= 2) {
+    const [ox, oy] = pos[2][0];
+    ctx.fillStyle = '#e2e8f0';
+    ctx.font = '11px "JetBrains Mono", monospace';
+    ctx.textAlign = 'left';
+    ctx.fillText(`ŷ=${cache.yhat.toFixed(3)}`, ox + 24, oy - 8);
+    ctx.fillText(`y=${cache.target.toFixed(2)}`, ox + 24, oy + 6);
+    ctx.fillText(`L=${cache.loss.toFixed(4)}`, ox + 24, oy + 20);
+  }
+}
+
+// ══════════════════════════════════════════════════════════════════════
+// Interaction / state
+// ══════════════════════════════════════════════════════════════════════
+let x1 = 1.0, x2 = -0.5, target = 1.0;
+let cache = forwardBackward([x1, x2], target);
+let stage = -1; // idle: full state
+let animTimer = null;
+
+function updateReadout() {
+  const box = document.getElementById('bp-readout');
+  box.innerHTML = `
+    <div class="readout" style="border-left-color:#00ff88">
+      <span>Output ŷ (forward)</span>
+      <strong>${cache.yhat.toFixed(4)}</strong>
+    </div>
+    <div class="readout" style="border-left-color:#ff4757">
+      <span>Loss L = ½(ŷ−y)²</span>
+      <strong>${cache.loss.toFixed(4)}</strong>
+    </div>
+    <div class="readout" style="border-left-color:#ffd700">
+      <span>δ at output (∂L/∂z₂)</span>
+      <strong>${cache.delta2.toFixed(4)}</strong>
+    </div>
+    <div class="readout" style="border-left-color:#ff9500">
+      <span>max |∂L/∂W₁| (input layer)</span>
+      <strong>${Math.max(...cache.gradW1[0].map(Math.abs), ...cache.gradW1[1].map(Math.abs)).toFixed(4)}</strong>
+    </div>
+  `;
+}
+
+function render() {
+  draw(cache, stage);
+  document.getElementById('stage-label').textContent = STAGE_LABELS[stage < 0 ? 5 : stage];
+  updateReadout();
+}
+
+function recompute() {
+  cache = forwardBackward([x1, x2], target);
+  stage = -1;
+  clearInterval(animTimer);
+  document.getElementById('animate-btn').disabled = false;
+  render();
+}
+
+document.getElementById('x1-slider').addEventListener('input', (e) => {
+  x1 = parseFloat(e.target.value);
+  document.getElementById('x1-val').textContent = x1.toFixed(2);
+  recompute();
+});
+document.getElementById('x2-slider').addEventListener('input', (e) => {
+  x2 = parseFloat(e.target.value);
+  document.getElementById('x2-val').textContent = x2.toFixed(2);
+  recompute();
+});
+document.getElementById('y-slider').addEventListener('input', (e) => {
+  target = parseFloat(e.target.value);
+  document.getElementById('y-val').textContent = target.toFixed(2);
+  recompute();
+});
+
+document.getElementById('animate-btn').addEventListener('click', () => {
+  clearInterval(animTimer);
+  cache = forwardBackward([x1, x2], target);
+  stage = 0;
+  render();
+  document.getElementById('animate-btn').disabled = true;
+  animTimer = setInterval(() => {
+    stage++;
+    if (stage > 5) {
+      clearInterval(animTimer);
+      stage = 5;
+      document.getElementById('animate-btn').disabled = false;
+      render();
+      return;
+    }
+    render();
+  }, 900);
+});
+
+document.getElementById('reset-btn').addEventListener('click', () => {
+  randInit();
+  recompute();
+});
+
+render();
+window.addEventListener('resize', render);
+document.fonts.ready.then(render);
+</script>
+</body>
+</html>

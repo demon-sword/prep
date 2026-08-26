@@ -1,0 +1,792 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1.0"/>
+  <title>Confusion Matrix & Metrics — Machine Learning Concepts</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com"/>
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet"/>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg:        #0d0f17;
+      --surface:   #141720;
+      --card:      #1a1e2e;
+      --border:    #252a3d;
+      --accent:    #00d4ff;
+      --purple:    #7c3aed;
+      --green:     #00ff88;
+      --yellow:    #ffd700;
+      --red:       #ff4757;
+      --orange:    #ff9500;
+      --text:      #e2e8f0;
+      --text-dim:  #8892a4;
+      --mono:      'JetBrains Mono', monospace;
+      --sans:      'Inter', system-ui, sans-serif;
+    }
+
+    html { scroll-behavior: smooth; }
+
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: var(--sans);
+      font-size: 16px;
+      line-height: 1.7;
+      min-height: 100vh;
+    }
+
+    header {
+      background: var(--surface);
+      border-bottom: 1px solid var(--border);
+      padding: 2rem 2rem 1.5rem;
+      max-width: 1100px;
+      margin: 0 auto;
+    }
+
+    .group-badge {
+      display: inline-block;
+      font-family: var(--mono);
+      font-size: 0.7rem;
+      font-weight: 700;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      color: var(--accent);
+      background: rgba(0, 212, 255, 0.1);
+      border: 1px solid rgba(0, 212, 255, 0.3);
+      padding: 0.2em 0.7em;
+      border-radius: 4px;
+      margin-bottom: 0.75rem;
+    }
+
+    header h1 {
+      font-size: clamp(1.6rem, 4vw, 2.4rem);
+      font-weight: 700;
+      color: var(--text);
+      line-height: 1.2;
+      margin-bottom: 0.5rem;
+    }
+
+    header h1 span.id {
+      color: var(--text-dim);
+      font-size: 0.55em;
+      font-family: var(--mono);
+      margin-right: 0.5rem;
+      vertical-align: middle;
+    }
+
+    header p.desc {
+      color: var(--text-dim);
+      font-size: 1.05rem;
+      max-width: 700px;
+    }
+
+    main {
+      max-width: 1100px;
+      margin: 0 auto;
+      padding: 0 2rem 4rem;
+    }
+
+    section { margin-top: 3rem; }
+
+    section > h2 {
+      font-size: 1.4rem;
+      font-weight: 700;
+      color: var(--accent);
+      border-bottom: 1px solid var(--border);
+      padding-bottom: 0.5rem;
+      margin-bottom: 1.5rem;
+    }
+
+    h3 {
+      font-size: 1.1rem;
+      font-weight: 600;
+      color: var(--yellow);
+      margin: 1.5rem 0 0.6rem;
+    }
+
+    p { margin-bottom: 1rem; color: var(--text); }
+
+    ul, ol { padding-left: 1.5rem; margin-bottom: 1rem; }
+    li { margin-bottom: 0.4rem; }
+
+    code {
+      font-family: var(--mono);
+      font-size: 0.85em;
+      background: rgba(0, 212, 255, 0.08);
+      color: var(--accent);
+      padding: 0.1em 0.35em;
+      border-radius: 3px;
+    }
+
+    .formula-block {
+      background: var(--card);
+      border-left: 3px solid var(--purple);
+      border-radius: 0 8px 8px 0;
+      padding: 0.8rem 1.2rem;
+      margin: 1rem 0;
+      font-family: var(--mono);
+      font-size: 0.95rem;
+      color: var(--text);
+    }
+
+    .callout {
+      background: rgba(124, 58, 237, 0.08);
+      border: 1px solid rgba(124, 58, 237, 0.3);
+      border-radius: 8px;
+      padding: 1rem 1.2rem;
+      margin: 1rem 0;
+    }
+
+    .callout strong { color: var(--purple); }
+
+    /* ── Visualization ── */
+    #visualization .viz-card {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 1.5rem;
+      margin-bottom: 1.5rem;
+    }
+
+    .viz-title { font-weight: 600; font-size: 1rem; color: var(--text); margin-bottom: 0.3rem; }
+    .viz-desc { font-size: 0.88rem; color: var(--text-dim); margin-bottom: 1.2rem; }
+
+    .controls {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 1.25rem;
+      align-items: center;
+      margin-bottom: 1.2rem;
+    }
+
+    .slider-row { display: flex; align-items: center; gap: 0.75rem; }
+
+    .slider-row label {
+      font-size: 0.82rem;
+      color: var(--text-dim);
+      white-space: nowrap;
+    }
+
+    .slider-row input[type="range"] {
+      accent-color: var(--accent);
+      width: 200px;
+    }
+
+    .slider-val {
+      font-family: var(--mono);
+      font-size: 0.85rem;
+      color: var(--accent);
+      min-width: 2.6rem;
+      display: inline-block;
+    }
+
+    .ctrl-btn {
+      font-family: var(--mono);
+      font-size: 0.8rem;
+      padding: 0.45em 1.1em;
+      border-radius: 6px;
+      border: 1px solid var(--accent);
+      background: rgba(0, 212, 255, 0.08);
+      color: var(--accent);
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+
+    .ctrl-btn:hover { background: rgba(0, 212, 255, 0.2); }
+    .ctrl-btn:active { transform: scale(0.97); }
+    .ctrl-btn.ghost { border-color: var(--border); background: transparent; color: var(--text-dim); }
+    .ctrl-btn.ghost:hover { border-color: var(--text-dim); }
+    .ctrl-btn.toggle-on { background: rgba(0, 255, 136, 0.14); border-color: var(--green); color: var(--green); }
+
+    canvas {
+      display: block;
+      border-radius: 8px;
+      background: var(--surface);
+      max-width: 100%;
+    }
+
+    canvas#hist-canvas { cursor: ew-resize; }
+
+    .main-layout {
+      display: grid;
+      grid-template-columns: 1.2fr 1fr;
+      gap: 1.5rem;
+      align-items: start;
+    }
+
+    .side-panel {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 1.1rem;
+    }
+
+    .side-panel h4 {
+      font-size: 0.85rem;
+      font-weight: 700;
+      color: var(--text);
+      margin-bottom: 0.8rem;
+      letter-spacing: 0.02em;
+    }
+
+    .legend {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 1rem;
+      margin-top: 0.8rem;
+    }
+
+    .legend-item {
+      display: flex;
+      align-items: center;
+      gap: 0.4rem;
+      font-size: 0.78rem;
+      color: var(--text-dim);
+    }
+
+    .legend-dot { width: 10px; height: 10px; border-radius: 50%; }
+    .legend-line { width: 16px; height: 2px; }
+
+    .readout-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.6rem;
+      margin-top: 1rem;
+    }
+
+    .readout {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 0.55rem 0.9rem;
+      font-size: 0.78rem;
+      color: var(--text-dim);
+      flex: 1;
+      min-width: 100px;
+      transition: border-color 0.2s;
+    }
+
+    .readout strong { display: block; font-family: var(--mono); font-size: 1.15rem; margin-top: 0.2rem; }
+    .readout.hi strong { color: var(--red); }
+    .readout.lo strong { color: var(--green); }
+    .readout.mid strong { color: var(--accent); }
+    .readout.yl strong { color: var(--yellow); }
+    .readout.active { border-color: var(--green); box-shadow: 0 0 0 1px rgba(0,255,136,0.25); }
+
+    .hint {
+      font-size: 0.78rem;
+      color: var(--text-dim);
+      margin-top: 0.6rem;
+      font-style: italic;
+    }
+
+    /* Confusion matrix grid */
+    .cm-wrap { display: grid; grid-template-columns: auto 1fr 1fr; gap: 4px; margin-top: 0.4rem; font-family: var(--mono); font-size: 0.78rem; }
+    .cm-header { display: flex; align-items: center; justify-content: center; color: var(--text-dim); font-size: 0.7rem; text-align: center; padding: 0.3rem; }
+    .cm-cell {
+      border-radius: 6px;
+      padding: 0.7rem 0.4rem;
+      text-align: center;
+      border: 1px solid var(--border);
+      transition: background 0.15s, border-color 0.15s;
+    }
+    .cm-cell .cm-count { font-size: 1.3rem; font-weight: 700; display: block; }
+    .cm-cell .cm-name { font-size: 0.65rem; color: var(--text-dim); text-transform: uppercase; letter-spacing: 0.05em; }
+    .cm-row-label { display: flex; align-items: center; justify-content: center; color: var(--text-dim); font-size: 0.7rem; writing-mode: vertical-rl; transform: rotate(180deg); }
+    .cm-tp { background: rgba(0,255,136,0.12); border-color: rgba(0,255,136,0.4); }
+    .cm-tp .cm-count { color: var(--green); }
+    .cm-tn { background: rgba(0,212,255,0.1); border-color: rgba(0,212,255,0.35); }
+    .cm-tn .cm-count { color: var(--accent); }
+    .cm-fp { background: rgba(255,71,87,0.12); border-color: rgba(255,71,87,0.4); }
+    .cm-fp .cm-count { color: var(--red); }
+    .cm-fn { background: rgba(255,149,0,0.12); border-color: rgba(255,149,0,0.4); }
+    .cm-fn .cm-count { color: var(--orange); }
+
+    /* ── Takeaways ── */
+    #takeaways ul { list-style: none; padding: 0; }
+
+    #takeaways li {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 1rem 1.2rem;
+      margin-bottom: 0.75rem;
+      padding-left: 3rem;
+      position: relative;
+    }
+
+    #takeaways li::before {
+      content: '→';
+      position: absolute;
+      left: 1rem;
+      color: var(--accent);
+      font-weight: 700;
+    }
+
+    /* ── Nav ── */
+    .concept-nav {
+      max-width: 1100px;
+      margin: 0 auto;
+      padding: 1.5rem 2rem 3rem;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      border-top: 1px solid var(--border);
+    }
+
+    .nav-link {
+      display: flex;
+      flex-direction: column;
+      gap: 0.2rem;
+      text-decoration: none;
+      padding: 0.6rem 1rem;
+      border-radius: 8px;
+      border: 1px solid var(--border);
+      background: var(--surface);
+      transition: all 0.2s;
+      max-width: 220px;
+    }
+
+    .nav-link:hover { border-color: var(--accent); background: rgba(0, 212, 255, 0.06); }
+    .nav-link.disabled { opacity: 0.3; pointer-events: none; }
+
+    .nav-dir {
+      font-size: 0.7rem;
+      font-family: var(--mono);
+      color: var(--text-dim);
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+    }
+
+    .nav-title { font-size: 0.88rem; color: var(--text); font-weight: 500; }
+
+    @media (max-width: 900px) {
+      .main-layout { grid-template-columns: 1fr; }
+    }
+
+    @media (max-width: 640px) {
+      header, main { padding-left: 1rem; padding-right: 1rem; }
+      .concept-nav { padding-left: 1rem; padding-right: 1rem; flex-direction: column; gap: 0.75rem; }
+      .nav-link { max-width: 100%; width: 100%; }
+      .slider-row input[type="range"] { width: 120px; }
+    }
+  </style>
+</head>
+<body>
+
+<header>
+  <div class="group-badge">Evaluation</div>
+  <h1><span class="id">22</span>Confusion Matrix & Metrics</h1>
+  <p class="desc">Precision, recall, F1, and specificity derived from the confusion matrix — how threshold choice trades off false positives against false negatives.</p>
+</header>
+
+<main>
+
+  <!-- ── THEORY ── -->
+  <section id="theory">
+    <h2>Theory</h2>
+
+    <h3>The Confusion Matrix Is the Ground Truth of Classification</h3>
+    <p>
+      A classifier that outputs a hard label 0/1 makes exactly four kinds of mistakes and correct calls against binary ground truth, and every classification metric worth reporting is derived from the counts of these four outcomes. A <strong>true positive (TP)</strong> is a positive correctly predicted positive; a <strong>true negative (TN)</strong> is a negative correctly predicted negative; a <strong>false positive (FP)</strong> — a Type I error — is a negative incorrectly predicted positive; a <strong>false negative (FN)</strong> — a Type II error — is a positive incorrectly predicted negative. Accuracy, <code>(TP+TN)/(TP+TN+FP+FN)</code>, collapses all four into one number and is the single most misleading metric in ML when classes are imbalanced: a fraud model that predicts "not fraud" on every transaction scores 99.8% accuracy on a dataset where fraud is 0.2% of rows, while catching zero fraud. This is why senior practitioners default to the confusion matrix and its derived rates rather than accuracy alone whenever class balance is not guaranteed 50/50.
+    </p>
+
+    <h3>Precision, Recall, and the Tradeoff Between Them</h3>
+    <p>
+      <strong>Precision</strong> — <code>TP/(TP+FP)</code> — answers "of everything I flagged positive, how much was actually positive?" It is the metric that matters when false positives are expensive: a spam filter with low precision buries real emails in the spam folder, and a content-moderation system with low precision wrongly bans legitimate users. <strong>Recall</strong> (a.k.a. sensitivity or true positive rate) — <code>TP/(TP+FN)</code> — answers "of everything that was actually positive, how much did I catch?" It matters when false negatives are expensive: a cancer screening model or a fraud detector with low recall lets dangerous cases through undetected. These two metrics are in structural tension because they move in opposite directions as you slide the classification threshold: lowering the threshold (labeling more things positive) always weakly increases recall (you catch more true positives) but weakly decreases precision (you also sweep in more false positives), and vice versa for raising the threshold. There is no threshold that maximizes both simultaneously except in the degenerate case of a perfectly separable dataset — which is why the threshold is a business decision, not a modeling one, and should be set by whoever owns the cost of FP vs FN, informed by the precision-recall curve rather than baked into the model at <code>0.5</code> by default.
+    </p>
+
+    <h3>F1, F-beta, and Specificity</h3>
+    <p>
+      The <strong>F1 score</strong> — the harmonic mean of precision and recall, <code>2·P·R/(P+R)</code> — is the standard way to compress the tradeoff into one number when both error types matter comparably. The harmonic mean (not the arithmetic mean) is deliberate: it punishes imbalance between precision and recall much more heavily, so a model with precision=1.0 and recall=0.01 gets F1≈0.02, not the misleadingly high 0.5 an arithmetic mean would give. When the two error types don't matter equally, the generalized <strong>F-beta score</strong>, <code>(1+β²)·P·R/(β²·P+R)</code>, lets you weight recall β times as important as precision — <code>F2</code> (β=2) is common in medical screening and fraud where missing a positive is costlier than a false alarm, while <code>F0.5</code> weights precision higher, appropriate for spam filtering or any user-facing flag where false accusations erode trust faster than a few misses. <strong>Specificity</strong> — <code>TN/(TN+FP)</code>, the true negative rate — is recall's mirror image on the negative class, and specificity plus recall (sensitivity) together are exactly the two axes of the ROC curve.
+    </p>
+
+    <h3>Macro vs Micro Averaging for Multiclass</h3>
+    <p>
+      For multiclass problems, scikit-learn's <code>classification_report</code> computes precision/recall/F1 per class (one-vs-rest) and then offers three ways to aggregate: <strong>macro</strong> averages the per-class scores unweighted, so a rare class contributes equally to the average as a common one — this is the right choice when you care about performance on minority classes regardless of their frequency; <strong>weighted</strong> averages by class support (row count), which better reflects overall dataset-level performance but can hide that the model is failing on rare classes entirely; <strong>micro</strong> aggregates raw TP/FP/FN counts across all classes before computing the ratio, which for single-label multiclass is mathematically identical to overall accuracy. Reporting only the weighted or micro average on an imbalanced multiclass problem is a classic way to hide a model that is silently useless on the classes that matter most (e.g. rare disease subtypes, rare fraud patterns).
+    </p>
+
+    <h3>Production Reality</h3>
+    <p>
+      In practice, the confusion matrix should be computed on a held-out or cross-validated set, never training data, and re-checked after every retrain — silent threshold drift as the underlying probability distribution shifts (model or data drift) is a common source of production incidents where recall silently craters while the team is still watching a stale accuracy dashboard. scikit-learn's <code>confusion_matrix</code>, <code>classification_report</code>, and <code>precision_recall_curve</code> are the standard tools; <code>imbalanced-learn</code>'s <code>classification_report_imbalanced</code> adds geometric-mean and index-balanced-accuracy metrics tuned for skewed classes. A concrete operating pattern: pick the threshold that hits a target recall floor (e.g. "catch ≥95% of fraud") by reading it off <code>precision_recall_curve</code>, then report the precision you pay for that recall — this is far more actionable than reporting a single F1 at the default 0.5 cutoff, which is almost never the threshold that should ship.
+    </p>
+  </section>
+
+  <!-- ── VISUALIZATION ── -->
+  <section id="visualization">
+    <h2>Interactive Visualization</h2>
+
+    <div class="viz-card">
+      <div class="viz-title">Draggable Threshold on a Predicted-Probability Histogram</div>
+      <div class="viz-desc">
+        80 simulated examples, each with a true class (negative/positive) and a model-predicted probability of being positive, deliberately overlapping the way a real classifier's scores do. Drag the yellow threshold line directly on the histogram (or use the slider) — every example with predicted probability ≥ threshold is classified positive. The confusion matrix, precision, recall, F1, and specificity below recompute live from the actual counts on every move. Try dragging to the extremes to see precision/recall hit their limiting behavior, then hit "Optimize for F1" to watch it jump to the threshold that maximizes F1 by brute-force search over all 80 candidate cut points.
+      </div>
+
+      <div class="controls">
+        <div class="slider-row">
+          <label>Threshold</label>
+          <input type="range" id="thresh-slider" min="0" max="1" step="0.01" value="0.5"/>
+          <span class="slider-val" id="thresh-val">0.50</span>
+        </div>
+        <button class="ctrl-btn" id="optimize-btn">⚡ Optimize for F1</button>
+        <button class="ctrl-btn ghost" id="reset-btn">↻ Reset to 0.50</button>
+        <button class="ctrl-btn ghost" id="regen-btn">⟳ New data sample</button>
+      </div>
+
+      <div class="panel-label" style="font-family:var(--mono);font-size:0.75rem;color:var(--text-dim);text-transform:uppercase;letter-spacing:0.08em;margin-bottom:0.4rem;">Predicted-probability histogram by true class — drag the threshold line</div>
+      <canvas id="hist-canvas" width="640" height="220"></canvas>
+
+      <div class="main-layout" style="margin-top:1.2rem;">
+        <div class="side-panel">
+          <h4>Confusion Matrix (threshold = <span id="cm-thresh-label">0.50</span>)</h4>
+          <div class="cm-wrap">
+            <div></div>
+            <div class="cm-header">Predicted Positive</div>
+            <div class="cm-header">Predicted Negative</div>
+            <div class="cm-row-label">Actual Pos</div>
+            <div class="cm-cell cm-tp"><span class="cm-count" id="cm-tp">—</span><span class="cm-name">True Positive</span></div>
+            <div class="cm-cell cm-fn"><span class="cm-count" id="cm-fn">—</span><span class="cm-name">False Negative</span></div>
+            <div class="cm-row-label">Actual Neg</div>
+            <div class="cm-cell cm-fp"><span class="cm-count" id="cm-fp">—</span><span class="cm-name">False Positive</span></div>
+            <div class="cm-cell cm-tn"><span class="cm-count" id="cm-tn">—</span><span class="cm-name">True Negative</span></div>
+          </div>
+          <p class="hint" id="hint-text">Drag the threshold line left to raise recall at the cost of precision; drag right for the opposite.</p>
+        </div>
+        <div class="side-panel">
+          <h4>Derived Metrics</h4>
+          <div class="readout-row">
+            <div class="readout hi"><span>Precision</span><strong id="metric-precision">—</strong></div>
+            <div class="readout lo"><span>Recall</span><strong id="metric-recall">—</strong></div>
+            <div class="readout mid"><span>F1 Score</span><strong id="metric-f1">—</strong></div>
+          </div>
+          <div class="readout-row">
+            <div class="readout yl"><span>Specificity</span><strong id="metric-specificity">—</strong></div>
+            <div class="readout"><span>Accuracy</span><strong id="metric-accuracy">—</strong></div>
+          </div>
+          <div class="legend">
+            <div class="legend-item"><div class="legend-dot" style="background:#00d4ff"></div>True Negative class</div>
+            <div class="legend-item"><div class="legend-dot" style="background:#ff9500"></div>True Positive class</div>
+            <div class="legend-item"><div class="legend-line" style="background:#ffd700;height:3px;"></div>Threshold (draggable)</div>
+          </div>
+          <p class="hint">At threshold ≈ 0, everything is called positive: recall = 100% but precision collapses to the base rate. At threshold ≈ 1, precision → high but recall collapses toward 0.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ── TAKEAWAYS ── -->
+  <section id="takeaways">
+    <h2>Key Takeaways</h2>
+    <ul>
+      <li>
+        <strong>Accuracy lies on imbalanced data — always look at the confusion matrix first.</strong> A model that predicts the majority class every time scores near-perfect accuracy on a 99.8%/0.2% dataset while catching zero of the minority class; precision, recall, and per-class breakdowns expose this instantly, accuracy hides it.
+      </li>
+      <li>
+        <strong>Precision and recall move in opposite directions as the threshold moves — there is no free lunch.</strong> The right operating point is a business decision about the relative cost of false positives vs false negatives (fraud review capacity vs missed fraud, spam-folder false accusations vs missed spam), not a modeling default — <code>0.5</code> is almost never the threshold that should ship.
+      </li>
+      <li>
+        <strong>F1 uses the harmonic mean specifically to punish imbalance between precision and recall.</strong> A model with precision 1.0 and recall 0.01 scores F1 ≈ 0.02, not the ≈0.5 an arithmetic mean would suggest — use <code>F-beta</code> (β=2 for recall-priority domains like medical screening or fraud, β=0.5 for precision-priority domains like spam or content moderation) when the two error types have unequal cost.
+      </li>
+      <li>
+        <strong>Macro vs weighted vs micro averaging in multiclass <code>classification_report</code> tell very different stories.</strong> Macro-average treats rare classes equally to common ones (right for catching failures on minority classes); weighted/micro can look healthy while the model is silently useless on the classes that matter most — always check per-class rows, not just the aggregate.
+      </li>
+      <li>
+        <strong>Pick thresholds off <code>precision_recall_curve</code>, not by eyeballing a single F1 at 0.5.</strong> A concrete production pattern: fix a recall floor dictated by the business ("must catch ≥95% of fraud") and read off the precision you pay for it — this is more actionable than a single blended score and makes the tradeoff explicit to stakeholders.
+      </li>
+      <li>
+        <strong>Confusion-matrix metrics silently drift as the score distribution shifts — monitor them, not just accuracy dashboards.</strong> Data or concept drift can crater recall at a fixed threshold while overall accuracy barely moves (especially on imbalanced classes); re-derive the confusion matrix on fresh held-out data after every retrain, and alert on precision/recall deltas, not just top-line accuracy.
+      </li>
+    </ul>
+  </section>
+
+</main>
+
+<!-- ── NAV ── -->
+<nav class="concept-nav">
+  <a class="nav-link" href="./21-cross-validation.html">
+    <span class="nav-dir">← Previous</span>
+    <span class="nav-title">Cross-Validation Strategies</span>
+  </a>
+  <a class="nav-link" href="./23-roc-pr-curves.html">
+    <span class="nav-dir">Next →</span>
+    <span class="nav-title">ROC vs Precision-Recall Curves</span>
+  </a>
+</nav>
+
+<script>
+// ─── Seeded RNG (mulberry32) ────────────────────────────────────────────────
+function mulberry32(seed) {
+  return function() {
+    seed |= 0; seed = (seed + 0x6D2B79F5) | 0;
+    let t = Math.imul(seed ^ (seed >>> 15), 1 | seed);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+
+function gaussian(rng) {
+  const u1 = Math.max(rng(), 1e-9), u2 = rng();
+  return Math.sqrt(-2 * Math.log(u1)) * Math.cos(2 * Math.PI * u2);
+}
+
+function clamp(v, lo, hi) { return Math.max(lo, Math.min(hi, v)); }
+
+// ─── Data generation ─────────────────────────────────────────────────────────
+const N = 80;
+let DATA_SEED = 7;
+let POINTS = []; // { prob, cls }
+
+function generateData(seed) {
+  const rng = mulberry32(seed);
+  const pts = [];
+  const nNeg = 44, nPos = 36;
+  for (let i = 0; i < nNeg; i++) {
+    pts.push({ prob: clamp(0.28 + gaussian(rng) * 0.19, 0.01, 0.99), cls: 0 });
+  }
+  for (let i = 0; i < nPos; i++) {
+    pts.push({ prob: clamp(0.66 + gaussian(rng) * 0.21, 0.01, 0.99), cls: 1 });
+  }
+  return pts;
+}
+
+// ─── Confusion matrix + metrics computation ─────────────────────────────────
+let THRESHOLD = 0.5;
+
+function computeConfusion(threshold) {
+  let tp = 0, fp = 0, fn = 0, tn = 0;
+  POINTS.forEach(p => {
+    const predPos = p.prob >= threshold;
+    if (p.cls === 1 && predPos) tp++;
+    else if (p.cls === 0 && predPos) fp++;
+    else if (p.cls === 1 && !predPos) fn++;
+    else tn++;
+  });
+  const precision = (tp + fp) > 0 ? tp / (tp + fp) : null;
+  const recall = (tp + fn) > 0 ? tp / (tp + fn) : null;
+  const f1 = (precision !== null && recall !== null && (precision + recall) > 0)
+    ? 2 * precision * recall / (precision + recall) : 0;
+  const specificity = (tn + fp) > 0 ? tn / (tn + fp) : null;
+  const accuracy = (tp + tn + fp + fn) > 0 ? (tp + tn) / (tp + tn + fp + fn) : null;
+  return { tp, fp, fn, tn, precision, recall, f1, specificity, accuracy };
+}
+
+function findOptimalF1Threshold() {
+  const candidates = [0, ...POINTS.map(p => p.prob), 1];
+  let best = { threshold: 0.5, f1: -1 };
+  candidates.forEach(t => {
+    const m = computeConfusion(t);
+    if (m.f1 > best.f1) best = { threshold: t, f1: m.f1 };
+  });
+  return best.threshold;
+}
+
+// ─── Canvas setup helper ────────────────────────────────────────────────────
+function setupCanvas(canvas) {
+  const dpr = window.devicePixelRatio || 1;
+  if (!canvas.getAttribute('data-css-w')) {
+    canvas.setAttribute('data-css-w', canvas.width);
+    canvas.setAttribute('data-css-h', canvas.height);
+  }
+  const W = +canvas.getAttribute('data-css-w'), H = +canvas.getAttribute('data-css-h');
+  canvas.style.width = W + 'px';
+  canvas.style.height = H + 'px';
+  canvas.width = W * dpr;
+  canvas.height = H * dpr;
+  const ctx = canvas.getContext('2d');
+  ctx.scale(dpr, dpr);
+  return { ctx, W, H };
+}
+
+// ─── Histogram geometry (shared by draw + drag hit-testing) ────────────────
+const HIST = { padL: 34, padR: 14, padT: 14, padB: 26, binWidth: 0.05 };
+
+function histX(canvas, prob) {
+  const W = +canvas.getAttribute('data-css-w') || canvas.width;
+  const chartW = W - HIST.padL - HIST.padR;
+  return HIST.padL + prob * chartW;
+}
+
+function xToProb(canvas, px) {
+  const W = +canvas.getAttribute('data-css-w') || canvas.width;
+  const chartW = W - HIST.padL - HIST.padR;
+  return clamp((px - HIST.padL) / chartW, 0, 1);
+}
+
+function drawHistogram() {
+  const canvas = document.getElementById('hist-canvas');
+  const { ctx, W, H } = setupCanvas(canvas);
+  ctx.fillStyle = '#141720';
+  ctx.fillRect(0, 0, W, H);
+  ctx.strokeStyle = '#252a3d';
+  ctx.strokeRect(0.5, 0.5, W - 1, H - 1);
+
+  const chartW = W - HIST.padL - HIST.padR;
+  const chartH = H - HIST.padT - HIST.padB;
+  const nBins = Math.round(1 / HIST.binWidth);
+
+  // bin counts by class
+  const bins = Array.from({ length: nBins }, () => ({ neg: 0, pos: 0 }));
+  POINTS.forEach(p => {
+    let b = Math.floor(p.prob / HIST.binWidth);
+    if (b >= nBins) b = nBins - 1;
+    if (b < 0) b = 0;
+    if (p.cls === 0) bins[b].neg++; else bins[b].pos++;
+  });
+  const maxCount = Math.max(1, ...bins.map(b => b.neg + b.pos));
+
+  // axis ticks
+  ctx.fillStyle = '#8892a4';
+  ctx.font = '10px monospace';
+  for (let t = 0; t <= 10; t += 2) {
+    const p = t / 10;
+    const px = HIST.padL + p * chartW;
+    ctx.fillText(p.toFixed(1), px - 8, H - 8);
+    ctx.strokeStyle = 'rgba(37,42,61,0.6)';
+    ctx.beginPath();
+    ctx.moveTo(px, HIST.padT);
+    ctx.lineTo(px, HIST.padT + chartH);
+    ctx.stroke();
+  }
+
+  // bars (stacked: negative class bottom in blue, positive class top in orange)
+  const binPxW = chartW / nBins;
+  bins.forEach((b, i) => {
+    const x = HIST.padL + i * binPxW;
+    const negH = (b.neg / maxCount) * chartH;
+    const posH = (b.pos / maxCount) * chartH;
+    ctx.fillStyle = '#00d4ff';
+    ctx.globalAlpha = 0.75;
+    ctx.fillRect(x + 1, HIST.padT + chartH - negH, binPxW - 2, negH);
+    ctx.fillStyle = '#ff9500';
+    ctx.fillRect(x + 1, HIST.padT + chartH - negH - posH, binPxW - 2, posH);
+    ctx.globalAlpha = 1;
+  });
+
+  // threshold line + draggable handle
+  const tx = histX(canvas, THRESHOLD);
+  ctx.strokeStyle = '#ffd700';
+  ctx.lineWidth = 2.5;
+  ctx.beginPath();
+  ctx.moveTo(tx, HIST.padT - 4);
+  ctx.lineTo(tx, HIST.padT + chartH + 4);
+  ctx.stroke();
+
+  // handle triangle at top
+  ctx.fillStyle = '#ffd700';
+  ctx.beginPath();
+  ctx.moveTo(tx - 7, HIST.padT - 4);
+  ctx.lineTo(tx + 7, HIST.padT - 4);
+  ctx.lineTo(tx, HIST.padT + 8);
+  ctx.closePath();
+  ctx.fill();
+
+  // shaded "predicted positive" region
+  ctx.fillStyle = 'rgba(255,215,0,0.06)';
+  ctx.fillRect(tx, HIST.padT, (HIST.padL + chartW) - tx, chartH);
+}
+
+// ─── Readouts ────────────────────────────────────────────────────────────────
+function pct(v) { return v === null ? '—' : (v * 100).toFixed(1) + '%'; }
+
+function updateReadouts() {
+  const m = computeConfusion(THRESHOLD);
+  document.getElementById('thresh-val').textContent = THRESHOLD.toFixed(2);
+  document.getElementById('cm-thresh-label').textContent = THRESHOLD.toFixed(2);
+  document.getElementById('thresh-slider').value = THRESHOLD;
+
+  document.getElementById('cm-tp').textContent = m.tp;
+  document.getElementById('cm-fp').textContent = m.fp;
+  document.getElementById('cm-fn').textContent = m.fn;
+  document.getElementById('cm-tn').textContent = m.tn;
+
+  document.getElementById('metric-precision').textContent = pct(m.precision);
+  document.getElementById('metric-recall').textContent = pct(m.recall);
+  document.getElementById('metric-f1').textContent = m.f1.toFixed(3);
+  document.getElementById('metric-specificity').textContent = pct(m.specificity);
+  document.getElementById('metric-accuracy').textContent = pct(m.accuracy);
+
+  const hint = document.getElementById('hint-text');
+  if (THRESHOLD < 0.12) {
+    hint.textContent = 'Near threshold 0: almost everything is called positive — recall is maxed out but precision approaches the base rate.';
+  } else if (THRESHOLD > 0.88) {
+    hint.textContent = 'Near threshold 1: only the most confident predictions are called positive — precision is high but recall collapses.';
+  } else {
+    hint.textContent = 'Drag the threshold line left to raise recall at the cost of precision; drag right for the opposite.';
+  }
+}
+
+function renderAll() {
+  drawHistogram();
+  updateReadouts();
+}
+
+// ─── Drag interaction on canvas ─────────────────────────────────────────────
+let dragging = false;
+
+function setThresholdFromEvent(canvas, clientX) {
+  const rect = canvas.getBoundingClientRect();
+  const px = (clientX - rect.left) * (+canvas.getAttribute('data-css-w') / rect.width);
+  THRESHOLD = Math.round(xToProb(canvas, px) * 100) / 100;
+  renderAll();
+}
+
+function attachDragHandlers() {
+  const canvas = document.getElementById('hist-canvas');
+
+  canvas.addEventListener('mousedown', (e) => {
+    dragging = true;
+    setThresholdFromEvent(canvas, e.clientX);
+  });
+  window.addEventListener('mousemove', (e) => {
+    if (dragging) setThresholdFromEvent(canvas, e.clientX);
+  });
+  window.addEventListener('mouseup', () => { dragging = false; });
+
+  canvas.addEventListener('touchstart', (e) => {
+    dragging = true;
+    setThresholdFromEvent(canvas, e.touches[0].clientX);
+    e.preventDefault();
+  }, { passive: false });
+  canvas.addEventListener('touchmove', (e) => {
+    if (dragging) setThresholdFromEvent(canvas, e.touches[0].clientX);
+    e.preventDefault();
+  }, { passive: false });
+  window.addEventListener('touchend', () => { dragging = false; });
+}
+
+// ─── Controls ────────────────────────────────────────────────────────────────
+document.getElementById('thresh-slider').addEventListener('input', (e) => {
+  THRESHOLD = parseFloat(e.target.value);
+  renderAll();
+});
+
+document.getElementById('optimize-btn').addEventListener('click', () => {
+  THRESHOLD = Math.round(findOptimalF1Threshold() * 100) / 100;
+  renderAll();
+});
+
+document.getElementById('reset-btn').addEventListener('click', () => {
+  THRESHOLD = 0.5;
+  renderAll();
+});
+
+document.getElementById('regen-btn').addEventListener('click', () => {
+  DATA_SEED += 101;
+  POINTS = generateData(DATA_SEED);
+  THRESHOLD = 0.5;
+  renderAll();
+});
+
+window.addEventListener('resize', renderAll);
+
+// ─── Init ───────────────────────────────────────────────────────────────────
+POINTS = generateData(DATA_SEED);
+attachDragHandlers();
+renderAll();
+document.fonts.ready.then(renderAll);
+</script>
+</body>
+</html>

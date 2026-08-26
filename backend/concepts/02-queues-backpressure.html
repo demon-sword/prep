@@ -1,0 +1,753 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1.0"/>
+<title>Queues and Backpressure — Backend Concepts</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #0d0f17;
+    --surface: #141720;
+    --card: #1a1e2e;
+    --border: #252a3d;
+    --accent: #00d4ff;
+    --purple: #7c3aed;
+    --green: #00ff88;
+    --yellow: #ffd700;
+    --red: #ff4757;
+    --orange: #ff9500;
+    --text: #e2e8f0;
+    --text-dim: #8892a4;
+    --mono: 'JetBrains Mono', monospace;
+    --sans: 'Inter', system-ui, sans-serif;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--sans);
+    line-height: 1.6;
+  }
+  header {
+    padding: 48px 24px 32px;
+    max-width: 920px;
+    margin: 0 auto;
+    border-bottom: 1px solid var(--border);
+  }
+  .badge {
+    display: inline-block;
+    font-family: var(--mono);
+    font-size: 12px;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--accent);
+    background: rgba(0,212,255,0.08);
+    border: 1px solid rgba(0,212,255,0.3);
+    padding: 4px 10px;
+    border-radius: 4px;
+    margin-bottom: 14px;
+  }
+  h1 {
+    font-size: 32px;
+    margin: 0 0 12px;
+    font-weight: 700;
+    letter-spacing: -0.01em;
+  }
+  header p.desc {
+    color: var(--text-dim);
+    font-size: 16px;
+    max-width: 720px;
+    margin: 0;
+  }
+  main {
+    max-width: 920px;
+    margin: 0 auto;
+    padding: 0 24px 60px;
+  }
+  section {
+    margin-top: 48px;
+  }
+  h2 {
+    font-size: 13px;
+    font-family: var(--mono);
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    color: var(--purple);
+    margin-bottom: 20px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+  h2::after {
+    content: '';
+    flex: 1;
+    height: 1px;
+    background: var(--border);
+  }
+  h3 {
+    font-size: 18px;
+    color: var(--accent);
+    margin: 28px 0 10px;
+  }
+  h3:first-child { margin-top: 0; }
+  p { color: var(--text); margin: 8px 0; }
+  ul { padding-left: 22px; }
+  li { margin: 6px 0; }
+  code {
+    font-family: var(--mono);
+    background: rgba(124,58,237,0.12);
+    color: var(--purple);
+    padding: 2px 6px;
+    border-radius: 4px;
+    font-size: 0.9em;
+  }
+  pre {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 16px;
+    overflow-x: auto;
+    font-family: var(--mono);
+    font-size: 13.5px;
+    color: var(--green);
+    line-height: 1.5;
+  }
+  .aside {
+    margin-top: 10px;
+    font-size: 13.5px;
+    color: var(--text-dim);
+    border-left: 2px solid var(--border);
+    padding-left: 12px;
+    font-style: italic;
+  }
+  .card {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 22px 24px;
+  }
+  .fail-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+    gap: 14px;
+    margin-top: 12px;
+  }
+  .fail-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-left: 3px solid var(--red);
+    border-radius: 8px;
+    padding: 14px 16px;
+  }
+  .fail-card.orange { border-left-color: var(--orange); }
+  .fail-card h4 {
+    margin: 0 0 6px;
+    font-size: 14.5px;
+    color: var(--red);
+  }
+  .fail-card.orange h4 { color: var(--orange); }
+  .fail-card p { font-size: 13.5px; color: var(--text-dim); margin: 0; }
+
+  /* Visualization */
+  .viz-card {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 24px;
+  }
+  .viz-intro { color: var(--text-dim); font-size: 14.5px; margin-bottom: 18px; }
+  .controls-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 22px;
+    align-items: center;
+    margin-bottom: 16px;
+  }
+  .control-group { display: flex; flex-direction: column; gap: 6px; }
+  .control-group label { font-family: var(--mono); font-size: 12px; color: var(--text-dim); }
+  input[type=range] { width: 200px; accent-color: var(--accent); }
+  .toggle-row { display: flex; align-items: center; gap: 10px; }
+  .switch {
+    position: relative;
+    width: 46px;
+    height: 24px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    cursor: pointer;
+  }
+  .switch::after {
+    content: '';
+    position: absolute;
+    width: 18px; height: 18px;
+    background: var(--text-dim);
+    border-radius: 50%;
+    top: 2px; left: 2px;
+    transition: all 0.18s;
+  }
+  .switch.on { background: rgba(0,255,136,0.15); border-color: var(--green); }
+  .switch.on::after { left: 23px; background: var(--green); }
+  .btn-row { display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 16px; }
+  .run-btn {
+    font-family: var(--mono);
+    font-size: 13px;
+    background: var(--purple);
+    color: white;
+    border: none;
+    padding: 10px 18px;
+    border-radius: 6px;
+    cursor: pointer;
+    font-weight: 600;
+  }
+  .run-btn:hover { opacity: 0.88; }
+  .run-btn.secondary { background: var(--surface); border: 1px solid var(--border); color: var(--text); }
+  .run-btn.burst { background: var(--orange); }
+  canvas#queue-canvas {
+    width: 100%;
+    height: 200px;
+    background: var(--surface);
+    border-radius: 8px;
+    border: 1px solid var(--border);
+    display: block;
+  }
+  canvas#lag-canvas {
+    width: 100%;
+    height: 180px;
+    background: var(--surface);
+    border-radius: 8px;
+    border: 1px solid var(--border);
+    margin-top: 14px;
+    display: block;
+  }
+  .stat-row {
+    display: flex;
+    gap: 24px;
+    margin-top: 14px;
+    flex-wrap: wrap;
+  }
+  .stat {
+    font-family: var(--mono);
+    font-size: 13px;
+    color: var(--text-dim);
+  }
+  .stat b { color: var(--yellow); font-size: 18px; display: block; }
+  .stat b.warn { color: var(--red); }
+  .divider { height: 1px; background: var(--border); margin: 20px 0; }
+
+  blockquote#interview-quote {
+    background: linear-gradient(135deg, rgba(0,212,255,0.06), rgba(124,58,237,0.06));
+    border-left: 4px solid var(--accent);
+    border-radius: 8px;
+    margin: 0;
+    padding: 22px 26px;
+    font-size: 16.5px;
+    color: var(--text);
+    font-style: italic;
+    position: relative;
+  }
+  blockquote#interview-quote::before {
+    content: '\201C';
+    font-size: 48px;
+    color: var(--accent);
+    opacity: 0.3;
+    position: absolute;
+    top: -6px;
+    left: 10px;
+    font-style: normal;
+  }
+  #takeaways ul { list-style: none; padding: 0; }
+  #takeaways li {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-left: 3px solid var(--green);
+    border-radius: 8px;
+    padding: 12px 16px;
+    margin-bottom: 10px;
+    font-size: 14.5px;
+  }
+  #takeaways li b { color: var(--green); }
+
+  nav.concept-nav {
+    max-width: 920px;
+    margin: 0 auto;
+    padding: 24px 24px 60px;
+    display: flex;
+    justify-content: space-between;
+    font-family: var(--mono);
+    font-size: 13.5px;
+  }
+  nav.concept-nav a {
+    color: var(--accent);
+    text-decoration: none;
+    border: 1px solid var(--border);
+    padding: 10px 16px;
+    border-radius: 6px;
+  }
+  nav.concept-nav a:hover { border-color: var(--accent); }
+  nav.concept-nav span.disabled {
+    color: var(--text-dim);
+    border: 1px solid var(--border);
+    padding: 10px 16px;
+    border-radius: 6px;
+    opacity: 0.4;
+  }
+  @media (max-width: 600px) {
+    h1 { font-size: 24px; }
+    .controls-row { flex-direction: column; align-items: flex-start; }
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <span class="badge">messaging</span>
+  <h1>Queues and Backpressure</h1>
+  <p class="desc">Work queues vs event logs, delivery guarantees (at-least-once plus idempotency), per-key ordering, and backpressure mechanisms that keep overload from silently turning into unbounded latency.</p>
+</header>
+
+<main>
+
+  <section id="theory">
+    <h2>Theory</h2>
+    <div class="card">
+      <h3>Why queues exist</h3>
+      <p>A queue <b>decouples the rate of production from the rate of consumption</b>. That's it. Everything else — durability, ordering, fan-out — is a feature built on top of that one property.</p>
+      <p>Two distinct uses, often conflated:</p>
+      <ul>
+        <li><b>Work queue</b> — distribute tasks across workers. One message, one consumer. SQS, Celery, RabbitMQ work queues.</li>
+        <li><b>Event log / stream</b> — durable ordered record, many independent consumers reading at their own pace. Kafka, Kinesis, Pulsar. Consumers track their own offset; the log doesn't delete on read.</li>
+      </ul>
+      <p>The distinction matters: a work queue forgets a message once acknowledged; a log retains it, so a new consumer can replay history. If someone asks "can we reprocess the last week?" the answer depends entirely on which one you built.</p>
+
+      <h3>Delivery guarantees</h3>
+      <ul>
+        <li><b>At-most-once</b> — fire and forget. Messages can be lost. Rare in practice.</li>
+        <li><b>At-least-once</b> — the default almost everywhere. Messages can be <b>duplicated</b>. This is why idempotency is non-negotiable in queue-based systems (see <code>05-idempotency</code>).</li>
+        <li><b>Exactly-once</b> — the marketing term. Real end-to-end exactly-once requires either transactional coordination between broker and consumer state, or at-least-once delivery plus idempotent processing. In an interview, say: <b>"exactly-once delivery is effectively at-least-once delivery plus idempotent consumers."</b> That one sentence signals you've actually built this.</li>
+      </ul>
+
+      <h3>Ordering</h3>
+      <p>Global ordering across a distributed queue is expensive and usually unnecessary. What you normally want is <b>per-key ordering</b>: all events for the same entity land in the same partition and are processed in order, while different entities proceed in parallel. Kafka gives you this via the partition key. The cost: a hot key becomes a hot partition, and you can't parallelise within it.</p>
+
+      <h3>Backpressure</h3>
+      <p><b>The concept:</b> when a consumer can't keep up, the system must signal upstream to slow down rather than silently accumulating work until something breaks.</p>
+      <p>Without backpressure, a queue absorbing 5x load doesn't fail — it grows. Latency climbs, memory fills, and you discover the problem when the oldest message is two hours old and every SLA is blown. <b>A queue that never applies backpressure is a queue that converts a throughput problem into a latency problem and hides it.</b></p>
+      <p>Mechanisms:</p>
+      <ul>
+        <li><b>Bounded queues</b> — a fixed capacity. When full, producers block, or get an error, or the system sheds load. The bound <i>is</i> the backpressure.</li>
+        <li><b>Pull-based consumption</b> — consumers request work at their own rate rather than having it pushed. Kafka is pull-based; this is a large part of why it degrades gracefully.</li>
+        <li><b>Rate limiting at the producer</b> — cap intake at what the system can actually process (see <code>08-rate-limiting</code>).</li>
+        <li><b>Load shedding</b> — deliberately drop or reject low-priority work to protect the rest. Better to reject 10% explicitly than to degrade 100% silently.</li>
+      </ul>
+
+      <h3>The metric that matters</h3>
+      <p><b>Consumer lag</b> — how far behind the head of the queue your consumers are, measured in messages or (better) in time. Queue depth alone is misleading; lag in seconds tells you whether you're meeting your SLA. Alert on lag, not depth.</p>
+
+      <h3>Failure modes to name</h3>
+      <div class="fail-grid">
+        <div class="fail-card">
+          <h4>Unbounded queue growth</h4>
+          <p>No backpressure means a burst just keeps accumulating. Memory fills, the oldest message ages out of relevance, and the system looks "up" on every health check right up until it OOMs.</p>
+        </div>
+        <div class="fail-card orange">
+          <h4>Hot partition</h4>
+          <p>Per-key ordering pins all traffic for one entity to one partition. A single hot tenant or celebrity user can starve throughput for that key while every other partition sits idle.</p>
+        </div>
+        <div class="fail-card">
+          <h4>Unmonitored DLQ</h4>
+          <p>Messages that fail repeatedly go to a dead letter queue instead of blocking the main queue or retrying forever. Two things people forget: someone must monitor the DLQ (an unmonitored DLQ is a data loss mechanism with extra steps), and you need a replay path to reprocess after the bug is fixed.</p>
+        </div>
+      </div>
+
+      <p class="aside">If the interviewer asks "what happens to your queue during a 5x traffic spike," the answer they're listening for is a mechanism (bounded queue, pull consumption, shedding) — not "we'd scale up the consumers," which is true but dodges the question of what happens in the seconds before that scaling completes.</p>
+    </div>
+  </section>
+
+  <section id="visualization">
+    <h2>Visualization</h2>
+    <div class="viz-card">
+      <p class="viz-intro">A live producer/consumer simulation. Messages arrive at the production rate you set and are drained by a pool of workers, each servicing ~2 msgs/sec. Trigger a 5x burst and watch consumer lag climb — then flip the queue between <b>bounded</b> (backpressure kicks in, excess is shed) and <b>unbounded</b> (it just keeps growing) to see why the bound <i>is</i> the backpressure mechanism.</p>
+
+      <div class="controls-row">
+        <div class="control-group">
+          <label>Production rate: <span id="prod-val">8</span> msgs/sec</label>
+          <input type="range" id="prod-slider" min="1" max="30" value="8">
+        </div>
+        <div class="control-group">
+          <label>Consumer pool size: <span id="pool-val">4</span> workers (<span id="cap-val">8</span> msgs/sec)</label>
+          <input type="range" id="pool-slider" min="1" max="10" value="4">
+        </div>
+        <div class="control-group">
+          <label>Bounded queue (capacity 60)</label>
+          <div class="toggle-row">
+            <div class="switch on" id="bounded-switch"></div>
+            <span id="bounded-label" style="font-family:var(--mono); font-size:12.5px; color:var(--text-dim);">ON</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="btn-row">
+        <button class="run-btn" id="play-btn">▶ Start</button>
+        <button class="run-btn burst" id="burst-btn">Trigger 5x burst (5s) →</button>
+        <button class="run-btn secondary" id="reset-btn">Reset</button>
+      </div>
+
+      <canvas id="queue-canvas" width="850" height="200"></canvas>
+      <canvas id="lag-canvas" width="850" height="180"></canvas>
+
+      <div class="stat-row">
+        <div class="stat">Queue depth<b id="stat-depth">0</b></div>
+        <div class="stat">Consumer lag<b id="stat-lag">0.0s</b></div>
+        <div class="stat">Messages shed<b id="stat-shed">0</b></div>
+        <div class="stat">Effective production rate<b id="stat-rate">8/s</b></div>
+      </div>
+    </div>
+  </section>
+
+  <section id="interview-line">
+    <h2>Interview Line</h2>
+    <blockquote id="interview-quote">
+      "I'd use a partitioned log rather than a work queue here, keyed by tenant, so we get per-tenant ordering and can replay. Backpressure comes from the bounded consumer pool and pull-based consumption — under a 5x burst, lag grows but nothing falls over, and I'd alert on lag in seconds rather than queue depth."
+    </blockquote>
+  </section>
+
+  <section id="takeaways">
+    <h2>Key Takeaways</h2>
+    <ul>
+      <li><b>Work queue vs event log is a real fork, not vocabulary.</b> A work queue (SQS, RabbitMQ) forgets a message on ack; a log (Kafka, Kinesis) retains it so a new consumer can replay history. Decide this before "can we reprocess last week" comes up in production.</li>
+      <li><b>"Exactly-once" is at-least-once plus idempotent consumers.</b> Saying this exact sentence in an interview signals you've actually operated a queue-based system, not just read about one — and it ties directly into <code>05-idempotency</code>.</li>
+      <li><b>Consumer lag in seconds, not queue depth, is the metric to alert on.</b> Depth alone doesn't tell you whether you're breaching an SLA; lag does. Kafka's <code>kafka-consumer-groups.sh --describe</code> reports lag per partition for exactly this reason.</li>
+      <li><b>The bound is the backpressure.</b> A bounded queue forces an explicit decision (block, error, shed) when full; an unbounded one defers the decision until you OOM. This is the same "smooth demand against a slower backend" toolkit as rate limiting (<code>08-rate-limiting</code>) — one throttles the producer, the other throttles the caller.</li>
+      <li><b>Pull-based consumption degrades gracefully; push-based doesn't.</b> Kafka consumers pull at their own pace, so a slow consumer just falls behind — visible as lag — instead of the broker force-feeding it into collapse.</li>
+      <li><b>An unmonitored DLQ is silent data loss.</b> Alerting on DLQ depth and having a replay path are not optional extras — they're the difference between "we retried the bad batch after the fix shipped" and "we lost three hours of writes and didn't notice for a week."</li>
+    </ul>
+  </section>
+
+</main>
+
+<nav class="concept-nav">
+  <a href="../concepts/01-caching-strategies.html">← Previous: Caching Strategies</a>
+  <a href="../concepts/03-consistency-tradeoffs.html">Next: Consistency Trade-offs →</a>
+</nav>
+
+<script>
+(function() {
+  // ---------- Controls ----------
+  const prodSlider = document.getElementById('prod-slider');
+  const prodVal = document.getElementById('prod-val');
+  const poolSlider = document.getElementById('pool-slider');
+  const poolVal = document.getElementById('pool-val');
+  const capVal = document.getElementById('cap-val');
+  const boundedSwitch = document.getElementById('bounded-switch');
+  const boundedLabel = document.getElementById('bounded-label');
+  const playBtn = document.getElementById('play-btn');
+  const burstBtn = document.getElementById('burst-btn');
+  const resetBtn = document.getElementById('reset-btn');
+
+  const SERVICE_RATE_PER_WORKER = 2; // msgs/sec per worker
+  const BOUNDED_CAPACITY = 60;
+  const BURST_MULTIPLIER = 5;
+  const BURST_DURATION = 5; // sim seconds
+
+  let productionRate = parseInt(prodSlider.value, 10);
+  let poolSize = parseInt(poolSlider.value, 10);
+  let bounded = true;
+  let running = false;
+
+  function updateCapDisplay() {
+    capVal.textContent = (poolSize * SERVICE_RATE_PER_WORKER).toString();
+  }
+  updateCapDisplay();
+
+  prodSlider.addEventListener('input', () => {
+    productionRate = parseInt(prodSlider.value, 10);
+    prodVal.textContent = productionRate;
+  });
+  poolSlider.addEventListener('input', () => {
+    poolSize = parseInt(poolSlider.value, 10);
+    poolVal.textContent = poolSize;
+    updateCapDisplay();
+  });
+  boundedSwitch.addEventListener('click', () => {
+    bounded = !bounded;
+    boundedSwitch.classList.toggle('on', bounded);
+    boundedLabel.textContent = bounded ? 'ON' : 'OFF';
+  });
+
+  // ---------- Simulation state ----------
+  let simTime = 0;
+  let queue = [];          // array of enqueue timestamps (sim seconds)
+  let arrivalAcc = 0;
+  let consumeAcc = 0;
+  let shedCount = 0;
+  let burstActive = false;
+  let burstEndTime = 0;
+  let lagHistory = [];     // {t, lag}
+  let depthHistory = [];   // {t, depth}
+  let lastTs = null;
+  let animId = null;
+
+  function resetSim() {
+    simTime = 0;
+    queue = [];
+    arrivalAcc = 0;
+    consumeAcc = 0;
+    shedCount = 0;
+    burstActive = false;
+    burstEndTime = 0;
+    lagHistory = [];
+    depthHistory = [];
+    lastTs = null;
+    updateStats(0);
+    drawQueue();
+    drawLagChart();
+  }
+
+  function updateStats(lag) {
+    document.getElementById('stat-depth').textContent = queue.length;
+    document.getElementById('stat-lag').textContent = lag.toFixed(1) + 's';
+    document.getElementById('stat-lag').classList.toggle('warn', lag > 4);
+    document.getElementById('stat-shed').textContent = shedCount;
+    const effRate = productionRate * (burstActive ? BURST_MULTIPLIER : 1);
+    document.getElementById('stat-rate').textContent = effRate + '/s' + (burstActive ? ' (BURST)' : '');
+  }
+
+  function tick(dt) {
+    simTime += dt;
+    if (burstActive && simTime >= burstEndTime) burstActive = false;
+
+    const rate = productionRate * (burstActive ? BURST_MULTIPLIER : 1);
+    arrivalAcc += rate * dt;
+    while (arrivalAcc >= 1) {
+      arrivalAcc -= 1;
+      if (bounded && queue.length >= BOUNDED_CAPACITY) {
+        shedCount++;
+      } else {
+        queue.push(simTime);
+      }
+    }
+
+    const capacity = poolSize * SERVICE_RATE_PER_WORKER;
+    consumeAcc += capacity * dt;
+    while (consumeAcc >= 1 && queue.length > 0) {
+      consumeAcc -= 1;
+      queue.shift();
+    }
+
+    const lag = queue.length > 0 ? (simTime - queue[0]) : 0;
+    lagHistory.push({ t: simTime, lag: lag });
+    depthHistory.push({ t: simTime, depth: queue.length });
+    const cutoff = simTime - 30;
+    while (lagHistory.length && lagHistory[0].t < cutoff) lagHistory.shift();
+    while (depthHistory.length && depthHistory[0].t < cutoff) depthHistory.shift();
+
+    updateStats(lag);
+  }
+
+  function loop(ts) {
+    if (!running) return;
+    if (lastTs === null) lastTs = ts;
+    let dt = (ts - lastTs) / 1000;
+    lastTs = ts;
+    dt = Math.min(dt, 0.1); // clamp so a tab pause doesn't jump-simulate
+    tick(dt);
+    drawQueue();
+    drawLagChart();
+    animId = requestAnimationFrame(loop);
+  }
+
+  playBtn.addEventListener('click', () => {
+    running = !running;
+    playBtn.textContent = running ? '⏸ Pause' : '▶ Start';
+    if (running) {
+      lastTs = null;
+      animId = requestAnimationFrame(loop);
+    } else if (animId) {
+      cancelAnimationFrame(animId);
+    }
+  });
+
+  burstBtn.addEventListener('click', () => {
+    burstActive = true;
+    burstEndTime = simTime + BURST_DURATION;
+    if (!running) {
+      running = true;
+      playBtn.textContent = '⏸ Pause';
+      lastTs = null;
+      animId = requestAnimationFrame(loop);
+    }
+  });
+
+  resetBtn.addEventListener('click', () => {
+    running = false;
+    if (animId) cancelAnimationFrame(animId);
+    playBtn.textContent = '▶ Start';
+    resetSim();
+  });
+
+  // ---------- Drawing: queue visual ----------
+  const qCanvas = document.getElementById('queue-canvas');
+  const qCtx = qCanvas.getContext('2d');
+  const QW = qCanvas.width, QH = qCanvas.height;
+
+  function drawQueue() {
+    qCtx.clearRect(0, 0, QW, QH);
+
+    // Producer icon
+    qCtx.fillStyle = '#1a1e2e';
+    qCtx.strokeStyle = '#00d4ff';
+    qCtx.lineWidth = 2;
+    qCtx.beginPath();
+    qCtx.arc(50, QH / 2, 28, 0, Math.PI * 2);
+    qCtx.fill(); qCtx.stroke();
+    qCtx.fillStyle = '#e2e8f0';
+    qCtx.font = '11px JetBrains Mono';
+    qCtx.textAlign = 'center';
+    qCtx.fillText('Producer', 50, QH / 2 + 4);
+
+    // Queue box
+    const boxX = 110, boxW = QW - 320, boxY = 40, boxH = QH - 80;
+    qCtx.strokeStyle = burstActive ? '#ff9500' : '#252a3d';
+    qCtx.lineWidth = burstActive ? 2 : 1;
+    qCtx.strokeRect(boxX, boxY, boxW, boxH);
+    qCtx.fillStyle = '#8892a4';
+    qCtx.font = '11px JetBrains Mono';
+    qCtx.textAlign = 'left';
+    qCtx.fillText(bounded ? 'Bounded queue (cap ' + BOUNDED_CAPACITY + ')' : 'Unbounded queue', boxX, boxY - 10);
+
+    // Draw queued messages as small blocks, newest at right, oldest at left
+    const maxVisible = 60;
+    const shown = queue.slice(-maxVisible);
+    const cell = Math.max(4, Math.min(14, (boxW - 10) / maxVisible));
+    const cols = Math.floor((boxW - 10) / cell);
+    shown.forEach((enqT, i) => {
+      const age = simTime - enqT;
+      let color = '#00ff88';
+      if (age > 2) color = '#ffd700';
+      if (age > 5) color = '#ff4757';
+      const col = i % cols;
+      const row = Math.floor(i / cols);
+      const x = boxX + 6 + col * cell;
+      const y = boxY + boxH - 6 - (row + 1) * cell;
+      if (y < boxY) return;
+      qCtx.fillStyle = color;
+      qCtx.fillRect(x, y, cell - 1.5, cell - 1.5);
+    });
+    if (queue.length > maxVisible) {
+      qCtx.fillStyle = '#8892a4';
+      qCtx.font = '10px JetBrains Mono';
+      qCtx.fillText('+' + (queue.length - maxVisible) + ' more', boxX + 6, boxY + 14);
+    }
+
+    // fill-level bar under box (bounded capacity indicator)
+    if (bounded) {
+      const pct = Math.min(1, queue.length / BOUNDED_CAPACITY);
+      qCtx.fillStyle = '#252a3d';
+      qCtx.fillRect(boxX, boxY + boxH + 8, boxW, 6);
+      qCtx.fillStyle = pct > 0.85 ? '#ff4757' : (pct > 0.5 ? '#ffd700' : '#00d4ff');
+      qCtx.fillRect(boxX, boxY + boxH + 8, boxW * pct, 6);
+    }
+
+    // Consumer pool
+    const workersX = QW - 150;
+    qCtx.fillStyle = '#e2e8f0';
+    qCtx.font = '11px JetBrains Mono';
+    qCtx.textAlign = 'center';
+    qCtx.fillText('Consumer pool (' + poolSize + ')', workersX + 40, boxY - 10);
+    const perRow = 5;
+    for (let i = 0; i < poolSize; i++) {
+      const col = i % perRow, row = Math.floor(i / perRow);
+      const wx = workersX + col * 18;
+      const wy = boxY + 16 + row * 18;
+      qCtx.fillStyle = '#1a1e2e';
+      qCtx.strokeStyle = '#7c3aed';
+      qCtx.lineWidth = 1.5;
+      qCtx.beginPath();
+      qCtx.arc(wx, wy, 7, 0, Math.PI * 2);
+      qCtx.fill(); qCtx.stroke();
+    }
+
+    // Shed indicator
+    if (bounded && shedCount > 0) {
+      qCtx.fillStyle = '#ff4757';
+      qCtx.font = '11px JetBrains Mono';
+      qCtx.textAlign = 'center';
+      qCtx.fillText('shedding excess →', workersX - 45, boxY + boxH / 2);
+    }
+
+    qCtx.textAlign = 'left';
+  }
+
+  // ---------- Drawing: lag chart ----------
+  const lCanvas = document.getElementById('lag-canvas');
+  const lCtx = lCanvas.getContext('2d');
+  const LW = lCanvas.width, LH = lCanvas.height;
+  const padL = 40, padB = 20, padT = 14, padR = 10;
+
+  function drawLagChart() {
+    lCtx.clearRect(0, 0, LW, LH);
+    const plotW = LW - padL - padR, plotH = LH - padT - padB;
+
+    lCtx.strokeStyle = '#252a3d';
+    lCtx.lineWidth = 1;
+    lCtx.strokeRect(padL, padT, plotW, plotH);
+
+    if (lagHistory.length < 2) {
+      lCtx.fillStyle = '#8892a4';
+      lCtx.font = '12px JetBrains Mono';
+      lCtx.fillText('Press Start to simulate consumer lag over time...', padL + 10, padT + plotH / 2);
+      return;
+    }
+
+    const tMax = lagHistory[lagHistory.length - 1].t;
+    const tMin = Math.max(0, tMax - 30);
+    let maxLag = 1;
+    lagHistory.forEach(p => { if (p.lag > maxLag) maxLag = p.lag; });
+    maxLag = Math.ceil(maxLag * 1.15);
+
+    // gridlines + y labels
+    lCtx.strokeStyle = '#1a1e2e';
+    lCtx.fillStyle = '#8892a4';
+    lCtx.font = '10px JetBrains Mono';
+    const ySteps = 4;
+    for (let i = 0; i <= ySteps; i++) {
+      const y = padT + plotH - (plotH * i / ySteps);
+      lCtx.beginPath();
+      lCtx.moveTo(padL, y);
+      lCtx.lineTo(padL + plotW, y);
+      lCtx.stroke();
+      lCtx.fillText((maxLag * i / ySteps).toFixed(1) + 's', 4, y + 3);
+    }
+
+    // line
+    lCtx.beginPath();
+    lCtx.strokeStyle = '#00d4ff';
+    lCtx.lineWidth = 2;
+    lagHistory.forEach((p, i) => {
+      const x = padL + ((p.t - tMin) / Math.max(1e-6, (tMax - tMin))) * plotW;
+      const y = padT + plotH - (p.lag / maxLag) * plotH;
+      if (i === 0) lCtx.moveTo(x, y); else lCtx.lineTo(x, y);
+    });
+    lCtx.stroke();
+
+    // fill under line
+    lCtx.lineTo(padL + plotW, padT + plotH);
+    lCtx.lineTo(padL, padT + plotH);
+    lCtx.closePath();
+    lCtx.fillStyle = 'rgba(0,212,255,0.08)';
+    lCtx.fill();
+
+    lCtx.fillStyle = '#8892a4';
+    lCtx.font = '11px JetBrains Mono';
+    lCtx.fillText('consumer lag (s) — last 30s', padL, LH - 4);
+  }
+
+  resetSim();
+})();
+</script>
+</body>
+</html>

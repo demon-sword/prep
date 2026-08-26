@@ -1,0 +1,775 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1.0"/>
+  <title>Weight Init & Vanishing Gradients — Machine Learning Concepts</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com"/>
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet"/>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg:        #0d0f17;
+      --surface:   #141720;
+      --card:      #1a1e2e;
+      --border:    #252a3d;
+      --accent:    #00d4ff;
+      --purple:    #7c3aed;
+      --green:     #00ff88;
+      --yellow:    #ffd700;
+      --red:       #ff4757;
+      --orange:    #ff9500;
+      --text:      #e2e8f0;
+      --text-dim:  #8892a4;
+      --mono:      'JetBrains Mono', monospace;
+      --sans:      'Inter', system-ui, sans-serif;
+    }
+
+    html { scroll-behavior: smooth; }
+
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: var(--sans);
+      font-size: 16px;
+      line-height: 1.7;
+      min-height: 100vh;
+    }
+
+    header {
+      background: var(--surface);
+      border-bottom: 1px solid var(--border);
+      padding: 2rem 2rem 1.5rem;
+      max-width: 1100px;
+      margin: 0 auto;
+    }
+
+    .group-badge {
+      display: inline-block;
+      font-family: var(--mono);
+      font-size: 0.7rem;
+      font-weight: 700;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      color: var(--accent);
+      background: rgba(0, 212, 255, 0.1);
+      border: 1px solid rgba(0, 212, 255, 0.3);
+      padding: 0.2em 0.7em;
+      border-radius: 4px;
+      margin-bottom: 0.75rem;
+    }
+
+    header h1 {
+      font-size: clamp(1.6rem, 4vw, 2.4rem);
+      font-weight: 700;
+      color: var(--text);
+      line-height: 1.2;
+      margin-bottom: 0.5rem;
+    }
+
+    header h1 span.id {
+      color: var(--text-dim);
+      font-size: 0.55em;
+      font-family: var(--mono);
+      margin-right: 0.5rem;
+      vertical-align: middle;
+    }
+
+    header p.desc {
+      color: var(--text-dim);
+      font-size: 1.05rem;
+      max-width: 700px;
+    }
+
+    main {
+      max-width: 1100px;
+      margin: 0 auto;
+      padding: 0 2rem 4rem;
+    }
+
+    section { margin-top: 3rem; }
+
+    section > h2 {
+      font-size: 1.4rem;
+      font-weight: 700;
+      color: var(--accent);
+      border-bottom: 1px solid var(--border);
+      padding-bottom: 0.5rem;
+      margin-bottom: 1.5rem;
+    }
+
+    h3 {
+      font-size: 1.1rem;
+      font-weight: 600;
+      color: var(--yellow);
+      margin: 1.5rem 0 0.6rem;
+    }
+
+    p { margin-bottom: 1rem; color: var(--text); }
+
+    ul, ol { padding-left: 1.5rem; margin-bottom: 1rem; }
+    li { margin-bottom: 0.4rem; }
+
+    code {
+      font-family: var(--mono);
+      font-size: 0.85em;
+      background: rgba(0, 212, 255, 0.08);
+      color: var(--accent);
+      padding: 0.1em 0.35em;
+      border-radius: 3px;
+    }
+
+    .formula-block {
+      background: var(--card);
+      border-left: 3px solid var(--purple);
+      border-radius: 0 8px 8px 0;
+      padding: 0.8rem 1.2rem;
+      margin: 1rem 0;
+      font-family: var(--mono);
+      font-size: 0.9rem;
+      color: var(--text);
+      line-height: 1.9;
+    }
+
+    .callout {
+      background: rgba(124, 58, 237, 0.08);
+      border: 1px solid rgba(124, 58, 237, 0.3);
+      border-radius: 8px;
+      padding: 1rem 1.2rem;
+      margin: 1rem 0;
+    }
+
+    .callout strong { color: var(--purple); }
+
+    /* ── Visualization ── */
+    #visualization .viz-card {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 1.5rem;
+      margin-bottom: 1.5rem;
+    }
+
+    .viz-title { font-weight: 600; font-size: 1rem; color: var(--text); margin-bottom: 0.3rem; }
+    .viz-desc { font-size: 0.88rem; color: var(--text-dim); margin-bottom: 1.2rem; }
+
+    .controls {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 1.25rem;
+      align-items: center;
+      margin-bottom: 1.2rem;
+    }
+
+    .slider-row { display: flex; align-items: center; gap: 0.75rem; }
+
+    .slider-row label {
+      font-size: 0.82rem;
+      color: var(--text-dim);
+      white-space: nowrap;
+    }
+
+    .slider-row input[type="range"] {
+      accent-color: var(--accent);
+      width: 150px;
+    }
+
+    .slider-val {
+      font-family: var(--mono);
+      font-size: 0.85rem;
+      color: var(--accent);
+      min-width: 2.8rem;
+      display: inline-block;
+    }
+
+    .ctrl-btn {
+      font-family: var(--mono);
+      font-size: 0.8rem;
+      padding: 0.45em 1.1em;
+      border-radius: 6px;
+      border: 1px solid var(--accent);
+      background: rgba(0, 212, 255, 0.08);
+      color: var(--accent);
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+
+    .ctrl-btn:hover { background: rgba(0, 212, 255, 0.2); }
+    .ctrl-btn:active { transform: scale(0.97); }
+    .ctrl-btn.ghost { border-color: var(--border); background: transparent; color: var(--text-dim); }
+    .ctrl-btn.ghost:hover { border-color: var(--text-dim); }
+
+    .tab-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.6rem;
+      margin-bottom: 1.2rem;
+    }
+
+    .tab-btn {
+      font-family: var(--mono);
+      font-size: 0.8rem;
+      padding: 0.5em 1.1em;
+      border-radius: 6px;
+      border: 1px solid var(--border);
+      background: var(--surface);
+      color: var(--text-dim);
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+
+    .tab-btn:hover { border-color: var(--accent); color: var(--text); }
+    .tab-btn.active { border-color: var(--green); color: var(--green); background: rgba(0, 255, 136, 0.1); }
+
+    canvas {
+      display: block;
+      border-radius: 8px;
+      background: var(--surface);
+      max-width: 100%;
+    }
+
+    .legend {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 1rem;
+      margin-top: 0.8rem;
+      justify-content: center;
+    }
+
+    .legend-item {
+      display: flex;
+      align-items: center;
+      gap: 0.4rem;
+      font-size: 0.78rem;
+      color: var(--text-dim);
+    }
+
+    .legend-line { width: 18px; height: 3px; border-radius: 2px; }
+
+    .side-panel {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 1.1rem;
+      margin-top: 1.2rem;
+    }
+
+    .side-panel h4 {
+      font-size: 0.85rem;
+      font-weight: 700;
+      color: var(--text);
+      margin-bottom: 0.8rem;
+      letter-spacing: 0.02em;
+    }
+
+    .readout-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.6rem;
+      margin-top: 0.4rem;
+    }
+
+    .readout {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 0.55rem 0.9rem;
+      font-size: 0.78rem;
+      color: var(--text-dim);
+      flex: 1;
+      min-width: 190px;
+      border-left: 3px solid var(--border);
+    }
+
+    .readout strong { display: block; font-family: var(--mono); font-size: 1.0rem; margin-top: 0.2rem; color: var(--text); }
+    .readout.small  { border-left-color: var(--red); }
+    .readout.large   { border-left-color: var(--orange); }
+    .readout.xavier { border-left-color: var(--accent); }
+    .readout.he     { border-left-color: var(--green); }
+
+    .hint {
+      font-size: 0.78rem;
+      color: var(--text-dim);
+      margin-top: 0.8rem;
+      font-style: italic;
+      text-align: center;
+    }
+
+    /* ── Takeaways ── */
+    #takeaways ul { list-style: none; padding: 0; }
+
+    #takeaways li {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 1rem 1.2rem;
+      margin-bottom: 0.75rem;
+      padding-left: 3rem;
+      position: relative;
+    }
+
+    #takeaways li::before {
+      content: '→';
+      position: absolute;
+      left: 1rem;
+      color: var(--accent);
+      font-weight: 700;
+    }
+
+    /* ── Nav ── */
+    .concept-nav {
+      max-width: 1100px;
+      margin: 0 auto;
+      padding: 1.5rem 2rem 3rem;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      border-top: 1px solid var(--border);
+    }
+
+    .nav-link {
+      display: flex;
+      flex-direction: column;
+      gap: 0.2rem;
+      text-decoration: none;
+      padding: 0.6rem 1rem;
+      border-radius: 8px;
+      border: 1px solid var(--border);
+      background: var(--surface);
+      transition: all 0.2s;
+      max-width: 220px;
+    }
+
+    .nav-link:hover { border-color: var(--accent); background: rgba(0, 212, 255, 0.06); }
+    .nav-link.disabled { opacity: 0.3; pointer-events: none; }
+
+    .nav-dir {
+      font-size: 0.7rem;
+      font-family: var(--mono);
+      color: var(--text-dim);
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+    }
+
+    .nav-title { font-size: 0.88rem; color: var(--text); font-weight: 500; }
+
+    @media (max-width: 640px) {
+      header, main { padding-left: 1rem; padding-right: 1rem; }
+      .concept-nav { padding-left: 1rem; padding-right: 1rem; flex-direction: column; gap: 0.75rem; }
+      .nav-link { max-width: 100%; width: 100%; }
+      .slider-row input[type="range"] { width: 110px; }
+    }
+  </style>
+</head>
+<body>
+
+<header>
+  <div class="group-badge">Deep Learning</div>
+  <h1><span class="id">31</span>Weight Init & Vanishing Gradients</h1>
+  <p class="desc">Why naive weight initialization causes vanishing/exploding activations and gradients, and how Xavier/He initialization keeps variance stable across layers.</p>
+</header>
+
+<main>
+
+  <!-- ── THEORY ── -->
+  <section id="theory">
+    <h2>Theory</h2>
+
+    <h3>Variance Propagation Through a Linear Layer</h3>
+    <p>
+      Consider a single fully-connected layer <code>y = Wx</code> where <code>x</code> has <code>n_in</code> independent, zero-mean components with variance <code>Var(x)</code>, and <code>W</code> has independent zero-mean entries with variance <code>Var(w)</code>. Each output <code>y_i = Σ w_ij x_j</code> is a sum of <code>n_in</code> independent zero-mean products, so its variance is <code>Var(y) = n_in · Var(w) · Var(x)</code>. Stack <code>L</code> such layers with no normalization in between and the variance compounds multiplicatively across depth: <code>Var(a_L) ≈ Var(a_0) · Π (n_in · Var(w_l))</code>. If the per-layer factor <code>n_in · Var(w)</code> is even slightly above 1, activations blow up exponentially with depth; if it's slightly below 1, they shrink to zero exponentially. There is exactly one factor that keeps variance constant across arbitrary depth: <code>n_in · Var(w) = 1</code>, i.e. <code>Var(w) = 1/n_in</code>. This single identity is the entire derivation behind every "principled" initialization scheme — the schemes differ only in what they additionally account for (backward pass, saturating nonlinearities, ReLU's zeroing behavior).
+    </p>
+
+    <h3>Xavier/Glorot Initialization</h3>
+    <p>
+      Glorot & Bengio (2010) applied the same variance argument to the <em>backward</em> pass — gradients flowing through <code>W^T</code> compound by a factor of <code>n_out · Var(w)</code> — and noted you generally can't satisfy both <code>Var(w) = 1/n_in</code> and <code>Var(w) = 1/n_out</code> simultaneously unless the layer is square. Their compromise, now called Xavier or Glorot initialization, splits the difference: <code>Var(w) = 2 / (n_in + n_out)</code>, commonly implemented as a uniform draw <code>U(−√(6/(n_in+n_out)), +√(6/(n_in+n_out)))</code> or a Gaussian with that variance. This derivation implicitly assumes a linear or near-linear activation around zero (true for <code>tanh</code> and <code>sigmoid</code> in their small-signal regime), and it works well empirically for <code>tanh</code> networks up to tens of layers — but it silently breaks for ReLU networks.
+    </p>
+
+    <h3>He Initialization — Accounting for ReLU</h3>
+    <p>
+      ReLU zeroes out roughly half of its inputs (every negative pre-activation), which exactly halves the variance passed forward compared to a linear layer. He et al. (2015) redid the variance derivation with this correction and arrived at <code>Var(w) = 2/n_in</code> — twice the Xavier variance for the same fan-in, exactly compensating for the factor of 2 that ReLU throws away. In their paper, a plain 22-layer ReLU CNN with Xavier init failed to converge at all (loss stayed flat), while the identical architecture with He init converged normally — a concrete demonstration that <code>tanh</code>-appropriate initialization is actively harmful once the activation function changes. The practical rule: <strong>match the init scheme to the activation function</strong> — Xavier/Glorot for <code>tanh</code>/<code>sigmoid</code>, He/Kaiming for ReLU and its variants (LeakyReLU, ELU with minor adjustment).
+    </p>
+
+    <h3>Two Failure Modes, One Root Cause</h3>
+    <p>
+      With <code>tanh</code>, over-scaled weights (<code>Var(w) ≫ 1/n_in</code>) don't just make activations numerically large — they push pre-activations into <code>tanh</code>'s saturating tails, where the function is nearly flat and its derivative <code>1 − tanh²(z)</code> is near zero. So an "exploding activations" forward pass frequently causes a <em>vanishing</em> gradient backward pass, because saturated units kill their own local gradient regardless of the weight magnitude multiplying them. Under-scaled weights (<code>Var(w) ≪ 1/n_in</code>) cause the more obvious failure: activations shrink toward zero every layer, so by layer 10–20 the entire forward signal is numerically indistinguishable from zero and every gradient computed from it is zero too. Both failure modes are visible directly in a per-layer activation-variance plot — collapsing toward 0 or diverging toward infinity — which is exactly what a well-chosen init keeps flat.
+    </p>
+
+    <h3>Production Reality</h3>
+    <p>
+      PyTorch's <code>nn.Linear</code> and <code>nn.Conv2d</code> default to a Kaiming-uniform variant (<code>a=√5</code>, fan_in mode) which in practice behaves close to <code>U(−1/√n_in, 1/√n_in)</code> — a reasonable ReLU-oriented default, but it's still worth explicitly calling <code>nn.init.kaiming_normal_(w, nonlinearity='relu')</code> or <code>nn.init.xavier_normal_</code> when you know your activation function, especially for very deep or unusual architectures. Keras/TensorFlow defaults to <code>glorot_uniform</code> for <code>Dense</code> and <code>Conv2D</code> layers, which is the wrong choice if you're stacking ReLU — Keras exposes <code>he_normal</code> explicitly for this reason. Batch Normalization and Layer Normalization dramatically reduce sensitivity to initialization by renormalizing activations at every layer regardless of the incoming weight scale, which is a large part of why 100+ layer networks became trainable without hand-tuned init — but init still matters in the first few steps before running statistics stabilize, and matters a lot in normalization-free architectures (some Transformer variants, RL policy networks). Residual connections (ResNet, Transformers) provide an *additive* identity path around each block, so even if a block's own weights are poorly scaled, the gradient has a clean unimpeded route back through the skip connection — this is why ResNets tolerate depth (152+ layers) that plain feedforward CNNs never could regardless of init. For extremely deep or unusual nets, <strong>LSUV</strong> (Layer-Sequential Unit-Variance, Mishkin & Matas 2015) initializes with orthogonal matrices then rescales each layer using a mini-batch forward pass so output variance is empirically ≈1, and modern large-scale Transformer training often applies additional depth-dependent scaling (e.g. GPT-2's residual-projection weights scaled by <code>1/√(2·n_layers)</code>) precisely because compounding variance across 50+ residual blocks is still a real risk even with residual paths.
+    </p>
+  </section>
+
+  <!-- ── VISUALIZATION ── -->
+  <section id="visualization">
+    <h2>Interactive Visualization</h2>
+
+    <div class="viz-card">
+      <div class="viz-title">Forward Activation Std by Layer — Real Matrix Multiplies, 4 Init Schemes</div>
+      <div class="viz-desc">
+        A fixed random input vector (width 64) is pushed through a stack of randomly-initialized 64×64 linear layers, each followed by the selected activation function. This is a real forward pass — actual matrix multiplies computed live in JS — repeated independently for four initialization schemes at the same depth. Watch the naive schemes collapse to zero or blow up while Xavier/He stay flat.
+      </div>
+
+      <div class="tab-row" id="act-tabs"></div>
+
+      <div class="controls">
+        <div class="slider-row">
+          <label>Network depth (layers)</label>
+          <input type="range" id="depth-slider" min="3" max="60" step="1" value="20"/>
+          <span class="slider-val" id="depth-val">20</span>
+        </div>
+        <button class="ctrl-btn ghost" id="reseed-btn">↻ Regenerate weights</button>
+      </div>
+
+      <canvas id="fwd-chart" width="900" height="300"></canvas>
+      <div class="legend">
+        <div class="legend-item"><div class="legend-line" style="background:#ff4757"></div>Naive small — σ = 0.01</div>
+        <div class="legend-item"><div class="legend-line" style="background:#ff9500"></div>Naive large — σ = 1.0</div>
+        <div class="legend-item"><div class="legend-line" style="background:#00d4ff"></div>Xavier/Glorot — σ² = 1/n</div>
+        <div class="legend-item"><div class="legend-line" style="background:#00ff88"></div>He/Kaiming — σ² = 2/n</div>
+      </div>
+
+      <div class="side-panel">
+        <h4>Activation std at final layer (depth = <span id="depth-readout-label">20</span>)</h4>
+        <div class="readout-row" id="fwd-readout-row"></div>
+      </div>
+    </div>
+
+    <div class="viz-card">
+      <div class="viz-title">Backward Gradient Norm by Layer — Real Backprop Through the Same Weights</div>
+      <div class="viz-desc">
+        Starting from a unit gradient at the output layer, this runs the actual chain-rule recursion (<code>δ_{l-1} = Wᵀ (δ_l ⊙ f'(z_l))</code>) backward through every layer, for the same four init schemes and the same weights used above. This shows why "activations look fine forward" doesn't guarantee usable gradients backward — a saturated <code>tanh</code> unit can have healthy forward variance but a near-zero local derivative.
+      </div>
+      <canvas id="bwd-chart" width="900" height="300"></canvas>
+      <div class="legend">
+        <div class="legend-item"><div class="legend-line" style="background:#ff4757"></div>Naive small — σ = 0.01</div>
+        <div class="legend-item"><div class="legend-line" style="background:#ff9500"></div>Naive large — σ = 1.0</div>
+        <div class="legend-item"><div class="legend-line" style="background:#00d4ff"></div>Xavier/Glorot — σ² = 1/n</div>
+        <div class="legend-item"><div class="legend-line" style="background:#00ff88"></div>He/Kaiming — σ² = 2/n</div>
+      </div>
+      <div class="hint">Switch the activation tab above between tanh and ReLU — Xavier stays flat for tanh but drifts for ReLU; He stays flat for ReLU.</div>
+    </div>
+  </section>
+
+  <!-- ── TAKEAWAYS ── -->
+  <section id="takeaways">
+    <h2>Key Takeaways</h2>
+    <ul>
+      <li>
+        <strong>The entire theory reduces to one identity</strong>: for a linear layer, <code>Var(output) = n_in · Var(w) · Var(input)</code>, so keeping variance constant across depth requires <code>Var(w) = 1/n_in</code> — Xavier and He are both just refinements of this single equation for different activation functions and both forward/backward passes.
+      </li>
+      <li>
+        <strong>Match the init scheme to the activation, not just "use a good default"</strong> — He et al. (2015) showed a 22-layer plain ReLU CNN with Xavier init fails to converge entirely (flat loss), while the same net with He init (σ² = 2/n_in, accounting for ReLU zeroing half its inputs) trains normally. PyTorch's <code>nn.Linear</code> default and Keras' <code>glorot_uniform</code> default are not automatically correct for every activation you attach.
+      </li>
+      <li>
+        <strong>"Exploding forward activations" and "vanishing gradients" are often the same bug</strong> — over-scaled weights push <code>tanh</code>/<code>sigmoid</code> units into their saturating tails, where the local derivative is near zero, so the forward signal looks large while the backward gradient dies anyway.
+      </li>
+      <li>
+        <strong>BatchNorm/LayerNorm reduce, but don't eliminate, init sensitivity</strong> — normalization renormalizes activations every layer regardless of incoming weight scale, which is why 100+ layer nets became practically trainable, but init still governs the first few optimizer steps before running statistics stabilize, and matters a lot in norm-free architectures.
+      </li>
+      <li>
+        <strong>Residual connections are as much an init fix as an architecture choice</strong> — the additive skip path gives gradients a route back that bypasses any single block's weight scale, which is why ResNet-152 and 96-layer Transformers train at all; large-scale Transformer training still applies explicit depth-dependent down-scaling of residual-branch weights (e.g. GPT-2's <code>1/√(2·n_layers)</code> factor) because 50+ stacked residual blocks can still compound variance.
+      </li>
+      <li>
+        <strong>LSUV and data-dependent init exist for cases where closed-form variance math isn't enough</strong> — Mishkin & Matas (2015) initialize with orthogonal matrices, then rescale each layer using an actual mini-batch forward pass so measured output variance ≈ 1; useful for unusual architectures where the analytical Xavier/He derivation's assumptions (independent zero-mean weights and inputs) don't cleanly hold.
+      </li>
+    </ul>
+  </section>
+
+</main>
+
+<!-- ── NAV ── -->
+<nav class="concept-nav">
+  <a class="nav-link" href="./30-rnn-lstm-gru.html">
+    <span class="nav-dir">← Previous</span>
+    <span class="nav-title">RNN, LSTM & GRU</span>
+  </a>
+  <a class="nav-link" href="./32-feature-scaling.html">
+    <span class="nav-dir">Next →</span>
+    <span class="nav-title">Feature Scaling</span>
+  </a>
+</nav>
+
+<script>
+(function () {
+  const WIDTH = 64;
+  const MAX_DEPTH = 60;
+
+  // ── PRNG (mulberry32) + Box-Muller Gaussian ──
+  let seed = 4242;
+  function mulberry32() {
+    seed |= 0; seed = (seed + 0x6D2B79F5) | 0;
+    let t = Math.imul(seed ^ (seed >>> 15), 1 | seed);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  }
+  function randn() {
+    let u = 0, v = 0;
+    while (u === 0) u = mulberry32();
+    while (v === 0) v = mulberry32();
+    return Math.sqrt(-2 * Math.log(u)) * Math.cos(2 * Math.PI * v);
+  }
+
+  function randVec(n) { const v = []; for (let i = 0; i < n; i++) v.push(randn()); return v; }
+  function randMat(rows, cols, std) {
+    const m = [];
+    for (let i = 0; i < rows; i++) {
+      const row = [];
+      for (let j = 0; j < cols; j++) row.push(randn() * std);
+      m.push(row);
+    }
+    return m;
+  }
+
+  function matVec(M, v) { // rows x cols * cols -> rows
+    const rows = M.length, cols = M[0].length;
+    const out = new Array(rows).fill(0);
+    for (let i = 0; i < rows; i++) {
+      let s = 0;
+      for (let j = 0; j < cols; j++) s += M[i][j] * v[j];
+      out[i] = s;
+    }
+    return out;
+  }
+  function matTVec(M, v) { // M^T * v, M is rows x cols -> cols
+    const rows = M.length, cols = M[0].length;
+    const out = new Array(cols).fill(0);
+    for (let i = 0; i < rows; i++) for (let j = 0; j < cols; j++) out[j] += M[i][j] * v[i];
+    return out;
+  }
+  function std(v) {
+    const n = v.length;
+    const mean = v.reduce((s, x) => s + x, 0) / n;
+    const varr = v.reduce((s, x) => s + (x - mean) * (x - mean), 0) / n;
+    return Math.sqrt(varr);
+  }
+  function vecNorm(v) { return Math.sqrt(v.reduce((s, x) => s + x * x, 0)); }
+
+  function tanhf(x) { return Math.tanh(x); }
+  function tanhDeriv(z) { const t = Math.tanh(z); return 1 - t * t; }
+  function relu(x) { return x > 0 ? x : 0; }
+  function reluDeriv(z) { return z > 0 ? 1 : 0; }
+
+  const SCHEMES = [
+    { key: 'small',  label: 'Naive small', color: '#ff4757', std: () => 0.01 },
+    { key: 'large',  label: 'Naive large', color: '#ff9500', std: () => 1.0 },
+    { key: 'xavier', label: 'Xavier/Glorot', color: '#00d4ff', std: (n) => Math.sqrt(1 / n) },
+    { key: 'he',     label: 'He/Kaiming', color: '#00ff88', std: (n) => Math.sqrt(2 / n) }
+  ];
+
+  const ACTS = [
+    { key: 'tanh', label: 'tanh', fwd: tanhf, deriv: tanhDeriv },
+    { key: 'relu', label: 'ReLU', fwd: relu, deriv: reluDeriv }
+  ];
+
+  // ── State ──
+  let depth = 20;
+  let activeAct = 'tanh';
+  let x0 = randVec(WIDTH);
+  // weights[schemeKey] = array of MAX_DEPTH weight matrices (WIDTHxWIDTH)
+  let weights = {};
+
+  function buildWeights() {
+    weights = {};
+    SCHEMES.forEach(s => {
+      const layers = [];
+      for (let l = 0; l < MAX_DEPTH; l++) {
+        layers.push(randMat(WIDTH, WIDTH, s.std(WIDTH)));
+      }
+      weights[s.key] = layers;
+    });
+  }
+
+  function reseed() {
+    seed = Math.floor(Math.random() * 1e9);
+    x0 = randVec(WIDTH);
+    buildWeights();
+  }
+
+  // ── Forward pass: returns per-layer std of activations (length depth+1, index 0 = input) ──
+  function forwardRun(schemeKey, act) {
+    const layers = weights[schemeKey];
+    let a = x0.slice();
+    const stds = [std(a)];
+    const zs = []; // pre-activations per layer, needed for backward
+    const as = [a.slice()]; // post-activations per layer (index 0 = input)
+    for (let l = 0; l < depth; l++) {
+      const z = matVec(layers[l], a);
+      a = z.map(act.fwd);
+      stds.push(std(a));
+      zs.push(z);
+      as.push(a.slice());
+    }
+    return { stds, zs, as };
+  }
+
+  // ── Backward pass: unit gradient at output, real chain rule back through layers ──
+  function backwardRun(schemeKey, act, fwdResult) {
+    const layers = weights[schemeKey];
+    const { zs } = fwdResult;
+    let delta = new Array(WIDTH).fill(1); // dL/da_L, start as unit vector
+    const norms = [vecNorm(delta)];
+    for (let l = depth - 1; l >= 0; l--) {
+      const deriv = zs[l].map(act.deriv);
+      const dz = delta.map((v, i) => v * deriv[i]);
+      delta = matTVec(layers[l], dz);
+      norms.push(vecNorm(delta));
+    }
+    return norms; // index 0 = at output, index depth = at input
+  }
+
+  // ── DOM refs ──
+  const actTabs = document.getElementById('act-tabs');
+  const depthSlider = document.getElementById('depth-slider');
+  const depthVal = document.getElementById('depth-val');
+  const depthReadoutLabel = document.getElementById('depth-readout-label');
+  const reseedBtn = document.getElementById('reseed-btn');
+  const fwdCanvas = document.getElementById('fwd-chart');
+  const fctx = fwdCanvas.getContext('2d');
+  const bwdCanvas = document.getElementById('bwd-chart');
+  const bctx = bwdCanvas.getContext('2d');
+  const fwdReadoutRow = document.getElementById('fwd-readout-row');
+
+  function renderActTabs() {
+    actTabs.innerHTML = '';
+    ACTS.forEach(a => {
+      const btn = document.createElement('button');
+      btn.className = 'tab-btn' + (a.key === activeAct ? ' active' : '');
+      btn.textContent = a.label;
+      btn.addEventListener('click', () => { activeAct = a.key; renderAll(); });
+      actTabs.appendChild(btn);
+    });
+  }
+
+  function drawLineChart(ctx, canvas, seriesList, opts) {
+    const W = canvas.width, H = canvas.height;
+    ctx.clearRect(0, 0, W, H);
+    ctx.fillStyle = '#141720';
+    ctx.fillRect(0, 0, W, H);
+
+    const padL = 65, padR = 20, padT = 20, padB = 40;
+    const plotW = W - padL - padR, plotH = H - padT - padB;
+
+    const allVals = [];
+    seriesList.forEach(s => s.values.forEach(v => { if (v > 1e-9 && isFinite(v)) allVals.push(v); }));
+    const minLog = Math.log10(Math.max(1e-8, Math.min(...allVals, 1e-3)));
+    const maxLog = Math.log10(Math.max(...allVals, 10));
+
+    const n = seriesList[0].values.length;
+    function xPos(i) { return padL + (i / (n - 1)) * plotW; }
+    function yPos(v) {
+      const clamped = Math.max(Math.min(v, Math.pow(10, maxLog)), Math.pow(10, minLog));
+      const lv = Math.log10(Math.max(clamped, 1e-8));
+      const t = (lv - minLog) / (maxLog - minLog || 1);
+      return padT + plotH - t * plotH;
+    }
+
+    // axes
+    ctx.strokeStyle = '#252a3d';
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(padL, padT);
+    ctx.lineTo(padL, padT + plotH);
+    ctx.lineTo(padL + plotW, padT + plotH);
+    ctx.stroke();
+
+    ctx.fillStyle = '#8892a4';
+    ctx.font = '11px "JetBrains Mono", monospace';
+    ctx.textAlign = 'center';
+    ctx.fillText(opts.xLabel, padL + plotW / 2, H - 8);
+    ctx.save();
+    ctx.translate(16, padT + plotH / 2);
+    ctx.rotate(-Math.PI / 2);
+    ctx.fillText(opts.yLabel, 0, 0);
+    ctx.restore();
+
+    const step = Math.max(1, Math.floor(n / 10));
+    for (let i = 0; i < n; i += step) {
+      ctx.fillStyle = '#8892a4';
+      ctx.font = '10px "JetBrains Mono", monospace';
+      ctx.fillText(String(i), xPos(i), padT + plotH + 14);
+    }
+    // y gridlines at powers of 10
+    for (let p = Math.floor(minLog); p <= Math.ceil(maxLog); p++) {
+      const y = yPos(Math.pow(10, p));
+      ctx.strokeStyle = 'rgba(37,42,61,0.6)';
+      ctx.beginPath();
+      ctx.moveTo(padL, y);
+      ctx.lineTo(padL + plotW, y);
+      ctx.stroke();
+      ctx.fillStyle = '#8892a4';
+      ctx.font = '9px "JetBrains Mono", monospace';
+      ctx.textAlign = 'right';
+      ctx.fillText('1e' + p, padL - 6, y + 3);
+      ctx.textAlign = 'center';
+    }
+
+    seriesList.forEach(s => {
+      ctx.strokeStyle = s.color;
+      ctx.lineWidth = 2.5;
+      ctx.beginPath();
+      s.values.forEach((v, i) => {
+        const x = xPos(i), y = yPos(v);
+        if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+      });
+      ctx.stroke();
+    });
+  }
+
+  function renderAll() {
+    renderActTabs();
+    depthVal.textContent = depth;
+    depthReadoutLabel.textContent = depth;
+
+    const act = ACTS.find(a => a.key === activeAct);
+    const fwdResults = {};
+    SCHEMES.forEach(s => { fwdResults[s.key] = forwardRun(s.key, act); });
+
+    drawLineChart(
+      fctx, fwdCanvas,
+      SCHEMES.map(s => ({ color: s.color, values: fwdResults[s.key].stds })),
+      { xLabel: 'layer index →', yLabel: 'activation std (log scale)' }
+    );
+
+    // readouts: final layer std
+    fwdReadoutRow.innerHTML = '';
+    SCHEMES.forEach(s => {
+      const finalStd = fwdResults[s.key].stds[fwdResults[s.key].stds.length - 1];
+      const div = document.createElement('div');
+      div.className = `readout ${s.key}`;
+      const display = finalStd < 1e-6 ? '≈0 (vanished)' : (finalStd > 1e4 ? finalStd.toExponential(2) + ' (exploded)' : finalStd.toFixed(4));
+      div.innerHTML = `${s.label} <strong>${display}</strong>`;
+      fwdReadoutRow.appendChild(div);
+    });
+
+    // backward pass, reusing forward results' cached zs
+    const bwdResults = {};
+    SCHEMES.forEach(s => { bwdResults[s.key] = backwardRun(s.key, act, fwdResults[s.key]); });
+
+    drawLineChart(
+      bctx, bwdCanvas,
+      SCHEMES.map(s => ({ color: s.color, values: bwdResults[s.key] })),
+      { xLabel: 'distance from output layer →', yLabel: 'gradient norm (log scale)' }
+    );
+  }
+
+  // ── Events ──
+  depthSlider.addEventListener('input', () => {
+    depth = parseInt(depthSlider.value, 10);
+    renderAll();
+  });
+  reseedBtn.addEventListener('click', () => {
+    reseed();
+    renderAll();
+  });
+
+  buildWeights();
+  renderAll();
+})();
+</script>
+
+</body>
+</html>

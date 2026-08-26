@@ -1,0 +1,717 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1.0"/>
+<title>Distributed Locking and Fencing Tokens — Backend Concepts</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #0d0f17;
+    --surface: #141720;
+    --card: #1a1e2e;
+    --border: #252a3d;
+    --accent: #00d4ff;
+    --purple: #7c3aed;
+    --green: #00ff88;
+    --yellow: #ffd700;
+    --red: #ff4757;
+    --orange: #ff9500;
+    --text: #e2e8f0;
+    --text-dim: #8892a4;
+    --mono: 'JetBrains Mono', monospace;
+    --sans: 'Inter', system-ui, sans-serif;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--sans);
+    line-height: 1.6;
+  }
+  header {
+    padding: 48px 24px 32px;
+    max-width: 920px;
+    margin: 0 auto;
+    border-bottom: 1px solid var(--border);
+  }
+  .badge {
+    display: inline-block;
+    font-family: var(--mono);
+    font-size: 12px;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--accent);
+    background: rgba(0,212,255,0.08);
+    border: 1px solid rgba(0,212,255,0.3);
+    padding: 4px 10px;
+    border-radius: 4px;
+    margin-bottom: 14px;
+  }
+  h1 {
+    font-size: 32px;
+    margin: 0 0 12px;
+    font-weight: 700;
+    letter-spacing: -0.01em;
+  }
+  header p.desc {
+    color: var(--text-dim);
+    font-size: 16px;
+    max-width: 720px;
+    margin: 0;
+  }
+  main {
+    max-width: 920px;
+    margin: 0 auto;
+    padding: 0 24px 60px;
+  }
+  section { margin-top: 48px; }
+  h2 {
+    font-size: 13px;
+    font-family: var(--mono);
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    color: var(--purple);
+    margin-bottom: 20px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+  h2::after {
+    content: '';
+    flex: 1;
+    height: 1px;
+    background: var(--border);
+  }
+  h3 {
+    font-size: 18px;
+    color: var(--accent);
+    margin: 28px 0 10px;
+  }
+  h3:first-child { margin-top: 0; }
+  p { color: var(--text); margin: 8px 0; }
+  ul { padding-left: 22px; }
+  li { margin: 6px 0; }
+  code {
+    font-family: var(--mono);
+    background: rgba(124,58,237,0.12);
+    color: var(--purple);
+    padding: 2px 6px;
+    border-radius: 4px;
+    font-size: 0.9em;
+  }
+  .aside {
+    margin-top: 10px;
+    font-size: 13.5px;
+    color: var(--text-dim);
+    border-left: 2px solid var(--border);
+    padding-left: 12px;
+    font-style: italic;
+  }
+  .card {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 22px 24px;
+  }
+  .fail-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+    gap: 14px;
+    margin-top: 12px;
+  }
+  .fail-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-left: 3px solid var(--accent);
+    border-radius: 8px;
+    padding: 14px 16px;
+  }
+  .fail-card h4 { margin: 0 0 6px; font-size: 14.5px; color: var(--accent); }
+  .fail-card p { font-size: 13.5px; color: var(--text-dim); margin: 0; }
+  .fail-card.danger { border-left-color: var(--red); }
+  .fail-card.danger h4 { color: var(--red); }
+
+  /* Visualization shared */
+  .viz-card {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 24px;
+    margin-bottom: 24px;
+  }
+  .viz-intro { color: var(--text-dim); font-size: 14.5px; margin-bottom: 18px; }
+  .btn-row { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; margin-top: 14px; }
+  .run-btn {
+    font-family: var(--mono);
+    font-size: 13px;
+    background: var(--purple);
+    color: white;
+    border: none;
+    padding: 10px 18px;
+    border-radius: 6px;
+    cursor: pointer;
+    font-weight: 600;
+  }
+  .run-btn:hover { opacity: 0.88; }
+  .run-btn:disabled { opacity: 0.35; cursor: not-allowed; }
+  .run-btn.secondary { background: var(--surface); border: 1px solid var(--border); color: var(--text-dim); }
+  .run-btn.secondary:hover { color: var(--text); border-color: var(--accent); }
+  .run-btn.active { background: var(--accent); color: #0d0f17; }
+  .run-btn.toggle-on { background: var(--green); color: #0d0f17; }
+  .run-btn.toggle-off { background: var(--red); color: #0d0f17; }
+
+  .slider-label { font-family: var(--mono); font-size: 13px; color: var(--text-dim); }
+  input[type=range] { width: 220px; accent-color: var(--accent); }
+
+  .flow-log {
+    margin-top: 14px;
+    font-family: var(--mono);
+    font-size: 12.5px;
+    color: var(--green);
+    min-height: 60px;
+    max-height: 170px;
+    overflow-y: auto;
+    white-space: pre-line;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 10px 12px;
+  }
+
+  .stat-row { display: flex; gap: 24px; margin-top: 16px; flex-wrap: wrap; }
+  .stat { font-family: var(--mono); font-size: 13px; color: var(--text-dim); }
+  .stat b { color: var(--yellow); font-size: 18px; display: block; }
+  .stat b.danger { color: var(--red); }
+  .stat b.good { color: var(--green); }
+
+  /* Lock stage */
+  .dl-grid {
+    display: grid;
+    grid-template-columns: 1fr 220px 1fr;
+    gap: 16px;
+    margin-top: 20px;
+    align-items: start;
+  }
+  .dl-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 16px;
+    min-height: 170px;
+    transition: border-color 0.2s;
+  }
+  .dl-card.a { border-top: 3px solid var(--accent); }
+  .dl-card.b { border-top: 3px solid var(--purple); }
+  .dl-card h4 {
+    margin: 0 0 10px;
+    font-size: 14px;
+    font-family: var(--mono);
+    color: var(--text);
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+  }
+  .dl-stage-badge {
+    display: inline-block;
+    font-family: var(--mono);
+    font-size: 10.5px;
+    padding: 3px 8px;
+    border-radius: 4px;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    border: 1px solid var(--border);
+    color: var(--text-dim);
+  }
+  .dl-stage-badge.st-idle { color: var(--text-dim); }
+  .dl-stage-badge.st-active { color: var(--accent); border-color: var(--accent); background: rgba(0,212,255,0.08); }
+  .dl-stage-badge.st-paused { color: var(--orange); border-color: var(--orange); background: rgba(255,149,0,0.1); }
+  .dl-stage-badge.st-waiting { color: var(--text-dim); border-color: var(--border); }
+  .dl-stage-badge.st-accepted { color: var(--green); border-color: var(--green); background: rgba(0,255,136,0.08); }
+  .dl-stage-badge.st-rejected { color: var(--red); border-color: var(--red); background: rgba(255,71,87,0.14); }
+  .dl-meta { font-family: var(--mono); font-size: 12px; color: var(--text-dim); min-height: 34px; }
+  .dl-note { font-family: var(--mono); font-size: 11.5px; color: var(--text-dim); margin-top: 8px; min-height: 30px; }
+
+  .lock-card {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 16px;
+    text-align: center;
+  }
+  .lock-card h4 { margin: 0 0 4px; font-size: 12px; font-family: var(--mono); color: var(--text-dim); text-transform: uppercase; letter-spacing: 0.06em; }
+  .lock-owner { font-family: var(--mono); font-size: 22px; color: var(--yellow); margin: 6px 0 2px; font-weight: 700; }
+  .ttl-track {
+    height: 10px;
+    border-radius: 6px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    overflow: hidden;
+    margin: 10px 0 4px;
+  }
+  .ttl-fill { height: 100%; background: var(--green); width: 100%; transition: width 0.1s linear, background 0.2s; }
+  .ttl-fill.expired { background: var(--red); }
+  .lock-meta { font-family: var(--mono); font-size: 11px; color: var(--text-dim); }
+  .storage-box {
+    margin-top: 14px;
+    font-family: var(--mono);
+    font-size: 12px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 10px;
+    text-align: left;
+    color: var(--text-dim);
+  }
+  .storage-box .val { color: var(--text); }
+  .storage-box.corrupt { border-color: var(--red); }
+  .storage-box.corrupt .val { color: var(--red); }
+
+  .divider { height: 1px; background: var(--border); margin: 32px 0; }
+
+  blockquote#interview-quote {
+    background: linear-gradient(135deg, rgba(0,212,255,0.06), rgba(124,58,237,0.06));
+    border-left: 4px solid var(--accent);
+    border-radius: 8px;
+    margin: 0;
+    padding: 22px 26px;
+    font-size: 16.5px;
+    color: var(--text);
+    font-style: italic;
+    position: relative;
+  }
+  blockquote#interview-quote::before {
+    content: '\201C';
+    font-size: 48px;
+    color: var(--accent);
+    opacity: 0.3;
+    position: absolute;
+    top: -6px;
+    left: 10px;
+    font-style: normal;
+  }
+  #takeaways ul { list-style: none; padding: 0; }
+  #takeaways li {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-left: 3px solid var(--green);
+    border-radius: 8px;
+    padding: 12px 16px;
+    margin-bottom: 10px;
+    font-size: 14.5px;
+  }
+  #takeaways li b { color: var(--green); }
+
+  nav.concept-nav {
+    max-width: 920px;
+    margin: 0 auto;
+    padding: 24px 24px 60px;
+    display: flex;
+    justify-content: space-between;
+    font-family: var(--mono);
+    font-size: 13.5px;
+  }
+  nav.concept-nav a {
+    color: var(--accent);
+    text-decoration: none;
+    border: 1px solid var(--border);
+    padding: 10px 16px;
+    border-radius: 6px;
+  }
+  nav.concept-nav a:hover { border-color: var(--accent); }
+  nav.concept-nav span.disabled {
+    color: var(--text-dim);
+    border: 1px solid var(--border);
+    padding: 10px 16px;
+    border-radius: 6px;
+    opacity: 0.4;
+  }
+  @media (max-width: 700px) {
+    h1 { font-size: 24px; }
+    .btn-row { flex-direction: column; align-items: flex-start; }
+    .dl-grid { grid-template-columns: 1fr; }
+    input[type=range] { width: 100%; }
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <span class="badge">coordination</span>
+  <h1>Distributed Locking and Fencing Tokens</h1>
+  <p class="desc">Distributed locks (Redlock, lease-based locks) and why a naive lock built on a single key is dangerous under GC pauses or clock drift, and how fencing tokens close the gap between lock expiry and actual work completion.</p>
+</header>
+
+<main>
+
+  <section id="theory">
+    <h2>Theory</h2>
+    <div class="card">
+      <h3>The problem: mutual exclusion across a network you don't control</h3>
+      <p>A distributed lock exists so that multiple independent processes — worker replicas pulling from a queue, cron jobs running on every pod, a fleet of API servers — can agree that only one of them should do a given piece of work at a time: run the nightly reconciliation job, process a specific order, hold the "primary" role. A local mutex works because the OS scheduler and a single process boundary give you an atomicity guarantee for free. Across a network there's no equivalent trusted referee built in — you have to build one, usually on top of a single system of record that supports atomic conditional writes (Redis <code>SET key value NX PX ttl</code>), an ephemeral session-backed node (ZooKeeper, etcd), or a database row with an owner column and an expiry timestamp. And critically: "I hold the lock" becomes a claim a client makes to itself, not a fact the system continuously verifies — which is exactly where this gets dangerous.</p>
+
+      <h3>Lease-based locks — the mechanism</h3>
+      <p>Every practical distributed lock is a <b>lease</b>: an exclusive claim with a time-to-live, not a permanent grant. <code>SET lock:order-42 client-a NX PX 10000</code> in Redis acquires the key only if it doesn't already exist, with a 10s TTL — the owner must either finish inside that window or renew (heartbeat) before it expires, and must release with a compare-and-delete (a small Lua script checking the stored value equals its own client id, so it never deletes a lock someone else now owns). ZooKeeper and etcd do the equivalent with an ephemeral node tied to a client session: if the client's heartbeat lapses — crash, GC pause, network partition — the server-side session timeout fires and the node is deleted automatically, releasing the lock and firing a watch that wakes the next waiter. Redlock (Antirez's algorithm) runs the same SET-NX-PX pattern against a majority of N independent Redis instances (typically 5, needing 3) within a bounded acquisition window, arguing this removes the single-Redis-instance SPOF the same way a quorum removes a single-node SPOF in consensus.</p>
+
+      <h3>Why a naive lock is dangerous — the Kleppmann critique</h3>
+      <p>The TTL is enforced by the lock service's clock; the client's belief that it still holds the lock is enforced by nothing. There is no upper bound on how long a client can be delayed between "acquired the lock" and "finished the work and released it": a JVM stop-the-world GC pause of 10-30 seconds under load is a documented real occurrence, not a hypothetical; so is an OS scheduling stall, a slow disk fsync, or a network partition that hides the expiry notification from the client entirely. TTLs are typically chosen in the 5-30s range, trading "long enough that normal work doesn't expire mid-flight" against "short enough that a genuinely dead holder fails over quickly" — and every team that picks that number is picking a probability, not a proof. This is exactly Martin Kleppmann's 2016 critique of Redlock: its safety depends on bounded clock drift and bounded process pauses, and no real system actually guarantees either, so a distributed lock built this way is mutual exclusion <em>most of the time</em>, not mutual exclusion under adversarial timing. Antirez's rebuttal is fair as far as it goes — for coordination hygiene (avoid running the same cron job twice, dedupe non-critical work) that's an acceptable bet — but the distinction between "a lock as an efficiency optimization" and "a lock as a correctness guarantee" is exactly what an interviewer is listening for.</p>
+
+      <h3>Fencing tokens — the fix that actually restores correctness</h3>
+      <p>Instead of trusting the client's claim that it still holds the lock, make the <em>resource being protected</em> the arbiter. Every time the lock is granted — including to a second client after the first one's lease expired — the lock service hands out a monotonically increasing <b>fencing token</b> (a simple integer, incremented on every acquire). The client attaches that token to every write it makes. The protected resource — a database row, a file store, a queue — rejects any write carrying a token lower than the highest one it has already accepted. A client that paused past its TTL and wakes up believing it's still the owner sends its write with the old, now-stale token; the resource sees a newer token has already been accepted and rejects it outright, instead of silently letting a zombie writer corrupt state. This is the exact same idea as optimistic locking's version column (see <code>14-concurrency-control</code>) — a monotonic counter checked at the point of the actual write — bolted onto a mutual-exclusion primitive instead of a plain row update.</p>
+
+      <h3>The trade-off that actually matters</h3>
+      <p>Fencing tokens only work if the thing being protected can enforce the check — a database row with a <code>fencing_token</code> column and a conditional <code>WHERE fencing_token &lt; :new_token</code> update does this cleanly; an arbitrary side effect like sending an email or calling a non-idempotent third-party API generally can't be fenced, because there's no shared resource on the other end capable of comparing tokens. So the practical stance: reach for a distributed lock to reduce duplicate work under normal conditions, but never let the lock alone be the thing standing between you and a correctness bug. Either fence the resource where that's possible, or make the protected operation idempotent (<code>05-idempotency</code>) so that a duplicate execution from a stale holder is harmless instead of catastrophic — the two techniques are complementary, not either/or.</p>
+
+      <div class="fail-grid">
+        <div class="fail-card danger">
+          <h4>Stale lock holder (GC pause / clock drift)</h4>
+          <p>A holder pauses past the lease TTL without knowing it — the lock is granted to a second client, and the first resumes still believing it's exclusive owner. Two writers, one "exclusive" critical section.</p>
+        </div>
+        <div class="fail-card danger">
+          <h4>Redlock's timing-assumption debate</h4>
+          <p>Redlock's safety proof assumes bounded clock drift and bounded process pauses between nodes — assumptions Kleppmann showed don't hold under GC pauses or NTP jumps, which is why it's treated as an efficiency mechanism, not a correctness one, absent fencing.</p>
+        </div>
+        <div class="fail-card">
+          <h4>Single-instance Redis lock as a SPOF</h4>
+          <p>A lock built on one Redis node can split-brain on failover: the primary accepts the SET, crashes before async-replicating it, and a promoted replica has no record of the lock — a second client acquires the "same" lock cleanly.</p>
+        </div>
+        <div class="fail-card">
+          <h4>Thundering herd on release</h4>
+          <p>When a popular lock frees, every waiter retries at once — same stampede shape as a cache-miss thundering herd (<code>01-caching-strategies</code>); jittered backoff on retry is the same fix.</p>
+        </div>
+      </div>
+      <p class="aside">This is the same "who do you trust, and for how long" question consensus algorithms answer more rigorously — a distributed lock is pessimistic concurrency control stretched across a network, and Raft/Paxos-backed lock services (etcd, ZooKeeper) are popular precisely because leader election already solved the "who's allowed to act right now" problem with a real majority quorum instead of a single node's TTL guess. See <code>11-consensus-algorithms</code>.</p>
+    </div>
+  </section>
+
+  <section id="visualization">
+    <h2>Visualization</h2>
+
+    <div class="viz-card">
+      <p class="viz-intro"><b>Live lease-lock simulator.</b> Client A acquires the lock first and enters its critical section, but then hits a simulated GC pause / clock-drift stall — drag the slider to control how long. If the stall outlasts the lock's TTL, the lease expires while A is still paused, Client B legitimately acquires the freed lock and writes first. Then A wakes up and tries to write with its now-stale claim. Toggle <b>fencing tokens</b> to see whether the storage layer catches the stale write — or silently corrupts state.</p>
+
+      <div class="btn-row">
+        <span class="slider-label">GC pause / clock drift on Client A: <b id="gc-val" style="color:var(--yellow)">2000ms</b></span>
+        <input type="range" id="gc-slider" min="0" max="8000" step="250" value="2000">
+      </div>
+      <div class="btn-row">
+        <span class="slider-label">Lock lease TTL: <b style="color:var(--yellow)">4000ms</b> (fixed)</span>
+        <button class="run-btn toggle-on" id="btn-fencing">Fencing tokens: ON</button>
+      </div>
+
+      <div class="dl-grid">
+        <div class="dl-card a" id="card-a"></div>
+        <div class="lock-card" id="lock-card"></div>
+        <div class="dl-card b" id="card-b"></div>
+      </div>
+
+      <div class="btn-row">
+        <button class="run-btn" id="btn-run">Run scenario</button>
+        <button class="run-btn secondary" id="btn-reset">Reset</button>
+      </div>
+
+      <div class="flow-log" id="dl-log">Set the GC pause, then click "Run scenario".</div>
+
+      <div class="stat-row">
+        <div class="stat">Lease expired mid-hold<b id="stat-expired" class="danger">no</b></div>
+        <div class="stat">Tokens issued<b id="stat-tokens" class="good">0</b></div>
+        <div class="stat">Stale writes rejected<b id="stat-rejected" class="good">0</b></div>
+        <div class="stat">Storage corrupted<b id="stat-corrupt" class="good">no</b></div>
+      </div>
+    </div>
+  </section>
+
+  <section id="interview-line">
+    <h2>Interview Line</h2>
+    <blockquote id="interview-quote">
+      "The naive version of a distributed lock — <code>SET key value NX PX 10000</code> — works until it doesn't: a GC pause, a slow disk write, a network blip past your TTL, and the lock holder doesn't know it's already lost the lock. It keeps executing the critical section believing it's still the exclusive owner, another client legitimately sees the lease expired and acquires the same lock, and now you have two writers inside what was supposed to be a single-writer section — that's the exact scenario Kleppmann used to argue Redlock's timing assumptions aren't sufficient for correctness, only for efficiency. The fix isn't a longer TTL or a fancier lock algorithm; it's making every write downstream carry a monotonically increasing fencing token and having the resource itself reject any write whose token is lower than the last one it accepted. That turns 'I believe I hold the lock' into something the storage layer can actually verify instead of trusting the client's word for it — and if the resource can't be fenced, the fallback is making the operation idempotent so a duplicate from a stale holder is a no-op instead of a corruption."
+    </blockquote>
+  </section>
+
+  <section id="takeaways">
+    <h2>Key Takeaways</h2>
+    <ul>
+      <li><b>A lease TTL is a bet, not a proof</b> — pick it in the 5-30s range trading fast failover against normal-operation noise (GC pauses, slow disks), and know you're choosing a probability of correctness, not a guarantee.</li>
+      <li><b>Fencing tokens are optimistic locking bolted onto a lock</b> — a monotonic counter checked at the point of the actual write, same mechanism as the version column in <code>14-concurrency-control</code>, just applied to a mutual-exclusion primitive instead of a row update.</li>
+      <li><b>Redlock is a real, cited debate — not FUD</b> — Kleppmann vs. Antirez; use majority-quorum locking to remove a single-instance SPOF, but don't treat quorum alone as a substitute for fencing when correctness, not just coordination hygiene, is on the line.</li>
+      <li><b>ZooKeeper/etcd ephemeral-session locks handle "the client crashed" cleanly</b> via server-side heartbeat timeouts, but they still can't bound a GC pause on a client that's alive but stalled — the same risk class survives regardless of lock backend.</li>
+      <li><b>Thundering herd on lock release is the same shape as a cache stampede</b> — many waiters retrying the instant a popular lock frees; jittered backoff is the same fix used in <code>01-caching-strategies</code> and <code>08-rate-limiting</code>.</li>
+      <li><b>When a resource can't be fenced, make the operation idempotent instead</b> — a duplicate execution that's a safe no-op (<code>05-idempotency</code>) beats a lock that occasionally fails under real-world timing.</li>
+    </ul>
+  </section>
+
+</main>
+
+<nav class="concept-nav">
+  <a href="../concepts/14-concurrency-control.html">← Previous: Concurrency Control (Optimistic, Pessimistic, MVCC)</a>
+  <a href="../concepts/16-event-sourcing-cqrs.html">Next: Event Sourcing and CQRS →</a>
+</nav>
+
+<script>
+(function() {
+  const TTL = 4000;
+  const ACQUIRE_DELAY = 300;
+  const B_ACQUIRE_DELAY = 250;
+  const WRITE_DELAY = 400;
+  const B_CRIT_DELAY = 500;
+
+  let gcPause = 2000;
+  let fencingOn = true;
+  let scenarioRunning = false;
+  let tokenCounter = 0;
+
+  let lock = { holder: null, token: null, leaseStart: 0, leaseDeadline: 0, expiredWhileHeld: false };
+  let storage = { value: 'v0', maxToken: 0, corrupted: false };
+  let a, b;
+
+  const logEl = document.getElementById('dl-log');
+  const logLines = [];
+  let rejectedCount = 0;
+
+  function log(msg) {
+    logLines.push(msg);
+    if (logLines.length > 40) logLines.shift();
+    logEl.textContent = logLines.join('\n');
+    logEl.scrollTop = logEl.scrollHeight;
+  }
+
+  function nameOf(id) { return id === 'a' ? 'Client A' : (id === 'b' ? 'Client B' : 'nobody'); }
+
+  function freshClients() {
+    a = { id: 'a', name: 'Client A', stage: 'idle', startAt: 0, nextAt: 0, token: null, writeVal: 'A-write', note: '' };
+    b = { id: 'b', name: 'Client B', stage: 'idle', startAt: 0, nextAt: 0, token: null, writeVal: 'B-write', note: '' };
+  }
+
+  function resetAll(clearStats) {
+    lock = { holder: null, token: null, leaseStart: 0, leaseDeadline: 0, expiredWhileHeld: false };
+    storage = { value: 'v0', maxToken: 0, corrupted: false };
+    tokenCounter = 0;
+    freshClients();
+    scenarioRunning = false;
+    if (clearStats) { rejectedCount = 0; }
+    updateStats();
+    render();
+  }
+
+  // ---------- Client A: acquire -> hold (GC pause) -> resume -> write ----------
+  function stepA(nowT) {
+    if (a.stage === 'idle' || a.stage === 'done_accept' || a.stage === 'done_reject') return;
+    if (a.stage === 'pending') {
+      if (nowT < a.startAt) return;
+      a.stage = 'acquiring'; a.nextAt = nowT + ACQUIRE_DELAY;
+      log('Client A requests the lock.');
+      return;
+    }
+    if (a.stage === 'acquiring') {
+      if (nowT >= a.nextAt) {
+        if (lock.holder !== null) { a.nextAt = nowT + 50; return; } // someone else holds it — retry shortly
+        tokenCounter++;
+        lock.holder = 'a'; lock.token = tokenCounter; lock.leaseStart = nowT; lock.leaseDeadline = nowT + TTL; lock.expiredWhileHeld = false;
+        a.token = tokenCounter;
+        a.stage = 'holding'; a.nextAt = nowT + gcPause;
+        a.note = 'entering critical section, then GC pause of ' + gcPause + 'ms';
+        log('Client A acquires the lock — fencing token=' + a.token + ', lease TTL=' + TTL + 'ms.');
+        if (gcPause > 0) log('Client A hits a GC pause / clock-drift stall (' + gcPause + 'ms) — it is not doing any work, just stopped.');
+      }
+      return;
+    }
+    if (a.stage === 'holding') {
+      if (nowT >= a.nextAt) {
+        a.stage = 'resuming'; a.nextAt = nowT + WRITE_DELAY;
+        a.note = 'resumed, preparing write';
+        log('Client A resumes from the stall — still believes it holds the lock (token=' + a.token + ').');
+      }
+      return;
+    }
+    if (a.stage === 'resuming') {
+      if (nowT >= a.nextAt) {
+        a.stage = 'writing';
+        attemptWrite(a, nowT);
+      }
+      return;
+    }
+  }
+
+  // ---------- Client B: waits for lock to free, acquires, short critical section, writes ----------
+  function stepB(nowT) {
+    if (b.stage === 'idle' || b.stage === 'done_accept' || b.stage === 'done_reject') return;
+    if (b.stage === 'pending') {
+      if (nowT < b.startAt) return;
+      b.stage = 'waiting'; b.note = 'watching for the lock to free';
+      log('Client B starts watching the lock.');
+      return;
+    }
+    if (b.stage === 'waiting') {
+      // Only race for the lock once A has actually had a chance at it — mirrors "A acquires first".
+      if (lock.holder === null && tokenCounter > 0) {
+        b.stage = 'acquiring'; b.nextAt = nowT + B_ACQUIRE_DELAY;
+      }
+      return;
+    }
+    if (b.stage === 'acquiring') {
+      if (nowT >= b.nextAt) {
+        if (lock.holder !== null) { b.stage = 'waiting'; return; } // someone re-acquired it first — back off and re-poll
+        tokenCounter++;
+        lock.holder = 'b'; lock.token = tokenCounter; lock.leaseStart = nowT; lock.leaseDeadline = nowT + TTL; lock.expiredWhileHeld = false;
+        b.token = tokenCounter;
+        b.stage = 'holding'; b.nextAt = nowT + B_CRIT_DELAY;
+        b.note = 'healthy critical section, no stall';
+        log('Client B acquires the ' + (a.stage === 'holding' || a.stage === 'resuming' ? 'now-freed (expired) ' : '') + 'lock — fencing token=' + b.token + '.');
+      }
+      return;
+    }
+    if (b.stage === 'holding') {
+      if (nowT >= b.nextAt) {
+        b.stage = 'writing';
+        attemptWrite(b, nowT);
+      }
+      return;
+    }
+  }
+
+  function attemptWrite(client, nowT) {
+    if (fencingOn) {
+      if (client.token < storage.maxToken) {
+        client.stage = 'done_reject';
+        rejectedCount++;
+        client.note = 'REJECTED — token ' + client.token + ' < highest accepted ' + storage.maxToken;
+        log(client.name + ' attempts write with token=' + client.token + ' — STORAGE REJECTS (highest accepted token is ' + storage.maxToken + '). Correctness preserved.');
+      } else {
+        storage.value = client.writeVal; storage.maxToken = client.token;
+        client.stage = 'done_accept';
+        client.note = 'ACCEPTED — token ' + client.token + ' recorded';
+        log(client.name + ' writes "' + client.writeVal + '" with token=' + client.token + ' — storage accepts, highest token now ' + storage.maxToken + '.');
+      }
+    } else {
+      // No fencing: whoever writes last wins, unconditionally.
+      const overwritingNewer = storage.maxToken > 0 && client.token < storage.maxToken;
+      storage.value = client.writeVal; storage.maxToken = Math.max(storage.maxToken, client.token);
+      if (overwritingNewer) storage.corrupted = true;
+      client.stage = 'done_accept';
+      client.note = 'accepted blindly (no fencing check)';
+      log(client.name + ' writes "' + client.writeVal + '" — storage accepts it BLINDLY (no fencing check)' + (overwritingNewer ? ', silently overwriting a newer write. DATA CORRUPTION.' : '.'));
+    }
+    if (lock.holder === client.id) { lock.holder = null; }
+  }
+
+  function tickLockExpiry(nowT) {
+    if (lock.holder === 'a' && (a.stage === 'holding' || a.stage === 'acquiring')) {
+      if (nowT >= lock.leaseDeadline && !lock.expiredWhileHeld) {
+        lock.expiredWhileHeld = true;
+        lock.holder = null; // freed for someone else, A doesn't know
+        log('Lease TTL (' + TTL + 'ms) expires while Client A is still stalled and never renewed it — lock is now free.');
+      }
+    }
+  }
+
+  function runScenario() {
+    resetAll(false);
+    scenarioRunning = true;
+    const start = performance.now();
+    a.stage = 'pending'; a.startAt = start;
+    b.stage = 'pending'; b.startAt = start + 150;
+    log('--- scenario start: Client A acquires first, Client B starts watching 150ms later ---');
+    render();
+  }
+
+  // ---------- render ----------
+  const STAGE_TEXT = {
+    idle: 'idle', pending: 'starting', acquiring: 'acquiring lock', holding: 'in critical section',
+    resuming: 'resumed / writing soon', writing: 'writing', waiting: 'waiting for lock',
+    done_accept: 'write accepted', done_reject: 'write rejected'
+  };
+  function badgeClassFor(stage) {
+    if (stage === 'holding') return 'st-paused';
+    if (stage === 'waiting') return 'st-waiting';
+    if (stage === 'acquiring' || stage === 'resuming' || stage === 'writing') return 'st-active';
+    if (stage === 'done_accept') return 'st-accepted';
+    if (stage === 'done_reject') return 'st-rejected';
+    return 'st-idle';
+  }
+
+  function renderClientCard(c) {
+    const el = document.getElementById('card-' + c.id);
+    el.innerHTML =
+      '<h4>' + c.name + ' <span class="dl-stage-badge ' + badgeClassFor(c.stage) + '">' + STAGE_TEXT[c.stage] + '</span></h4>' +
+      '<div class="dl-meta">' + (c.token != null ? 'fencing token = ' + c.token : 'no token yet') + '</div>' +
+      '<div class="dl-note">' + (c.note || '') + '</div>';
+  }
+
+  function renderLock(nowT) {
+    const el = document.getElementById('lock-card');
+    let ttlPct = 100;
+    let expired = false;
+    if (lock.holder !== null || lock.expiredWhileHeld) {
+      const elapsed = nowT - lock.leaseStart;
+      ttlPct = Math.max(0, 100 - (elapsed / TTL) * 100);
+      if (elapsed >= TTL) expired = true;
+    }
+    el.innerHTML =
+      '<h4>Lock service</h4>' +
+      '<div class="lock-owner">' + (lock.holder ? nameOf(lock.holder) : (lock.expiredWhileHeld ? 'free (expired)' : 'free')) + '</div>' +
+      '<div class="lock-meta">last token issued: ' + (tokenCounter || '—') + '</div>' +
+      '<div class="ttl-track"><div class="ttl-fill' + (expired ? ' expired' : '') + '" style="width:' + ttlPct + '%"></div></div>' +
+      '<div class="lock-meta">' + (lock.holder ? 'lease TTL remaining' : (expired ? 'lease expired' : 'no active lease')) + '</div>' +
+      '<div class="storage-box' + (storage.corrupted ? ' corrupt' : '') + '">storage.value = <span class="val">' + storage.value + '</span><br>storage.maxToken = <span class="val">' + storage.maxToken + '</span>' + (storage.corrupted ? '<br><b>CORRUPTED — newer write lost</b>' : '') + '</div>';
+  }
+
+  function updateStats() {
+    document.getElementById('stat-expired').textContent = lock.expiredWhileHeld ? 'yes' : 'no';
+    document.getElementById('stat-expired').className = lock.expiredWhileHeld ? 'danger' : 'good';
+    document.getElementById('stat-tokens').textContent = String(tokenCounter);
+    document.getElementById('stat-rejected').textContent = String(rejectedCount);
+    document.getElementById('stat-corrupt').textContent = storage.corrupted ? 'yes' : 'no';
+    document.getElementById('stat-corrupt').className = storage.corrupted ? 'danger' : 'good';
+  }
+
+  function render() {
+    const nowT = performance.now();
+    renderClientCard(a);
+    renderClientCard(b);
+    renderLock(nowT);
+    updateStats();
+  }
+
+  function tick() {
+    const nowT = performance.now();
+    if (scenarioRunning) {
+      tickLockExpiry(nowT);
+      stepA(nowT);
+      stepB(nowT);
+      render();
+      const aDone = a.stage === 'done_accept' || a.stage === 'done_reject';
+      const bDone = b.stage === 'done_accept' || b.stage === 'done_reject';
+      if (aDone && bDone) scenarioRunning = false;
+    }
+    requestAnimationFrame(tick);
+  }
+
+  // ---------- controls ----------
+  document.getElementById('gc-slider').addEventListener('input', (e) => {
+    gcPause = Number(e.target.value);
+    document.getElementById('gc-val').textContent = gcPause + 'ms';
+  });
+  document.getElementById('btn-fencing').addEventListener('click', (e) => {
+    fencingOn = !fencingOn;
+    e.target.textContent = 'Fencing tokens: ' + (fencingOn ? 'ON' : 'OFF');
+    e.target.classList.toggle('toggle-on', fencingOn);
+    e.target.classList.toggle('toggle-off', !fencingOn);
+  });
+  document.getElementById('btn-run').addEventListener('click', runScenario);
+  document.getElementById('btn-reset').addEventListener('click', () => {
+    resetAll(true);
+    log('Reset. Set the GC pause, then click "Run scenario".');
+  });
+
+  freshClients();
+  updateStats();
+  render();
+  requestAnimationFrame(tick);
+})();
+</script>
+</body>
+</html>

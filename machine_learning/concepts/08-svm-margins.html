@@ -1,0 +1,898 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1.0"/>
+  <title>SVM & Maximum Margin — Machine Learning Concepts</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com"/>
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet"/>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg:        #0d0f17;
+      --surface:   #141720;
+      --card:      #1a1e2e;
+      --border:    #252a3d;
+      --accent:    #00d4ff;
+      --purple:    #7c3aed;
+      --green:     #00ff88;
+      --yellow:    #ffd700;
+      --red:       #ff4757;
+      --orange:    #ff9500;
+      --text:      #e2e8f0;
+      --text-dim:  #8892a4;
+      --mono:      'JetBrains Mono', monospace;
+      --sans:      'Inter', system-ui, sans-serif;
+    }
+
+    html { scroll-behavior: smooth; }
+
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: var(--sans);
+      font-size: 16px;
+      line-height: 1.7;
+      min-height: 100vh;
+    }
+
+    header {
+      background: var(--surface);
+      border-bottom: 1px solid var(--border);
+      padding: 2rem 2rem 1.5rem;
+      max-width: 1100px;
+      margin: 0 auto;
+    }
+
+    .group-badge {
+      display: inline-block;
+      font-family: var(--mono);
+      font-size: 0.7rem;
+      font-weight: 700;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      color: var(--accent);
+      background: rgba(0, 212, 255, 0.1);
+      border: 1px solid rgba(0, 212, 255, 0.3);
+      padding: 0.2em 0.7em;
+      border-radius: 4px;
+      margin-bottom: 0.75rem;
+    }
+
+    header h1 {
+      font-size: clamp(1.6rem, 4vw, 2.4rem);
+      font-weight: 700;
+      color: var(--text);
+      line-height: 1.2;
+      margin-bottom: 0.5rem;
+    }
+
+    header h1 span.id {
+      color: var(--text-dim);
+      font-size: 0.55em;
+      font-family: var(--mono);
+      margin-right: 0.5rem;
+      vertical-align: middle;
+    }
+
+    header p.desc {
+      color: var(--text-dim);
+      font-size: 1.05rem;
+      max-width: 700px;
+    }
+
+    main {
+      max-width: 1100px;
+      margin: 0 auto;
+      padding: 0 2rem 4rem;
+    }
+
+    section { margin-top: 3rem; }
+
+    section > h2 {
+      font-size: 1.4rem;
+      font-weight: 700;
+      color: var(--accent);
+      border-bottom: 1px solid var(--border);
+      padding-bottom: 0.5rem;
+      margin-bottom: 1.5rem;
+    }
+
+    h3 {
+      font-size: 1.1rem;
+      font-weight: 600;
+      color: var(--yellow);
+      margin: 1.5rem 0 0.6rem;
+    }
+
+    p { margin-bottom: 1rem; color: var(--text); }
+
+    ul, ol { padding-left: 1.5rem; margin-bottom: 1rem; }
+    li { margin-bottom: 0.4rem; }
+
+    code {
+      font-family: var(--mono);
+      font-size: 0.85em;
+      background: rgba(0, 212, 255, 0.08);
+      color: var(--accent);
+      padding: 0.1em 0.35em;
+      border-radius: 3px;
+    }
+
+    .formula-block {
+      background: var(--card);
+      border-left: 3px solid var(--purple);
+      border-radius: 0 8px 8px 0;
+      padding: 0.8rem 1.2rem;
+      margin: 1rem 0;
+      font-family: var(--mono);
+      font-size: 0.95rem;
+      color: var(--text);
+    }
+
+    .callout {
+      background: rgba(124, 58, 237, 0.08);
+      border: 1px solid rgba(124, 58, 237, 0.3);
+      border-radius: 8px;
+      padding: 1rem 1.2rem;
+      margin: 1rem 0;
+    }
+
+    .callout strong { color: var(--purple); }
+
+    /* ── Visualization ── */
+    #visualization .viz-card {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 1.5rem;
+      margin-bottom: 1.5rem;
+    }
+
+    .viz-title { font-weight: 600; font-size: 1rem; color: var(--text); margin-bottom: 0.3rem; }
+    .viz-desc { font-size: 0.88rem; color: var(--text-dim); margin-bottom: 1.2rem; }
+
+    .controls {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 1.25rem;
+      align-items: center;
+      margin-bottom: 1.2rem;
+    }
+
+    .slider-row { display: flex; align-items: center; gap: 0.75rem; }
+
+    .slider-row label {
+      font-size: 0.82rem;
+      color: var(--text-dim);
+      white-space: nowrap;
+    }
+
+    .slider-row input[type="range"] {
+      accent-color: var(--accent);
+      width: 180px;
+    }
+
+    .slider-val {
+      font-family: var(--mono);
+      font-size: 0.85rem;
+      color: var(--accent);
+      min-width: 3.5rem;
+    }
+
+    select.ctrl-select {
+      font-family: var(--mono);
+      font-size: 0.82rem;
+      background: var(--surface);
+      color: var(--text);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 0.4em 0.7em;
+      cursor: pointer;
+    }
+    select.ctrl-select:hover { border-color: var(--accent); }
+
+    .ctrl-btn {
+      font-family: var(--mono);
+      font-size: 0.8rem;
+      padding: 0.45em 1.1em;
+      border-radius: 6px;
+      border: 1px solid var(--accent);
+      background: rgba(0, 212, 255, 0.08);
+      color: var(--accent);
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+
+    .ctrl-btn:hover { background: rgba(0, 212, 255, 0.2); }
+    .ctrl-btn:active { transform: scale(0.97); }
+    .ctrl-btn.alt { border-color: var(--purple); background: rgba(124,58,237,0.08); color: var(--purple); }
+    .ctrl-btn.alt:hover { background: rgba(124,58,237,0.2); }
+    .ctrl-btn.ghost { border-color: var(--border); background: transparent; color: var(--text-dim); }
+    .ctrl-btn.ghost:hover { border-color: var(--text-dim); }
+
+    canvas {
+      display: block;
+      border-radius: 8px;
+      background: var(--surface);
+      max-width: 100%;
+      cursor: crosshair;
+    }
+
+    .two-col {
+      display: grid;
+      grid-template-columns: 2fr 1fr;
+      gap: 1.5rem;
+      align-items: start;
+    }
+
+    @media (max-width: 880px) {
+      .two-col { grid-template-columns: 1fr; }
+    }
+
+    .readout-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 1rem;
+      margin-top: 1rem;
+    }
+
+    .readout {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 0.6rem 1rem;
+      font-size: 0.85rem;
+      color: var(--text-dim);
+      flex: 1;
+      min-width: 120px;
+    }
+
+    .readout strong { display: block; font-family: var(--mono); font-size: 1.1rem; margin-top: 0.2rem; }
+    .readout.hi strong { color: var(--green); }
+    .readout.lo strong { color: var(--red); }
+    .readout.mid strong { color: var(--accent); }
+    .readout.warn strong { color: var(--orange); }
+
+    .legend {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 1rem;
+      margin-top: 0.8rem;
+    }
+
+    .legend-item {
+      display: flex;
+      align-items: center;
+      gap: 0.4rem;
+      font-size: 0.8rem;
+      color: var(--text-dim);
+    }
+
+    .legend-dot { width: 10px; height: 10px; border-radius: 50%; }
+    .legend-ring { width: 10px; height: 10px; border-radius: 50%; border: 2px solid; background: transparent; }
+    .legend-line { width: 16px; height: 3px; border-radius: 2px; }
+    .legend-line.dashed { background: none; border-top: 2px dashed; height: 0; }
+
+    .hint {
+      font-size: 0.78rem;
+      color: var(--text-dim);
+      margin-top: 0.6rem;
+      font-style: italic;
+    }
+
+    /* ── Takeaways ── */
+    #takeaways ul { list-style: none; padding: 0; }
+
+    #takeaways li {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 1rem 1.2rem;
+      margin-bottom: 0.75rem;
+      padding-left: 3rem;
+      position: relative;
+    }
+
+    #takeaways li::before {
+      content: '→';
+      position: absolute;
+      left: 1rem;
+      color: var(--accent);
+      font-weight: 700;
+    }
+
+    /* ── Nav ── */
+    .concept-nav {
+      max-width: 1100px;
+      margin: 0 auto;
+      padding: 1.5rem 2rem 3rem;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      border-top: 1px solid var(--border);
+    }
+
+    .nav-link {
+      display: flex;
+      flex-direction: column;
+      gap: 0.2rem;
+      text-decoration: none;
+      padding: 0.6rem 1rem;
+      border-radius: 8px;
+      border: 1px solid var(--border);
+      background: var(--surface);
+      transition: all 0.2s;
+      max-width: 220px;
+    }
+
+    .nav-link:hover { border-color: var(--accent); background: rgba(0, 212, 255, 0.06); }
+    .nav-link.disabled { opacity: 0.3; pointer-events: none; }
+
+    .nav-dir {
+      font-size: 0.7rem;
+      font-family: var(--mono);
+      color: var(--text-dim);
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+    }
+
+    .nav-title { font-size: 0.88rem; color: var(--text); font-weight: 500; }
+
+    @media (max-width: 640px) {
+      header, main { padding-left: 1rem; padding-right: 1rem; }
+      .concept-nav { padding-left: 1rem; padding-right: 1rem; flex-direction: column; gap: 0.75rem; }
+      .nav-link { max-width: 100%; width: 100%; }
+      .slider-row input[type="range"] { width: 120px; }
+    }
+  </style>
+</head>
+<body>
+
+<header>
+  <div class="group-badge">Supervised Learning</div>
+  <h1><span class="id">08</span>SVM & Maximum Margin</h1>
+  <p class="desc">Maximum margin classifiers, support vectors, the kernel trick, and the C/gamma hyperparameters that control the margin-violation tradeoff.</p>
+</header>
+
+<main>
+
+  <!-- ── THEORY ── -->
+  <section id="theory">
+    <h2>Theory</h2>
+
+    <h3>Maximum Margin and the Primal Problem</h3>
+    <p>
+      A Support Vector Machine finds the hyperplane <code>w·x + b = 0</code> that separates two classes while maximizing the <strong>margin</strong> — the distance from the hyperplane to the nearest point of either class. Unlike logistic regression, which finds <em>any</em> separating hyperplane that maximizes likelihood, SVM explicitly optimizes for the hyperplane with the most breathing room on both sides, which turns out to minimize generalization error under a margin-based bound (Vapnik's statistical learning theory). For linearly separable data, the margin width is <code>2/‖w‖</code>, so maximizing margin is equivalent to minimizing <code>‖w‖</code> subject to every point satisfying <code>yᵢ(w·xᵢ + b) ≥ 1</code>. The points that sit exactly on this constraint boundary — where the inequality is tight — are the <strong>support vectors</strong>: the only points that determine the hyperplane. Every other point could be deleted or moved (as long as it stays outside the margin) without changing the solution at all, which is the core reason SVM gives a sparse, robust-to-outliers-in-the-interior decision function.
+    </p>
+    <div class="formula-block">
+      min (1/2)‖w‖² &nbsp; s.t. &nbsp; yᵢ(w·xᵢ + b) ≥ 1 &nbsp;∀i &nbsp;&nbsp;(hard margin)
+    </div>
+
+    <h3>Soft Margin, Hinge Loss, and C</h3>
+    <p>
+      Real data is rarely perfectly separable, so the <strong>soft-margin SVM</strong> introduces slack variables <code>ξᵢ ≥ 0</code> that allow points to violate the margin at a cost, controlled by the hyperparameter <code>C</code>:
+    </p>
+    <div class="formula-block">
+      min (1/2)‖w‖² + C·Σᵢξᵢ &nbsp; s.t. &nbsp; yᵢ(w·xᵢ+b) ≥ 1−ξᵢ, ξᵢ ≥ 0
+    </div>
+    <p>
+      This is equivalent to unconstrained minimization of the <strong>hinge loss</strong> plus an L2 penalty: <code>min (1/n)Σᵢ max(0, 1 − yᵢ(w·xᵢ+b)) + λ‖w‖²</code>, where <code>λ ∝ 1/C</code>. Hinge loss is zero once a point is correctly classified with margin ≥ 1 — it stops caring about points that are already comfortably correct, unlike cross-entropy which keeps pushing probabilities toward 0/1 forever. <code>C</code> is the single most important SVM hyperparameter: small <code>C</code> tolerates more margin violations, giving a wider margin and stronger regularization (higher bias, lower variance); large <code>C</code> penalizes violations heavily, giving a narrow margin that hugs the training data (lower bias, higher variance, risk of overfitting to noisy points near the boundary).
+    </p>
+
+    <h3>The Dual Problem, Support Vectors, and the Kernel Trick</h3>
+    <p>
+      SVMs are almost always solved in their <strong>dual form</strong>, derived via Lagrangian duality. The dual replaces <code>w</code> with a weighted sum of training points, <code>w = Σᵢ αᵢyᵢxᵢ</code>, where each <code>αᵢ ∈ [0, C]</code> is a Lagrange multiplier satisfying the KKT conditions. Points with <code>αᵢ = 0</code> are outside the margin and contribute nothing (most of the dataset, in practice); points with <code>0 &lt; αᵢ &lt; C</code> sit exactly on the margin boundary (<strong>free/unbound support vectors</strong>); points with <code>αᵢ = C</code> violate the margin — either inside it or misclassified (<strong>bound support vectors</strong>). Crucially, the dual objective and the decision function <code>f(x) = Σᵢ αᵢyᵢ(xᵢ·x) + b</code> depend on data <em>only through dot products</em>. This is what enables the <strong>kernel trick</strong>: replace <code>xᵢ·xⱼ</code> everywhere with a kernel function <code>K(xᵢ,xⱼ)</code> that computes the dot product in some (possibly infinite-dimensional) feature space without ever materializing that space. The RBF kernel <code>K(x,x′) = exp(−γ‖x−x′‖²)</code> corresponds to an infinite-dimensional feature map and lets SVM draw arbitrarily curved decision boundaries; the polynomial kernel <code>K(x,x′) = (γx·x′+r)^d</code> captures interaction terms up to degree <code>d</code> without explicitly constructing them. <code>gamma</code> controls how far a single training point's influence reaches — high gamma means each point only affects its immediate neighborhood (tight, wiggly boundary, overfitting risk); low gamma means influence extends far (smooth boundary, underfitting risk). Any valid kernel just needs to satisfy Mercer's condition (the kernel matrix must be positive semi-definite).
+    </p>
+
+    <h3>Production Reality</h3>
+    <p>
+      Training a kernel SVM (<code>sklearn.svm.SVC</code>) requires storing and optimizing over the full <code>n×n</code> kernel matrix — training scales roughly <code>O(n²)</code> to <code>O(n³)</code>, making it impractical past a few tens of thousands of rows. For large or high-dimensional (especially sparse, e.g. bag-of-words text) data, use <code>sklearn.svm.LinearSVC</code>, which solves the primal directly via <code>liblinear</code>'s coordinate descent and scales roughly linearly in <code>n</code> — or <code>SGDClassifier(loss="hinge")</code> for truly large-scale streaming data. <strong>Feature scaling is not optional</strong>: because the margin and every kernel (RBF, polynomial) depend directly on Euclidean distances or dot products, unscaled features (e.g. income in dollars vs. age in years) will dominate the margin computation — always fit on <code>StandardScaler</code>-transformed features. SVM's raw decision function is a signed distance, not a probability; scikit-learn's <code>probability=True</code> fits a separate Platt-scaling logistic regression via 5-fold internal cross-validation, which is expensive and can produce probabilities that are slightly inconsistent with the hard <code>predict()</code> boundary — enable it only if you truly need calibrated scores. Class imbalance is handled the same way as logistic regression, via <code>class_weight="balanced"</code>, which reweights the per-class contribution to the hinge-loss sum. Multiclass is handled via one-vs-rest or one-vs-one (scikit-learn defaults to one-vs-one for <code>SVC</code>, training <code>K(K−1)/2</code> binary classifiers), since the margin formulation is inherently binary. In practice, gradient-boosted trees have displaced kernel SVMs for most tabular problems (better handling of mixed feature types, less sensitivity to scaling, faster training at scale), but SVM with RBF kernel remains a strong, well-calibrated-with-tuning baseline for small-to-medium, high-dimensional, cleanly-separable problems — and the max-margin / hinge-loss framing underlies modern contrastive and metric-learning losses used in deep embedding models.
+    </p>
+  </section>
+
+  <!-- ── VISUALIZATION ── -->
+  <section id="visualization">
+    <h2>Interactive Visualization</h2>
+
+    <div class="viz-card">
+      <div class="viz-title">Live Soft-Margin SVM (Real SMO Optimizer)</div>
+      <div class="viz-desc">
+        <strong>Drag any point</strong> to reposition it — the SVM retrains from scratch every frame using a real simplified <strong>SMO (Sequential Minimal Optimization)</strong> dual solver, exactly as described in the dual formulation above. <strong>Click a point</strong> (without dragging) to flip its class label and watch the margin recompute. Switch the kernel to see the boundary morph from a straight line to a curved RBF or polynomial surface — same optimizer, same math, just a different <code>K(xᵢ,xⱼ)</code>.
+      </div>
+
+      <div class="controls">
+        <div class="slider-row">
+          <label>Kernel</label>
+          <select class="ctrl-select" id="kernel-select">
+            <option value="linear">Linear</option>
+            <option value="rbf">RBF (Gaussian)</option>
+            <option value="poly">Polynomial (deg 2)</option>
+          </select>
+        </div>
+        <div class="slider-row">
+          <label>C (penalty)</label>
+          <input type="range" id="c-slider" min="-20" max="30" step="1" value="0"/>
+          <span class="slider-val" id="c-val">1.00</span>
+        </div>
+        <div class="slider-row" id="gamma-row">
+          <label>γ (gamma)</label>
+          <input type="range" id="gamma-slider" min="-30" max="20" step="1" value="0"/>
+          <span class="slider-val" id="gamma-val">0.50</span>
+        </div>
+        <button class="ctrl-btn ghost" id="reset-btn">⟳ Reset points</button>
+      </div>
+
+      <div class="two-col">
+        <div>
+          <canvas id="svm-canvas" width="620" height="420"></canvas>
+          <div class="legend">
+            <div class="legend-item"><div class="legend-dot" style="background:var(--red)"></div>Class −1</div>
+            <div class="legend-item"><div class="legend-dot" style="background:var(--green)"></div>Class +1</div>
+            <div class="legend-item"><div class="legend-ring" style="border-color:var(--yellow)"></div>Free SV (0&lt;α&lt;C, on margin)</div>
+            <div class="legend-item"><div class="legend-ring" style="border-color:var(--orange)"></div>Bound SV (α=C, violates margin)</div>
+            <div class="legend-item"><div class="legend-line" style="background:var(--accent)"></div>Boundary f(x)=0</div>
+            <div class="legend-item"><div class="legend-line dashed" style="border-color:var(--purple)"></div>Margin f(x)=±1</div>
+          </div>
+          <p class="hint">Tip: drag a Class +1 point into the middle of the red cluster and watch it become a bound support vector (orange ring) as the margin bends to tolerate it.</p>
+        </div>
+        <div>
+          <div class="readout-row" style="flex-direction:column;">
+            <div class="readout mid">Kernel<strong id="ro-kernel">linear</strong></div>
+            <div class="readout warn">Support vectors<strong id="ro-nsv">—</strong></div>
+            <div class="readout hi">Train accuracy<strong id="ro-acc">—</strong></div>
+            <div class="readout lo">Margin width (2/‖w‖)<strong id="ro-margin">—</strong></div>
+            <div class="readout mid">SMO passes to converge<strong id="ro-passes">—</strong></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ── TAKEAWAYS ── -->
+  <section id="takeaways">
+    <h2>Key Takeaways</h2>
+    <ul>
+      <li>
+        <strong>Only support vectors matter for prediction.</strong> Every point with <code>α = 0</code> (typically the majority of the dataset once training converges) could be deleted without changing the boundary at all — SVM's decision function is a sparse weighted sum over a small subset of the training set, which is why it generalizes well from limited data but also why adding more "easy" interior points doesn't improve the model.
+      </li>
+      <li>
+        <strong>C trades margin width for training fit — it is the primary regularization knob.</strong> <code>sklearn.svm.SVC</code> defaults to <code>C=1.0</code>; in practice, tune it on a log scale (<code>0.01, 0.1, 1, 10, 100</code>) via <code>GridSearchCV</code> jointly with <code>gamma</code>, since the two interact — a wide-margin/low-C model can look identical to a narrow-margin/high-C model at different gamma settings.
+      </li>
+      <li>
+        <strong>gamma='scale' is scikit-learn's default</strong> (<code>1 / (n_features · X.var())</code>), not a fixed constant — it auto-adapts to feature scale, but you still must standardize features first (<code>StandardScaler</code>) since RBF and polynomial kernels are computed directly from Euclidean distances and dot products.
+      </li>
+      <li>
+        <strong>Kernel SVM training is O(n²)–O(n³)</strong> due to the dense <code>n×n</code> kernel (Gram) matrix — past roughly 50k–100k rows, switch to <code>LinearSVC</code> (primal, <code>liblinear</code>, near-linear scaling) or <code>SGDClassifier(loss="hinge")</code>, both of which forgo the kernel trick and only support linear boundaries.
+      </li>
+      <li>
+        <strong>predict_proba is bolted on, not native.</strong> <code>probability=True</code> triggers an internal 5-fold Platt-scaling fit that multiplies training time and can yield probability estimates mildly inconsistent with the hard-margin <code>predict()</code> call — don't enable it unless you actually consume the probabilities downstream.
+      </li>
+      <li>
+        <strong>Hinge loss's "zero loss once correct with margin" property is exactly what modern contrastive/triplet losses in embedding models borrow</strong> — recognizing max-margin hinge loss in a research paper's loss function is a direct callback to this 1990s SVM formulation.
+      </li>
+    </ul>
+  </section>
+
+</main>
+
+<!-- ── NAV ── -->
+<nav class="concept-nav">
+  <a class="nav-link" href="./07-logistic-regression.html">
+    <span class="nav-dir">← Previous</span>
+    <span class="nav-title">Logistic Regression</span>
+  </a>
+  <a class="nav-link" href="./09-decision-trees.html">
+    <span class="nav-dir">Next →</span>
+    <span class="nav-title">Decision Trees</span>
+  </a>
+</nav>
+
+<script>
+// ─── Shared canvas setup ─────────────────────────────────────────────────
+function setupCanvas(canvas, displayH, widthOverride) {
+  const dpr = window.devicePixelRatio || 1;
+  const displayW = widthOverride || canvas.parentElement.clientWidth || 620;
+  canvas.style.width = displayW + 'px';
+  canvas.style.height = displayH + 'px';
+  canvas.width = displayW * dpr;
+  canvas.height = displayH * dpr;
+  const ctx = canvas.getContext('2d');
+  ctx.scale(dpr, dpr);
+  return { ctx, W: displayW, H: displayH };
+}
+
+// ─── Dataset (world coords in [0,10]), label ∈ {-1, +1} ────────────────────
+const DEFAULT_DATA = [
+  { x: 1.5, y: 2.0, label: -1 }, { x: 2.2, y: 1.4, label: -1 }, { x: 1.8, y: 3.6, label: -1 },
+  { x: 3.0, y: 2.7, label: -1 }, { x: 3.6, y: 1.9, label: -1 }, { x: 1.1, y: 4.2, label: -1 },
+  { x: 3.2, y: 4.3, label: -1 }, { x: 2.4, y: 4.8, label: -1 }, { x: 4.2, y: 3.1, label: -1 },
+  { x: 1.2, y: 1.1, label: -1 }, { x: 0.7, y: 3.0, label: -1 }, { x: 2.8, y: 0.9, label: -1 },
+  { x: 6.6, y: 7.1, label: 1 }, { x: 7.3, y: 6.3, label: 1 }, { x: 8.1, y: 7.7, label: 1 },
+  { x: 6.1, y: 8.3, label: 1 }, { x: 8.7, y: 6.1, label: 1 }, { x: 7.9, y: 8.5, label: 1 },
+  { x: 5.7, y: 6.7, label: 1 }, { x: 9.1, y: 7.3, label: 1 }, { x: 6.9, y: 5.5, label: 1 },
+  { x: 8.5, y: 8.9, label: 1 }, { x: 5.4, y: 7.9, label: 1 }, { x: 7.1, y: 9.3, label: 1 }
+];
+
+let data = DEFAULT_DATA.map(p => ({ ...p }));
+const WORLD_MAX = 10;
+
+// ─── Kernel functions ───────────────────────────────────────────────────
+function kernelFn(name, gamma) {
+  if (name === 'linear') return (a, b) => a[0] * b[0] + a[1] * b[1];
+  if (name === 'rbf') return (a, b) => {
+    const dx = a[0] - b[0], dy = a[1] - b[1];
+    return Math.exp(-gamma * (dx * dx + dy * dy));
+  };
+  // poly degree 2
+  return (a, b) => Math.pow(gamma * (a[0] * b[0] + a[1] * b[1]) + 1, 2);
+}
+
+// ─── Simplified SMO (Platt-style) ──────────────────────────────────────
+function trainSMO(pts, C, K, maxPasses) {
+  const n = pts.length;
+  const X = pts.map(p => [p.x, p.y]);
+  const Y = pts.map(p => p.label);
+  const alpha = new Array(n).fill(0);
+  let b = 0;
+
+  // precompute kernel matrix
+  const Kmat = [];
+  for (let i = 0; i < n; i++) {
+    Kmat.push(new Array(n));
+    for (let j = 0; j < n; j++) Kmat[i][j] = K(X[i], X[j]);
+  }
+
+  function fVal(i) {
+    let s = 0;
+    for (let k = 0; k < n; k++) s += alpha[k] * Y[k] * Kmat[k][i];
+    return s + b;
+  }
+
+  const tol = 1e-3;
+  let passes = 0, totalPasses = 0;
+  const maxTotal = maxPasses;
+  while (passes < 5 && totalPasses < maxTotal) {
+    let numChanged = 0;
+    for (let i = 0; i < n; i++) {
+      const Ei = fVal(i) - Y[i];
+      if ((Y[i] * Ei < -tol && alpha[i] < C) || (Y[i] * Ei > tol && alpha[i] > 0)) {
+        let j = Math.floor(Math.random() * n);
+        while (j === i) j = Math.floor(Math.random() * n);
+        const Ej = fVal(j) - Y[j];
+        const aiOld = alpha[i], ajOld = alpha[j];
+        let L, H;
+        if (Y[i] !== Y[j]) {
+          L = Math.max(0, alpha[j] - alpha[i]);
+          H = Math.min(C, C + alpha[j] - alpha[i]);
+        } else {
+          L = Math.max(0, alpha[i] + alpha[j] - C);
+          H = Math.min(C, alpha[i] + alpha[j]);
+        }
+        if (L === H) continue;
+        const eta = 2 * Kmat[i][j] - Kmat[i][i] - Kmat[j][j];
+        if (eta >= 0) continue;
+        let aj = alpha[j] - (Y[j] * (Ei - Ej)) / eta;
+        aj = Math.max(L, Math.min(H, aj));
+        if (Math.abs(aj - ajOld) < 1e-7) continue;
+        alpha[j] = aj;
+        alpha[i] = aiOld + Y[i] * Y[j] * (ajOld - aj);
+        const b1 = b - Ei - Y[i] * (alpha[i] - aiOld) * Kmat[i][i] - Y[j] * (alpha[j] - ajOld) * Kmat[i][j];
+        const b2 = b - Ej - Y[i] * (alpha[i] - aiOld) * Kmat[i][j] - Y[j] * (alpha[j] - ajOld) * Kmat[j][j];
+        if (alpha[i] > 0 && alpha[i] < C) b = b1;
+        else if (alpha[j] > 0 && alpha[j] < C) b = b2;
+        else b = (b1 + b2) / 2;
+        numChanged++;
+      }
+    }
+    totalPasses++;
+    if (numChanged === 0) passes++; else passes = 0;
+  }
+
+  return { alpha, b, X, Y, K, passes: totalPasses };
+}
+
+function decisionFn(model, x, y) {
+  const { alpha, b, X, Y, K } = model;
+  let s = 0;
+  for (let k = 0; k < X.length; k++) {
+    if (alpha[k] > 1e-6) s += alpha[k] * Y[k] * K(X[k], [x, y]);
+  }
+  return s + b;
+}
+
+// ─── State ──────────────────────────────────────────────────────────────
+let state = { kernel: 'linear', C: 1.0, gamma: 0.5, model: null };
+let dragIdx = -1;
+let mouseDownPos = null;
+let didDrag = false;
+
+function retrain() {
+  const K = kernelFn(state.kernel, state.gamma);
+  state.model = trainSMO(data, state.C, K, 60);
+}
+
+// ─── Rendering ──────────────────────────────────────────────────────────
+const pad = { top: 16, right: 16, bottom: 34, left: 36 };
+
+function worldToPx(x, y, W, H) {
+  const plotW = W - pad.left - pad.right;
+  const plotH = H - pad.top - pad.bottom;
+  return {
+    px: pad.left + (x / WORLD_MAX) * plotW,
+    py: pad.top + plotH - (y / WORLD_MAX) * plotH
+  };
+}
+
+function pxToWorld(px, py, W, H) {
+  const plotW = W - pad.left - pad.right;
+  const plotH = H - pad.top - pad.bottom;
+  return {
+    x: ((px - pad.left) / plotW) * WORLD_MAX,
+    y: ((H - pad.bottom - py) / plotH) * WORLD_MAX
+  };
+}
+
+function drawAxes(ctx, W, H) {
+  ctx.strokeStyle = '#252a3d';
+  ctx.fillStyle = '#8892a4';
+  ctx.font = "10px 'JetBrains Mono', monospace";
+  ctx.lineWidth = 1;
+  const plotW = W - pad.left - pad.right;
+  const plotH = H - pad.top - pad.bottom;
+  for (let i = 0; i <= 10; i += 2) {
+    const xPx = pad.left + (i / 10) * plotW;
+    ctx.beginPath(); ctx.moveTo(xPx, pad.top); ctx.lineTo(xPx, H - pad.bottom); ctx.stroke();
+    ctx.textAlign = 'center';
+    ctx.fillText(i, xPx, H - pad.bottom + 14);
+    const yPx = pad.top + plotH - (i / 10) * plotH;
+    ctx.beginPath(); ctx.moveTo(pad.left, yPx); ctx.lineTo(W - pad.right, yPx); ctx.stroke();
+    ctx.textAlign = 'right';
+    ctx.fillText(i, pad.left - 6, yPx + 3);
+  }
+}
+
+// marching-squares-ish contour extraction for levels
+function drawContour(ctx, W, H, model, level, color, dashed) {
+  const RES = 42;
+  const plotW = W - pad.left - pad.right;
+  const plotH = H - pad.top - pad.bottom;
+  const grid = [];
+  for (let j = 0; j <= RES; j++) {
+    const row = [];
+    for (let i = 0; i <= RES; i++) {
+      const wx = (i / RES) * WORLD_MAX;
+      const wy = (j / RES) * WORLD_MAX;
+      row.push(decisionFn(model, wx, wy) - level);
+    }
+    grid.push(row);
+  }
+  ctx.strokeStyle = color;
+  ctx.lineWidth = dashed ? 1.5 : 2.5;
+  if (dashed) ctx.setLineDash([5, 4]); else ctx.setLineDash([]);
+  ctx.beginPath();
+  for (let j = 0; j < RES; j++) {
+    for (let i = 0; i < RES; i++) {
+      const v00 = grid[j][i], v10 = grid[j][i + 1], v01 = grid[j + 1][i], v11 = grid[j + 1][i + 1];
+      const corners = [v00, v10, v11, v01];
+      const anyPos = corners.some(v => v > 0), anyNeg = corners.some(v => v <= 0);
+      if (!(anyPos && anyNeg)) continue;
+      // cell world bounds
+      const x0 = (i / RES) * WORLD_MAX, x1 = ((i + 1) / RES) * WORLD_MAX;
+      const y0 = (j / RES) * WORLD_MAX, y1 = ((j + 1) / RES) * WORLD_MAX;
+      const pts = [];
+      const interp = (va, vb, pa, pb) => {
+        const t = va / (va - vb);
+        return [pa[0] + t * (pb[0] - pa[0]), pa[1] + t * (pb[1] - pa[1])];
+      };
+      const edges = [
+        [v00, v10, [x0, y0], [x1, y0]],
+        [v10, v11, [x1, y0], [x1, y1]],
+        [v11, v01, [x1, y1], [x0, y1]],
+        [v01, v00, [x0, y1], [x0, y0]]
+      ];
+      for (const [va, vb, pa, pb] of edges) {
+        if ((va > 0) !== (vb > 0)) pts.push(interp(va, vb, pa, pb));
+      }
+      if (pts.length >= 2) {
+        const p0 = worldToPx(pts[0][0], pts[0][1], W, H);
+        const p1 = worldToPx(pts[1][0], pts[1][1], W, H);
+        ctx.moveTo(p0.px, p0.py);
+        ctx.lineTo(p1.px, p1.py);
+      }
+    }
+  }
+  ctx.stroke();
+  ctx.setLineDash([]);
+}
+
+function render() {
+  const canvas = document.getElementById('svm-canvas');
+  const { ctx, W, H } = setupCanvas(canvas, 420);
+  ctx.fillStyle = '#141720';
+  ctx.fillRect(0, 0, W, H);
+
+  const model = state.model;
+
+  // decision-region heatmap
+  if (model) {
+    const RES = 44;
+    const plotW = W - pad.left - pad.right;
+    const plotH = H - pad.top - pad.bottom;
+    const cellW = plotW / RES, cellH = plotH / RES;
+    const red = [255, 71, 87], green = [0, 255, 136];
+    for (let j = 0; j < RES; j++) {
+      for (let i = 0; i < RES; i++) {
+        const wx = ((i + 0.5) / RES) * WORLD_MAX;
+        const wy = WORLD_MAX - ((j + 0.5) / RES) * WORLD_MAX;
+        const f = decisionFn(model, wx, wy);
+        const t = 1 / (1 + Math.exp(-f)); // squash for coloring only
+        const r = Math.round(red[0] + (green[0] - red[0]) * t);
+        const g = Math.round(red[1] + (green[1] - red[1]) * t);
+        const bch = Math.round(red[2] + (green[2] - red[2]) * t);
+        ctx.fillStyle = `rgba(${r},${g},${bch},0.14)`;
+        ctx.fillRect(pad.left + i * cellW, pad.top + j * cellH, cellW + 1, cellH + 1);
+      }
+    }
+  }
+
+  drawAxes(ctx, W, H);
+
+  if (model) {
+    drawContour(ctx, W, H, model, -1, '#7c3aed', true);
+    drawContour(ctx, W, H, model, 1, '#7c3aed', true);
+    drawContour(ctx, W, H, model, 0, '#00d4ff', false);
+  }
+
+  // points
+  for (let idx = 0; idx < data.length; idx++) {
+    const p = data[idx];
+    const { px, py } = worldToPx(p.x, p.y, W, H);
+    const alpha = model ? model.alpha[idx] : 0;
+    const C = state.C;
+    ctx.beginPath();
+    ctx.arc(px, py, 6, 0, Math.PI * 2);
+    ctx.fillStyle = p.label === 1 ? '#00ff88' : '#ff4757';
+    ctx.fill();
+    ctx.strokeStyle = '#0d0f17';
+    ctx.lineWidth = 1.2;
+    ctx.stroke();
+    if (alpha > 1e-4) {
+      const bound = alpha >= C - 1e-4;
+      ctx.beginPath();
+      ctx.arc(px, py, 10, 0, Math.PI * 2);
+      ctx.strokeStyle = bound ? '#ff9500' : '#ffd700';
+      ctx.lineWidth = 2.2;
+      ctx.stroke();
+    }
+  }
+
+  updateReadouts();
+}
+
+function updateReadouts() {
+  const model = state.model;
+  document.getElementById('ro-kernel').textContent = state.kernel;
+  if (!model) return;
+  const nsv = model.alpha.filter(a => a > 1e-4).length;
+  document.getElementById('ro-nsv').textContent = nsv + ' / ' + data.length;
+  let correct = 0;
+  for (let i = 0; i < data.length; i++) {
+    const f = decisionFn(model, data[i].x, data[i].y);
+    if ((f >= 0 ? 1 : -1) === data[i].label) correct++;
+  }
+  document.getElementById('ro-acc').textContent = ((correct / data.length) * 100).toFixed(0) + '%';
+  if (state.kernel === 'linear') {
+    // recover w from alpha for linear kernel
+    let w1 = 0, w2 = 0;
+    for (let i = 0; i < data.length; i++) {
+      w1 += model.alpha[i] * model.Y[i] * model.X[i][0];
+      w2 += model.alpha[i] * model.Y[i] * model.X[i][1];
+    }
+    const norm = Math.sqrt(w1 * w1 + w2 * w2);
+    document.getElementById('ro-margin').textContent = norm > 1e-6 ? (2 / norm).toFixed(2) : '—';
+  } else {
+    document.getElementById('ro-margin').textContent = 'n/a (nonlinear)';
+  }
+  document.getElementById('ro-passes').textContent = model.passes;
+}
+
+// ─── Controls ───────────────────────────────────────────────────────────
+function cFromSlider(v) { return Math.pow(10, v / 10); } // -20..30 -> 0.01..1000
+function gammaFromSlider(v) { return Math.pow(10, v / 10); } // -30..20 -> 0.001..100
+
+document.getElementById('kernel-select').addEventListener('change', (e) => {
+  state.kernel = e.target.value;
+  document.getElementById('gamma-row').style.opacity = state.kernel === 'linear' ? '0.35' : '1';
+  retrain();
+  render();
+});
+
+document.getElementById('c-slider').addEventListener('input', (e) => {
+  state.C = cFromSlider(parseInt(e.target.value));
+  document.getElementById('c-val').textContent = state.C < 1 ? state.C.toFixed(2) : state.C.toFixed(state.C < 10 ? 2 : 0);
+  retrain();
+  render();
+});
+
+document.getElementById('gamma-slider').addEventListener('input', (e) => {
+  state.gamma = gammaFromSlider(parseInt(e.target.value));
+  document.getElementById('gamma-val').textContent = state.gamma < 1 ? state.gamma.toFixed(3) : state.gamma.toFixed(2);
+  retrain();
+  render();
+});
+
+document.getElementById('reset-btn').addEventListener('click', () => {
+  data = DEFAULT_DATA.map(p => ({ ...p }));
+  retrain();
+  render();
+});
+
+const svmCanvas = document.getElementById('svm-canvas');
+
+function findNearestPoint(px, py, W, H) {
+  let best = -1, bestD = 14;
+  for (let i = 0; i < data.length; i++) {
+    const p = worldToPx(data[i].x, data[i].y, W, H);
+    const d = Math.hypot(p.px - px, p.py - py);
+    if (d < bestD) { bestD = d; best = i; }
+  }
+  return best;
+}
+
+svmCanvas.addEventListener('mousedown', (e) => {
+  const rect = svmCanvas.getBoundingClientRect();
+  const px = e.clientX - rect.left, py = e.clientY - rect.top;
+  const idx = findNearestPoint(px, py, rect.width, 420);
+  if (idx >= 0) {
+    dragIdx = idx;
+    didDrag = false;
+    mouseDownPos = { px, py };
+  }
+});
+
+let renderQueued = false;
+function queueRender() {
+  if (renderQueued) return;
+  renderQueued = true;
+  requestAnimationFrame(() => { renderQueued = false; retrain(); render(); });
+}
+
+svmCanvas.addEventListener('mousemove', (e) => {
+  if (dragIdx < 0) return;
+  const rect = svmCanvas.getBoundingClientRect();
+  const px = e.clientX - rect.left, py = e.clientY - rect.top;
+  if (mouseDownPos && Math.hypot(px - mouseDownPos.px, py - mouseDownPos.py) > 3) didDrag = true;
+  const world = pxToWorld(px, py, rect.width, 420);
+  data[dragIdx].x = Math.max(0, Math.min(WORLD_MAX, world.x));
+  data[dragIdx].y = Math.max(0, Math.min(WORLD_MAX, world.y));
+  queueRender();
+});
+
+window.addEventListener('mouseup', () => {
+  if (dragIdx >= 0 && !didDrag) {
+    // treat as click: flip label
+    data[dragIdx].label = data[dragIdx].label === 1 ? -1 : 1;
+    retrain();
+    render();
+  }
+  dragIdx = -1;
+  mouseDownPos = null;
+});
+
+window.addEventListener('resize', () => render());
+
+// ─── Init ───────────────────────────────────────────────────────────────
+state.C = cFromSlider(parseInt(document.getElementById('c-slider').value));
+state.gamma = gammaFromSlider(parseInt(document.getElementById('gamma-slider').value));
+document.getElementById('c-val').textContent = state.C.toFixed(2);
+document.getElementById('gamma-val').textContent = state.gamma.toFixed(2);
+document.getElementById('gamma-row').style.opacity = '0.35';
+retrain();
+render();
+document.fonts.ready.then(() => render());
+</script>
+</body>
+</html>

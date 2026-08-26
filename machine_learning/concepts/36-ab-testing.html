@@ -1,0 +1,882 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1.0"/>
+  <title>A/B Testing for ML Products — Machine Learning Concepts</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com"/>
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet"/>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg:        #0d0f17;
+      --surface:   #141720;
+      --card:      #1a1e2e;
+      --border:    #252a3d;
+      --accent:    #00d4ff;
+      --purple:    #7c3aed;
+      --green:     #00ff88;
+      --yellow:    #ffd700;
+      --red:       #ff4757;
+      --orange:    #ff9500;
+      --text:      #e2e8f0;
+      --text-dim:  #8892a4;
+      --mono:      'JetBrains Mono', monospace;
+      --sans:      'Inter', system-ui, sans-serif;
+    }
+
+    html { scroll-behavior: smooth; }
+
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: var(--sans);
+      font-size: 16px;
+      line-height: 1.7;
+      min-height: 100vh;
+    }
+
+    header {
+      background: var(--surface);
+      border-bottom: 1px solid var(--border);
+      padding: 2rem 2rem 1.5rem;
+      max-width: 1100px;
+      margin: 0 auto;
+    }
+
+    .group-badge {
+      display: inline-block;
+      font-family: var(--mono);
+      font-size: 0.7rem;
+      font-weight: 700;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      color: var(--accent);
+      background: rgba(0, 212, 255, 0.1);
+      border: 1px solid rgba(0, 212, 255, 0.3);
+      padding: 0.2em 0.7em;
+      border-radius: 4px;
+      margin-bottom: 0.75rem;
+    }
+
+    header h1 {
+      font-size: clamp(1.6rem, 4vw, 2.4rem);
+      font-weight: 700;
+      color: var(--text);
+      line-height: 1.2;
+      margin-bottom: 0.5rem;
+    }
+
+    header h1 span.id {
+      color: var(--text-dim);
+      font-size: 0.55em;
+      font-family: var(--mono);
+      margin-right: 0.5rem;
+      vertical-align: middle;
+    }
+
+    header p.desc {
+      color: var(--text-dim);
+      font-size: 1.05rem;
+      max-width: 700px;
+    }
+
+    main {
+      max-width: 1100px;
+      margin: 0 auto;
+      padding: 0 2rem 4rem;
+    }
+
+    section { margin-top: 3rem; }
+
+    section > h2 {
+      font-size: 1.4rem;
+      font-weight: 700;
+      color: var(--accent);
+      border-bottom: 1px solid var(--border);
+      padding-bottom: 0.5rem;
+      margin-bottom: 1.5rem;
+    }
+
+    h3 {
+      font-size: 1.1rem;
+      font-weight: 600;
+      color: var(--yellow);
+      margin: 1.5rem 0 0.6rem;
+    }
+
+    p { margin-bottom: 1rem; color: var(--text); }
+
+    ul, ol { padding-left: 1.5rem; margin-bottom: 1rem; }
+    li { margin-bottom: 0.4rem; }
+
+    code {
+      font-family: var(--mono);
+      font-size: 0.85em;
+      background: rgba(0, 212, 255, 0.08);
+      color: var(--accent);
+      padding: 0.1em 0.35em;
+      border-radius: 3px;
+    }
+
+    .formula-block {
+      background: var(--card);
+      border-left: 3px solid var(--purple);
+      border-radius: 0 8px 8px 0;
+      padding: 0.8rem 1.2rem;
+      margin: 1rem 0;
+      font-family: var(--mono);
+      font-size: 0.9rem;
+      color: var(--text);
+      line-height: 1.9;
+    }
+
+    .callout {
+      background: rgba(124, 58, 237, 0.08);
+      border: 1px solid rgba(124, 58, 237, 0.3);
+      border-radius: 8px;
+      padding: 1rem 1.2rem;
+      margin: 1rem 0;
+    }
+
+    .callout strong { color: var(--purple); }
+
+    /* ── Visualization ── */
+    #visualization .viz-card {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 1.5rem;
+      margin-bottom: 1.5rem;
+    }
+
+    .viz-title { font-weight: 600; font-size: 1rem; color: var(--text); margin-bottom: 0.3rem; }
+    .viz-desc { font-size: 0.88rem; color: var(--text-dim); margin-bottom: 1.2rem; }
+
+    .controls {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 1.25rem;
+      align-items: center;
+      margin-bottom: 1.2rem;
+    }
+
+    .slider-row { display: flex; align-items: center; gap: 0.75rem; }
+
+    .slider-row label {
+      font-size: 0.82rem;
+      color: var(--text-dim);
+      white-space: nowrap;
+    }
+
+    .slider-row input[type="range"] {
+      accent-color: var(--accent);
+      width: 150px;
+    }
+
+    .slider-val {
+      font-family: var(--mono);
+      font-size: 0.85rem;
+      color: var(--accent);
+      min-width: 2.6rem;
+      display: inline-block;
+    }
+
+    .ctrl-btn {
+      font-family: var(--mono);
+      font-size: 0.8rem;
+      padding: 0.45em 1.1em;
+      border-radius: 6px;
+      border: 1px solid var(--accent);
+      background: rgba(0, 212, 255, 0.08);
+      color: var(--accent);
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+
+    .ctrl-btn:hover { background: rgba(0, 212, 255, 0.2); }
+    .ctrl-btn:active { transform: scale(0.97); }
+    .ctrl-btn.ghost { border-color: var(--border); background: transparent; color: var(--text-dim); }
+    .ctrl-btn.ghost:hover { border-color: var(--text-dim); }
+    .ctrl-btn.warn-btn { border-color: var(--orange); color: var(--orange); background: rgba(255,149,0,0.08); }
+    .ctrl-btn.warn-btn:hover { background: rgba(255,149,0,0.2); }
+
+    .viz-grid {
+      display: grid;
+      grid-template-columns: 1.15fr 0.85fr;
+      gap: 1.5rem;
+    }
+
+    @media (max-width: 800px) {
+      .viz-grid { grid-template-columns: 1fr; }
+    }
+
+    canvas {
+      display: block;
+      border-radius: 8px;
+      background: var(--surface);
+      max-width: 100%;
+    }
+
+    .panel-label {
+      font-family: var(--mono);
+      font-size: 0.78rem;
+      color: var(--text-dim);
+      text-align: center;
+      margin-top: 0.5rem;
+    }
+
+    .legend {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 1rem;
+      margin-top: 0.8rem;
+      justify-content: center;
+    }
+
+    .legend-item {
+      display: flex;
+      align-items: center;
+      gap: 0.4rem;
+      font-size: 0.78rem;
+      color: var(--text-dim);
+    }
+
+    .legend-line { width: 18px; height: 3px; border-radius: 2px; }
+    .legend-dot { width: 10px; height: 10px; border-radius: 50%; }
+    .legend-swatch { width: 14px; height: 14px; border-radius: 3px; }
+
+    .side-panel {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 1.1rem;
+    }
+
+    .side-panel h4 {
+      font-size: 0.85rem;
+      font-weight: 700;
+      color: var(--text);
+      margin-bottom: 0.8rem;
+      letter-spacing: 0.02em;
+    }
+
+    .readout-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.6rem;
+      margin-top: 0.4rem;
+    }
+
+    .readout {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 0.55rem 0.9rem;
+      font-size: 0.78rem;
+      color: var(--text-dim);
+      flex: 1;
+      min-width: 130px;
+      border-left: 3px solid var(--accent);
+    }
+
+    .readout strong { display: block; font-family: var(--mono); font-size: 1.0rem; margin-top: 0.2rem; color: var(--text); }
+    .readout.warn { border-left-color: var(--red); }
+    .readout.warn strong { color: var(--red); }
+    .readout.good { border-left-color: var(--green); }
+    .readout.good strong { color: var(--green); }
+
+    .hint {
+      font-size: 0.78rem;
+      color: var(--text-dim);
+      margin-top: 0.8rem;
+      font-style: italic;
+      text-align: center;
+    }
+
+    .note-box {
+      background: rgba(255, 149, 0, 0.08);
+      border: 1px solid rgba(255, 149, 0, 0.35);
+      border-radius: 8px;
+      padding: 0.7rem 1rem;
+      font-size: 0.82rem;
+      color: var(--text-dim);
+      margin-top: 0.9rem;
+    }
+    .note-box strong { color: var(--orange); }
+
+    .mc-results {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.8rem;
+      margin-top: 1rem;
+    }
+
+    /* ── Takeaways ── */
+    #takeaways ul { list-style: none; padding: 0; }
+
+    #takeaways li {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 1rem 1.2rem;
+      margin-bottom: 0.75rem;
+      padding-left: 3rem;
+      position: relative;
+    }
+
+    #takeaways li::before {
+      content: '→';
+      position: absolute;
+      left: 1rem;
+      color: var(--accent);
+      font-weight: 700;
+    }
+
+    /* ── Nav ── */
+    .concept-nav {
+      max-width: 1100px;
+      margin: 0 auto;
+      padding: 1.5rem 2rem 3rem;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      border-top: 1px solid var(--border);
+    }
+
+    .nav-link {
+      display: flex;
+      flex-direction: column;
+      gap: 0.2rem;
+      text-decoration: none;
+      padding: 0.6rem 1rem;
+      border-radius: 8px;
+      border: 1px solid var(--border);
+      background: var(--surface);
+      transition: all 0.2s;
+      max-width: 220px;
+    }
+
+    .nav-link:hover { border-color: var(--accent); background: rgba(0, 212, 255, 0.06); }
+    .nav-link.disabled { opacity: 0.3; pointer-events: none; }
+
+    .nav-dir {
+      font-size: 0.7rem;
+      font-family: var(--mono);
+      color: var(--text-dim);
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+    }
+
+    .nav-title { font-size: 0.88rem; color: var(--text); font-weight: 500; }
+
+    @media (max-width: 640px) {
+      header, main { padding-left: 1rem; padding-right: 1rem; }
+      .concept-nav { padding-left: 1rem; padding-right: 1rem; flex-direction: column; gap: 0.75rem; }
+      .nav-link { max-width: 100%; width: 100%; }
+      .slider-row input[type="range"] { width: 110px; }
+    }
+  </style>
+</head>
+<body>
+
+<header>
+  <div class="group-badge">Systems</div>
+  <h1><span class="id">36</span>A/B Testing for ML Products</h1>
+  <p class="desc">Randomized experiment design for ML products — sample size/power calculation, novelty effects, and common pitfalls like peeking and Simpson's paradox.</p>
+</header>
+
+<main>
+
+  <!-- ── THEORY ── -->
+  <section id="theory">
+    <h2>Theory</h2>
+
+    <h3>Why Offline Metrics Aren't Enough</h3>
+    <p>
+      A model that improves offline AUC, NDCG, or RMSE does not automatically improve the business metric anyone cares about — revenue, retention, session length. Offline evaluation measures fit to historical labels, which were themselves generated under the <em>old</em> policy; deploying a new model changes user behavior in ways offline data can never capture (exposure bias, feedback loops, changed incentives). A/B testing closes that gap by randomizing real users into a <strong>control</strong> arm (existing system) and one or more <strong>treatment</strong> arms (new model/feature), then comparing outcomes under actual deployment. The randomization is what buys causal inference — without it, any observed difference is confounded with whatever correlates with who self-selected into each group.
+    </p>
+
+    <h3>Power, Sample Size, and Minimum Detectable Effect</h3>
+    <p>
+      Before running a test, teams fix a significance level <code>α</code> (probability of a false positive, conventionally 0.05) and a target power <code>1−β</code> (probability of detecting a true effect, conventionally 0.80), then solve for the sample size needed to detect a given <strong>minimum detectable effect (MDE)</strong>. For a two-proportion test the standard approximation is:
+    </p>
+    <div class="formula-block">
+      n ≈ 2·(z_{α/2} + z_β)² · p(1−p) / δ²
+    </div>
+    <p>
+      where <code>p</code> is the baseline conversion rate and <code>δ</code> is the absolute lift you need to detect. This is why detecting a 0.5% relative lift on a 2% baseline conversion rate can require millions of users per arm, while a 20% relative lift on the same baseline needs only a few thousand — MDE and required sample size trade off quadratically, which is the single most common reason "the test was inconclusive" (underpowered, not truly null).
+    </p>
+
+    <h3>The Peeking Problem</h3>
+    <p>
+      A p-value computed at day 3 and re-checked at day 7, day 10, day 14… is <strong>not</strong> a sequence of independent 5%-error tests — it's repeated significance testing on accumulating data, and the probability that <em>at least one</em> of those checks crosses <code>p &lt; 0.05</code> under the null is far higher than 5%. Johari et al. (2017, "Peeking at A/B Tests") showed this optional-stopping false-positive rate can climb to 25–30%+ over a multi-week experiment if analysts stop the moment they see significance. The fix is either a <strong>fixed-horizon</strong> design (commit to sample size and duration up front, look once) or a proper <strong>sequential testing</strong> framework — group-sequential designs with an alpha-spending function (O'Brien-Fleming, Pocock) or "always-valid" mixture-SPRT p-values (the approach behind Optimizely's Stats Engine), both of which are constructed so that peeking at any time preserves the nominal false-positive rate.
+    </p>
+
+    <h3>Novelty Effects, Simpson's Paradox, and Guardrails</h3>
+    <p>
+      Early lift often decays (novelty effect — users try the new thing, then habituate) or grows (primacy — a UI change needs a learning period), so experiments should run a minimum of one to two full weekly cycles to average out day-of-week seasonality before drawing conclusions. A subtler trap is <strong>Simpson's paradox</strong>: a treatment can win in every individual segment (country, device, cohort) yet lose in aggregate if the segment mix differs between arms — usually a symptom of a <strong>sample ratio mismatch (SRM)</strong> bug in the randomization or logging pipeline, which teams detect with a chi-square goodness-of-fit check on the actual vs expected traffic split before trusting any result. Production experimentation always tracks an <strong>Overall Evaluation Criterion (OEC)</strong> alongside <strong>guardrail metrics</strong> (latency, crash rate, unsubscribe rate) that must not regress even if the OEC improves, and applies multiple-testing correction (Bonferroni or FDR control) when many metrics or segments are checked simultaneously.
+    </p>
+
+    <h3>Production Reality</h3>
+    <p>
+      Variance-reduction techniques matter as much as raw sample size: Microsoft's <strong>CUPED</strong> (Controlled-experiment Using Pre-Existing Data) uses a user's pre-experiment metric value as a covariate to shrink outcome variance, often cutting required sample size by 30–50% for the same power. At scale, platforms like Booking.com (1,000+ concurrent experiments), Airbnb (ERF), Uber (XP), and open-source/commercial tools like Statsig, GrowthBook, and Eppo automate SRM checks, sequential p-values, and guardrail monitoring so individual analysts can't accidentally peek their way into a false launch decision.
+    </p>
+  </section>
+
+  <!-- ── VISUALIZATION ── -->
+  <section id="visualization">
+    <h2>Interactive Visualization</h2>
+
+    <div class="viz-card">
+      <div class="viz-title">Live A/B Trial Simulator — Sequential p-values & the Peeking Trap</div>
+      <div class="viz-desc">
+        Set a true effect size and traffic split, then run a simulated 30-day trial where daily conversions are drawn from real binomial sampling and a two-proportion z-test is recomputed every day. Watch the p-value chart — the red zone is where <code>p &lt; 0.05</code>; a curve that dips into it early and later climbs back out is exactly the "peeking" false-positive trap. Run 500 simulated trials to see how often naive early-stopping fires a false positive compared to a proper fixed-horizon check.
+      </div>
+
+      <div class="controls">
+        <div class="slider-row">
+          <label>True effect (relative lift)</label>
+          <input type="range" id="lift-slider" min="-10" max="30" step="1" value="10"/>
+          <span class="slider-val" id="lift-val">+10%</span>
+        </div>
+        <div class="slider-row">
+          <label>Traffic split (% treatment)</label>
+          <input type="range" id="split-slider" min="10" max="90" step="5" value="50"/>
+          <span class="slider-val" id="split-val">50%</span>
+        </div>
+        <div class="slider-row">
+          <label>Daily visitors</label>
+          <input type="range" id="visitors-slider" min="200" max="5000" step="100" value="1000"/>
+          <span class="slider-val" id="visitors-val">1000</span>
+        </div>
+      </div>
+
+      <div class="controls">
+        <button class="ctrl-btn" id="play-btn">▶ Run Trial</button>
+        <button class="ctrl-btn ghost" id="reset-btn">↻ New Trial</button>
+        <button class="ctrl-btn warn-btn" id="mc-btn">Run 500 Trials (Monte Carlo)</button>
+      </div>
+
+      <div class="viz-grid">
+        <div>
+          <canvas id="pval-canvas" width="560" height="320"></canvas>
+          <div class="panel-label">x = day of trial · y = −log₁₀(p) (higher = more significant) · dashed line = p = 0.05 threshold</div>
+          <div class="legend">
+            <div class="legend-item"><div class="legend-line" style="background:#00d4ff"></div>not significant</div>
+            <div class="legend-item"><div class="legend-line" style="background:#ff4757"></div>significant (p &lt; 0.05)</div>
+            <div class="legend-item"><div class="legend-line" style="background:#ffd700; height:1px; border-top:2px dashed #ffd700"></div>α = 0.05 threshold</div>
+          </div>
+        </div>
+        <div class="side-panel">
+          <h4>Trial Status (Day <span id="day-num">0</span> / 30)</h4>
+          <div class="readout-row" id="status-readout"></div>
+          <div class="note-box" id="peek-warning" style="display:none;">
+            <strong>⚠ Peeking risk:</strong> <span id="peek-warning-text"></span>
+          </div>
+          <h4 style="margin-top:1.2rem;">Monte Carlo Result (500 trials)</h4>
+          <div class="mc-results" id="mc-results">
+            <div class="readout"><span style="display:block">Run the button above to simulate</span></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="hint">Set true effect to 0% and run the Monte Carlo — the "peeking" false-stop rate lands far above the nominal 5%, while the fixed-horizon (day-30-only) rate stays close to 5%.</div>
+    </div>
+  </section>
+
+  <!-- ── TAKEAWAYS ── -->
+  <section id="takeaways">
+    <h2>Key Takeaways</h2>
+    <ul>
+      <li>
+        <strong>MDE and sample size trade off quadratically</strong> — halving the minimum detectable effect roughly quadruples the required sample size (<code>n ∝ 1/δ²</code>); most "inconclusive" experiments are underpowered for the effect size that actually exists, not genuinely null.
+      </li>
+      <li>
+        <strong>Peeking inflates the real false-positive rate well past α = 0.05</strong> — Johari et al. (2017) showed repeated daily significance checks can push the effective false-positive rate to 25–30%+; use a pre-committed fixed horizon, or a sequential framework (group-sequential alpha-spending, mixture-SPRT / Optimizely's Stats Engine) that's valid to check at any time.
+      </li>
+      <li>
+        <strong>CUPED can cut required sample size 30–50%</strong> — using a user's pre-experiment metric as a covariate to reduce outcome variance (Microsoft's technique) is now standard in mature experimentation platforms and shortens time-to-decision without touching the randomization.
+      </li>
+      <li>
+        <strong>Always run an A/A-style sample ratio mismatch (SRM) check first</strong> — a chi-square test on actual vs expected traffic split catches randomization/logging bugs before they masquerade as a real treatment effect; an undetected SRM is one of the most common causes of a false "win."
+      </li>
+      <li>
+        <strong>Simpson's paradox means segment-level results can contradict the aggregate</strong> — a treatment can win in every country and lose overall (or vice versa) if segment mix differs between arms; always slice by major segments, not just look at the topline delta.
+      </li>
+      <li>
+        <strong>Guardrail metrics gate the launch decision, not just the OEC</strong> — a model that lifts click-through but regresses p99 latency or crash rate should not ship; production platforms (Statsig, GrowthBook, Eppo, internal tools at Airbnb/Uber/Booking.com) enforce guardrails and multiple-testing correction automatically so individual analysts can't accidentally p-hack a launch.
+      </li>
+    </ul>
+  </section>
+
+</main>
+
+<!-- ── NAV ── -->
+<nav class="concept-nav">
+  <a class="nav-link" href="./35-recommender-systems.html">
+    <span class="nav-dir">← Previous</span>
+    <span class="nav-title">Recommender Systems</span>
+  </a>
+  <a class="nav-link" href="./37-time-series-decomposition.html">
+    <span class="nav-dir">Next →</span>
+    <span class="nav-title">Time Series Decomposition</span>
+  </a>
+</nav>
+
+<script>
+(function () {
+  // ── PRNG (mulberry32) ──
+  let seed = 1234;
+  function mulberry32() {
+    seed |= 0; seed = (seed + 0x6D2B79F5) | 0;
+    let t = Math.imul(seed ^ (seed >>> 15), 1 | seed);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  }
+
+  function gaussianRandom() {
+    // Box-Muller
+    let u = 0, v = 0;
+    while (u === 0) u = mulberry32();
+    while (v === 0) v = mulberry32();
+    return Math.sqrt(-2 * Math.log(u)) * Math.cos(2 * Math.PI * v);
+  }
+
+  // Normal-approximation binomial draw (fast, good for n*p and n*(1-p) both > ~5)
+  function sampleBinomialApprox(n, p) {
+    if (n <= 0) return 0;
+    const mean = n * p;
+    const sd = Math.sqrt(n * p * (1 - p));
+    let x = Math.round(mean + sd * gaussianRandom());
+    return Math.max(0, Math.min(n, x));
+  }
+
+  // Normal CDF via erf approximation (Abramowitz-Stegun 7.1.26)
+  function erf(x) {
+    const sign = x < 0 ? -1 : 1;
+    x = Math.abs(x);
+    const a1 = 0.254829592, a2 = -0.284496736, a3 = 1.421413741,
+          a4 = -1.453152027, a5 = 1.061405429, p = 0.3275911;
+    const t = 1 / (1 + p * x);
+    const y = 1 - (((((a5 * t + a4) * t) + a3) * t + a2) * t + a1) * t * Math.exp(-x * x);
+    return sign * y;
+  }
+
+  function normalCDF(z) {
+    return 0.5 * (1 + erf(z / Math.SQRT2));
+  }
+
+  function twoPropZTestPValue(x1, n1, x2, n2) {
+    if (n1 === 0 || n2 === 0) return 1;
+    const p1 = x1 / n1, p2 = x2 / n2;
+    const pPool = (x1 + x2) / (n1 + n2);
+    const se = Math.sqrt(pPool * (1 - pPool) * (1 / n1 + 1 / n2));
+    if (se === 0) return 1;
+    const z = (p2 - p1) / se;
+    const pTwoTailed = 2 * (1 - normalCDF(Math.abs(z)));
+    return Math.max(1e-12, Math.min(1, pTwoTailed));
+  }
+
+  const BASELINE = 0.10; // control conversion rate
+  const N_DAYS = 30;
+
+  // ── DOM refs ──
+  const liftSlider = document.getElementById('lift-slider');
+  const liftVal = document.getElementById('lift-val');
+  const splitSlider = document.getElementById('split-slider');
+  const splitVal = document.getElementById('split-val');
+  const visitorsSlider = document.getElementById('visitors-slider');
+  const visitorsVal = document.getElementById('visitors-val');
+  const playBtn = document.getElementById('play-btn');
+  const resetBtn = document.getElementById('reset-btn');
+  const mcBtn = document.getElementById('mc-btn');
+  const canvas = document.getElementById('pval-canvas');
+  const ctx = canvas.getContext('2d');
+  const dayNum = document.getElementById('day-num');
+  const statusReadout = document.getElementById('status-readout');
+  const peekWarning = document.getElementById('peek-warning');
+  const peekWarningText = document.getElementById('peek-warning-text');
+  const mcResults = document.getElementById('mc-results');
+
+  function currentLift() { return parseInt(liftSlider.value, 10) / 100; }
+  function currentSplit() { return parseInt(splitSlider.value, 10) / 100; }
+  function currentVisitors() { return parseInt(visitorsSlider.value, 10); }
+
+  function updateSliderLabels() {
+    const l = parseInt(liftSlider.value, 10);
+    liftVal.textContent = (l >= 0 ? '+' : '') + l + '%';
+    splitVal.textContent = splitSlider.value + '%';
+    visitorsVal.textContent = visitorsSlider.value;
+  }
+
+  // ── Single-trial state ──
+  let day = 0;
+  let cCount = 0, cConv = 0, tCount = 0, tConv = 0; // cumulative
+  let pHistory = []; // {day, p, sig}
+  let running = false;
+  let rafId = null;
+  let lastStepTime = 0;
+  let firstSigDay = null;
+
+  function runOneDay() {
+    const dailyN = currentVisitors();
+    const split = currentSplit();
+    const nT = Math.round(dailyN * split);
+    const nC = dailyN - nT;
+    const pControl = BASELINE;
+    const pTreatment = Math.max(0.001, Math.min(0.999, BASELINE * (1 + currentLift())));
+
+    const convC = sampleBinomialApprox(nC, pControl);
+    const convT = sampleBinomialApprox(nT, pTreatment);
+
+    cCount += nC; cConv += convC;
+    tCount += nT; tConv += convT;
+    day++;
+
+    const pval = twoPropZTestPValue(cConv, cCount, tConv, tCount);
+    const sig = pval < 0.05;
+    if (sig && firstSigDay === null) firstSigDay = day;
+    pHistory.push({ day, p: pval, sig });
+  }
+
+  function resetTrial() {
+    day = 0; cCount = 0; cConv = 0; tCount = 0; tConv = 0;
+    pHistory = [];
+    firstSigDay = null;
+    running = false;
+    playBtn.textContent = '▶ Run Trial';
+    if (rafId) cancelAnimationFrame(rafId);
+  }
+
+  function drawChart() {
+    const W = canvas.width, H = canvas.height;
+    ctx.clearRect(0, 0, W, H);
+    ctx.fillStyle = '#141720';
+    ctx.fillRect(0, 0, W, H);
+
+    const marginLeft = 45, marginTop = 15, marginBottom = 30, marginRight = 15;
+    const gridW = W - marginLeft - marginRight;
+    const gridH = H - marginTop - marginBottom;
+    const yMax = 6; // -log10(p) capped at 6 (p = 1e-6)
+    const threshold = -Math.log10(0.05); // ~1.301
+
+    function xPos(d) { return marginLeft + (d / N_DAYS) * gridW; }
+    function yPos(v) { return marginTop + gridH - (Math.min(v, yMax) / yMax) * gridH; }
+
+    // red significance zone (above threshold)
+    ctx.fillStyle = 'rgba(255,71,87,0.08)';
+    ctx.fillRect(marginLeft, marginTop, gridW, yPos(threshold) - marginTop);
+
+    // axes grid
+    ctx.strokeStyle = '#252a3d';
+    ctx.lineWidth = 1;
+    ctx.font = '10px "JetBrains Mono", monospace';
+    ctx.fillStyle = '#8892a4';
+    ctx.textAlign = 'right';
+    ctx.textBaseline = 'middle';
+    for (let v = 0; v <= yMax; v += 2) {
+      const y = yPos(v);
+      ctx.beginPath();
+      ctx.moveTo(marginLeft, y);
+      ctx.lineTo(W - marginRight, y);
+      ctx.stroke();
+      ctx.fillText(String(v), marginLeft - 6, y);
+    }
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'top';
+    for (let d = 0; d <= N_DAYS; d += 5) {
+      const x = xPos(d);
+      ctx.fillText(String(d), x, H - marginBottom + 8);
+    }
+
+    // threshold dashed line
+    ctx.strokeStyle = '#ffd700';
+    ctx.setLineDash([5, 4]);
+    ctx.lineWidth = 1.5;
+    const ty = yPos(threshold);
+    ctx.beginPath();
+    ctx.moveTo(marginLeft, ty);
+    ctx.lineTo(W - marginRight, ty);
+    ctx.stroke();
+    ctx.setLineDash([]);
+
+    // p-value curve
+    if (pHistory.length > 0) {
+      ctx.lineWidth = 2;
+      for (let i = 1; i < pHistory.length; i++) {
+        const prev = pHistory[i - 1], cur = pHistory[i];
+        ctx.strokeStyle = cur.sig ? '#ff4757' : '#00d4ff';
+        ctx.beginPath();
+        ctx.moveTo(xPos(prev.day), yPos(-Math.log10(prev.p)));
+        ctx.lineTo(xPos(cur.day), yPos(-Math.log10(cur.p)));
+        ctx.stroke();
+      }
+      pHistory.forEach(pt => {
+        ctx.fillStyle = pt.sig ? '#ff4757' : '#00d4ff';
+        ctx.beginPath();
+        ctx.arc(xPos(pt.day), yPos(-Math.log10(pt.p)), 2.5, 0, Math.PI * 2);
+        ctx.fill();
+      });
+    }
+
+    // axis labels
+    ctx.fillStyle = '#8892a4';
+    ctx.font = '10px "JetBrains Mono", monospace';
+    ctx.textAlign = 'left';
+    ctx.fillText('p=0.05', W - marginRight - 45, ty - 12);
+  }
+
+  function renderStatus() {
+    statusReadout.innerHTML = '';
+    dayNum.textContent = day;
+    const curP = pHistory.length ? pHistory[pHistory.length - 1].p : 1;
+    const pControlRate = cCount ? (cConv / cCount) : 0;
+    const pTreatRate = tCount ? (tConv / tCount) : 0;
+    const items = [
+      { label: 'Control conv. rate', val: (pControlRate * 100).toFixed(2) + '%', cls: '' },
+      { label: 'Treatment conv. rate', val: (pTreatRate * 100).toFixed(2) + '%', cls: '' },
+      { label: 'Sample size (both arms)', val: (cCount + tCount).toLocaleString(), cls: '' },
+      { label: 'Current p-value', val: day === 0 ? '—' : curP.toExponential(2), cls: day > 0 && curP < 0.05 ? 'warn' : (day > 0 ? 'good' : '') },
+      { label: 'Verdict', val: day === 0 ? 'not started' : (curP < 0.05 ? 'significant' : 'not significant'), cls: day > 0 && curP < 0.05 ? 'warn' : '' }
+    ];
+    items.forEach(it => {
+      const div = document.createElement('div');
+      div.className = 'readout' + (it.cls ? ' ' + it.cls : '');
+      div.innerHTML = `${it.label} <strong>${it.val}</strong>`;
+      statusReadout.appendChild(div);
+    });
+
+    if (day > 0 && day < N_DAYS && curP < 0.05) {
+      peekWarning.style.display = 'block';
+      peekWarningText.textContent = `Day ${day} is already significant (p = ${curP.toExponential(2)}). Stopping right now — before the pre-committed horizon of day ${N_DAYS} — is exactly the "peeking" behavior that inflates the true false-positive rate.`;
+    } else if (day === N_DAYS && firstSigDay !== null && firstSigDay < N_DAYS && curP >= 0.05) {
+      peekWarning.style.display = 'block';
+      peekWarningText.textContent = `This trial went significant on day ${firstSigDay} but is NOT significant at the final day ${N_DAYS}. Anyone who stopped early at day ${firstSigDay} would have shipped a false positive.`;
+    } else {
+      peekWarning.style.display = 'none';
+    }
+  }
+
+  function renderAll() {
+    drawChart();
+    renderStatus();
+  }
+
+  function animate(ts) {
+    if (!running) return;
+    if (ts - lastStepTime > 180) {
+      if (day < N_DAYS) {
+        runOneDay();
+        renderAll();
+        lastStepTime = ts;
+      } else {
+        running = false;
+        playBtn.textContent = '▶ Run Trial';
+        return;
+      }
+    }
+    rafId = requestAnimationFrame(animate);
+  }
+
+  playBtn.addEventListener('click', () => {
+    if (day >= N_DAYS) return; // finished, need reset
+    running = !running;
+    playBtn.textContent = running ? '⏸ Pause' : '▶ Run Trial';
+    if (running) {
+      lastStepTime = 0;
+      rafId = requestAnimationFrame(animate);
+    } else if (rafId) {
+      cancelAnimationFrame(rafId);
+    }
+  });
+
+  resetBtn.addEventListener('click', () => {
+    seed = (seed * 2654435761 + 12345) >>> 0;
+    resetTrial();
+    renderAll();
+  });
+
+  [liftSlider, splitSlider, visitorsSlider].forEach(s => {
+    s.addEventListener('input', () => {
+      updateSliderLabels();
+      // changing params mid-trial invalidates it; reset for a clean run
+      resetTrial();
+      renderAll();
+    });
+  });
+
+  // ── Monte Carlo ──
+  function runMonteCarlo() {
+    const trials = 500;
+    let peekFalseStops = 0; // any day 1..N_DAYS-1 significant
+    let fixedHorizonSig = 0; // day N_DAYS significant
+    const split = currentSplit();
+    const lift = currentLift();
+    const dailyN = currentVisitors();
+    const pControl = BASELINE;
+    const pTreatment = Math.max(0.001, Math.min(0.999, BASELINE * (1 + lift)));
+
+    for (let tIdx = 0; tIdx < trials; tIdx++) {
+      let cN = 0, cX = 0, tN = 0, tX = 0;
+      let sawSigEarly = false;
+      let finalSig = false;
+      for (let d = 1; d <= N_DAYS; d++) {
+        const nT = Math.round(dailyN * split);
+        const nC = dailyN - nT;
+        cN += nC; cX += sampleBinomialApprox(nC, pControl);
+        tN += nT; tX += sampleBinomialApprox(nT, pTreatment);
+        const pv = twoPropZTestPValue(cX, cN, tX, tN);
+        if (pv < 0.05) {
+          if (d < N_DAYS) sawSigEarly = true;
+          if (d === N_DAYS) finalSig = true;
+        }
+      }
+      if (sawSigEarly || finalSig) peekFalseStops++;
+      if (finalSig) fixedHorizonSig++;
+    }
+
+    const peekRate = (peekFalseStops / trials * 100).toFixed(1);
+    const fixedRate = (fixedHorizonSig / trials * 100).toFixed(1);
+    const isNull = Math.abs(lift) < 0.005;
+    const labelWord = isNull ? 'false-positive' : 'significant-result';
+
+    mcResults.innerHTML = '';
+    const item1 = document.createElement('div');
+    item1.className = 'readout warn';
+    item1.innerHTML = `Peeking ${labelWord} rate (stopped early any day) <strong>${peekRate}%</strong>`;
+    const item2 = document.createElement('div');
+    item2.className = 'readout good';
+    item2.innerHTML = `Fixed-horizon ${labelWord} rate (day 30 only) <strong>${fixedRate}%</strong>`;
+    mcResults.appendChild(item1);
+    mcResults.appendChild(item2);
+
+    const note = document.createElement('div');
+    note.className = 'note-box';
+    note.style.flexBasis = '100%';
+    note.innerHTML = isNull
+      ? `<strong>True effect = 0%</strong>: both rates are false-positive rates. Peeking inflates far above the nominal α = 5%, while the fixed-horizon check stays close to 5%.`
+      : `<strong>True effect = ${(lift * 100).toFixed(0)}%</strong>: these are true-positive (power) rates, not false positives — set the lift slider to 0% to reproduce the classic false-positive-inflation experiment.`;
+    mcResults.appendChild(note);
+  }
+
+  mcBtn.addEventListener('click', () => {
+    mcBtn.disabled = true;
+    mcBtn.textContent = 'Running…';
+    setTimeout(() => {
+      runMonteCarlo();
+      mcBtn.disabled = false;
+      mcBtn.textContent = 'Run 500 Trials (Monte Carlo)';
+    }, 20);
+  });
+
+  // ── Init ──
+  updateSliderLabels();
+  renderAll();
+})();
+</script>
+
+</body>
+</html>

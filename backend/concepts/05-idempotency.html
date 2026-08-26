@@ -1,0 +1,627 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1.0"/>
+<title>Idempotency — Backend Concepts</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #0d0f17;
+    --surface: #141720;
+    --card: #1a1e2e;
+    --border: #252a3d;
+    --accent: #00d4ff;
+    --purple: #7c3aed;
+    --green: #00ff88;
+    --yellow: #ffd700;
+    --red: #ff4757;
+    --orange: #ff9500;
+    --text: #e2e8f0;
+    --text-dim: #8892a4;
+    --mono: 'JetBrains Mono', monospace;
+    --sans: 'Inter', system-ui, sans-serif;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--sans);
+    line-height: 1.6;
+  }
+  header {
+    padding: 48px 24px 32px;
+    max-width: 920px;
+    margin: 0 auto;
+    border-bottom: 1px solid var(--border);
+  }
+  .badge {
+    display: inline-block;
+    font-family: var(--mono);
+    font-size: 12px;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--accent);
+    background: rgba(0,212,255,0.08);
+    border: 1px solid rgba(0,212,255,0.3);
+    padding: 4px 10px;
+    border-radius: 4px;
+    margin-bottom: 14px;
+  }
+  h1 {
+    font-size: 32px;
+    margin: 0 0 12px;
+    font-weight: 700;
+    letter-spacing: -0.01em;
+  }
+  header p.desc {
+    color: var(--text-dim);
+    font-size: 16px;
+    max-width: 720px;
+    margin: 0;
+  }
+  main {
+    max-width: 920px;
+    margin: 0 auto;
+    padding: 0 24px 60px;
+  }
+  section {
+    margin-top: 48px;
+  }
+  h2 {
+    font-size: 13px;
+    font-family: var(--mono);
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    color: var(--purple);
+    margin-bottom: 20px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+  h2::after {
+    content: '';
+    flex: 1;
+    height: 1px;
+    background: var(--border);
+  }
+  h3 {
+    font-size: 18px;
+    color: var(--accent);
+    margin: 28px 0 10px;
+  }
+  h3:first-child { margin-top: 0; }
+  p { color: var(--text); margin: 8px 0; }
+  ul { padding-left: 22px; }
+  li { margin: 6px 0; }
+  code {
+    font-family: var(--mono);
+    background: rgba(124,58,237,0.12);
+    color: var(--purple);
+    padding: 2px 6px;
+    border-radius: 4px;
+    font-size: 0.9em;
+  }
+  pre {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 16px;
+    overflow-x: auto;
+    font-family: var(--mono);
+    font-size: 13.5px;
+    color: var(--green);
+    line-height: 1.5;
+  }
+  .aside {
+    margin-top: 10px;
+    font-size: 13.5px;
+    color: var(--text-dim);
+    border-left: 2px solid var(--border);
+    padding-left: 12px;
+    font-style: italic;
+  }
+  .card {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 22px 24px;
+  }
+  .fail-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+    gap: 14px;
+    margin-top: 12px;
+  }
+  .fail-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-left: 3px solid var(--accent);
+    border-radius: 8px;
+    padding: 14px 16px;
+  }
+  .fail-card h4 {
+    margin: 0 0 6px;
+    font-size: 14.5px;
+    color: var(--accent);
+  }
+  .fail-card p { font-size: 13.5px; color: var(--text-dim); margin: 0; }
+  .fail-card.danger { border-left-color: var(--red); }
+  .fail-card.danger h4 { color: var(--red); }
+
+  /* Visualization */
+  .viz-card {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 24px;
+  }
+  .viz-intro { color: var(--text-dim); font-size: 14.5px; margin-bottom: 18px; }
+  .mode-tabs {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-bottom: 18px;
+  }
+  .mode-tab {
+    font-family: var(--mono);
+    font-size: 12.5px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    color: var(--text-dim);
+    padding: 8px 14px;
+    border-radius: 6px;
+    cursor: pointer;
+    transition: all 0.15s;
+  }
+  .mode-tab:hover { color: var(--text); border-color: var(--accent); }
+  .mode-tab.active {
+    color: var(--bg);
+    background: var(--accent);
+    border-color: var(--accent);
+    font-weight: 600;
+  }
+  .mode-tab.active[data-mode="naive"] {
+    background: var(--red);
+    border-color: var(--red);
+  }
+  svg#flow-svg { width: 100%; height: 240px; background: var(--surface); border-radius: 8px; border: 1px solid var(--border); }
+  .flow-node-label { fill: var(--text); font-family: var(--mono); font-size: 13px; }
+  .flow-edge-label { fill: var(--text-dim); font-family: var(--mono); font-size: 11px; }
+  .flow-log {
+    margin-top: 14px;
+    font-family: var(--mono);
+    font-size: 13px;
+    color: var(--green);
+    min-height: 44px;
+    white-space: pre-line;
+  }
+  .btn-row { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; margin-top: 12px; }
+  .run-btn {
+    font-family: var(--mono);
+    font-size: 13px;
+    background: var(--purple);
+    color: white;
+    border: none;
+    padding: 10px 18px;
+    border-radius: 6px;
+    cursor: pointer;
+    font-weight: 600;
+  }
+  .run-btn:hover { opacity: 0.88; }
+  .run-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+  .run-btn.secondary { background: var(--surface); border: 1px solid var(--border); color: var(--text-dim); }
+  .run-btn.secondary:hover { color: var(--text); border-color: var(--accent); }
+
+  .divider { height: 1px; background: var(--border); margin: 32px 0; }
+
+  .stat-row {
+    display: flex;
+    gap: 24px;
+    margin-top: 16px;
+    flex-wrap: wrap;
+  }
+  .stat {
+    font-family: var(--mono);
+    font-size: 13px;
+    color: var(--text-dim);
+  }
+  .stat b { color: var(--yellow); font-size: 18px; display: block; }
+  .stat b.danger { color: var(--red); }
+  .key-readout {
+    margin-top: 10px;
+    font-family: var(--mono);
+    font-size: 12.5px;
+    color: var(--text-dim);
+  }
+  .key-readout b { color: var(--accent); }
+
+  blockquote#interview-quote {
+    background: linear-gradient(135deg, rgba(0,212,255,0.06), rgba(124,58,237,0.06));
+    border-left: 4px solid var(--accent);
+    border-radius: 8px;
+    margin: 0;
+    padding: 22px 26px;
+    font-size: 16.5px;
+    color: var(--text);
+    font-style: italic;
+    position: relative;
+  }
+  blockquote#interview-quote::before {
+    content: '“';
+    font-size: 48px;
+    color: var(--accent);
+    opacity: 0.3;
+    position: absolute;
+    top: -6px;
+    left: 10px;
+    font-style: normal;
+  }
+  #takeaways ul { list-style: none; padding: 0; }
+  #takeaways li {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-left: 3px solid var(--green);
+    border-radius: 8px;
+    padding: 12px 16px;
+    margin-bottom: 10px;
+    font-size: 14.5px;
+  }
+  #takeaways li b { color: var(--green); }
+
+  nav.concept-nav {
+    max-width: 920px;
+    margin: 0 auto;
+    padding: 24px 24px 60px;
+    display: flex;
+    justify-content: space-between;
+    font-family: var(--mono);
+    font-size: 13.5px;
+  }
+  nav.concept-nav a {
+    color: var(--accent);
+    text-decoration: none;
+    border: 1px solid var(--border);
+    padding: 10px 16px;
+    border-radius: 6px;
+  }
+  nav.concept-nav a:hover { border-color: var(--accent); }
+  nav.concept-nav span.disabled {
+    color: var(--text-dim);
+    border: 1px solid var(--border);
+    padding: 10px 16px;
+    border-radius: 6px;
+    opacity: 0.4;
+  }
+  @media (max-width: 600px) {
+    h1 { font-size: 24px; }
+    .btn-row { flex-direction: column; align-items: flex-start; }
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <span class="badge">coordination</span>
+  <h1>Idempotency</h1>
+  <p class="desc">Why at-least-once delivery makes idempotency non-negotiable, the idempotency-key pattern (client-generated, atomic check-and-store), natural idempotency via conditional writes, and HTTP method semantics.</p>
+</header>
+
+<main>
+
+  <section id="theory">
+    <h2>Theory</h2>
+    <div class="card">
+      <h3>The definition</h3>
+      <p>An operation is idempotent if performing it multiple times has the same effect as performing it once. <code>SET x = 5</code> is idempotent; <code>x += 5</code> is not. That's the whole vocabulary word — the interesting part is what falls out of taking it seriously.</p>
+
+      <h3>Why it's non-negotiable</h3>
+      <p>Every distributed system delivers <b>at-least-once</b>. Networks time out without telling you whether the operation succeeded on the other end. Retries are automatic and often invisible — a client library, a load balancer, an orchestration engine like Temporal, all of them retry on timeout by default. <b>You cannot build a correct distributed system without idempotency somewhere</b> — the only question is whether you designed for it or discovered you needed it in production.</p>
+      <p>The canonical failure: a payment request times out, the client retries, and the customer is charged twice. The server did nothing wrong on either attempt — it succeeded both times. The bug isn't in the request handling, it's in the absence of a mechanism to recognize "I've already done this."</p>
+
+      <h3>The idempotency key pattern</h3>
+      <p>The client generates a unique key per logical operation (a UUID) and sends it with the request. The server:</p>
+      <ol style="padding-left: 22px; color: var(--text);">
+        <li>Checks whether it has seen this key</li>
+        <li>If yes, returns the <b>stored response</b> from the first attempt — it does not re-execute</li>
+        <li>If no, executes, stores the result against the key, returns it</li>
+      </ol>
+      <p>Critical details people miss:</p>
+      <div class="fail-grid">
+        <div class="fail-card">
+          <h4>Client-generated, once</h4>
+          <p>The key must be generated by the client, once, before the first attempt — and reused across retries. A key generated per-attempt defeats the purpose entirely: the server sees a "new" key every time and happily re-executes.</p>
+        </div>
+        <div class="fail-card">
+          <h4>Store the response, not a flag</h4>
+          <p>The retry needs to receive the same answer, not a bare "duplicate" error. If you only record "this key was used," a retry has no way to learn what actually happened the first time.</p>
+        </div>
+        <div class="fail-card danger">
+          <h4>Check-and-store must be atomic</h4>
+          <p>Otherwise two concurrent retries both see "not seen" and both execute. Use a unique constraint on the key column, a transaction, or a distributed lock — a read-then-write with a gap in between is a race, not a guard.</p>
+        </div>
+        <div class="fail-card">
+          <h4>Keys need a retention window</h4>
+          <p>Long enough to cover any realistic retry (24h is common), then expire. Keep them forever and the store grows unbounded; expire too early and a slow retry re-executes.</p>
+        </div>
+      </div>
+
+      <h3>Natural idempotency</h3>
+      <p>Sometimes you get it free by design, and it's worth preferring these over key-tracking machinery where you can — less to get wrong:</p>
+      <ul>
+        <li><b>Conditional writes</b> — <code>UPDATE ... WHERE version = 7</code>. The second attempt matches nothing and no-ops.</li>
+        <li><b>Upserts on a natural key</b> — the operation converges to the same state regardless of how many times it runs.</li>
+        <li><b>Set semantics</b> — adding an element that's already present is a no-op by definition.</li>
+        <li><b>Deriving state rather than mutating it</b> — recomputing a total from an event log is idempotent; incrementing a counter isn't. This is the same instinct behind event sourcing (<code>16-event-sourcing-cqrs</code>): state that's a pure function of an immutable log is idempotent to recompute by construction.</li>
+      </ul>
+
+      <h3>HTTP semantics</h3>
+      <p><code>GET</code>, <code>PUT</code>, <code>DELETE</code> are defined as idempotent; <code>POST</code> is not. This is why "create" endpoints are the ones that need explicit idempotency keys, and why PUT-with-client-generated-ID is sometimes a cleaner API design than POST-and-return-an-ID — it lets the transport-level idempotency guarantee do the work instead of bolting on a key.</p>
+
+      <p class="aside">Where this appeared in the Simbian design: <code>execute_write_tool</code> is idempotency-keyed precisely because a retried containment action is a customer-visible incident — isolating the same host twice, or worse, re-running a destructive remediation step twice, is not a "just retry it" situation the way a read is.</p>
+    </div>
+  </section>
+
+  <section id="visualization">
+    <h2>Visualization</h2>
+    <div class="viz-card">
+      <p class="viz-intro">A payment request times out before the client sees the response. The client retries. Toggle between the <b>idempotency-key pattern</b> (key generated once, reused) and the <b>naive</b> approach (no key persistence — every attempt looks new to the server) and watch what the retry actually does to the backing store.</p>
+
+      <div class="mode-tabs">
+        <div class="mode-tab active" data-mode="correct">Idempotency Key (correct)</div>
+        <div class="mode-tab" data-mode="naive">No Dedup (naive)</div>
+      </div>
+
+      <svg id="flow-svg" viewBox="0 0 700 240"></svg>
+      <div class="flow-log" id="flow-log">Click "Send request" to fire the first attempt. It will time out before the client sees the response — then click "Retry" to see what happens.</div>
+
+      <div class="btn-row">
+        <button class="run-btn" id="run-request">Send request →</button>
+        <button class="run-btn secondary" id="run-retry" disabled>Retry (same client call) →</button>
+        <button class="run-btn secondary" id="reset-sim">Reset scenario</button>
+      </div>
+
+      <div class="key-readout" id="key-readout">Idempotency key store: <b>empty</b></div>
+
+      <div class="stat-row">
+        <div class="stat">Requests sent<b id="stat-requests">0</b></div>
+        <div class="stat">DB charges executed<b id="stat-charges">0</b></div>
+        <div class="stat">Customer charged<b id="stat-amount">$0</b></div>
+      </div>
+    </div>
+  </section>
+
+  <section id="interview-line">
+    <h2>Interview Line</h2>
+    <blockquote id="interview-quote">
+      "The write tools carry an idempotency key generated when the action is first approved, so a Temporal retry after a timeout can't isolate the same host twice. The key is checked and the action recorded in one atomic operation — otherwise two concurrent retries both see 'not executed' and both fire."
+    </blockquote>
+  </section>
+
+  <section id="takeaways">
+    <h2>Key Takeaways</h2>
+    <ul>
+      <li><b>At-least-once delivery is why idempotency is mandatory</b>, not optional hardening — every queue, every retrying HTTP client, every orchestration engine (Temporal, SQS, Kafka consumers) gives you at-least-once by default, so idempotency is what makes those retries safe rather than a liability (see <code>02-queues-backpressure</code>).</li>
+      <li><b>The key must outlive the attempt, not the request object</b> — generate it once on the client (or at the point of first approval), before the first network call, and thread it through every retry unchanged. A key minted per HTTP call is indistinguishable from having no key at all.</li>
+      <li><b>Store the response, not just a "seen" bit</b> — the whole point of a retry is the client wants the answer it missed the first time, not a 409.</li>
+      <li><b>Check-and-store must be one atomic operation</b> — a unique constraint on the key column (or a transactional check-and-set) closes the race where two concurrent retries both see "not executed" and both fire. A naive read-then-write is a TOCTOU bug wearing a dedup costume.</li>
+      <li><b>Prefer natural idempotency when the domain gives it to you</b> — conditional writes (<code>WHERE version = 7</code>) and upserts on a natural key need no key-store machinery at all, and that's less surface area to get wrong.</li>
+      <li>Idempotency is the precondition for every other reliability pattern that leans on retries — <b>circuit breakers</b> (<code>06-circuit-breakers-bulkheads</code>) only make sense to retry-and-trip against operations that are safe to repeat; without idempotency, a "helpful" retry is just a second bug.</li>
+    </ul>
+  </section>
+
+</main>
+
+<nav class="concept-nav">
+  <a href="../concepts/04-sharding-partitioning.html">← Previous: Sharding and Partitioning</a>
+  <a href="../concepts/06-circuit-breakers-bulkheads.html">Next: Circuit Breakers and Bulkheads →</a>
+</nav>
+
+<script>
+(function() {
+  const svg = document.getElementById('flow-svg');
+  const NS = 'http://www.w3.org/2000/svg';
+  const nodes = {
+    client: { x: 80,  y: 130, label: 'Client' },
+    server: { x: 350, y: 130, label: 'Server' },
+    db:     { x: 620, y: 130, label: 'DB' }
+  };
+
+  function el(tag, attrs) {
+    const e = document.createElementNS(NS, tag);
+    for (const k in attrs) e.setAttribute(k, attrs[k]);
+    return e;
+  }
+
+  function drawBase() {
+    svg.innerHTML = '';
+    svg.appendChild(el('line', { x1: nodes.client.x+32, y1: nodes.client.y, x2: nodes.server.x-32, y2: nodes.server.y, stroke: '#252a3d', 'stroke-width': 2 }));
+    svg.appendChild(el('line', { x1: nodes.server.x+32, y1: nodes.server.y, x2: nodes.db.x-32, y2: nodes.db.y, stroke: '#252a3d', 'stroke-width': 2 }));
+    for (const key in nodes) {
+      const n = nodes[key];
+      const circle = el('circle', { cx: n.x, cy: n.y, r: 32, fill: '#1a1e2e', stroke: '#00d4ff', 'stroke-width': 2, id: 'node-' + key });
+      svg.appendChild(circle);
+      const text = el('text', { x: n.x, y: n.y + 5, 'text-anchor': 'middle', class: 'flow-node-label' });
+      text.textContent = n.label;
+      svg.appendChild(text);
+    }
+    // key store readout under server
+    const storeLabel = el('text', { x: nodes.server.x, y: nodes.server.y + 55, 'text-anchor': 'middle', class: 'flow-edge-label' });
+    storeLabel.id = 'store-label';
+    storeLabel.textContent = 'key store: ' + Object.keys(keyStore).length + ' key(s)';
+    svg.appendChild(storeLabel);
+  }
+
+  // ---------- state ----------
+  let currentMode = 'correct';
+  let keyStore = {};       // key -> { amount }
+  let clientKey = null;    // key the client is currently holding (correct mode: fixed once generated)
+  let requestsSent = 0;
+  let chargesExecuted = 0;
+  let amountCharged = 0;
+  let animating = false;
+  let attemptCount = 0;
+
+  function genKey() {
+    return Math.random().toString(16).slice(2, 6) + '-' + Math.random().toString(16).slice(2, 6);
+  }
+
+  function updateStats() {
+    document.getElementById('stat-requests').textContent = requestsSent;
+    document.getElementById('stat-charges').textContent = chargesExecuted;
+    document.getElementById('stat-charges').className = chargesExecuted > 1 ? 'danger' : '';
+    document.getElementById('stat-amount').textContent = '$' + amountCharged;
+    document.getElementById('stat-amount').className = amountCharged > 50 ? 'danger' : '';
+    const keys = Object.keys(keyStore);
+    document.getElementById('key-readout').innerHTML = 'Idempotency key store: <b>' +
+      (keys.length ? keys.map(k => k.slice(0,9)+'…').join(', ') : 'empty') + '</b>';
+  }
+
+  function log(msg) {
+    document.getElementById('flow-log').textContent = msg;
+  }
+
+  function moveDot(from, to, duration, color, dashed) {
+    return new Promise(resolve => {
+      const dot = el('circle', { r: 7, fill: color, cx: from.x, cy: from.y });
+      if (dashed) dot.setAttribute('opacity', '0.9');
+      svg.appendChild(dot);
+      const start = performance.now();
+      function frame(now) {
+        const t = Math.min(1, (now - start) / duration);
+        dot.setAttribute('cx', from.x + (to.x - from.x) * t);
+        dot.setAttribute('cy', from.y + (to.y - from.y) * t);
+        if (t < 1) {
+          requestAnimationFrame(frame);
+        } else {
+          if (dashed) {
+            // response "lost" — fade out instead of arriving
+            dot.setAttribute('fill', '#ff4757');
+            let fadeStart = performance.now();
+            function fade(now2) {
+              const ft = Math.min(1, (now2 - fadeStart) / 400);
+              dot.setAttribute('opacity', 1 - ft);
+              if (ft < 1) requestAnimationFrame(fade);
+              else { svg.removeChild(dot); resolve(); }
+            }
+            requestAnimationFrame(fade);
+          } else {
+            svg.removeChild(dot);
+            resolve();
+          }
+        }
+      }
+      requestAnimationFrame(frame);
+    });
+  }
+
+  async function pulseNode(id, color) {
+    const node = document.getElementById('node-' + id);
+    const orig = node.getAttribute('stroke');
+    node.setAttribute('stroke', color);
+    await new Promise(r => setTimeout(r, 300));
+    node.setAttribute('stroke', orig);
+  }
+
+  async function runAttempt(isRetry) {
+    if (animating) return;
+    animating = true;
+    document.getElementById('run-request').disabled = true;
+    document.getElementById('run-retry').disabled = true;
+    attemptCount++;
+    requestsSent++;
+
+    // determine the key used for this attempt
+    let key;
+    if (currentMode === 'correct') {
+      if (!clientKey) clientKey = genKey();
+      key = clientKey;
+    } else {
+      // naive: a fresh key (or effectively no dedup) every attempt
+      key = genKey();
+    }
+
+    const label = isRetry ? 'Attempt ' + attemptCount + ' (RETRY, same client call)' : 'Attempt ' + attemptCount + ' (first try)';
+    log(label + '\nclient → server: charge request, key=' + key.slice(0,9) + '…');
+    await moveDot(nodes.client, nodes.server, 650, '#00d4ff', false);
+    await pulseNode('server', '#00d4ff');
+
+    if (keyStore[key]) {
+      // seen before — short circuit
+      log(label + '\nserver: key already in store → return stored response, DB NOT touched');
+      await new Promise(r => setTimeout(r, 300));
+      await moveDot(nodes.server, nodes.client, 650, '#00ff88', false);
+      await pulseNode('client', '#00ff88');
+      log(label + '\nclient receives the ORIGINAL response — no duplicate charge.');
+    } else {
+      log(label + '\nserver: key not seen → execute against DB');
+      await moveDot(nodes.server, nodes.db, 600, '#ffd700', false);
+      await pulseNode('db', '#ffd700');
+      chargesExecuted++;
+      amountCharged += 50;
+      keyStore[key] = { amount: 50 };
+      updateStats();
+      log(label + '\nDB: charge executed ($50). server stores response against key.');
+      await new Promise(r => setTimeout(r, 250));
+      await moveDot(nodes.db, nodes.server, 600, '#ffd700', false);
+
+      // First attempt in this scenario always times out before the client sees it —
+      // that's *why* a retry happens at all.
+      if (!isRetry) {
+        log(label + '\nserver → client: response sent… but the connection times out. Client never sees it.');
+        await moveDot(nodes.server, nodes.client, 650, '#ff4757', true);
+        log(label + '\nClient got nothing back. It will retry the same logical operation.');
+      } else {
+        await moveDot(nodes.server, nodes.client, 650, '#00ff88', false);
+        await pulseNode('client', '#00ff88');
+        log(label + '\nclient receives the response this time.');
+      }
+    }
+
+    updateStats();
+    drawStoreLabel();
+    animating = false;
+    document.getElementById('run-request').disabled = attemptCount >= 1;
+    document.getElementById('run-retry').disabled = false;
+  }
+
+  function drawStoreLabel() {
+    const lbl = document.getElementById('store-label');
+    if (lbl) lbl.textContent = 'key store: ' + Object.keys(keyStore).length + ' key(s)';
+  }
+
+  function resetScenario() {
+    keyStore = {};
+    clientKey = null;
+    requestsSent = 0;
+    chargesExecuted = 0;
+    amountCharged = 0;
+    attemptCount = 0;
+    animating = false;
+    drawBase();
+    updateStats();
+    log('Click "Send request" to fire the first attempt. It will time out before the client sees the response — then click "Retry" to see what happens.');
+    document.getElementById('run-request').disabled = false;
+    document.getElementById('run-retry').disabled = true;
+  }
+
+  document.querySelectorAll('.mode-tab').forEach(t => t.addEventListener('click', () => {
+    document.querySelectorAll('.mode-tab').forEach(x => x.classList.remove('active'));
+    t.classList.add('active');
+    currentMode = t.dataset.mode;
+    resetScenario();
+  }));
+
+  document.getElementById('run-request').addEventListener('click', () => runAttempt(false));
+  document.getElementById('run-retry').addEventListener('click', () => runAttempt(true));
+  document.getElementById('reset-sim').addEventListener('click', resetScenario);
+
+  drawBase();
+  updateStats();
+})();
+</script>
+</body>
+</html>

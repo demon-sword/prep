@@ -1,0 +1,878 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1.0"/>
+  <title>Principal Component Analysis — Machine Learning Concepts</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com"/>
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet"/>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg:        #0d0f17;
+      --surface:   #141720;
+      --card:      #1a1e2e;
+      --border:    #252a3d;
+      --accent:    #00d4ff;
+      --purple:    #7c3aed;
+      --green:     #00ff88;
+      --yellow:    #ffd700;
+      --red:       #ff4757;
+      --orange:    #ff9500;
+      --text:      #e2e8f0;
+      --text-dim:  #8892a4;
+      --mono:      'JetBrains Mono', monospace;
+      --sans:      'Inter', system-ui, sans-serif;
+    }
+
+    html { scroll-behavior: smooth; }
+
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: var(--sans);
+      font-size: 16px;
+      line-height: 1.7;
+      min-height: 100vh;
+    }
+
+    header {
+      background: var(--surface);
+      border-bottom: 1px solid var(--border);
+      padding: 2rem 2rem 1.5rem;
+      max-width: 1100px;
+      margin: 0 auto;
+    }
+
+    .group-badge {
+      display: inline-block;
+      font-family: var(--mono);
+      font-size: 0.7rem;
+      font-weight: 700;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      color: var(--accent);
+      background: rgba(0, 212, 255, 0.1);
+      border: 1px solid rgba(0, 212, 255, 0.3);
+      padding: 0.2em 0.7em;
+      border-radius: 4px;
+      margin-bottom: 0.75rem;
+    }
+
+    header h1 {
+      font-size: clamp(1.6rem, 4vw, 2.4rem);
+      font-weight: 700;
+      color: var(--text);
+      line-height: 1.2;
+      margin-bottom: 0.5rem;
+    }
+
+    header h1 span.id {
+      color: var(--text-dim);
+      font-size: 0.55em;
+      font-family: var(--mono);
+      margin-right: 0.5rem;
+      vertical-align: middle;
+    }
+
+    header p.desc {
+      color: var(--text-dim);
+      font-size: 1.05rem;
+      max-width: 700px;
+    }
+
+    main {
+      max-width: 1100px;
+      margin: 0 auto;
+      padding: 0 2rem 4rem;
+    }
+
+    section { margin-top: 3rem; }
+
+    section > h2 {
+      font-size: 1.4rem;
+      font-weight: 700;
+      color: var(--accent);
+      border-bottom: 1px solid var(--border);
+      padding-bottom: 0.5rem;
+      margin-bottom: 1.5rem;
+    }
+
+    h3 {
+      font-size: 1.1rem;
+      font-weight: 600;
+      color: var(--yellow);
+      margin: 1.5rem 0 0.6rem;
+    }
+
+    p { margin-bottom: 1rem; color: var(--text); }
+
+    ul, ol { padding-left: 1.5rem; margin-bottom: 1rem; }
+    li { margin-bottom: 0.4rem; }
+
+    code {
+      font-family: var(--mono);
+      font-size: 0.85em;
+      background: rgba(0, 212, 255, 0.08);
+      color: var(--accent);
+      padding: 0.1em 0.35em;
+      border-radius: 3px;
+    }
+
+    .formula-block {
+      background: var(--card);
+      border-left: 3px solid var(--purple);
+      border-radius: 0 8px 8px 0;
+      padding: 0.8rem 1.2rem;
+      margin: 1rem 0;
+      font-family: var(--mono);
+      font-size: 0.95rem;
+      color: var(--text);
+    }
+
+    .callout {
+      background: rgba(124, 58, 237, 0.08);
+      border: 1px solid rgba(124, 58, 237, 0.3);
+      border-radius: 8px;
+      padding: 1rem 1.2rem;
+      margin: 1rem 0;
+    }
+
+    .callout strong { color: var(--purple); }
+
+    /* ── Visualization ── */
+    #visualization .viz-card {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 1.5rem;
+      margin-bottom: 1.5rem;
+    }
+
+    .viz-title { font-weight: 600; font-size: 1rem; color: var(--text); margin-bottom: 0.3rem; }
+    .viz-desc { font-size: 0.88rem; color: var(--text-dim); margin-bottom: 1.2rem; }
+
+    .controls {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 1.25rem;
+      align-items: center;
+      margin-bottom: 1.2rem;
+    }
+
+    .slider-row { display: flex; align-items: center; gap: 0.75rem; }
+
+    .slider-row label {
+      font-size: 0.82rem;
+      color: var(--text-dim);
+      white-space: nowrap;
+    }
+
+    .slider-row input[type="range"] {
+      accent-color: var(--accent);
+      width: 150px;
+    }
+
+    .slider-val {
+      font-family: var(--mono);
+      font-size: 0.85rem;
+      color: var(--accent);
+      min-width: 2.6rem;
+      display: inline-block;
+    }
+
+    .ctrl-btn {
+      font-family: var(--mono);
+      font-size: 0.8rem;
+      padding: 0.45em 1.1em;
+      border-radius: 6px;
+      border: 1px solid var(--accent);
+      background: rgba(0, 212, 255, 0.08);
+      color: var(--accent);
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+
+    .ctrl-btn:hover { background: rgba(0, 212, 255, 0.2); }
+    .ctrl-btn:active { transform: scale(0.97); }
+    .ctrl-btn.ghost { border-color: var(--border); background: transparent; color: var(--text-dim); }
+    .ctrl-btn.ghost:hover { border-color: var(--text-dim); }
+    .ctrl-btn.toggle-on { background: rgba(0, 255, 136, 0.14); border-color: var(--green); color: var(--green); }
+
+    canvas {
+      display: block;
+      border-radius: 8px;
+      background: var(--surface);
+      max-width: 100%;
+    }
+
+    .main-layout {
+      display: grid;
+      grid-template-columns: 1.3fr 1fr;
+      gap: 1.5rem;
+      align-items: start;
+    }
+
+    .side-panel {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 1.1rem;
+    }
+
+    .side-panel h4 {
+      font-size: 0.85rem;
+      font-weight: 700;
+      color: var(--text);
+      margin-bottom: 0.8rem;
+      letter-spacing: 0.02em;
+    }
+
+    .legend {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 1rem;
+      margin-top: 0.8rem;
+    }
+
+    .legend-item {
+      display: flex;
+      align-items: center;
+      gap: 0.4rem;
+      font-size: 0.78rem;
+      color: var(--text-dim);
+    }
+
+    .legend-dot { width: 10px; height: 10px; border-radius: 50%; }
+    .legend-line { width: 16px; height: 2px; }
+
+    .readout-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.6rem;
+      margin-top: 1rem;
+    }
+
+    .readout {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 0.55rem 0.9rem;
+      font-size: 0.78rem;
+      color: var(--text-dim);
+      flex: 1;
+      min-width: 110px;
+      transition: border-color 0.2s;
+    }
+
+    .readout strong { display: block; font-family: var(--mono); font-size: 1.05rem; margin-top: 0.2rem; }
+    .readout.hi strong { color: var(--red); }
+    .readout.lo strong { color: var(--green); }
+    .readout.mid strong { color: var(--accent); }
+    .readout.active { border-color: var(--green); box-shadow: 0 0 0 1px rgba(0,255,136,0.25); }
+
+    .hint {
+      font-size: 0.78rem;
+      color: var(--text-dim);
+      margin-top: 0.6rem;
+      font-style: italic;
+    }
+
+    /* ── Takeaways ── */
+    #takeaways ul { list-style: none; padding: 0; }
+
+    #takeaways li {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 1rem 1.2rem;
+      margin-bottom: 0.75rem;
+      padding-left: 3rem;
+      position: relative;
+    }
+
+    #takeaways li::before {
+      content: '→';
+      position: absolute;
+      left: 1rem;
+      color: var(--accent);
+      font-weight: 700;
+    }
+
+    /* ── Nav ── */
+    .concept-nav {
+      max-width: 1100px;
+      margin: 0 auto;
+      padding: 1.5rem 2rem 3rem;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      border-top: 1px solid var(--border);
+    }
+
+    .nav-link {
+      display: flex;
+      flex-direction: column;
+      gap: 0.2rem;
+      text-decoration: none;
+      padding: 0.6rem 1rem;
+      border-radius: 8px;
+      border: 1px solid var(--border);
+      background: var(--surface);
+      transition: all 0.2s;
+      max-width: 220px;
+    }
+
+    .nav-link:hover { border-color: var(--accent); background: rgba(0, 212, 255, 0.06); }
+    .nav-link.disabled { opacity: 0.3; pointer-events: none; }
+
+    .nav-dir {
+      font-size: 0.7rem;
+      font-family: var(--mono);
+      color: var(--text-dim);
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+    }
+
+    .nav-title { font-size: 0.88rem; color: var(--text); font-weight: 500; }
+
+    @media (max-width: 900px) {
+      .main-layout { grid-template-columns: 1fr; }
+    }
+
+    @media (max-width: 640px) {
+      header, main { padding-left: 1rem; padding-right: 1rem; }
+      .concept-nav { padding-left: 1rem; padding-right: 1rem; flex-direction: column; gap: 0.75rem; }
+      .nav-link { max-width: 100%; width: 100%; }
+      .slider-row input[type="range"] { width: 100px; }
+    }
+  </style>
+</head>
+<body>
+
+<header>
+  <div class="group-badge">Unsupervised</div>
+  <h1><span class="id">19</span>Principal Component Analysis</h1>
+  <p class="desc">PCA as variance-maximizing projection — eigenvectors of the covariance matrix, explained variance ratio, and dimensionality reduction tradeoffs.</p>
+</header>
+
+<main>
+
+  <!-- ── THEORY ── -->
+  <section id="theory">
+    <h2>Theory</h2>
+
+    <h3>The Objective: Find the Direction That Maximizes Projected Variance</h3>
+    <p>
+      PCA answers a precise question: among all possible unit directions in feature space, which one, if you projected every data point onto it, preserves the most spread (variance) of the original data? Formally, for mean-centered data <code>X</code>, PCA seeks a unit vector <code>w</code> maximizing <code>Var(Xw) = wᵀΣw</code> subject to <code>‖w‖ = 1</code>, where <code>Σ = XᵀX / (n−1)</code> is the feature covariance matrix. This is a constrained optimization problem solved with a Lagrange multiplier, and the solution falls straight out of linear algebra: the maximizing <code>w</code> is the <strong>eigenvector of Σ with the largest eigenvalue</strong>, and the maximum achieved variance is exactly that eigenvalue. The second-best direction — orthogonal to the first, maximizing remaining variance — is the eigenvector with the second-largest eigenvalue, and so on. The full set of eigenvectors of the covariance matrix, ordered by eigenvalue, is the set of <strong>principal components</strong>: an orthogonal basis rotated to align with the data's actual axes of spread rather than the original (often arbitrary) feature axes.
+    </p>
+
+    <h3>Eigendecomposition vs SVD — What scikit-learn Actually Computes</h3>
+    <p>
+      Conceptually PCA is an eigendecomposition of the covariance matrix, but <code>sklearn.decomposition.PCA</code> never explicitly forms <code>Σ</code> — it computes a <strong>Singular Value Decomposition (SVD)</strong> of the centered data matrix directly: <code>X = UΣVᵀ</code>. The columns of <code>V</code> are exactly the principal component directions, and the singular values relate to the eigenvalues of the covariance matrix by <code>λᵢ = σᵢ² / (n−1)</code>. SVD is preferred numerically because forming <code>XᵀX</code> explicitly squares the condition number of the problem, amplifying floating-point error — going through SVD is more numerically stable, especially with correlated or near-collinear features. Default full SVD costs roughly <code>O(min(n,d)² · max(n,d))</code>; for large <code>n</code> or <code>d</code>, scikit-learn's default <code>svd_solver='auto'</code> switches to a <strong>randomized SVD</strong> approximation (Halko et al.) once the matrix is large and only a handful of components are requested, cutting compute dramatically at negligible accuracy cost.
+    </p>
+
+    <h3>Explained Variance Ratio and Choosing the Number of Components</h3>
+    <p>
+      Each eigenvalue <code>λᵢ</code> is the variance captured by component <code>i</code>; dividing by the total variance <code>Σλⱼ</code> gives the <strong>explained variance ratio</strong> — scikit-learn exposes this directly as <code>pca.explained_variance_ratio_</code>. Plotting cumulative explained variance against number of components (a <em>scree plot</em>) is the standard way to pick <code>k</code>: a common production rule of thumb is to keep enough components to cross 90–95% cumulative variance, though the right threshold is domain-specific — for noisy sensor data with 500 correlated features you might compress to 20 components at 90% variance; for a well-conditioned 10-feature table there may be no elbow at all, meaning PCA isn't buying much.
+    </p>
+
+    <h3>Standardization Is Not Optional</h3>
+    <p>
+      Because PCA maximizes raw variance, a feature measured in larger units (income in dollars vs age in years) will dominate the covariance matrix and hijack the first component purely due to scale, not genuine signal. <code>StandardScaler</code> before <code>PCA</code> — equivalent to running PCA on the <strong>correlation matrix</strong> instead of the covariance matrix — is close to mandatory whenever features aren't already on comparable, meaningful scales. Whether to standardize is itself a modeling decision: for images where all pixels share the same scale, or for count data already expressed in consistent units, un-scaled PCA can be the right choice.
+    </p>
+
+    <h3>What PCA Assumes, and When It Breaks</h3>
+    <p>
+      PCA finds only <strong>linear</strong>, <strong>orthogonal</strong> directions of maximum variance — it cannot represent nonlinear manifolds (a spiral or Swiss-roll structure gets flattened into a poor linear approximation), and it optimizes for variance, not class separability or task-relevant structure, so a component that maximizes spread might be nearly useless for a downstream classification task (LDA optimizes for class separation instead, when labels are available). PCA is also sensitive to outliers, since variance is a squared quantity — a handful of extreme points can dominate a component. For nonlinear structure, <strong>Kernel PCA</strong> applies the kernel trick to find nonlinear principal surfaces, and for pure visualization, t-SNE/UMAP (see <a href="./20-tsne-umap.html">concept 20</a>) trade global linear structure for locally faithful nonlinear embeddings.
+    </p>
+
+    <h3>Production Reality</h3>
+    <p>
+      Beyond visualization, PCA's biggest production use is as a <strong>preprocessing step</strong>: decorrelating and compressing features before feeding them to models sensitive to multicollinearity or the curse of dimensionality (e.g. k-NN, linear regression with near-singular design matrices), denoising signals by dropping low-variance components assumed to be noise, and whitening (<code>whiten=True</code> scales each component to unit variance) to feed downstream algorithms that assume isotropic input. For streaming or memory-constrained settings, <code>IncrementalPCA</code> processes data in mini-batches without holding the full dataset in memory. A frequent interview gotcha: PCA components are linear combinations of <em>all</em> original features, so they sacrifice interpretability — a "component" rarely maps to a single human-meaningful concept, unlike a raw feature or a Lasso-selected subset. Always fit PCA only on the training set and apply the same fitted transform to validation/test data to avoid leaking test-set variance structure into the projection.
+    </p>
+  </section>
+
+  <!-- ── VISUALIZATION ── -->
+  <section id="visualization">
+    <h2>Interactive Visualization</h2>
+
+    <div class="viz-card">
+      <div class="viz-title">Live Variance-Maximizing Search on a Real 2D Point Cloud</div>
+      <div class="viz-desc">
+        150 points drawn from a correlated Gaussian. <strong>Sweep for PC1</strong> actually rotates a probe direction from 0° to 180°, computing <code>Var(X·w(θ))</code> at each angle in real time (the live polar-style readout below the canvas) and locking onto the angle of maximum variance — that's the eigenvector computation happening mechanically, not a canned animation. <strong>Project to k components</strong> reconstructs each point using only the top-<code>k</code> principal axes and draws the residual (reconstruction error) as a line back to the original point. Adjust correlation to reshape the covariance structure and watch PC1/PC2 rotate and rescale to match.
+      </div>
+
+      <div class="controls">
+        <div class="slider-row">
+          <label>Correlation (ρ)</label>
+          <input type="range" id="corr-slider" min="-95" max="95" step="5" value="75"/>
+          <span class="slider-val" id="corr-val">0.75</span>
+        </div>
+        <button class="ctrl-btn" id="sweep-btn">Sweep for PC1 ▸</button>
+        <button class="ctrl-btn ghost" id="proj1-btn">Project to k=1</button>
+        <button class="ctrl-btn ghost" id="proj2-btn">Project to k=2 (identity)</button>
+        <button class="ctrl-btn ghost" id="regen-btn">↻ Regenerate data</button>
+      </div>
+
+      <div class="main-layout">
+        <div>
+          <canvas id="pca-canvas" width="620" height="380"></canvas>
+          <div class="legend" id="pca-legend"></div>
+        </div>
+        <div class="side-panel">
+          <h4>Eigen-search &amp; Explained Variance</h4>
+          <div class="readout-row">
+            <div class="readout mid" id="readout-angle">Sweep angle θ<strong id="angle-val">0.0°</strong></div>
+            <div class="readout hi" id="readout-var">Var(X·w(θ))<strong id="var-val">—</strong></div>
+            <div class="readout lo" id="readout-status">Status<strong id="status-val">Ready</strong></div>
+          </div>
+          <canvas id="scree-canvas" width="280" height="150" style="margin-top:1rem;"></canvas>
+          <p class="hint" id="scree-hint">Scree plot: explained variance ratio per component, computed from the real eigenvalues of the current covariance matrix.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ── TAKEAWAYS ── -->
+  <section id="takeaways">
+    <h2>Key Takeaways</h2>
+    <ul>
+      <li>
+        <strong>PC1 is the eigenvector of the covariance matrix with the largest eigenvalue — full stop.</strong> Everything else (scree plots, explained variance ratio, whitening) is downstream bookkeeping on top of that one linear-algebra fact; if you can state the constrained optimization (<code>max wᵀΣw</code> s.t. <code>‖w‖=1</code>) and why Lagrange multipliers hand you an eigenvector, you can derive the rest of PCA from scratch on a whiteboard.
+      </li>
+      <li>
+        <strong>scikit-learn computes SVD of the data matrix, not eigendecomposition of the covariance matrix.</strong> They're mathematically equivalent (<code>λᵢ = σᵢ²/(n−1)</code>), but SVD avoids explicitly forming <code>XᵀX</code>, which squares the condition number and amplifies floating-point error — this is why <code>PCA</code> is numerically preferred over manual eigendecomposition in production code.
+      </li>
+      <li>
+        <strong>Standardize before PCA unless every feature already shares a meaningful common scale.</strong> Because PCA maximizes raw variance, an unscaled feature on a larger numeric range will dominate the first component for reasons that have nothing to do with actual signal — <code>StandardScaler → PCA</code> is effectively running PCA on the correlation matrix instead of the covariance matrix.
+      </li>
+      <li>
+        <strong>Principal components sacrifice interpretability.</strong> Each component is a linear combination of every original feature with real-valued loadings, so "PC1 went up" rarely maps to one human concept — if interpretability matters more than compression, prefer Lasso-based feature selection or domain-driven feature engineering over PCA.
+      </li>
+      <li>
+        <strong>PCA is linear and variance-driven — it is blind to class labels and nonlinear structure.</strong> A component that maximizes overall spread can be nearly orthogonal to what actually separates your classes (use LDA when labels exist and separability is the goal), and manifold structure like a Swiss roll gets crushed flat; reach for Kernel PCA or t-SNE/UMAP when the data doesn't live on a linear subspace.
+      </li>
+      <li>
+        <strong>Fit on train, transform on test — never refit PCA on validation/test data.</strong> Refitting leaks test-set covariance structure into the projection, silently inflating downstream validation metrics; for datasets too large to fit in memory at once, <code>IncrementalPCA</code> fits the same components via mini-batches instead of loading everything at once.
+      </li>
+    </ul>
+  </section>
+
+</main>
+
+<!-- ── NAV ── -->
+<nav class="concept-nav">
+  <a class="nav-link" href="./18-dbscan.html">
+    <span class="nav-dir">← Previous</span>
+    <span class="nav-title">DBSCAN Density Clustering</span>
+  </a>
+  <a class="nav-link" href="./20-tsne-umap.html">
+    <span class="nav-dir">Next →</span>
+    <span class="nav-title">t-SNE &amp; UMAP</span>
+  </a>
+</nav>
+
+<script>
+// ─── Seeded RNG (mulberry32) ────────────────────────────────────────────────
+function mulberry32(seed) {
+  return function() {
+    seed |= 0; seed = (seed + 0x6D2B79F5) | 0;
+    let t = Math.imul(seed ^ (seed >>> 15), 1 | seed);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+
+function gaussian(rng) {
+  // Box-Muller
+  const u1 = Math.max(rng(), 1e-9), u2 = rng();
+  return Math.sqrt(-2 * Math.log(u1)) * Math.cos(2 * Math.PI * u2);
+}
+
+// ─── Data: correlated 2D Gaussian ───────────────────────────────────────────
+let DATA_SEED = 42;
+let RHO = 0.75;            // target correlation
+let DATA = [];              // raw points (data units)
+let PLOT_X_MIN, PLOT_X_MAX, PLOT_Y_MIN, PLOT_Y_MAX;
+
+function generateCorrelated(seed, n, rho) {
+  const rng = mulberry32(seed);
+  // two std devs to make the ellipse visually elongated
+  const sx = 2.6, sy = 1.1;
+  const pts = [];
+  for (let i = 0; i < n; i++) {
+    const z1 = gaussian(rng), z2 = gaussian(rng);
+    // correlated pair via Cholesky-style mix
+    const u = z1;
+    const v = rho * z1 + Math.sqrt(Math.max(1e-6, 1 - rho * rho)) * z2;
+    pts.push({ x: 5 + u * sx, y: 5 + v * sy });
+  }
+  return pts;
+}
+
+function computeBounds() {
+  const xs = DATA.map(p => p.x), ys = DATA.map(p => p.y);
+  const xr = Math.max(...xs) - Math.min(...xs), yr = Math.max(...ys) - Math.min(...ys);
+  const span = Math.max(xr, yr) * 0.65;
+  const cx = (Math.max(...xs) + Math.min(...xs)) / 2;
+  const cy = (Math.max(...ys) + Math.min(...ys)) / 2;
+  PLOT_X_MIN = cx - span - 1; PLOT_X_MAX = cx + span + 1;
+  PLOT_Y_MIN = cy - span - 1; PLOT_Y_MAX = cy + span + 1;
+}
+
+// ─── PCA core (real covariance + closed-form 2x2 eigendecomposition) ───────
+function mean2D(points) {
+  let mx = 0, my = 0;
+  points.forEach(p => { mx += p.x; my += p.y; });
+  return { x: mx / points.length, y: my / points.length };
+}
+
+function covariance2D(points) {
+  const m = mean2D(points);
+  let sxx = 0, syy = 0, sxy = 0;
+  points.forEach(p => {
+    const dx = p.x - m.x, dy = p.y - m.y;
+    sxx += dx * dx; syy += dy * dy; sxy += dx * dy;
+  });
+  const n1 = points.length - 1;
+  return { a: sxx / n1, d: syy / n1, b: sxy / n1, mean: m };
+}
+
+// closed-form eigendecomposition of symmetric 2x2 [[a,b],[b,d]]
+function eig2x2(a, b, d) {
+  const tr = a + d, diff = a - d;
+  const rad = Math.sqrt((diff / 2) * (diff / 2) + b * b);
+  const l1 = tr / 2 + rad; // largest
+  const l2 = tr / 2 - rad;
+  // eigenvector angle for l1
+  const theta1 = 0.5 * Math.atan2(2 * b, diff);
+  return { l1: Math.max(l1, 0), l2: Math.max(l2, 0), theta1 };
+}
+
+// projected variance of centered data onto unit direction at angle theta
+function projectedVariance(points, mean, theta) {
+  const wx = Math.cos(theta), wy = Math.sin(theta);
+  let s = 0;
+  points.forEach(p => {
+    const proj = (p.x - mean.x) * wx + (p.y - mean.y) * wy;
+    s += proj * proj;
+  });
+  return s / (points.length - 1);
+}
+
+// ─── Live state ─────────────────────────────────────────────────────────────
+let cov, mean, eig;           // current covariance/eigen info
+let sweepTheta = 0;
+let sweeping = false;
+let bestTheta = 0, bestVar = -Infinity;
+let sweepTrail = [];          // {theta, variance} samples so far
+let projK = 2;                // components kept for reconstruction (2 = identity, no loss)
+let lastFrameTime = 0;
+const SWEEP_SPEED = 1.4;      // radians per second
+
+function recomputePCA() {
+  cov = covariance2D(DATA);
+  eig = eig2x2(cov.a, cov.b, cov.d);
+  mean = cov.mean;
+}
+
+function resetSweep() {
+  sweeping = false;
+  sweepTheta = 0;
+  bestTheta = 0;
+  bestVar = -Infinity;
+  sweepTrail = [];
+  document.getElementById('status-val').textContent = 'Ready';
+}
+
+// ─── Canvas helpers ─────────────────────────────────────────────────────────
+function setupCanvas(canvas, displayH) {
+  const dpr = window.devicePixelRatio || 1;
+  const displayW = canvas.parentElement.clientWidth || canvas.width;
+  canvas.style.width = displayW + 'px';
+  canvas.style.height = displayH + 'px';
+  canvas.width = displayW * dpr;
+  canvas.height = displayH * dpr;
+  const ctx = canvas.getContext('2d');
+  ctx.scale(dpr, dpr);
+  return { ctx, W: displayW, H: displayH };
+}
+
+function toPx(x, y, W, H, pad) {
+  const px = pad + (x - PLOT_X_MIN) / (PLOT_X_MAX - PLOT_X_MIN) * (W - 2 * pad);
+  const py = pad + (PLOT_Y_MAX - y) / (PLOT_Y_MAX - PLOT_Y_MIN) * (H - 2 * pad);
+  return [px, py];
+}
+
+function reconstructPoint(p) {
+  // project onto kept principal components, reconstruct in original space
+  const dx = p.x - mean.x, dy = p.y - mean.y;
+  const w1x = Math.cos(eig.theta1), w1y = Math.sin(eig.theta1);
+  const w2x = -Math.sin(eig.theta1), w2y = Math.cos(eig.theta1);
+  const c1 = dx * w1x + dy * w1y;
+  const c2 = dx * w2x + dy * w2y;
+  if (projK >= 2) return { x: p.x, y: p.y };
+  // k = 1: drop PC2 component entirely
+  return { x: mean.x + c1 * w1x, y: mean.y + c1 * w1y };
+}
+
+function renderMain() {
+  const canvas = document.getElementById('pca-canvas');
+  const { ctx, W, H } = setupCanvas(canvas, 380);
+  const pad = 24;
+
+  ctx.fillStyle = '#141720';
+  ctx.fillRect(0, 0, W, H);
+  ctx.strokeStyle = '#252a3d';
+  ctx.lineWidth = 1;
+  ctx.strokeRect(pad, pad, W - 2 * pad, H - 2 * pad);
+
+  // residual lines + reconstructed / original points
+  DATA.forEach(p => {
+    const recon = reconstructPoint(p);
+    const [px, py] = toPx(p.x, p.y, W, H, pad);
+    if (projK < 2) {
+      const [rx, ry] = toPx(recon.x, recon.y, W, H, pad);
+      ctx.beginPath();
+      ctx.moveTo(px, py);
+      ctx.lineTo(rx, ry);
+      ctx.strokeStyle = 'rgba(255,71,87,0.25)';
+      ctx.lineWidth = 1;
+      ctx.stroke();
+      ctx.beginPath();
+      ctx.arc(rx, ry, 2.6, 0, Math.PI * 2);
+      ctx.fillStyle = '#ff9500';
+      ctx.fill();
+    }
+    ctx.beginPath();
+    ctx.arc(px, py, 3.2, 0, Math.PI * 2);
+    ctx.fillStyle = projK < 2 ? 'rgba(0,212,255,0.55)' : '#00d4ff';
+    ctx.fill();
+  });
+
+  // mean point
+  const [mx, my] = toPx(mean.x, mean.y, W, H, pad);
+
+  // principal axes (scaled by sqrt(eigenvalue) for a visually meaningful length)
+  const scale = 1.7;
+  const len1 = Math.sqrt(eig.l1) * scale;
+  const len2 = Math.sqrt(eig.l2) * scale;
+  drawAxis(ctx, mx, my, eig.theta1, len1, W, H, pad, '#00d4ff', 3, false);
+  drawAxis(ctx, mx, my, eig.theta1 + Math.PI / 2, len2, W, H, pad, '#7c3aed', 2.4, true);
+
+  // sweep probe line
+  if (sweeping || sweepTrail.length > 0) {
+    const color = sweeping ? '#ffd700' : '#00ff88';
+    drawAxis(ctx, mx, my, sweepTheta, Math.sqrt(Math.max(bestVar, 0.3)) * scale, W, H, pad, color, 2, false, true);
+  }
+
+  // centroid dot
+  ctx.beginPath();
+  ctx.arc(mx, my, 4, 0, Math.PI * 2);
+  ctx.fillStyle = '#e2e8f0';
+  ctx.fill();
+  ctx.strokeStyle = '#0d0f17';
+  ctx.lineWidth = 1.5;
+  ctx.stroke();
+}
+
+function drawAxis(ctx, cx, cy, theta, len, W, H, pad, color, width, dashed, arrow) {
+  // convert data-space direction to pixel-space direction (y flips)
+  const dxData = Math.cos(theta), dyData = Math.sin(theta);
+  const scaleX = (W - 2 * pad) / (PLOT_X_MAX - PLOT_X_MIN);
+  const scaleY = (H - 2 * pad) / (PLOT_Y_MAX - PLOT_Y_MIN);
+  const dxPx = dxData * scaleX, dyPx = -dyData * scaleY;
+  const norm = Math.sqrt(dxPx * dxPx + dyPx * dyPx) || 1;
+  const ux = dxPx / norm, uy = dyPx / norm;
+  const pxLen = len * ((scaleX + scaleY) / 2);
+
+  const x1 = cx - ux * pxLen, y1 = cy - uy * pxLen;
+  const x2 = cx + ux * pxLen, y2 = cy + uy * pxLen;
+
+  ctx.save();
+  ctx.setLineDash(dashed ? [5, 4] : []);
+  ctx.strokeStyle = color;
+  ctx.lineWidth = width;
+  ctx.beginPath();
+  ctx.moveTo(x1, y1);
+  ctx.lineTo(x2, y2);
+  ctx.stroke();
+  ctx.restore();
+
+  if (arrow) {
+    drawArrowhead(ctx, x2, y2, Math.atan2(y2 - y1, x2 - x1), color);
+    drawArrowhead(ctx, x1, y1, Math.atan2(y1 - y2, x1 - x2), color);
+  } else {
+    drawArrowhead(ctx, x2, y2, Math.atan2(y2 - y1, x2 - x1), color);
+  }
+}
+
+function drawArrowhead(ctx, x, y, angle, color) {
+  const size = 7;
+  ctx.save();
+  ctx.translate(x, y);
+  ctx.rotate(angle);
+  ctx.beginPath();
+  ctx.moveTo(0, 0);
+  ctx.lineTo(-size, size * 0.55);
+  ctx.lineTo(-size, -size * 0.55);
+  ctx.closePath();
+  ctx.fillStyle = color;
+  ctx.fill();
+  ctx.restore();
+}
+
+function renderLegend() {
+  const el = document.getElementById('pca-legend');
+  el.innerHTML = `
+    <div class="legend-item"><div class="legend-line" style="background:#00d4ff"></div>PC1 (largest eigenvalue)</div>
+    <div class="legend-item"><div class="legend-line" style="background:#7c3aed; border-top:2px dashed #7c3aed; height:0;"></div>PC2 (orthogonal)</div>
+    <div class="legend-item"><div class="legend-line" style="background:#ffd700"></div>Sweep probe w(θ)</div>
+    <div class="legend-item"><div class="legend-dot" style="background:#ff9500"></div>k=1 reconstruction</div>
+  `;
+}
+
+function renderScree() {
+  const canvas = document.getElementById('scree-canvas');
+  const { ctx, W, H } = setupCanvas(canvas, 150);
+  const pad = 30;
+
+  ctx.fillStyle = '#1a1e2e';
+  ctx.fillRect(0, 0, W, H);
+
+  const total = eig.l1 + eig.l2;
+  const r1 = total > 0 ? eig.l1 / total : 0.5;
+  const r2 = total > 0 ? eig.l2 / total : 0.5;
+
+  ctx.strokeStyle = '#252a3d';
+  ctx.lineWidth = 1;
+  ctx.beginPath();
+  ctx.moveTo(pad, H - pad); ctx.lineTo(W - pad, H - pad);
+  ctx.moveTo(pad, pad); ctx.lineTo(pad, H - pad);
+  ctx.stroke();
+
+  const barW = 60;
+  const plotH = H - 2 * pad;
+  const bars = [
+    { label: 'PC1', ratio: r1, x: pad + 40, color: '#00d4ff' },
+    { label: 'PC2', ratio: r2, x: pad + 40 + barW + 40, color: '#7c3aed' }
+  ];
+
+  bars.forEach(bar => {
+    const bh = bar.ratio * plotH;
+    ctx.fillStyle = bar.color;
+    ctx.fillRect(bar.x, H - pad - bh, barW, bh);
+    ctx.fillStyle = '#e2e8f0';
+    ctx.font = '11px "JetBrains Mono", monospace';
+    ctx.textAlign = 'center';
+    ctx.fillText((bar.ratio * 100).toFixed(0) + '%', bar.x + barW / 2, H - pad - bh - 8);
+    ctx.fillStyle = '#8892a4';
+    ctx.fillText(bar.label, bar.x + barW / 2, H - pad + 14);
+  });
+}
+
+function updateReadouts() {
+  document.getElementById('corr-val').textContent = (RHO).toFixed(2);
+  document.getElementById('angle-val').textContent = (sweepTheta * 180 / Math.PI).toFixed(1) + '°';
+  const curVar = projectedVariance(DATA, mean, sweepTheta);
+  document.getElementById('var-val').textContent = curVar.toFixed(2);
+  if (!sweeping) {
+    document.getElementById('status-val').textContent =
+      sweepTrail.length > 0 ? `Locked θ*=${(bestTheta * 180 / Math.PI).toFixed(1)}°` : 'Ready';
+  } else {
+    document.getElementById('status-val').textContent = 'Sweeping…';
+  }
+  const total = eig.l1 + eig.l2;
+  const cum = total > 0 ? (eig.l1 / total * 100).toFixed(1) : '—';
+  document.getElementById('scree-hint').textContent =
+    `Scree plot: explained variance ratio per component from the real eigenvalues (λ1=${eig.l1.toFixed(2)}, λ2=${eig.l2.toFixed(2)}). Keeping just PC1 retains ${cum}% of total variance.`;
+}
+
+function renderAll() {
+  renderMain();
+  renderLegend();
+  renderScree();
+  updateReadouts();
+}
+
+// ─── Animation loop: sweep probe angle, track running max variance ─────────
+function animateSweep(ts) {
+  if (!sweeping) return;
+  if (!lastFrameTime) lastFrameTime = ts;
+  const dt = (ts - lastFrameTime) / 1000;
+  lastFrameTime = ts;
+
+  sweepTheta += SWEEP_SPEED * dt;
+  const v = projectedVariance(DATA, mean, sweepTheta);
+  sweepTrail.push({ theta: sweepTheta, variance: v });
+  if (v > bestVar) { bestVar = v; bestTheta = sweepTheta; }
+
+  if (sweepTheta >= Math.PI) {
+    sweepTheta = bestTheta; // settle exactly on the discovered maximum
+    sweeping = false;
+    lastFrameTime = 0;
+    renderAll();
+    return;
+  }
+  renderAll();
+  requestAnimationFrame(animateSweep);
+}
+
+// ─── Controls ───────────────────────────────────────────────────────────────
+document.getElementById('corr-slider').addEventListener('input', (e) => {
+  RHO = parseInt(e.target.value) / 100;
+  sweeping = false;
+  DATA = generateCorrelated(DATA_SEED, 150, RHO);
+  computeBounds();
+  recomputePCA();
+  resetSweep();
+  projK = 2;
+  renderAll();
+});
+
+document.getElementById('sweep-btn').addEventListener('click', () => {
+  if (sweeping) return;
+  sweepTheta = 0;
+  bestVar = -Infinity;
+  bestTheta = 0;
+  sweepTrail = [];
+  sweeping = true;
+  lastFrameTime = 0;
+  document.getElementById('status-val').textContent = 'Sweeping…';
+  requestAnimationFrame(animateSweep);
+});
+
+document.getElementById('proj1-btn').addEventListener('click', () => {
+  projK = 1;
+  renderAll();
+});
+
+document.getElementById('proj2-btn').addEventListener('click', () => {
+  projK = 2;
+  renderAll();
+});
+
+document.getElementById('regen-btn').addEventListener('click', () => {
+  sweeping = false;
+  DATA_SEED += 137;
+  DATA = generateCorrelated(DATA_SEED, 150, RHO);
+  computeBounds();
+  recomputePCA();
+  resetSweep();
+  renderAll();
+});
+
+window.addEventListener('resize', renderAll);
+
+// ─── Init ───────────────────────────────────────────────────────────────────
+DATA = generateCorrelated(DATA_SEED, 150, RHO);
+computeBounds();
+recomputePCA();
+renderAll();
+document.fonts.ready.then(renderAll);
+</script>
+</body>
+</html>

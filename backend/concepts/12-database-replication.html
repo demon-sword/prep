@@ -1,0 +1,817 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1.0"/>
+<title>Database Replication — Backend Concepts</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #0d0f17;
+    --surface: #141720;
+    --card: #1a1e2e;
+    --border: #252a3d;
+    --accent: #00d4ff;
+    --purple: #7c3aed;
+    --green: #00ff88;
+    --yellow: #ffd700;
+    --red: #ff4757;
+    --orange: #ff9500;
+    --text: #e2e8f0;
+    --text-dim: #8892a4;
+    --mono: 'JetBrains Mono', monospace;
+    --sans: 'Inter', system-ui, sans-serif;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--sans);
+    line-height: 1.6;
+  }
+  header {
+    padding: 48px 24px 32px;
+    max-width: 920px;
+    margin: 0 auto;
+    border-bottom: 1px solid var(--border);
+  }
+  .badge {
+    display: inline-block;
+    font-family: var(--mono);
+    font-size: 12px;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--accent);
+    background: rgba(0,212,255,0.08);
+    border: 1px solid rgba(0,212,255,0.3);
+    padding: 4px 10px;
+    border-radius: 4px;
+    margin-bottom: 14px;
+  }
+  h1 {
+    font-size: 32px;
+    margin: 0 0 12px;
+    font-weight: 700;
+    letter-spacing: -0.01em;
+  }
+  header p.desc {
+    color: var(--text-dim);
+    font-size: 16px;
+    max-width: 720px;
+    margin: 0;
+  }
+  main {
+    max-width: 920px;
+    margin: 0 auto;
+    padding: 0 24px 60px;
+  }
+  section { margin-top: 48px; }
+  h2 {
+    font-size: 13px;
+    font-family: var(--mono);
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    color: var(--purple);
+    margin-bottom: 20px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+  h2::after {
+    content: '';
+    flex: 1;
+    height: 1px;
+    background: var(--border);
+  }
+  h3 {
+    font-size: 18px;
+    color: var(--accent);
+    margin: 28px 0 10px;
+  }
+  h3:first-child { margin-top: 0; }
+  p { color: var(--text); margin: 8px 0; }
+  ul { padding-left: 22px; }
+  li { margin: 6px 0; }
+  code {
+    font-family: var(--mono);
+    background: rgba(124,58,237,0.12);
+    color: var(--purple);
+    padding: 2px 6px;
+    border-radius: 4px;
+    font-size: 0.9em;
+  }
+  .aside {
+    margin-top: 10px;
+    font-size: 13.5px;
+    color: var(--text-dim);
+    border-left: 2px solid var(--border);
+    padding-left: 12px;
+    font-style: italic;
+  }
+  .card {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 22px 24px;
+  }
+  .fail-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+    gap: 14px;
+    margin-top: 12px;
+  }
+  .fail-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-left: 3px solid var(--accent);
+    border-radius: 8px;
+    padding: 14px 16px;
+  }
+  .fail-card h4 { margin: 0 0 6px; font-size: 14.5px; color: var(--accent); }
+  .fail-card p { font-size: 13.5px; color: var(--text-dim); margin: 0; }
+  .fail-card.danger { border-left-color: var(--red); }
+  .fail-card.danger h4 { color: var(--red); }
+
+  /* Visualization shared */
+  .viz-card {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 24px;
+    margin-bottom: 24px;
+  }
+  .viz-intro { color: var(--text-dim); font-size: 14.5px; margin-bottom: 18px; }
+  .btn-row { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; margin-top: 14px; }
+  .run-btn {
+    font-family: var(--mono);
+    font-size: 13px;
+    background: var(--purple);
+    color: white;
+    border: none;
+    padding: 10px 18px;
+    border-radius: 6px;
+    cursor: pointer;
+    font-weight: 600;
+  }
+  .run-btn:hover { opacity: 0.88; }
+  .run-btn:disabled { opacity: 0.35; cursor: not-allowed; }
+  .run-btn.secondary { background: var(--surface); border: 1px solid var(--border); color: var(--text-dim); }
+  .run-btn.secondary:hover { color: var(--text); border-color: var(--accent); }
+  .run-btn.active { background: var(--accent); color: #0d0f17; }
+  .run-btn.danger-btn { background: var(--red); }
+
+  .slider-label { font-family: var(--mono); font-size: 13px; color: var(--text-dim); }
+  input[type=range] { width: 220px; accent-color: var(--accent); }
+
+  .flow-log {
+    margin-top: 14px;
+    font-family: var(--mono);
+    font-size: 12.5px;
+    color: var(--green);
+    min-height: 60px;
+    max-height: 150px;
+    overflow-y: auto;
+    white-space: pre-line;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 10px 12px;
+  }
+
+  .stat-row { display: flex; gap: 24px; margin-top: 16px; flex-wrap: wrap; }
+  .stat { font-family: var(--mono); font-size: 13px; color: var(--text-dim); }
+  .stat b { color: var(--yellow); font-size: 18px; display: block; }
+  .stat b.danger { color: var(--red); }
+  .stat b.good { color: var(--green); }
+
+  /* Replication topology area */
+  .topo-area {
+    position: relative;
+    width: 100%;
+    height: 320px;
+    margin-top: 20px;
+  }
+  #topo-svg { position: absolute; top: 0; left: 0; width: 100%; height: 100%; }
+  .repl-node {
+    position: absolute;
+    width: 122px;
+    height: 92px;
+    margin-left: -61px;
+    margin-top: -46px;
+    background: var(--surface);
+    border: 2px solid var(--border);
+    border-radius: 10px;
+    text-align: center;
+    padding: 8px 6px;
+    font-family: var(--mono);
+    transition: border-color 0.25s, background 0.25s, opacity 0.25s, transform 0.2s;
+    z-index: 2;
+  }
+  .repl-node .n-name { font-size: 13px; font-weight: 700; color: var(--text); }
+  .repl-node .n-role { font-size: 10.5px; margin-top: 4px; text-transform: uppercase; letter-spacing: 0.05em; color: var(--text-dim); }
+  .repl-node .n-val { font-size: 11.5px; color: var(--yellow); margin-top: 4px; }
+  .repl-node .n-ts { font-size: 9.5px; color: var(--text-dim); margin-top: 2px; }
+  .repl-node.leader { border-color: var(--green); background: rgba(0,255,136,0.1); transform: scale(1.04); }
+  .repl-node.leader .n-role { color: var(--green); }
+  .repl-node.follower { border-color: var(--accent); }
+  .repl-node.follower .n-role { color: var(--accent); }
+  .repl-node.replica { border-color: var(--purple); }
+  .repl-node.replica .n-role { color: var(--purple); }
+  .repl-node.crashed { opacity: 0.28; border-style: dashed; }
+
+  .divider { height: 1px; background: var(--border); margin: 32px 0; }
+
+  blockquote#interview-quote {
+    background: linear-gradient(135deg, rgba(0,212,255,0.06), rgba(124,58,237,0.06));
+    border-left: 4px solid var(--accent);
+    border-radius: 8px;
+    margin: 0;
+    padding: 22px 26px;
+    font-size: 16.5px;
+    color: var(--text);
+    font-style: italic;
+    position: relative;
+  }
+  blockquote#interview-quote::before {
+    content: '\201C';
+    font-size: 48px;
+    color: var(--accent);
+    opacity: 0.3;
+    position: absolute;
+    top: -6px;
+    left: 10px;
+    font-style: normal;
+  }
+  #takeaways ul { list-style: none; padding: 0; }
+  #takeaways li {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-left: 3px solid var(--green);
+    border-radius: 8px;
+    padding: 12px 16px;
+    margin-bottom: 10px;
+    font-size: 14.5px;
+  }
+  #takeaways li b { color: var(--green); }
+
+  nav.concept-nav {
+    max-width: 920px;
+    margin: 0 auto;
+    padding: 24px 24px 60px;
+    display: flex;
+    justify-content: space-between;
+    font-family: var(--mono);
+    font-size: 13.5px;
+  }
+  nav.concept-nav a {
+    color: var(--accent);
+    text-decoration: none;
+    border: 1px solid var(--border);
+    padding: 10px 16px;
+    border-radius: 6px;
+  }
+  nav.concept-nav a:hover { border-color: var(--accent); }
+  nav.concept-nav span.disabled {
+    color: var(--text-dim);
+    border: 1px solid var(--border);
+    padding: 10px 16px;
+    border-radius: 6px;
+    opacity: 0.4;
+  }
+  @media (max-width: 600px) {
+    h1 { font-size: 24px; }
+    .btn-row { flex-direction: column; align-items: flex-start; }
+    .topo-area { height: 440px; }
+    input[type=range] { width: 100%; }
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <span class="badge">data</span>
+  <h1>Database Replication</h1>
+  <p class="desc">Leader-follower vs multi-leader vs leaderless replication, synchronous vs asynchronous replication, replication lag, and failover mechanics when a follower falls behind or a leader dies.</p>
+</header>
+
+<main>
+
+  <section id="theory">
+    <h2>Theory</h2>
+    <div class="card">
+      <h3>What replication is actually solving</h3>
+      <p>Replication means keeping the same data on more than one node, for three reasons that often get bundled together but are worth separating: <b>durability</b> (a copy survives losing any single node), <b>availability</b> (another node can keep serving if one is down or partitioned), and <b>read scalability</b> (spread read traffic across copies instead of hammering one node). It's the mechanism underneath "add a read replica," "we run three AZs," and "failover took 12 seconds" — all three are replication decisions wearing different clothes.</p>
+
+      <h3>Three topologies</h3>
+      <ul>
+        <li><b>Single-leader (leader-follower).</b> One node accepts all writes; it streams a log of changes to N followers, which apply them and serve reads (with a staleness caveat). This is the default for a reason — writes have one obvious order because there's only one writer. Postgres streaming replication, MySQL binlog replication, and MongoDB replica sets are all this shape.</li>
+        <li><b>Multi-leader.</b> More than one node accepts writes, each replicating asynchronously to the others. The draw is local low-latency writes per region — a user in Singapore doesn't round-trip to a leader in Virginia. The cost is real: two leaders can accept conflicting writes to the same key before either has heard from the other, and that conflict has to be resolved after the fact, not prevented up front.</li>
+        <li><b>Leaderless (Dynamo-style).</b> No leader at all. A client (or coordinator) writes directly to <code>W</code> of <code>N</code> replicas and reads from <code>R</code> of <code>N</code>, leaning on quorum overlap — the same <code>W + R &gt; N</code> arithmetic covered in <code>03-consistency-tradeoffs</code> — to make reads see recent writes without every replica needing to be up. Cassandra, DynamoDB, and Riak are this shape. There's no failover step because there's no leader to fail over from — that's the actual trade, not just a footnote.</li>
+      </ul>
+
+      <h3>Sync vs async — the trade-off that matters</h3>
+      <p>This is the one decision that dominates every other replication question. <b>Synchronous replication</b>: the leader waits for an ack from the replica before acknowledging the write to the client. No acknowledged write is ever lost if the leader dies immediately after, but the leader's write latency now includes a full round trip to that replica, and if the replica is slow or unreachable, the leader either blocks or fails the write — replica availability has just become leader availability. <b>Asynchronous replication</b>: the leader acks the client the moment its own local write commits, and replicates in the background. Low latency, no availability coupling, but if the leader crashes before the replica catches up, an <em>acknowledged</em> write silently disappears on failover. This is a direct instance of PACELC's "else, Latency vs Consistency" branch (<code>03-consistency-tradeoffs</code>) — you are always making this trade, the only question is whether you made it on purpose. <b>Semi-synchronous</b> replication splits the difference: the leader waits for an ack from at least one replica, not all of them, buying a durability floor without paying for every replica's round trip on every write — Postgres's <code>synchronous_commit = remote_write</code> and MySQL semi-sync both work this way, and it's the common production default over full-sync or full-async.</p>
+
+      <h3>Replication lag and its downstream symptoms</h3>
+      <p>Async replication means followers are behind by some lag — usually hundreds of milliseconds under normal load, but a long-running migration, a <code>VACUUM</code>, or a network blip on the replica can spike it to minutes. That lag isn't abstract; it shows up as concrete, reproducible bugs if the application doesn't account for it: <b>read-your-writes violations</b> (a user writes, then immediately reads from a lagging replica and doesn't see their own write), and <b>monotonic-read violations</b> (a user reads from replica A, then a slower replica B, and watches time go backwards). These are exactly the session guarantees named in <code>03-consistency-tradeoffs</code> — replication lag is the physical cause, session guarantees (pin a user's reads to the leader, or to a replica at least as caught-up as their last write's LSN/offset) are the application-level fix.</p>
+
+      <h3>Failover — the actually hard part</h3>
+      <p>Automatic failover sounds simple and isn't. It requires: (1) detecting the leader is genuinely dead, not just slow or on the far side of a network partition — get this wrong and both the old and new leader think they're in charge, which is <b>split-brain</b>; (2) picking whichever surviving replica has the most up-to-date log; (3) promoting it and repointing traffic/DNS/config; (4) reconciling the old leader if it comes back — it has to step down and often discard writes that were acknowledged to a client but never left its own disk. Step (1) is precisely the leader-election problem consensus protocols solve, which is why serious deployments wire failover through a consensus-backed coordinator — Patroni backed by etcd for Postgres, MongoDB's own Raft-derived replica set protocol — rather than a heartbeat-and-promote shell script. "Promote the first replica that responds" is a well-known way to manufacture split-brain (<code>11-consensus-algorithms</code> is the same majority-quorum machinery under the hood).</p>
+      <p>Multi-leader conflict resolution deserves its own line: <b>last-write-wins by timestamp</b> is the default because it's trivial to implement, but it silently drops the losing write with no merge attempt — fine for a shopping-cart quantity, quietly corrupting for two people editing the same document. CRDTs and vector clocks exist specifically to preserve both writers' intent instead of blindly picking one (this is the same tension <code>21-multi-region-architecture</code> covers at the cross-region scale).</p>
+      <div class="fail-grid">
+        <div class="fail-card danger">
+          <h4>Split-brain during failover</h4>
+          <p>A heartbeat-based promotion script promotes a new leader while the old one is only slow/partitioned, not dead — two leaders now accept writes concurrently.</p>
+        </div>
+        <div class="fail-card danger">
+          <h4>Lost writes on async failover</h4>
+          <p>The old leader acked a write to a client, crashed before replicating it, and the promoted follower never had it — the write is gone even though the client was told it succeeded.</p>
+        </div>
+        <div class="fail-card">
+          <h4>Stale reads from replication lag</h4>
+          <p>A follower serves a read before it has applied a write the client just made — read-your-writes and monotonic-read violations without any crash involved.</p>
+        </div>
+        <div class="fail-card">
+          <h4>Write-write conflicts (multi-leader)</h4>
+          <p>Two leaders accept different writes to the same key before either replicates to the other — resolved after the fact by LWW or a merge function, never prevented.</p>
+        </div>
+      </div>
+      <p class="aside">In practice: Postgres and MySQL default to single-leader with async or semi-sync followers; Cassandra and DynamoDB expose W/R as a per-request tuning knob rather than a cluster-wide setting; Patroni + etcd (or Consul) is the standard way to get consensus-backed Postgres failover instead of trusting a naive promote script.</p>
+    </div>
+  </section>
+
+  <section id="visualization">
+    <h2>Visualization</h2>
+
+    <div class="viz-card">
+      <p class="viz-intro"><b>Live replication topology.</b> Pick a topology, then click <b>Client write</b> to push a value through it — watch the packet actually travel node-to-node over the delay set by the slider, arriving and applying only when its timer elapses. <b>Kill current leader</b> triggers real failover: the most up-to-date survivor is promoted, and if the dead leader's last write hadn't finished replicating, that's logged as a genuine lost write. In multi-leader mode, <b>Trigger conflicting write</b> fires two writes to the same key from both leaders at once and resolves them via last-write-wins when they collide. In leaderless mode, tune W and R and try <b>Client read</b> to see quorum overlap (or its absence) decide whether the read is guaranteed fresh.</p>
+
+      <div class="btn-row" id="mode-buttons">
+        <button class="run-btn active" data-mode="single">Single-leader</button>
+        <button class="run-btn" data-mode="multi">Multi-leader</button>
+        <button class="run-btn" data-mode="leaderless">Leaderless</button>
+      </div>
+
+      <div class="btn-row">
+        <span class="slider-label">Network delay: <b id="delay-val" style="color:var(--yellow)">700ms</b></span>
+        <input type="range" id="delay-slider" min="0" max="2500" step="50" value="700">
+      </div>
+
+      <div class="topo-area" id="topo-wrap">
+        <svg id="topo-svg"></svg>
+      </div>
+
+      <div class="btn-row">
+        <button class="run-btn" id="btn-write">Client write</button>
+        <button class="run-btn danger-btn" id="btn-kill">Kill current leader</button>
+        <button class="run-btn" id="btn-conflict" style="display:none">Trigger conflicting write</button>
+      </div>
+      <div class="btn-row" id="quorum-controls" style="display:none">
+        <span class="slider-label">W = <b id="w-val" style="color:var(--yellow)">2</b></span>
+        <button class="run-btn secondary" id="btn-w-cycle">Cycle W</button>
+        <span class="slider-label">R = <b id="r-val" style="color:var(--yellow)">2</b></span>
+        <button class="run-btn secondary" id="btn-r-cycle">Cycle R</button>
+        <button class="run-btn" id="btn-read">Client read</button>
+        <span class="slider-label" id="quorum-check">W+R=4, N=4 → not &gt; N: stale reads possible</span>
+      </div>
+      <div class="btn-row">
+        <button class="run-btn secondary" id="btn-revive">Revive crashed node</button>
+        <button class="run-btn secondary" id="btn-reset">Reset cluster</button>
+      </div>
+
+      <div class="flow-log" id="repl-log">Single-leader topology: A=leader, B/C/D=followers. Click "Client write" to push a value.</div>
+
+      <div class="stat-row">
+        <div class="stat">In-flight packets<b id="stat-inflight">0</b></div>
+        <div class="stat">Writes lost on failover<b id="stat-lost" class="danger">0</b></div>
+        <div class="stat">Conflicts resolved (LWW)<b id="stat-conflicts" class="good">0</b></div>
+        <div class="stat">Stale reads observed<b id="stat-stale" class="danger">0</b></div>
+      </div>
+    </div>
+  </section>
+
+  <section id="interview-line">
+    <h2>Interview Line</h2>
+    <blockquote id="interview-quote">
+      "Replication's one real trade-off is sync versus async, and it's the same PACELC 'else, Latency versus Consistency' choice that shows up everywhere — synchronous means no acknowledged write is ever lost on failover, but it couples the leader's latency and availability to the replica's; async decouples them but an acknowledged write can vanish if the leader dies before it replicates. My default is semi-sync — wait for one replica to ack, let the rest catch up async — so I get a durability floor without paying for every replica's round trip on every write. The part people usually get wrong is failover: detecting 'the leader is actually dead, not just slow' is the exact same problem Raft and Paxos solve, so I don't trust a heartbeat-and-promote script to make that call alone — I want a consensus-backed coordinator, like Patroni on etcd, because 'promote the first replica that answers' is a textbook way to end up with two leaders taking writes at once."
+    </blockquote>
+  </section>
+
+  <section id="takeaways">
+    <h2>Key Takeaways</h2>
+    <ul>
+      <li><b>Semi-sync is the usual production default</b> — Postgres's <code>synchronous_commit = remote_write</code> and MySQL semi-sync wait for one replica's ack, not all of them, giving a durability floor without the full-sync latency tax.</li>
+      <li><b>Replication lag is normally sub-second but spikes hard</b> — a long <code>VACUUM</code>, a schema migration, or a network blip on a replica can push lag to minutes; pin session reads to the leader or track an LSN/offset cursor rather than assume followers are fresh.</li>
+      <li><b>Split-brain during failover is why Patroni delegates the election to etcd</b> instead of a heartbeat script — same majority-quorum mechanism as <code>11-consensus-algorithms</code>, applied to "who gets to be the database leader" instead of "who gets to be the cluster leader."</li>
+      <li><b>Multi-leader conflicts aren't a bug, they're the trade you accepted</b> — last-write-wins is the cheap default and it drops data silently; anything with concurrent edits to the same record (<code>21-multi-region-architecture</code>) needs CRDTs or app-level merge logic instead.</li>
+      <li><b>Leaderless replication turns durability into a per-request knob</b> — Cassandra and DynamoDB let you tune W/R per query, so a client can trade consistency for latency on one slow write without a cluster-wide config change, which single-leader replication simply doesn't offer.</li>
+      <li><b>"The write succeeded" and "the write is durable" are different claims</b> — async replication plus a leader crash is exactly the gap between them, and it's the detail interviewers listen for when they ask "what happens if the leader dies right after acking my write."</li>
+    </ul>
+  </section>
+
+</main>
+
+<nav class="concept-nav">
+  <a href="../concepts/11-consensus-algorithms.html">← Previous: Consensus Algorithms (Raft/Paxos)</a>
+  <a href="../concepts/13-distributed-transactions.html">Next: Distributed Transactions (2PC & Saga) →</a>
+</nav>
+
+<script>
+(function() {
+  const NAMES = ['A', 'B', 'C', 'D'];
+  const N = 4;
+  const POS = {
+    A: { xPct: 22, yPct: 26 },
+    B: { xPct: 78, yPct: 26 },
+    C: { xPct: 22, yPct: 78 },
+    D: { xPct: 78, yPct: 78 }
+  };
+
+  let mode = 'single';
+  let nodes = [];
+  let packets = [];
+  let pendingEvents = [];
+  let writeCounter = 0;
+  let packetSeq = 0;
+  let delayMs = 700;
+  let W = 2, R = 2;
+  let lostWrites = 0, conflictsResolved = 0, staleReads = 0;
+  let now = performance.now();
+
+  const wrap = document.getElementById('topo-wrap');
+  const svg = document.getElementById('topo-svg');
+  const logEl = document.getElementById('repl-log');
+  const logLines = [];
+
+  function pushLog(msg) {
+    logLines.push(msg);
+    if (logLines.length > 40) logLines.shift();
+    logEl.textContent = logLines.join('\n');
+    logEl.scrollTop = logEl.scrollHeight;
+  }
+
+  function nodeById(id) { return nodes.find(n => n.id === id); }
+
+  function initNodes() {
+    nodes = NAMES.map((name, i) => ({
+      id: i,
+      name,
+      role: 'follower',
+      value: 'v0',
+      writeTs: 0,
+      lastOrigin: null,
+      crashed: false
+    }));
+  }
+
+  function assignRoles() {
+    nodes.forEach(n => { n.crashed = false; });
+    if (mode === 'single') {
+      nodes[0].role = 'leader';
+      nodes[1].role = 'follower';
+      nodes[2].role = 'follower';
+      nodes[3].role = 'follower';
+    } else if (mode === 'multi') {
+      nodes[0].role = 'leader';
+      nodes[1].role = 'follower';
+      nodes[2].role = 'leader';
+      nodes[3].role = 'follower';
+    } else {
+      nodes.forEach(n => { n.role = 'replica'; });
+    }
+  }
+
+  function edgesForMode() {
+    const A = nodeById(0), B = nodeById(1), C = nodeById(2), D = nodeById(3);
+    if (mode === 'single') {
+      return [[A, B], [A, C], [A, D]];
+    } else if (mode === 'multi') {
+      return [[A, B], [A, D], [A, C], [C, B], [C, D]];
+    } else {
+      return [[A, B], [A, C], [A, D], [B, C], [B, D], [C, D]];
+    }
+  }
+
+  function setMode(newMode) {
+    mode = newMode;
+    document.querySelectorAll('#mode-buttons .run-btn').forEach(b => {
+      b.classList.toggle('active', b.dataset.mode === mode);
+    });
+    initNodes();
+    assignRoles();
+    packets = [];
+    pendingEvents = [];
+    document.getElementById('btn-conflict').style.display = mode === 'multi' ? '' : 'none';
+    document.getElementById('quorum-controls').style.display = mode === 'leaderless' ? '' : 'none';
+    document.getElementById('btn-kill').style.display = mode === 'leaderless' ? 'none' : '';
+    updateQuorumReadout();
+    if (mode === 'single') pushLog('Switched to single-leader: A=leader, B/C/D=followers.');
+    else if (mode === 'multi') pushLog('Switched to multi-leader: A and C both accept writes, B and D are followers of both.');
+    else pushLog('Switched to leaderless: no leader — client writes directly to W of N=4 replicas, reads from R of N.');
+    updateStats();
+    render();
+  }
+
+  // ---------- write / packet mechanics ----------
+  function spawnPacket(from, to, value, writeTs) {
+    packets.push({
+      id: 'pk' + (packetSeq++),
+      fromId: from.id,
+      toId: to.id,
+      value, writeTs,
+      origin: from.name,
+      sentAt: now,
+      arriveAt: now + delayMs
+    });
+  }
+
+  function applyDelivery(to, value, writeTs, origin) {
+    if (to.crashed) {
+      pushLog('Packet to ' + to.name + ' dropped — node is down.');
+      return;
+    }
+    const isConflict = to.writeTs > 0 && to.lastOrigin && to.lastOrigin !== origin && Math.abs(writeTs - to.writeTs) < 250;
+    if (writeTs > to.writeTs) {
+      const prevVal = to.value, prevOrigin = to.lastOrigin;
+      to.value = value;
+      to.writeTs = writeTs;
+      to.lastOrigin = origin;
+      if (isConflict) {
+        conflictsResolved++;
+        pushLog('CONFLICT at ' + to.name + ': "' + value + '" (from ' + origin + ') beat "' + prevVal + '" (from ' + prevOrigin + ') via last-write-wins — losing write discarded, no merge.');
+      } else {
+        pushLog(to.name + ' applied "' + value + '" from ' + origin + ' (lag ' + Math.round(delayMs) + 'ms).');
+      }
+    } else {
+      pushLog(to.name + ' received "' + value + '" from ' + origin + ' but already has a newer write — discarded (LWW, out of order).');
+    }
+  }
+
+  function clientWrite() {
+    if (mode === 'single') {
+      const leader = nodes.find(n => n.role === 'leader' && !n.crashed);
+      if (!leader) { pushLog('Client write rejected — no leader.'); return; }
+      writeCounter++;
+      const val = 'v' + writeCounter;
+      leader.value = val; leader.writeTs = now; leader.lastOrigin = leader.name;
+      pushLog('Client write "' + val + '" committed locally on leader ' + leader.name + ', replicating to followers...');
+      nodes.filter(n => n.role === 'follower' && !n.crashed).forEach(f => spawnPacket(leader, f, val, now));
+    } else if (mode === 'multi') {
+      const leaders = nodes.filter(n => n.role === 'leader' && !n.crashed);
+      if (!leaders.length) { pushLog('Client write rejected — no live leader.'); return; }
+      const leader = leaders[writeCounter % leaders.length];
+      writeCounter++;
+      const val = leader.name + '-v' + writeCounter;
+      leader.value = val; leader.writeTs = now; leader.lastOrigin = leader.name;
+      pushLog('Client write "' + val + '" committed locally on leader ' + leader.name + ', replicating to the rest of the cluster...');
+      nodes.filter(n => n.id !== leader.id && !n.crashed).forEach(f => spawnPacket(leader, f, val, now));
+    } else {
+      writeCounter++;
+      const val = 'v' + writeCounter;
+      const live = nodes.filter(n => !n.crashed);
+      const targets = shuffle(live).slice(0, Math.min(W, live.length));
+      const ts = now;
+      targets.forEach(t => { t.value = val; t.writeTs = ts; t.lastOrigin = 'client'; });
+      pushLog('Client write "' + val + '" sent directly to W=' + W + ' replicas: [' + targets.map(t => t.name).join(', ') + '] — no leader involved, acked once W replicas confirm.');
+      const rest = live.filter(n => !targets.includes(n));
+      rest.forEach(n => spawnPacket(targets[0], n, val, ts));
+    }
+    updateStats();
+    render();
+  }
+
+  function conflictingWrite() {
+    if (mode !== 'multi') return;
+    const leaders = nodes.filter(n => n.role === 'leader' && !n.crashed);
+    if (leaders.length < 2) { pushLog('Need two live leaders for a conflicting write.'); return; }
+    const [L1, L2] = leaders;
+    writeCounter++;
+    const val1 = L1.name + '-conflict' + writeCounter;
+    const t1 = now;
+    writeCounter++;
+    const val2 = L2.name + '-conflict' + writeCounter;
+    const t2 = now + 5; // near-simultaneous, neither leader has heard from the other yet
+    L1.value = val1; L1.writeTs = t1; L1.lastOrigin = L1.name;
+    L2.value = val2; L2.writeTs = t2; L2.lastOrigin = L2.name;
+    pushLog('Concurrent writes to the SAME key: ' + L1.name + ' wrote "' + val1 + '", ' + L2.name + ' wrote "' + val2 + '" — neither leader has seen the other\'s write yet.');
+    nodes.filter(n => !n.crashed).forEach(n => {
+      if (n.id !== L1.id) spawnPacket(L1, n, val1, t1);
+      if (n.id !== L2.id) spawnPacket(L2, n, val2, t2);
+    });
+    updateStats();
+    render();
+  }
+
+  function killLeader() {
+    const leaders = nodes.filter(n => n.role === 'leader' && !n.crashed);
+    if (!leaders.length) { pushLog('No live leader to kill.'); return; }
+    const dead = leaders[0];
+    const staleValue = dead.value, staleTs = dead.writeTs;
+    dead.crashed = true;
+    const otherLeaderAlive = nodes.some(n => n.role === 'leader' && n.id !== dead.id && !n.crashed);
+    pushLog(dead.name + ' crashed holding "' + staleValue + '" (writeTs ' + staleTs.toFixed(0) + '). ' +
+      (otherLeaderAlive ? 'Other leader keeps accepting writes uninterrupted — that\'s the whole point of multi-leader.' : 'Followers: ' +
+        nodes.filter(n => n.role === 'follower' && !n.crashed).map(n => n.name + '="' + n.value + '"').join(', ') + '. Electing a replacement...'));
+    pendingEvents.push({ type: 'failover', deadId: dead.id, at: now + 900, staleValue, staleTs });
+    render();
+  }
+
+  function processEvents() {
+    pendingEvents = pendingEvents.filter(ev => {
+      if (now < ev.at) return true;
+      if (ev.type === 'failover') {
+        const candidates = nodes.filter(n => n.role === 'follower' && !n.crashed);
+        if (!candidates.length) {
+          pushLog('Failover failed — no live follower available to promote.');
+          return false;
+        }
+        const promoted = candidates.reduce((a, b) => (b.writeTs > a.writeTs ? b : a));
+        promoted.role = 'leader';
+        const lost = ev.staleTs > promoted.writeTs;
+        if (lost) lostWrites++;
+        pushLog('Failover: ' + promoted.name + ' promoted to leader (had writeTs ' + promoted.writeTs.toFixed(0) + ').' +
+          (lost ? ' DATA LOSS: "' + ev.staleValue + '" was committed on the dead leader but never finished replicating — it is gone.' : ' No data loss — promoted node was fully caught up.'));
+        updateStats();
+        render();
+      }
+      return false;
+    });
+  }
+
+  function clientRead() {
+    if (mode !== 'leaderless') return;
+    const live = nodes.filter(n => !n.crashed);
+    if (live.length < R) { pushLog('Client read rejected — fewer than R=' + R + ' replicas alive.'); return; }
+    const globalMaxTs = Math.max(...nodes.map(n => n.writeTs));
+    const sample = shuffle(live).slice(0, R);
+    const observedMaxTs = Math.max(...sample.map(n => n.writeTs));
+    const fresh = observedMaxTs >= globalMaxTs;
+    if (!fresh) staleReads++;
+    pushLog('Client read from R=' + R + ' replicas [' + sample.map(n => n.name).join(', ') + '] → observed "' +
+      sample.find(n => n.writeTs === observedMaxTs).value + '". ' +
+      (fresh ? 'Saw the latest write — quorum overlap guaranteed it.' : 'STALE — the latest write lives only on a replica this read never touched.'));
+    updateStats();
+  }
+
+  function shuffle(arr) {
+    const a = arr.slice();
+    for (let i = a.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [a[i], a[j]] = [a[j], a[i]];
+    }
+    return a;
+  }
+
+  function updateQuorumReadout() {
+    document.getElementById('w-val').textContent = String(W);
+    document.getElementById('r-val').textContent = String(R);
+    const sum = W + R;
+    const ok = sum > N;
+    const el = document.getElementById('quorum-check');
+    el.textContent = 'W+R=' + sum + ', N=' + N + (ok ? ' → > N: reads always see the latest write' : ' → not > N: stale reads possible');
+    el.style.color = ok ? 'var(--green)' : 'var(--red)';
+  }
+
+  // ---------- layout / render ----------
+  function pxPos(name) {
+    const w = wrap.clientWidth || 600;
+    const h = wrap.clientHeight || 320;
+    const p = POS[name];
+    return { x: (p.xPct / 100) * w, y: (p.yPct / 100) * h };
+  }
+
+  let nodeEls = {};
+  function ensureNodeEls() {
+    if (Object.keys(nodeEls).length) return;
+    wrap.querySelectorAll('.repl-node').forEach(e => e.remove());
+    nodes.forEach(n => {
+      const div = document.createElement('div');
+      div.className = 'repl-node';
+      wrap.appendChild(div);
+      nodeEls[n.id] = div;
+    });
+  }
+
+  function renderNodes() {
+    ensureNodeEls();
+    nodes.forEach(n => {
+      const div = nodeEls[n.id];
+      const pos = pxPos(n.name);
+      div.style.left = pos.x + 'px';
+      div.style.top = pos.y + 'px';
+      div.className = 'repl-node ' + (n.crashed ? 'crashed' : n.role);
+      div.innerHTML =
+        '<div class="n-name">' + n.name + '</div>' +
+        '<div class="n-role">' + (n.crashed ? 'crashed' : n.role) + '</div>' +
+        '<div class="n-val">' + n.value + '</div>' +
+        '<div class="n-ts">ts ' + Math.round(n.writeTs) + '</div>';
+    });
+  }
+
+  function renderEdgesAndPackets() {
+    const w = wrap.clientWidth || 600;
+    const h = wrap.clientHeight || 320;
+    svg.setAttribute('viewBox', '0 0 ' + w + ' ' + h);
+    let html = '';
+    edgesForMode().forEach(([a, b]) => {
+      if (a.crashed || b.crashed) return;
+      const pa = pxPos(a.name), pb = pxPos(b.name);
+      html += '<line x1="' + pa.x + '" y1="' + pa.y + '" x2="' + pb.x + '" y2="' + pb.y + '" stroke="#252a3d" stroke-width="1.5" opacity="0.6"/>';
+    });
+    packets.forEach(p => {
+      const from = nodeById(p.fromId), to = nodeById(p.toId);
+      if (!from || !to) return;
+      const pf = pxPos(from.name), pt = pxPos(to.name);
+      const progress = Math.min(1, Math.max(0, (now - p.sentAt) / Math.max(1, p.arriveAt - p.sentAt)));
+      const x = pf.x + (pt.x - pf.x) * progress;
+      const y = pf.y + (pt.y - pf.y) * progress;
+      html += '<circle cx="' + x + '" cy="' + y + '" r="6" fill="#ffd700"/>';
+    });
+    svg.innerHTML = html;
+  }
+
+  function deliverDuePackets() {
+    const due = packets.filter(p => now >= p.arriveAt);
+    packets = packets.filter(p => now < p.arriveAt);
+    due.forEach(p => {
+      const to = nodeById(p.toId);
+      if (to) applyDelivery(to, p.value, p.writeTs, p.origin);
+    });
+    if (due.length) updateStats();
+  }
+
+  function updateStats() {
+    document.getElementById('stat-inflight').textContent = String(packets.length);
+    document.getElementById('stat-lost').textContent = String(lostWrites);
+    document.getElementById('stat-conflicts').textContent = String(conflictsResolved);
+    document.getElementById('stat-stale').textContent = String(staleReads);
+  }
+
+  function render() {
+    renderNodes();
+    renderEdgesAndPackets();
+  }
+
+  function tick() {
+    now = performance.now();
+    processEvents();
+    deliverDuePackets();
+    render();
+    requestAnimationFrame(tick);
+  }
+
+  // ---------- controls ----------
+  document.querySelectorAll('#mode-buttons .run-btn').forEach(btn => {
+    btn.addEventListener('click', () => setMode(btn.dataset.mode));
+  });
+
+  document.getElementById('delay-slider').addEventListener('input', (e) => {
+    delayMs = Number(e.target.value);
+    document.getElementById('delay-val').textContent = delayMs + 'ms';
+  });
+
+  document.getElementById('btn-write').addEventListener('click', clientWrite);
+  document.getElementById('btn-kill').addEventListener('click', killLeader);
+  document.getElementById('btn-conflict').addEventListener('click', conflictingWrite);
+  document.getElementById('btn-read').addEventListener('click', clientRead);
+
+  document.getElementById('btn-w-cycle').addEventListener('click', () => {
+    W = W >= 3 ? 1 : W + 1;
+    updateQuorumReadout();
+  });
+  document.getElementById('btn-r-cycle').addEventListener('click', () => {
+    R = R >= 3 ? 1 : R + 1;
+    updateQuorumReadout();
+  });
+
+  document.getElementById('btn-revive').addEventListener('click', () => {
+    const crashed = nodes.filter(n => n.crashed);
+    if (!crashed.length) { pushLog('No crashed nodes to revive.'); return; }
+    const n = crashed[Math.floor(Math.random() * crashed.length)];
+    n.crashed = false;
+    if (mode !== 'leaderless' && !nodes.some(x => x.role === 'leader' && !x.crashed && x.id !== n.id)) {
+      // no-op: role stays whatever it was demoted/promoted to already
+    }
+    pushLog(n.name + ' revived as ' + n.role + ' — will catch up on the next replication packet it receives.');
+    render();
+  });
+
+  document.getElementById('btn-reset').addEventListener('click', () => {
+    lostWrites = 0; conflictsResolved = 0; staleReads = 0; writeCounter = 0;
+    nodeEls = {};
+    setMode(mode);
+  });
+
+  initNodes();
+  assignRoles();
+  updateQuorumReadout();
+  requestAnimationFrame(tick);
+  window.addEventListener('resize', () => { render(); });
+})();
+</script>
+</body>
+</html>
+</content>

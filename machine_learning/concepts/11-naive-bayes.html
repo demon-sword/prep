@@ -1,0 +1,689 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1.0"/>
+  <title>Naive Bayes Classifier — Machine Learning Concepts</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com"/>
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet"/>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg:        #0d0f17;
+      --surface:   #141720;
+      --card:      #1a1e2e;
+      --border:    #252a3d;
+      --accent:    #00d4ff;
+      --purple:    #7c3aed;
+      --green:     #00ff88;
+      --yellow:    #ffd700;
+      --red:       #ff4757;
+      --orange:    #ff9500;
+      --text:      #e2e8f0;
+      --text-dim:  #8892a4;
+      --mono:      'JetBrains Mono', monospace;
+      --sans:      'Inter', system-ui, sans-serif;
+    }
+
+    html { scroll-behavior: smooth; }
+
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: var(--sans);
+      font-size: 16px;
+      line-height: 1.7;
+      min-height: 100vh;
+    }
+
+    header {
+      background: var(--surface);
+      border-bottom: 1px solid var(--border);
+      padding: 2rem 2rem 1.5rem;
+      max-width: 1100px;
+      margin: 0 auto;
+    }
+
+    .group-badge {
+      display: inline-block;
+      font-family: var(--mono);
+      font-size: 0.7rem;
+      font-weight: 700;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      color: var(--accent);
+      background: rgba(0, 212, 255, 0.1);
+      border: 1px solid rgba(0, 212, 255, 0.3);
+      padding: 0.2em 0.7em;
+      border-radius: 4px;
+      margin-bottom: 0.75rem;
+    }
+
+    header h1 {
+      font-size: clamp(1.6rem, 4vw, 2.4rem);
+      font-weight: 700;
+      color: var(--text);
+      line-height: 1.2;
+      margin-bottom: 0.5rem;
+    }
+
+    header h1 span.id {
+      color: var(--text-dim);
+      font-size: 0.55em;
+      font-family: var(--mono);
+      margin-right: 0.5rem;
+      vertical-align: middle;
+    }
+
+    header p.desc {
+      color: var(--text-dim);
+      font-size: 1.05rem;
+      max-width: 700px;
+    }
+
+    main {
+      max-width: 1100px;
+      margin: 0 auto;
+      padding: 0 2rem 4rem;
+    }
+
+    section { margin-top: 3rem; }
+
+    section > h2 {
+      font-size: 1.4rem;
+      font-weight: 700;
+      color: var(--accent);
+      border-bottom: 1px solid var(--border);
+      padding-bottom: 0.5rem;
+      margin-bottom: 1.5rem;
+    }
+
+    h3 {
+      font-size: 1.1rem;
+      font-weight: 600;
+      color: var(--yellow);
+      margin: 1.5rem 0 0.6rem;
+    }
+
+    p { margin-bottom: 1rem; color: var(--text); }
+
+    ul, ol { padding-left: 1.5rem; margin-bottom: 1rem; }
+    li { margin-bottom: 0.4rem; }
+
+    code {
+      font-family: var(--mono);
+      font-size: 0.85em;
+      background: rgba(0, 212, 255, 0.08);
+      color: var(--accent);
+      padding: 0.1em 0.35em;
+      border-radius: 3px;
+    }
+
+    .formula-block {
+      background: var(--card);
+      border-left: 3px solid var(--purple);
+      border-radius: 0 8px 8px 0;
+      padding: 0.8rem 1.2rem;
+      margin: 1rem 0;
+      font-family: var(--mono);
+      font-size: 0.95rem;
+      color: var(--text);
+    }
+
+    .callout {
+      background: rgba(124, 58, 237, 0.08);
+      border: 1px solid rgba(124, 58, 237, 0.3);
+      border-radius: 8px;
+      padding: 1rem 1.2rem;
+      margin: 1rem 0;
+    }
+
+    .callout strong { color: var(--purple); }
+
+    /* ── Visualization ── */
+    #visualization .viz-card {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 1.5rem;
+      margin-bottom: 1.5rem;
+    }
+
+    .viz-title { font-weight: 600; font-size: 1rem; color: var(--text); margin-bottom: 0.3rem; }
+    .viz-desc { font-size: 0.88rem; color: var(--text-dim); margin-bottom: 1.2rem; }
+
+    .controls {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 1.25rem;
+      align-items: center;
+      margin-bottom: 1.2rem;
+    }
+
+    .slider-row { display: flex; align-items: center; gap: 0.75rem; }
+
+    .slider-row label {
+      font-size: 0.82rem;
+      color: var(--text-dim);
+      white-space: nowrap;
+    }
+
+    .slider-row input[type="range"] {
+      accent-color: var(--accent);
+      width: 160px;
+    }
+
+    .slider-val {
+      font-family: var(--mono);
+      font-size: 0.85rem;
+      color: var(--accent);
+      min-width: 2.5rem;
+    }
+
+    .ctrl-btn {
+      font-family: var(--mono);
+      font-size: 0.8rem;
+      padding: 0.45em 1.1em;
+      border-radius: 6px;
+      border: 1px solid var(--accent);
+      background: rgba(0, 212, 255, 0.08);
+      color: var(--accent);
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+
+    .ctrl-btn:hover { background: rgba(0, 212, 255, 0.2); }
+    .ctrl-btn:active { transform: scale(0.97); }
+    .ctrl-btn.ghost { border-color: var(--border); background: transparent; color: var(--text-dim); }
+    .ctrl-btn.ghost:hover { border-color: var(--text-dim); }
+
+    canvas {
+      display: block;
+      border-radius: 8px;
+      background: var(--surface);
+      max-width: 100%;
+    }
+
+    .word-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 0.85rem;
+      margin-bottom: 1.2rem;
+    }
+
+    .word-table th {
+      text-align: left;
+      color: var(--text-dim);
+      font-family: var(--mono);
+      font-size: 0.72rem;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      padding: 0.5rem 0.6rem;
+      border-bottom: 1px solid var(--border);
+    }
+
+    .word-table td {
+      padding: 0.45rem 0.6rem;
+      border-bottom: 1px solid var(--border);
+      font-family: var(--mono);
+      vertical-align: middle;
+    }
+
+    .word-table tr:last-child td { border-bottom: none; }
+    .word-table tr.checked td { background: rgba(0, 212, 255, 0.05); }
+
+    .word-table input[type="checkbox"] {
+      width: 16px;
+      height: 16px;
+      accent-color: var(--accent);
+      cursor: pointer;
+    }
+
+    .contrib-cell { display: flex; align-items: center; gap: 0.4rem; }
+    .contrib-bar-track { width: 70px; height: 8px; background: var(--surface); border-radius: 4px; overflow: hidden; position: relative; }
+    .contrib-bar-fill { position: absolute; top: 0; bottom: 0; }
+
+    .readout-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 1rem;
+      margin-top: 1.2rem;
+    }
+
+    .readout {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 0.6rem 1rem;
+      font-size: 0.85rem;
+      color: var(--text-dim);
+      flex: 1;
+      min-width: 150px;
+    }
+
+    .readout strong { display: block; font-family: var(--mono); font-size: 1.1rem; margin-top: 0.2rem; }
+    .readout.hi strong { color: var(--red); }
+    .readout.lo strong { color: var(--green); }
+    .readout.mid strong { color: var(--accent); }
+
+    .legend {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 1rem;
+      margin-top: 0.8rem;
+    }
+
+    .legend-item {
+      display: flex;
+      align-items: center;
+      gap: 0.4rem;
+      font-size: 0.8rem;
+      color: var(--text-dim);
+    }
+
+    .legend-dot { width: 10px; height: 10px; border-radius: 2px; }
+
+    .hint {
+      font-size: 0.78rem;
+      color: var(--text-dim);
+      margin-top: 0.6rem;
+      font-style: italic;
+    }
+
+    /* ── Takeaways ── */
+    #takeaways ul { list-style: none; padding: 0; }
+
+    #takeaways li {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 1rem 1.2rem;
+      margin-bottom: 0.75rem;
+      padding-left: 3rem;
+      position: relative;
+    }
+
+    #takeaways li::before {
+      content: '→';
+      position: absolute;
+      left: 1rem;
+      color: var(--accent);
+      font-weight: 700;
+    }
+
+    /* ── Nav ── */
+    .concept-nav {
+      max-width: 1100px;
+      margin: 0 auto;
+      padding: 1.5rem 2rem 3rem;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      border-top: 1px solid var(--border);
+    }
+
+    .nav-link {
+      display: flex;
+      flex-direction: column;
+      gap: 0.2rem;
+      text-decoration: none;
+      padding: 0.6rem 1rem;
+      border-radius: 8px;
+      border: 1px solid var(--border);
+      background: var(--surface);
+      transition: all 0.2s;
+      max-width: 220px;
+    }
+
+    .nav-link:hover { border-color: var(--accent); background: rgba(0, 212, 255, 0.06); }
+    .nav-link.disabled { opacity: 0.3; pointer-events: none; }
+
+    .nav-dir {
+      font-size: 0.7rem;
+      font-family: var(--mono);
+      color: var(--text-dim);
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+    }
+
+    .nav-title { font-size: 0.88rem; color: var(--text); font-weight: 500; }
+
+    @media (max-width: 640px) {
+      header, main { padding-left: 1rem; padding-right: 1rem; }
+      .concept-nav { padding-left: 1rem; padding-right: 1rem; flex-direction: column; gap: 0.75rem; }
+      .nav-link { max-width: 100%; width: 100%; }
+      .slider-row input[type="range"] { width: 110px; }
+      .word-table { font-size: 0.72rem; }
+      .contrib-bar-track { width: 44px; }
+    }
+  </style>
+</head>
+<body>
+
+<header>
+  <div class="group-badge">Supervised Learning</div>
+  <h1><span class="id">11</span>Naive Bayes Classifier</h1>
+  <p class="desc">Conditional independence assumption, how it simplifies Bayes' theorem for classification, and why it works well for text despite the naive assumption.</p>
+</header>
+
+<main>
+
+  <!-- ── THEORY ── -->
+  <section id="theory">
+    <h2>Theory</h2>
+
+    <h3>From Bayes' Theorem to a Classifier</h3>
+    <p>
+      Naive Bayes turns <code>02-bayes-theorem</code> into a working classifier by asking: given a feature vector <code>x = (x₁, …, xₙ)</code>, which class <code>c</code> maximizes the posterior <code>P(c|x)</code>? By Bayes' rule, <code>P(c|x) = P(x|c)·P(c) / P(x)</code>. Since <code>P(x)</code> is the same normalizing constant for every candidate class, classification reduces to maximizing the numerator: <code>argmax_c P(x|c)·P(c)</code> — a prior <code>P(c)</code> (how common is this class overall) times a likelihood <code>P(x|c)</code> (how well do these features fit that class). The entire difficulty is estimating <code>P(x|c)</code>: a joint distribution over <code>n</code> features has, in the worst case, exponentially many parameters to learn — utterly infeasible from a finite training set.
+    </p>
+
+    <h3>The "Naive" Independence Assumption</h3>
+    <p>
+      Naive Bayes sidesteps this by assuming every feature is <strong>conditionally independent given the class</strong>: <code>P(x₁,…,xₙ|c) = P(x₁|c)·P(x₂|c)·…·P(xₙ|c)</code>. This is almost always false in reality — in spam email, the words "click" and "here" co-occur far more than independence would predict, and "prince" and "inheritance" are practically inseparable. Yet the classifier is famously robust to this violation for a subtle reason: NB only needs to get the <em>ranking</em> of <code>P(c|x)</code> across classes right, not the calibrated probability values. Even when the independence assumption skews the magnitude of the estimated posterior (often pushing it toward 0 or 1 more aggressively than justified), it frequently still skews it in the <em>correct direction</em>, so the <code>argmax</code> decision remains correct even though <code>predict_proba()</code> output is poorly calibrated. This is why NB is a strong classifier despite being a weak density estimator — a distinction worth stating explicitly in an interview.
+    </p>
+
+    <h3>Three Flavors, by Feature Type</h3>
+    <p>
+      <strong>Multinomial NB</strong> (<code>sklearn.naive_bayes.MultinomialNB</code>) models each feature as a count (word frequency in a document) drawn from a multinomial distribution per class — the standard choice for bag-of-words / TF-count text classification. <strong>Bernoulli NB</strong> (<code>BernoulliNB</code>) instead models each feature as a binary presence/absence indicator and explicitly penalizes the <em>absence</em> of expected words, not just rewarding presence — better suited to short texts where word presence matters more than frequency. <strong>Gaussian NB</strong> (<code>GaussianNB</code>) assumes each continuous feature is normally distributed within each class, estimating a per-class mean and variance — useful as a fast baseline on numeric/tabular data, though the Gaussian assumption is often badly wrong for skewed real-world features (worth combining with a power transform first).
+    </p>
+
+    <h3>Laplace (Additive) Smoothing</h3>
+    <p>
+      A word that never appeared with a given class in training gets estimated likelihood <code>0</code>, which — because likelihoods multiply — zeroes out the entire posterior for that class regardless of how strongly every other feature supports it. <strong>Laplace smoothing</strong> (alpha smoothing) fixes this by adding a pseudocount <code>α</code> (scikit-learn's default <code>alpha=1.0</code>) to every count before normalizing: <code>P(word|class) = (count + α) / (total_count + α·|vocab|)</code>. This guarantees every probability stays strictly positive. Tuning <code>alpha</code> down (e.g. 0.1–0.5) trusts the training counts more and sharpens the model; tuning it up smooths harder and better protects against unseen-word zeroing on small training sets — a real hyperparameter worth grid-searching, not just leaving at its default.
+    </p>
+
+    <h3>Numerical Stability: Log-Space</h3>
+    <p>
+      Multiplying dozens or hundreds of probabilities (one per word in a document) underflows floating point almost immediately — a product of 200 numbers each around 0.01 vanishes to <code>0.0</code> in double precision. Every real implementation computes in <strong>log-space</strong> instead: <code>log P(c|x) ∝ log P(c) + Σᵢ log P(xᵢ|c)</code>, turning the product into a sum, which is numerically stable and is exactly what <code>MultinomialNB.predict_log_proba()</code> returns internally before exponentiating back for <code>predict_proba()</code>.
+    </p>
+
+    <h3>Production Reality</h3>
+    <p>
+      NB's appeal in production is speed and simplicity: training is a single pass counting word/class co-occurrences — <code>O(n)</code> and trivially parallelizable/incremental (<code>partial_fit</code> supports online/streaming learning, unlike most other classifiers) — and inference is a dot product, sub-millisecond even on commodity hardware. It's the classic first baseline for spam filtering, sentiment analysis, and document routing before reaching for logistic regression, linear SVM, or a fine-tuned transformer. For imbalanced text classification, scikit-learn's <code>ComplementNB</code> (designed specifically for skewed class distributions) typically outperforms <code>MultinomialNB</code> out of the box. The known failure mode: strongly correlated or redundant features get "double-counted" in the naive product, overconfidently swinging the decision — e.g. including both a raw word and a stemmed/lemmatized version of it as separate features compounds the same signal twice. NB is also a <strong>generative</strong> model (it models <code>P(x|c)</code>, and can in principle generate synthetic samples), in contrast to <strong>discriminative</strong> models like logistic regression that model <code>P(c|x)</code> directly — generative models need less data to reach their asymptotic accuracy but are eventually outperformed by discriminative models as training data grows, a classic result from Ng & Jordan's 2001 NB-vs-logistic-regression comparison.
+    </p>
+  </section>
+
+  <!-- ── VISUALIZATION ── -->
+  <section id="visualization">
+    <h2>Interactive Visualization</h2>
+
+    <div class="viz-card">
+      <div class="viz-title">Spam Filter: Live Naive Bayes Posterior</div>
+      <div class="viz-desc">
+        Each row is a word with its learned likelihoods <code>P(word|spam)</code> and <code>P(word|ham)</code> from a toy training corpus. <strong>Check the words that appear in an email</strong> to build a live example — every checkbox toggle recomputes the real log-odds sum and the final posterior <code>P(spam|email)</code> via Bayes' rule, exactly as <code>MultinomialNB</code>/<code>BernoulliNB</code> would. Bars show each word's individual pull toward spam (red) or ham (green).
+      </div>
+
+      <div class="controls">
+        <div class="slider-row">
+          <label>Prior P(spam)</label>
+          <input type="range" id="prior-slider" min="5" max="95" step="5" value="50"/>
+          <span class="slider-val" id="prior-val">0.50</span>
+        </div>
+        <button class="ctrl-btn" id="preset-spam">Classic spam email</button>
+        <button class="ctrl-btn" id="preset-work">Work email</button>
+        <button class="ctrl-btn ghost" id="preset-clear">Clear all</button>
+      </div>
+
+      <table class="word-table" id="word-table">
+        <thead>
+          <tr>
+            <th>In email?</th>
+            <th>Word</th>
+            <th>P(w|spam)</th>
+            <th>P(w|ham)</th>
+            <th>Log-odds contribution</th>
+          </tr>
+        </thead>
+        <tbody id="word-tbody"></tbody>
+      </table>
+
+      <canvas id="posterior-canvas" width="620" height="70"></canvas>
+
+      <div class="legend">
+        <div class="legend-item"><div class="legend-dot" style="background:var(--red)"></div>Pulls toward SPAM</div>
+        <div class="legend-item"><div class="legend-dot" style="background:var(--green)"></div>Pulls toward HAM</div>
+      </div>
+
+      <div class="readout-row">
+        <div class="readout mid">Prior odds (spam:ham)<strong id="ro-prior">1.00 : 1.00</strong></div>
+        <div class="readout mid">Sum of log-likelihood-ratios<strong id="ro-sumlog">0.00</strong></div>
+        <div class="readout hi" id="ro-pred-box">Predicted class<strong id="ro-pred">—</strong></div>
+        <div class="readout lo" id="ro-conf-box">P(spam | email)<strong id="ro-conf">50.0%</strong></div>
+      </div>
+
+      <p class="hint">Tip: check "free", "win", "prize" and watch the posterior swing hard toward SPAM even before you touch the prior slider — that's the multiplicative effect of several weak signals compounding, the same mechanism that makes NB a strong text baseline despite the independence lie.</p>
+    </div>
+  </section>
+
+  <!-- ── TAKEAWAYS ── -->
+  <section id="takeaways">
+    <h2>Key Takeaways</h2>
+    <ul>
+      <li>
+        <strong>NB is a generative classifier that's usually miscalibrated but rarely wrong on ranking.</strong> Because the conditional independence assumption systematically distorts the magnitude (not always the direction) of the posterior, <code>predict_proba()</code> outputs often look overconfident (values clustered near 0 or 1) — recalibrate with <code>CalibratedClassifierCV</code> if you actually need trustworthy probabilities, e.g. for a downstream threshold-based business decision.
+      </li>
+      <li>
+        <strong>Always smooth — never trust raw counts.</strong> scikit-learn's default <code>alpha=1.0</code> Laplace smoothing exists because a single unseen word in test data would otherwise zero out an entire class's likelihood. In practice, tune <code>alpha</code> via cross-validation; smaller corpora need more smoothing (higher <code>alpha</code>), large corpora need less.
+      </li>
+      <li>
+        <strong>Match the NB variant to the feature type</strong> — <code>MultinomialNB</code> for word counts/TF, <code>BernoulliNB</code> for binary presence (especially short texts like tweets or SMS), <code>ComplementNB</code> for imbalanced text classification (often beats MultinomialNB out of the box on skewed classes), <code>GaussianNB</code> only for roughly-normal continuous features — using the wrong variant silently degrades accuracy without throwing an error.
+      </li>
+      <li>
+        <strong>NB needs far less training data than logistic regression to reach its (lower) asymptotic accuracy</strong> — the classic Ng & Jordan (2001) result. It's the right choice for cold-start classifiers with a few hundred labeled examples; once you have tens of thousands of labeled documents, a discriminative linear model (logistic regression, linear SVM) or a fine-tuned transformer will typically overtake it.
+      </li>
+      <li>
+        <strong>Redundant/correlated features get double-counted.</strong> Feeding NB both a raw token and its stem, or both a word and a bigram containing it, makes the same evidence multiply in twice — inflating confidence without adding real information. Deduplicate or use TF-IDF weighting to dampen this before feeding a bag-of-words into NB.
+      </li>
+      <li>
+        <strong>NB supports true online/incremental learning</strong> via <code>partial_fit()</code>, updating word/class counts one mini-batch at a time without retraining from scratch — a real production advantage over batch-only models when the training corpus streams continuously (e.g. live spam reports feeding back into the filter).
+      </li>
+    </ul>
+  </section>
+
+</main>
+
+<!-- ── NAV ── -->
+<nav class="concept-nav">
+  <a class="nav-link" href="./10-knn.html">
+    <span class="nav-dir">← Previous</span>
+    <span class="nav-title">k-Nearest Neighbors</span>
+  </a>
+  <a class="nav-link" href="./12-bagging-vs-boosting.html">
+    <span class="nav-dir">Next →</span>
+    <span class="nav-title">Bagging vs Boosting</span>
+  </a>
+</nav>
+
+<script>
+// ─── Toy trained vocabulary: P(word|spam), P(word|ham) ─────────────────────
+const WORDS = [
+  { word: 'free',    pSpam: 0.65, pHam: 0.05 },
+  { word: 'win',     pSpam: 0.55, pHam: 0.03 },
+  { word: 'prize',   pSpam: 0.58, pHam: 0.02 },
+  { word: 'money',   pSpam: 0.60, pHam: 0.08 },
+  { word: 'click',   pSpam: 0.50, pHam: 0.04 },
+  { word: 'urgent',  pSpam: 0.45, pHam: 0.06 },
+  { word: 'viagra',  pSpam: 0.70, pHam: 0.01 },
+  { word: 'meeting', pSpam: 0.05, pHam: 0.55 },
+  { word: 'report',  pSpam: 0.04, pHam: 0.45 },
+  { word: 'invoice', pSpam: 0.10, pHam: 0.30 },
+  { word: 'project', pSpam: 0.03, pHam: 0.40 },
+  { word: 'team',    pSpam: 0.04, pHam: 0.35 }
+];
+
+const PRESET_SPAM = new Set(['free', 'win', 'prize', 'money']);
+const PRESET_WORK = new Set(['meeting', 'report', 'project', 'team']);
+
+let checked = new Set(PRESET_SPAM);
+
+// ─── Shared canvas setup ─────────────────────────────────────────────────
+function setupCanvas(canvas, displayH, widthOverride) {
+  const dpr = window.devicePixelRatio || 1;
+  const displayW = widthOverride || canvas.parentElement.clientWidth || 620;
+  canvas.style.width = displayW + 'px';
+  canvas.style.height = displayH + 'px';
+  canvas.width = displayW * dpr;
+  canvas.height = displayH * dpr;
+  const ctx = canvas.getContext('2d');
+  ctx.scale(dpr, dpr);
+  return { ctx, W: displayW, H: displayH };
+}
+
+// ─── Naive Bayes math ───────────────────────────────────────────────────
+function priorSpam() {
+  return parseInt(document.getElementById('prior-slider').value) / 100;
+}
+
+// per-word log-likelihood-ratio contribution: log(P(w|spam)/P(w|ham)) if present,
+// log((1-P(w|spam))/(1-P(w|ham))) if absent (Bernoulli NB style — absence counts too)
+function wordContribution(w) {
+  const present = checked.has(w.word);
+  const pS = present ? w.pSpam : (1 - w.pSpam);
+  const pH = present ? w.pHam : (1 - w.pHam);
+  return Math.log(pS) - Math.log(pH);
+}
+
+function computePosterior() {
+  const pS = priorSpam();
+  const pH = 1 - pS;
+  const priorLogOdds = Math.log(pS) - Math.log(pH);
+  let sumLogRatio = 0;
+  const contributions = WORDS.map(w => {
+    const c = wordContribution(w);
+    sumLogRatio += c;
+    return { word: w.word, present: checked.has(w.word), c };
+  });
+  const totalLogOdds = priorLogOdds + sumLogRatio;
+  // posterior P(spam|x) = 1 / (1 + exp(-totalLogOdds))
+  const postSpam = 1 / (1 + Math.exp(-totalLogOdds));
+  return { pS, pH, priorLogOdds, sumLogRatio, totalLogOdds, postSpam, contributions };
+}
+
+// ─── Table rendering ──────────────────────────────────────────────────────
+function renderTable() {
+  const tbody = document.getElementById('word-tbody');
+  const result = computePosterior();
+  const maxAbs = Math.max(0.5, ...result.contributions.map(c => Math.abs(c.c)));
+
+  let html = '';
+  WORDS.forEach((w, i) => {
+    const contrib = result.contributions[i];
+    const isChecked = checked.has(w.word);
+    const barPct = Math.min(100, (Math.abs(contrib.c) / maxAbs) * 100);
+    const color = contrib.c >= 0 ? 'var(--red)' : 'var(--green)';
+    const barLeft = contrib.c >= 0 ? '50%' : (50 - barPct / 2) + '%';
+    const barWidth = barPct / 2 + '%';
+
+    html += `<tr class="${isChecked ? 'checked' : ''}">
+      <td><input type="checkbox" data-word="${w.word}" ${isChecked ? 'checked' : ''}/></td>
+      <td>${w.word}</td>
+      <td>${w.pSpam.toFixed(2)}</td>
+      <td>${w.pHam.toFixed(2)}</td>
+      <td>
+        <div class="contrib-cell">
+          <div class="contrib-bar-track">
+            <div class="contrib-bar-fill" style="left:${barLeft};width:${barWidth};background:${color}"></div>
+          </div>
+          <span style="color:${color};font-size:0.78rem">${contrib.c >= 0 ? '+' : ''}${contrib.c.toFixed(2)}</span>
+        </div>
+      </td>
+    </tr>`;
+  });
+  tbody.innerHTML = html;
+
+  tbody.querySelectorAll('input[type="checkbox"]').forEach(cb => {
+    cb.addEventListener('change', (e) => {
+      const word = e.target.getAttribute('data-word');
+      if (e.target.checked) checked.add(word); else checked.delete(word);
+      renderAll();
+    });
+  });
+}
+
+// ─── Posterior gauge canvas ─────────────────────────────────────────────
+function renderGauge() {
+  const canvas = document.getElementById('posterior-canvas');
+  const { ctx, W, H } = setupCanvas(canvas, 70);
+  const result = computePosterior();
+
+  ctx.fillStyle = '#141720';
+  ctx.fillRect(0, 0, W, H);
+
+  const barY = 22, barH = 28, barX = 10, barW = W - 20;
+  const spamW = barW * result.postSpam;
+
+  // track
+  ctx.fillStyle = '#1a1e2e';
+  ctx.fillRect(barX, barY, barW, barH);
+
+  // spam portion (red, from left) and ham portion (green, from right)
+  ctx.fillStyle = '#ff4757';
+  ctx.fillRect(barX, barY, spamW, barH);
+  ctx.fillStyle = '#00ff88';
+  ctx.fillRect(barX + spamW, barY, barW - spamW, barH);
+
+  // divider marker
+  ctx.strokeStyle = '#0d0f17';
+  ctx.lineWidth = 2;
+  ctx.beginPath();
+  ctx.moveTo(barX + spamW, barY);
+  ctx.lineTo(barX + spamW, barY + barH);
+  ctx.stroke();
+
+  // labels
+  ctx.font = "11px 'JetBrains Mono', monospace";
+  ctx.fillStyle = '#e2e8f0';
+  ctx.textAlign = 'left';
+  ctx.fillText('SPAM ' + (result.postSpam * 100).toFixed(1) + '%', barX + 6, barY + barH / 2 + 4);
+  ctx.textAlign = 'right';
+  ctx.fillText('HAM ' + ((1 - result.postSpam) * 100).toFixed(1) + '%', barX + barW - 6, barY + barH / 2 + 4);
+}
+
+// ─── Readouts ───────────────────────────────────────────────────────────
+function renderReadouts() {
+  const result = computePosterior();
+  const priorOddsSpam = result.pS / (1 - result.pS);
+  document.getElementById('prior-val').textContent = result.pS.toFixed(2);
+  document.getElementById('ro-prior').textContent = priorOddsSpam.toFixed(2) + ' : 1.00';
+  document.getElementById('ro-sumlog').textContent = (result.sumLogRatio >= 0 ? '+' : '') + result.sumLogRatio.toFixed(2);
+
+  const predicted = result.postSpam >= 0.5 ? 'SPAM' : 'HAM';
+  document.getElementById('ro-pred').textContent = predicted;
+  document.getElementById('ro-pred-box').className = 'readout ' + (predicted === 'SPAM' ? 'hi' : 'lo');
+
+  document.getElementById('ro-conf').textContent = (result.postSpam * 100).toFixed(1) + '%';
+  document.getElementById('ro-conf-box').className = 'readout ' + (result.postSpam >= 0.5 ? 'hi' : 'lo');
+}
+
+function renderAll() {
+  renderTable();
+  renderGauge();
+  renderReadouts();
+}
+
+// ─── Controls ───────────────────────────────────────────────────────────
+document.getElementById('prior-slider').addEventListener('input', renderAll);
+
+document.getElementById('preset-spam').addEventListener('click', () => {
+  checked = new Set(PRESET_SPAM);
+  renderAll();
+});
+document.getElementById('preset-work').addEventListener('click', () => {
+  checked = new Set(PRESET_WORK);
+  renderAll();
+});
+document.getElementById('preset-clear').addEventListener('click', () => {
+  checked = new Set();
+  renderAll();
+});
+
+window.addEventListener('resize', () => renderGauge());
+
+// ─── Init ───────────────────────────────────────────────────────────────
+renderAll();
+document.fonts.ready.then(() => renderGauge());
+</script>
+</body>
+</html>

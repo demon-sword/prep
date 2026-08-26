@@ -1,0 +1,622 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1.0"/>
+<title>Indexing and Storage Engines (B-tree vs LSM-tree) — Backend Concepts</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #0d0f17;
+    --surface: #141720;
+    --card: #1a1e2e;
+    --border: #252a3d;
+    --accent: #00d4ff;
+    --purple: #7c3aed;
+    --green: #00ff88;
+    --yellow: #ffd700;
+    --red: #ff4757;
+    --orange: #ff9500;
+    --text: #e2e8f0;
+    --text-dim: #8892a4;
+    --mono: 'JetBrains Mono', monospace;
+    --sans: 'Inter', system-ui, sans-serif;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--sans);
+    line-height: 1.6;
+  }
+  header {
+    padding: 48px 24px 32px;
+    max-width: 920px;
+    margin: 0 auto;
+    border-bottom: 1px solid var(--border);
+  }
+  .badge {
+    display: inline-block;
+    font-family: var(--mono);
+    font-size: 12px;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--accent);
+    background: rgba(0,212,255,0.08);
+    border: 1px solid rgba(0,212,255,0.3);
+    padding: 4px 10px;
+    border-radius: 4px;
+    margin-bottom: 14px;
+  }
+  h1 {
+    font-size: 32px;
+    margin: 0 0 12px;
+    font-weight: 700;
+    letter-spacing: -0.01em;
+  }
+  header p.desc {
+    color: var(--text-dim);
+    font-size: 16px;
+    max-width: 720px;
+    margin: 0;
+  }
+  main {
+    max-width: 920px;
+    margin: 0 auto;
+    padding: 0 24px 60px;
+  }
+  section { margin-top: 48px; }
+  h2 {
+    font-size: 13px;
+    font-family: var(--mono);
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    color: var(--purple);
+    margin-bottom: 20px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+  h2::after {
+    content: '';
+    flex: 1;
+    height: 1px;
+    background: var(--border);
+  }
+  h3 {
+    font-size: 18px;
+    color: var(--accent);
+    margin: 28px 0 10px;
+  }
+  h3:first-child { margin-top: 0; }
+  p { color: var(--text); margin: 8px 0; }
+  ul { padding-left: 22px; }
+  li { margin: 6px 0; }
+  code {
+    font-family: var(--mono);
+    background: rgba(124,58,237,0.12);
+    color: var(--purple);
+    padding: 2px 6px;
+    border-radius: 4px;
+    font-size: 0.9em;
+  }
+  .card {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 22px 24px;
+  }
+  .fail-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+    gap: 14px;
+    margin-top: 12px;
+  }
+  .fail-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-left: 3px solid var(--accent);
+    border-radius: 8px;
+    padding: 14px 16px;
+  }
+  .fail-card h4 { margin: 0 0 6px; font-size: 14.5px; color: var(--accent); }
+  .fail-card p { font-size: 13.5px; color: var(--text-dim); margin: 0; }
+  .fail-card.danger { border-left-color: var(--red); }
+  .fail-card.danger h4 { color: var(--red); }
+
+  .aside {
+    margin-top: 14px;
+    font-size: 13px;
+    color: var(--text-dim);
+    border-left: 2px solid var(--border);
+    padding-left: 12px;
+    font-style: italic;
+  }
+
+  /* Visualization shared */
+  .viz-card {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 24px;
+    margin-bottom: 24px;
+  }
+  .viz-intro { color: var(--text-dim); font-size: 14.5px; margin-bottom: 18px; }
+  .btn-row { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; margin-top: 14px; }
+  .run-btn {
+    font-family: var(--mono);
+    font-size: 13px;
+    background: var(--purple);
+    color: white;
+    border: none;
+    padding: 10px 18px;
+    border-radius: 6px;
+    cursor: pointer;
+    font-weight: 600;
+  }
+  .run-btn:hover { opacity: 0.88; }
+  .run-btn:disabled { opacity: 0.35; cursor: not-allowed; }
+  .run-btn.secondary { background: var(--surface); border: 1px solid var(--border); color: var(--text-dim); }
+  .run-btn.secondary:hover { color: var(--text); border-color: var(--accent); }
+  .run-btn.active { background: var(--accent); color: #04121a; }
+  .run-btn.danger-btn { background: var(--red); color: #1a0000; }
+
+  .slider-label { font-family: var(--mono); font-size: 13px; color: var(--text-dim); }
+
+  .flow-log {
+    margin-top: 14px;
+    font-family: var(--mono);
+    font-size: 12.5px;
+    color: var(--green);
+    min-height: 60px;
+    max-height: 170px;
+    overflow-y: auto;
+    white-space: pre-line;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 10px 12px;
+  }
+
+  .stat-row { display: flex; gap: 24px; margin-top: 16px; flex-wrap: wrap; }
+  .stat { font-family: var(--mono); font-size: 13px; color: var(--text-dim); }
+  .stat b { color: var(--yellow); font-size: 18px; display: block; }
+  .stat b.danger { color: var(--red); }
+  .stat b.good { color: var(--green); }
+
+  /* Engine columns */
+  .engine-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-top: 18px; }
+  .engine-col {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 16px;
+  }
+  .engine-col h4 {
+    margin: 0 0 4px;
+    font-family: var(--mono);
+    font-size: 13px;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--accent);
+  }
+  .engine-col p.sub { margin: 0 0 12px; font-size: 12.5px; color: var(--text-dim); }
+
+  .tree-svg { width: 100%; height: 150px; }
+  .tree-node rect { fill: var(--card); stroke: var(--border); stroke-width: 1.5; transition: fill 0.25s, stroke 0.25s; }
+  .tree-node text { fill: var(--text-dim); font-family: var(--mono); font-size: 10px; }
+  .tree-node.flash rect { fill: rgba(255,71,87,0.25); stroke: var(--red); }
+  .tree-line { stroke: var(--border); stroke-width: 1.5; }
+
+  .memtable-box {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 10px 12px;
+    margin-bottom: 10px;
+  }
+  .memtable-box .label { font-family: var(--mono); font-size: 11.5px; color: var(--text-dim); margin-bottom: 6px; }
+  .memtable-bar-track { background: var(--surface); border-radius: 4px; height: 10px; overflow: hidden; }
+  .memtable-bar-fill { background: var(--green); height: 100%; width: 0%; transition: width 0.2s; }
+
+  .lsm-level { margin-bottom: 8px; }
+  .lsm-level .label { font-family: var(--mono); font-size: 11px; color: var(--text-dim); margin-bottom: 4px; }
+  .lsm-chips { display: flex; gap: 6px; flex-wrap: wrap; min-height: 26px; }
+  .sst-chip {
+    font-family: var(--mono);
+    font-size: 10.5px;
+    background: rgba(0,212,255,0.1);
+    border: 1px solid var(--accent);
+    color: var(--accent);
+    border-radius: 4px;
+    padding: 4px 7px;
+  }
+  .sst-chip.l1 { background: rgba(124,58,237,0.12); border-color: var(--purple); color: var(--purple); }
+  .sst-chip.l2 { background: rgba(255,149,0,0.12); border-color: var(--orange); color: var(--orange); }
+
+  .divider { height: 1px; background: var(--border); margin: 32px 0; }
+
+  blockquote#interview-quote {
+    background: linear-gradient(135deg, rgba(0,212,255,0.06), rgba(124,58,237,0.06));
+    border-left: 4px solid var(--accent);
+    border-radius: 8px;
+    margin: 0;
+    padding: 22px 26px;
+    font-size: 16.5px;
+    color: var(--text);
+    font-style: italic;
+    position: relative;
+  }
+  blockquote#interview-quote::before {
+    content: '\201C';
+    font-size: 48px;
+    color: var(--accent);
+    opacity: 0.3;
+    position: absolute;
+    top: -6px;
+    left: 10px;
+    font-style: normal;
+  }
+  #takeaways ul { list-style: none; padding: 0; }
+  #takeaways li {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-left: 3px solid var(--green);
+    border-radius: 8px;
+    padding: 12px 16px;
+    margin-bottom: 10px;
+    font-size: 14.5px;
+  }
+  #takeaways li b { color: var(--green); }
+
+  nav.concept-nav {
+    max-width: 920px;
+    margin: 0 auto;
+    padding: 24px 24px 60px;
+    display: flex;
+    justify-content: space-between;
+    font-family: var(--mono);
+    font-size: 13.5px;
+  }
+  nav.concept-nav a {
+    color: var(--accent);
+    text-decoration: none;
+    border: 1px solid var(--border);
+    padding: 10px 16px;
+    border-radius: 6px;
+  }
+  nav.concept-nav a:hover { border-color: var(--accent); }
+  nav.concept-nav span.disabled {
+    color: var(--text-dim);
+    border: 1px solid var(--border);
+    padding: 10px 16px;
+    border-radius: 6px;
+    opacity: 0.4;
+  }
+  @media (max-width: 700px) {
+    h1 { font-size: 24px; }
+    .btn-row { flex-direction: column; align-items: flex-start; }
+    .engine-grid { grid-template-columns: 1fr; }
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <span class="badge">data</span>
+  <h1>Indexing and Storage Engines (B-tree vs LSM-tree)</h1>
+  <p class="desc">B-tree vs LSM-tree storage engines — why B-trees favor read-heavy in-place-update workloads and LSM-trees favor write-heavy workloads via compaction, and how this drives database engine choice.</p>
+</header>
+
+<main>
+
+  <section id="theory">
+    <h2>Theory</h2>
+    <div class="card">
+      <h3>Both are answers to the same question: where does a write land on disk?</h3>
+      <p>Every general-purpose database index reduces to one of two families, and the split is entirely about what happens physically on disk when you write a row. A <b>B-tree</b> (almost always a <b>B+tree</b> in practice — data lives only in leaf nodes, internal nodes hold only routing keys) is a balanced, sorted tree of fixed-size pages, typically 4–16 KB. A write finds the correct leaf page by traversing from the root — height is <code>O(log_B N)</code> where <code>B</code> is the branching factor, usually in the hundreds, so even a billion-row table has a tree height of 3–4 — and then <b>updates that page in place</b>: the page is read, the record is inserted/modified/deleted within it, and the whole page is rewritten to the same location on disk (through a write-ahead log first, for crash safety). If the page overflows, it <b>splits</b> into two pages and the split propagates up if the parent also overflows. This is the storage engine behind InnoDB (MySQL), PostgreSQL's B-tree indexes, SQLite, and LMDB.</p>
+      <p>An <b>LSM-tree</b> (Log-Structured Merge-tree) never updates in place. A write is appended to an in-memory, sorted structure called the <b>memtable</b> (usually a skip list or red-black tree) after first being appended to a write-ahead log on disk for durability. When the memtable hits a size threshold, it's flushed to disk as an immutable, sorted file — an <b>SSTable</b> (Sorted String Table) — at level 0. The write path never seeks and never rewrites existing data; it's pure sequential append. This is the storage engine behind RocksDB, LevelDB, Cassandra, HBase, and BigTable.</p>
+
+      <h3>The cost LSM defers: compaction</h3>
+      <p>An LSM-tree accumulates SSTables over time, and a read for a key might have to check the memtable, then every L0 SSTable (which can overlap in key range since they're flushed independently), then successively larger levels below. Left unchecked, read cost grows without bound. <b>Compaction</b> is the background process that merges SSTables — reading several sorted files, merging them into fewer, larger sorted files at the next level down, and dropping any keys shadowed by a newer version or a tombstone (the marker written for a delete, since you can't remove a record in place). Two dominant strategies: <b>leveled compaction</b> (RocksDB/LevelDB default) keeps each level non-overlapping and roughly 10x the size of the level above it — read-optimized, because a key exists in at most one SSTable per level, but it rewrites data more times as it cascades down levels, so higher write amplification. <b>Size-tiered compaction</b> (Cassandra's default) merges same-sized SSTables together within a tier rather than across levels — lower write amplification, but more SSTables can exist at once, so higher read amplification and higher space amplification (multiple stale versions of the same key sitting around longer before they're compacted away).</p>
+
+      <h3>The trade-off that actually matters: which amplification you're willing to pay for</h3>
+      <p>Every storage engine pays three currencies, and the B-tree/LSM choice is about which one you're willing to spend more of: <b>write amplification</b> (bytes physically written to disk per logical byte written by the application), <b>read amplification</b> (number of disk reads per logical read), and <b>space amplification</b> (disk space used vs. logical data size). A B-tree pays write amplification per write — a 50-byte record update still rewrites an entire 8–16 KB page — but keeps read amplification low and roughly constant (one tree traversal, no merging). An LSM-tree pays write amplification later and in bulk, via compaction — the same byte can be rewritten across L0→L1→L2→... several times before it settles, with real-world figures commonly cited in the <b>10–30x</b> range — in exchange for O(1) sequential appends on the write path itself, which is why LSM engines dominate write-heavy workloads (time-series, event logs, write-through caches) where B-tree's random-write page churn would thrash the disk and fragment the buffer pool. <b>Bloom filters</b> are the standard mitigation for LSM read amplification: a small per-SSTable probabilistic filter (~1% false-positive rate is typical) that lets a read skip an SSTable entirely if the filter says the key definitely isn't there, without doing an actual disk read — this is what makes LSM point-reads for recent keys competitive with a B-tree despite the multi-level structure.</p>
+
+      <h3>Named failure modes</h3>
+      <div class="fail-grid">
+        <div class="fail-card danger">
+          <h4>Compaction stall / write stall</h4>
+          <p>If write throughput outpaces compaction throughput, SSTables (especially at L0) pile up faster than they can be merged. The engine throttles or blocks new writes to let compaction catch up — a classic cause of p99 write-latency spikes in Cassandra/RocksDB under sustained high write load.</p>
+        </div>
+        <div class="fail-card danger">
+          <h4>B-tree page-split cascades</h4>
+          <p>A burst of inserts into a densely packed page range (e.g. monotonically increasing keys hitting the same "hot" page) triggers repeated splits, generating extra I/O and page fragmentation — the reason UUID primary keys fragment a B-tree index far more than sequential/ULID keys do.</p>
+        </div>
+        <div class="fail-card">
+          <h4>Tombstone accumulation</h4>
+          <p>A delete in an LSM-tree is a written marker, not a removal. Until compaction merges the tombstone with the original write and both are dropped, storage isn't reclaimed and reads must scan past tombstones — a well-known Cassandra failure mode ("tombstone hell") when a workload deletes heavily and compaction can't keep up.</p>
+        </div>
+        <div class="fail-card">
+          <h4>Space amplification under size-tiered compaction</h4>
+          <p>Multiple stale versions of the same key can coexist across several uncompacted SSTables, so disk usage can be several times logical data size until compaction catches up — a real operational cost when provisioning storage headroom.</p>
+        </div>
+      </div>
+      <p class="aside">Where this shows up in practice: choosing InnoDB's B+tree clustered index vs. a time-series/event-heavy table backed by RocksDB (used inside MyRocks, CockroachDB, TiDB) is exactly this trade-off made explicit — read-heavy transactional tables stay on B-tree, high-ingest append-mostly tables move to LSM.</p>
+    </div>
+  </section>
+
+  <section id="visualization">
+    <h2>Visualization</h2>
+
+    <div class="viz-card">
+      <p class="viz-intro"><b>Write path, side by side.</b> Click <b>Write 1 key</b> to send the same logical write into both engines and watch what physically happens on disk. B-tree: a leaf page is located and rewritten in place. LSM: the key lands in the memtable; when the memtable fills, it flushes to an L0 SSTable; when a level fills, background compaction merges it down. Use <b>Auto-write ×40</b> to see compaction cascade, and toggle the bloom filter to see its effect on LSM read amplification below.</p>
+
+      <div class="btn-row">
+        <button class="run-btn" id="btn-write-one">Write 1 key</button>
+        <button class="run-btn secondary" id="btn-write-auto">Auto-write ×40</button>
+        <button class="run-btn secondary" id="btn-bloom">Bloom filter: ON</button>
+        <button class="run-btn secondary" id="btn-reset-viz">Reset</button>
+      </div>
+
+      <div class="engine-grid">
+        <div class="engine-col">
+          <h4>B-tree (in-place)</h4>
+          <p class="sub">8&nbsp;KB pages, height 2 for this demo (real trees: 3–4 for billions of rows)</p>
+          <svg class="tree-svg" viewBox="0 0 280 150">
+            <line class="tree-line" x1="140" y1="48" x2="42" y2="108"></line>
+            <line class="tree-line" x1="140" y1="48" x2="112" y2="108"></line>
+            <line class="tree-line" x1="140" y1="48" x2="182" y2="108"></line>
+            <line class="tree-line" x1="140" y1="48" x2="252" y2="108"></line>
+            <g class="tree-node" id="tn-root">
+              <rect x="110" y="18" width="60" height="28" rx="5"></rect>
+              <text x="140" y="36" text-anchor="middle">root</text>
+            </g>
+            <g class="tree-node" id="tn-leaf0">
+              <rect x="14" y="108" width="56" height="28" rx="5"></rect>
+              <text x="42" y="126" text-anchor="middle">leaf A</text>
+            </g>
+            <g class="tree-node" id="tn-leaf1">
+              <rect x="84" y="108" width="56" height="28" rx="5"></rect>
+              <text x="112" y="126" text-anchor="middle">leaf B</text>
+            </g>
+            <g class="tree-node" id="tn-leaf2">
+              <rect x="154" y="108" width="56" height="28" rx="5"></rect>
+              <text x="182" y="126" text-anchor="middle">leaf C</text>
+            </g>
+            <g class="tree-node" id="tn-leaf3">
+              <rect x="224" y="108" width="56" height="28" rx="5"></rect>
+              <text x="252" y="126" text-anchor="middle">leaf D</text>
+            </g>
+          </svg>
+        </div>
+
+        <div class="engine-col">
+          <h4>LSM-tree (append + compact)</h4>
+          <p class="sub">memtable capacity 4 · L0 compacts at 4 SSTables · L1 compacts at 3 runs</p>
+          <div class="memtable-box">
+            <div class="label" id="memtable-label">Memtable 0/4</div>
+            <div class="memtable-bar-track"><div class="memtable-bar-fill" id="memtable-fill"></div></div>
+          </div>
+          <div class="lsm-level">
+            <div class="label">L0 (unsorted, overlapping)</div>
+            <div class="lsm-chips" id="l0-chips"></div>
+          </div>
+          <div class="lsm-level">
+            <div class="label">L1</div>
+            <div class="lsm-chips" id="l1-chips"></div>
+          </div>
+          <div class="lsm-level">
+            <div class="label">L2</div>
+            <div class="lsm-chips" id="l2-chips"></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="stat-row">
+        <div class="stat">Write amp (B-tree)<b id="stat-wamp-bt" class="danger">—</b></div>
+        <div class="stat">Write amp (LSM)<b id="stat-wamp-lsm" class="good">—</b></div>
+        <div class="stat">Read amp (B-tree)<b id="stat-ramp-bt" class="good">3 levels</b></div>
+        <div class="stat">Read amp (LSM)<b id="stat-ramp-lsm" class="good">—</b></div>
+      </div>
+
+      <div class="flow-log" id="viz-log">Click "Write 1 key" to send a write through both engines.</div>
+    </div>
+  </section>
+
+  <section id="interview-line">
+    <h2>Interview Line</h2>
+    <blockquote id="interview-quote">
+      "B-tree vs LSM-tree is really a question of which amplification you're willing to pay and when. A B-tree updates a page in place, so every write — even a 50-byte one — costs a whole page rewrite, but a read is a single bounded tree traversal, so it wins on read-heavy, random-access, transactional workloads, which is why InnoDB and Postgres indexes are B-trees. An LSM-tree turns writes into sequential appends to a memtable and defers the real cost to background compaction, which can rewrite the same byte 10 to 30 times before it settles at its final level — that write amplification is the price for write throughput that doesn't degrade under high insert or update rates, which is why RocksDB, Cassandra, and time-series or event-heavy systems use it. The thing I actually watch for operationally is compaction falling behind — write stalls when L0 piles up faster than compaction can merge it, and tombstones not getting reclaimed under heavy delete load — because those are the failure modes that don't show up in a benchmark, only under sustained production write pressure."
+    </blockquote>
+  </section>
+
+  <section id="takeaways">
+    <h2>Key Takeaways</h2>
+    <ul>
+      <li><b>Pick by write/read ratio, not by fashion</b> — B-tree (InnoDB, Postgres, SQLite, LMDB) for read-heavy, point-lookup-heavy, in-place-update workloads; LSM (RocksDB, LevelDB, Cassandra, HBase) for write-heavy, append-mostly, high-ingest workloads. MyRocks, CockroachDB, and TiDB all let you swap the storage engine underneath a SQL layer for exactly this reason.</li>
+      <li><b>Write amplification is real money on an SSD</b> — LSM engines commonly cite 10–30x write amplification from compaction; on cloud block storage billed by IOPS/throughput, that multiplier shows up directly on the infra bill, not just in latency.</li>
+      <li><b>Bloom filters are what make LSM point-reads viable</b> — without them, a lookup for a key not present would have to check every SSTable at every level; a ~1% false-positive-rate filter per SSTable turns "check every table" into "check the 1–2 tables that might actually have it."</li>
+      <li><b>The write-ahead log underneath a B-tree is the same mechanism CDC reads off of</b> — Debezium tailing MySQL's binlog or Postgres's WAL (<code>07-change-data-capture</code>) works because both storage engines already durably log every write before applying it; LSM engines have their own WAL for memtable durability, serving the identical crash-recovery purpose.</li>
+      <li><b>Sequential primary keys aren't just a convenience, they're a write-amplification decision</b> — a UUID primary key spreads inserts randomly across a B-tree's leaf pages, causing far more page splits and cache misses than a monotonically increasing key (ULID, auto-increment, or Snowflake ID) that appends to the rightmost page.</li>
+      <li><b>Compaction backlog is the LSM equivalent of a saturated connection pool</b> — both are a capacity mismatch between arrival rate and processing rate that looks fine until a burst, then produces a latency cliff (<code>22-connection-pooling</code>); watching L0 SSTable count / compaction pending bytes is the LSM-specific signal to alert on.</li>
+    </ul>
+  </section>
+
+</main>
+
+<nav class="concept-nav">
+  <a href="../concepts/18-api-design-evolution.html">← Previous: API Design and Evolution</a>
+  <a href="../concepts/20-zero-downtime-deployments.html">Next: Zero-Downtime Deployments →</a>
+</nav>
+
+<script>
+(function() {
+  const PAGE_SIZE_KB = 8;
+  const RECORD_KB = 0.1;
+  const MEMTABLE_CAP = 4;
+  const L0_COMPACT_AT = 4;
+  const L1_COMPACT_AT = 3;
+
+  let bloomOn = true;
+  let autoTimer = null;
+
+  // B-tree state
+  let btPhysicalKB = 0;
+  let btLogicalKB = 0;
+  const leafIds = ['tn-leaf0', 'tn-leaf1', 'tn-leaf2', 'tn-leaf3'];
+
+  // LSM state
+  let memCount = 0;
+  let lsmPhysicalKB = 0;
+  let lsmLogicalKB = 0;
+  let l0 = []; // array of sizes (KB)
+  let l1 = [];
+  let l2 = [];
+  let sstCounter = 0;
+
+  const logEl = document.getElementById('viz-log');
+  const logLines = [];
+  function log(msg) {
+    logLines.push(msg);
+    if (logLines.length > 24) logLines.shift();
+    logEl.textContent = logLines.join('\n');
+    logEl.scrollTop = logEl.scrollHeight;
+  }
+
+  function fmtKB(n) { return n < 1 ? (n * 1024).toFixed(0) + ' B' : n.toFixed(1) + ' KB'; }
+
+  function renderStats() {
+    const wampBt = btLogicalKB > 0 ? (btPhysicalKB / btLogicalKB) : 0;
+    const wampLsm = lsmLogicalKB > 0 ? (lsmPhysicalKB / lsmLogicalKB) : 0;
+    document.getElementById('stat-wamp-bt').textContent = wampBt > 0 ? wampBt.toFixed(1) + 'x' : '—';
+    document.getElementById('stat-wamp-lsm').textContent = wampLsm > 0 ? wampLsm.toFixed(1) + 'x' : '—';
+
+    const rawReadAmpLsm = 1 + l0.length + (l1.length > 0 ? 1 : 0) + (l2.length > 0 ? 1 : 0);
+    const effectiveReadAmp = bloomOn ? Math.max(1, Math.round(rawReadAmpLsm * 0.3)) : rawReadAmpLsm;
+    const ramEl = document.getElementById('stat-ramp-lsm');
+    ramEl.textContent = effectiveReadAmp + ' probe' + (effectiveReadAmp === 1 ? '' : 's') + (bloomOn ? ' (w/ bloom)' : ' (no bloom)');
+    ramEl.className = effectiveReadAmp <= 2 ? 'good' : (effectiveReadAmp <= 4 ? '' : 'danger');
+  }
+
+  function renderMemtable() {
+    document.getElementById('memtable-label').textContent = 'Memtable ' + memCount + '/' + MEMTABLE_CAP;
+    document.getElementById('memtable-fill').style.width = (memCount / MEMTABLE_CAP * 100) + '%';
+  }
+
+  function renderLevel(id, arr, cls) {
+    const el = document.getElementById(id);
+    el.innerHTML = '';
+    arr.forEach((sizeKB, i) => {
+      const chip = document.createElement('span');
+      chip.className = 'sst-chip' + (cls ? ' ' + cls : '');
+      chip.textContent = 'SST ' + fmtKB(sizeKB);
+      el.appendChild(chip);
+    });
+  }
+
+  function renderLsm() {
+    renderMemtable();
+    renderLevel('l0-chips', l0, '');
+    renderLevel('l1-chips', l1, 'l1');
+    renderLevel('l2-chips', l2, 'l2');
+    renderStats();
+  }
+
+  function flashLeaf() {
+    const idx = Math.floor(Math.random() * leafIds.length);
+    const g = document.getElementById(leafIds[idx]);
+    g.classList.add('flash');
+    setTimeout(() => g.classList.remove('flash'), 400);
+    return leafIds[idx];
+  }
+
+  function writeBtree() {
+    const leaf = flashLeaf();
+    btLogicalKB += RECORD_KB;
+    btPhysicalKB += PAGE_SIZE_KB; // whole page rewritten regardless of record size
+    log('[B-tree] traverse root → ' + leaf.replace('tn-', '') + ', rewrite whole ' + PAGE_SIZE_KB + ' KB page in place.');
+  }
+
+  function compactL0toL1() {
+    const mergedSize = l0.reduce((a, b) => a + b, 0);
+    lsmPhysicalKB += mergedSize; // rewrite cost of compaction
+    l0 = [];
+    l1.push(mergedSize);
+    log('[LSM] L0 hit ' + L0_COMPACT_AT + ' SSTables → compacted into L1 run (' + fmtKB(mergedSize) + ' rewritten).');
+    if (l1.length >= L1_COMPACT_AT) compactL1toL2();
+  }
+
+  function compactL1toL2() {
+    const mergedSize = l1.reduce((a, b) => a + b, 0);
+    lsmPhysicalKB += mergedSize;
+    l1 = [];
+    l2.push(mergedSize);
+    log('[LSM] L1 hit ' + L1_COMPACT_AT + ' runs → compacted into L2 (' + fmtKB(mergedSize) + ' rewritten).');
+  }
+
+  function writeLsm() {
+    memCount += 1;
+    lsmLogicalKB += RECORD_KB;
+    lsmPhysicalKB += RECORD_KB; // WAL append, cheap sequential cost
+    if (memCount >= MEMTABLE_CAP) {
+      const flushSize = MEMTABLE_CAP * RECORD_KB;
+      lsmPhysicalKB += flushSize; // flush to SSTable
+      l0.push(flushSize);
+      memCount = 0;
+      log('[LSM] memtable full → flushed ' + fmtKB(flushSize) + ' to new L0 SSTable #' + (++sstCounter) + '.');
+      if (l0.length >= L0_COMPACT_AT) compactL0toL1();
+    } else {
+      log('[LSM] key appended to memtable (' + memCount + '/' + MEMTABLE_CAP + ').');
+    }
+  }
+
+  function writeOne() {
+    writeBtree();
+    writeLsm();
+    renderLsm();
+  }
+
+  function resetAll() {
+    btPhysicalKB = 0; btLogicalKB = 0;
+    memCount = 0; lsmPhysicalKB = 0; lsmLogicalKB = 0;
+    l0 = []; l1 = []; l2 = []; sstCounter = 0;
+    logLines.length = 0;
+    log('Reset. Both engines empty.');
+    renderLsm();
+  }
+
+  document.getElementById('btn-write-one').addEventListener('click', writeOne);
+
+  document.getElementById('btn-write-auto').addEventListener('click', (e) => {
+    if (autoTimer) { clearInterval(autoTimer); autoTimer = null; e.target.textContent = 'Auto-write ×40'; return; }
+    let n = 0;
+    e.target.textContent = 'Stop';
+    autoTimer = setInterval(() => {
+      writeOne();
+      n += 1;
+      if (n >= 40) { clearInterval(autoTimer); autoTimer = null; e.target.textContent = 'Auto-write ×40'; }
+    }, 90);
+  });
+
+  document.getElementById('btn-bloom').addEventListener('click', (e) => {
+    bloomOn = !bloomOn;
+    e.target.textContent = 'Bloom filter: ' + (bloomOn ? 'ON' : 'OFF');
+    e.target.classList.toggle('active', bloomOn);
+    renderStats();
+  });
+  document.getElementById('btn-bloom').classList.add('active');
+
+  document.getElementById('btn-reset-viz').addEventListener('click', () => {
+    if (autoTimer) { clearInterval(autoTimer); autoTimer = null; document.getElementById('btn-write-auto').textContent = 'Auto-write ×40'; }
+    resetAll();
+  });
+
+  resetAll();
+})();
+</script>
+</body>
+</html>

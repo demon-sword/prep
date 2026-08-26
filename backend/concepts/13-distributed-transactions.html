@@ -1,0 +1,839 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1.0"/>
+<title>Distributed Transactions (2PC & Saga) — Backend Concepts</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #0d0f17;
+    --surface: #141720;
+    --card: #1a1e2e;
+    --border: #252a3d;
+    --accent: #00d4ff;
+    --purple: #7c3aed;
+    --green: #00ff88;
+    --yellow: #ffd700;
+    --red: #ff4757;
+    --orange: #ff9500;
+    --text: #e2e8f0;
+    --text-dim: #8892a4;
+    --mono: 'JetBrains Mono', monospace;
+    --sans: 'Inter', system-ui, sans-serif;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--sans);
+    line-height: 1.6;
+  }
+  header {
+    padding: 48px 24px 32px;
+    max-width: 920px;
+    margin: 0 auto;
+    border-bottom: 1px solid var(--border);
+  }
+  .badge {
+    display: inline-block;
+    font-family: var(--mono);
+    font-size: 12px;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--accent);
+    background: rgba(0,212,255,0.08);
+    border: 1px solid rgba(0,212,255,0.3);
+    padding: 4px 10px;
+    border-radius: 4px;
+    margin-bottom: 14px;
+  }
+  h1 {
+    font-size: 32px;
+    margin: 0 0 12px;
+    font-weight: 700;
+    letter-spacing: -0.01em;
+  }
+  header p.desc {
+    color: var(--text-dim);
+    font-size: 16px;
+    max-width: 720px;
+    margin: 0;
+  }
+  main {
+    max-width: 920px;
+    margin: 0 auto;
+    padding: 0 24px 60px;
+  }
+  section { margin-top: 48px; }
+  h2 {
+    font-size: 13px;
+    font-family: var(--mono);
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    color: var(--purple);
+    margin-bottom: 20px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+  h2::after {
+    content: '';
+    flex: 1;
+    height: 1px;
+    background: var(--border);
+  }
+  h3 {
+    font-size: 18px;
+    color: var(--accent);
+    margin: 28px 0 10px;
+  }
+  h3:first-child { margin-top: 0; }
+  p { color: var(--text); margin: 8px 0; }
+  ul { padding-left: 22px; }
+  li { margin: 6px 0; }
+  code {
+    font-family: var(--mono);
+    background: rgba(124,58,237,0.12);
+    color: var(--purple);
+    padding: 2px 6px;
+    border-radius: 4px;
+    font-size: 0.9em;
+  }
+  .aside {
+    margin-top: 10px;
+    font-size: 13.5px;
+    color: var(--text-dim);
+    border-left: 2px solid var(--border);
+    padding-left: 12px;
+    font-style: italic;
+  }
+  .card {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 22px 24px;
+  }
+  .fail-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+    gap: 14px;
+    margin-top: 12px;
+  }
+  .fail-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-left: 3px solid var(--accent);
+    border-radius: 8px;
+    padding: 14px 16px;
+  }
+  .fail-card h4 { margin: 0 0 6px; font-size: 14.5px; color: var(--accent); }
+  .fail-card p { font-size: 13.5px; color: var(--text-dim); margin: 0; }
+  .fail-card.danger { border-left-color: var(--red); }
+  .fail-card.danger h4 { color: var(--red); }
+
+  /* Visualization shared */
+  .viz-card {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 24px;
+    margin-bottom: 24px;
+  }
+  .viz-intro { color: var(--text-dim); font-size: 14.5px; margin-bottom: 18px; }
+  .btn-row { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; margin-top: 14px; }
+  .run-btn {
+    font-family: var(--mono);
+    font-size: 13px;
+    background: var(--purple);
+    color: white;
+    border: none;
+    padding: 10px 18px;
+    border-radius: 6px;
+    cursor: pointer;
+    font-weight: 600;
+  }
+  .run-btn:hover { opacity: 0.88; }
+  .run-btn:disabled { opacity: 0.35; cursor: not-allowed; }
+  .run-btn.secondary { background: var(--surface); border: 1px solid var(--border); color: var(--text-dim); }
+  .run-btn.secondary:hover { color: var(--text); border-color: var(--accent); }
+  .run-btn.active { background: var(--accent); color: #0d0f17; }
+  .run-btn.danger-btn { background: var(--red); }
+  .run-btn.toggle-on { background: var(--orange); color: #0d0f17; }
+
+  .slider-label { font-family: var(--mono); font-size: 13px; color: var(--text-dim); }
+  input[type=range] { width: 220px; accent-color: var(--accent); }
+  select {
+    font-family: var(--mono);
+    font-size: 13px;
+    background: var(--surface);
+    color: var(--text);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 9px 12px;
+  }
+
+  .flow-log {
+    margin-top: 14px;
+    font-family: var(--mono);
+    font-size: 12.5px;
+    color: var(--green);
+    min-height: 60px;
+    max-height: 150px;
+    overflow-y: auto;
+    white-space: pre-line;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 10px 12px;
+  }
+
+  .stat-row { display: flex; gap: 24px; margin-top: 16px; flex-wrap: wrap; }
+  .stat { font-family: var(--mono); font-size: 13px; color: var(--text-dim); }
+  .stat b { color: var(--yellow); font-size: 18px; display: block; }
+  .stat b.danger { color: var(--red); }
+  .stat b.good { color: var(--green); }
+
+  /* Transaction topology area */
+  .topo-area {
+    position: relative;
+    width: 100%;
+    height: 320px;
+    margin-top: 20px;
+  }
+  #topo-svg { position: absolute; top: 0; left: 0; width: 100%; height: 100%; }
+  .txn-node {
+    position: absolute;
+    width: 132px;
+    height: 92px;
+    margin-left: -66px;
+    margin-top: -46px;
+    background: var(--surface);
+    border: 2px solid var(--border);
+    border-radius: 10px;
+    text-align: center;
+    padding: 8px 6px;
+    font-family: var(--mono);
+    transition: border-color 0.25s, background 0.25s, opacity 0.25s, transform 0.2s;
+    z-index: 2;
+  }
+  .txn-node .n-name { font-size: 13px; font-weight: 700; color: var(--text); }
+  .txn-node .n-role { font-size: 10.5px; margin-top: 4px; text-transform: uppercase; letter-spacing: 0.05em; color: var(--text-dim); }
+  .txn-node .n-status { font-size: 11.5px; color: var(--yellow); margin-top: 4px; }
+  .txn-node.running { border-color: var(--accent); background: rgba(0,212,255,0.08); }
+  .txn-node.prepared { border-color: var(--yellow); background: rgba(255,215,0,0.08); }
+  .txn-node.committed { border-color: var(--green); background: rgba(0,255,136,0.08); }
+  .txn-node.aborted, .txn-node.failed { border-color: var(--red); background: rgba(255,71,87,0.08); }
+  .txn-node.compensating { border-color: var(--orange); background: rgba(255,149,0,0.08); }
+  .txn-node.compensated { border-color: var(--orange); background: rgba(255,149,0,0.04); opacity: 0.85; }
+  .txn-node.crashed { opacity: 0.28; border-style: dashed; }
+  .txn-node.hub { transform: scale(1.05); }
+
+  .divider { height: 1px; background: var(--border); margin: 32px 0; }
+
+  blockquote#interview-quote {
+    background: linear-gradient(135deg, rgba(0,212,255,0.06), rgba(124,58,237,0.06));
+    border-left: 4px solid var(--accent);
+    border-radius: 8px;
+    margin: 0;
+    padding: 22px 26px;
+    font-size: 16.5px;
+    color: var(--text);
+    font-style: italic;
+    position: relative;
+  }
+  blockquote#interview-quote::before {
+    content: '\201C';
+    font-size: 48px;
+    color: var(--accent);
+    opacity: 0.3;
+    position: absolute;
+    top: -6px;
+    left: 10px;
+    font-style: normal;
+  }
+  #takeaways ul { list-style: none; padding: 0; }
+  #takeaways li {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-left: 3px solid var(--green);
+    border-radius: 8px;
+    padding: 12px 16px;
+    margin-bottom: 10px;
+    font-size: 14.5px;
+  }
+  #takeaways li b { color: var(--green); }
+
+  nav.concept-nav {
+    max-width: 920px;
+    margin: 0 auto;
+    padding: 24px 24px 60px;
+    display: flex;
+    justify-content: space-between;
+    font-family: var(--mono);
+    font-size: 13.5px;
+  }
+  nav.concept-nav a {
+    color: var(--accent);
+    text-decoration: none;
+    border: 1px solid var(--border);
+    padding: 10px 16px;
+    border-radius: 6px;
+  }
+  nav.concept-nav a:hover { border-color: var(--accent); }
+  nav.concept-nav span.disabled {
+    color: var(--text-dim);
+    border: 1px solid var(--border);
+    padding: 10px 16px;
+    border-radius: 6px;
+    opacity: 0.4;
+  }
+  @media (max-width: 600px) {
+    h1 { font-size: 24px; }
+    .btn-row { flex-direction: column; align-items: flex-start; }
+    .topo-area { height: 440px; }
+    input[type=range] { width: 100%; }
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <span class="badge">coordination</span>
+  <h1>Distributed Transactions (2PC &amp; Saga)</h1>
+  <p class="desc">Two-phase commit and its coordinator-blocking failure mode, the Saga pattern (choreography vs orchestration) with compensating actions, TCC, and why atomic multi-service transactions are avoided in practice.</p>
+</header>
+
+<main>
+
+  <section id="theory">
+    <h2>Theory</h2>
+    <div class="card">
+      <h3>Why "just wrap it in a transaction" stops working</h3>
+      <p>A single database gives you atomicity for free — <code>BEGIN; UPDATE accounts...; UPDATE inventory...; COMMIT;</code> either all happens or none does, because one engine owns the WAL, the locks, and the recovery log. The moment "debit the account" and "reserve the inventory" live in two different services with two different databases, that guarantee is gone. Neither service can see the other's uncommitted state, neither can lock the other's rows, and a crash between the two calls leaves you with exactly one side done — the same physical problem <code>07-change-data-capture</code> covers for dual writes, just one level up at the transaction boundary instead of the write boundary. Distributed transactions are the two competing answers to "how do I get atomicity-like behavior across that boundary anyway": force real atomicity through coordination (2PC), or give up on atomicity and design for eventual, compensable consistency instead (Saga).</p>
+
+      <h3>Two-Phase Commit — the mechanism</h3>
+      <p>2PC introduces a coordinator that owns the decision, and participants (resource managers — could be databases, message brokers, or services) that hold the resources. It runs in two rounds:</p>
+      <ul>
+        <li><b>Phase 1 — prepare/vote.</b> The coordinator sends <code>PREPARE</code> to every participant. Each participant does everything short of making the change durable-and-visible: it acquires the locks, writes the change to its own local log, and replies <code>VOTE-YES</code> if it can guarantee it will be able to commit later, or <code>VOTE-NO</code> if it can't (constraint violation, deadlock, out of resources). Critically, a <code>YES</code> vote is a promise — the participant is now obligated to honor whatever the coordinator decides, even across a crash and restart.</li>
+        <li><b>Phase 2 — commit/abort.</b> If every participant voted <code>YES</code>, the coordinator logs the decision and sends <code>COMMIT</code> to all; if any voted <code>NO</code>, it sends <code>ABORT</code> to all. Participants apply the decision and release their locks.</li>
+      </ul>
+      <p>This is exactly the shape XA transactions (Java JTA, most enterprise message brokers) implement, and it's what Google Spanner uses under the hood for cross-shard transactions — each shard is itself a Paxos group, and 2PC coordinates commit across shards on top of that.</p>
+
+      <h3>2PC's fatal flaw: it's a blocking protocol</h3>
+      <p>The failure mode that actually gets asked about: a participant that has voted <code>YES</code> is holding locks and cannot unilaterally decide anything — it doesn't know if the other participants also voted yes, so it can't commit on its own, and it can't abort either because the coordinator might have already told everyone else to commit. If the coordinator crashes after collecting all votes but before phase 2 goes out, every participant is stuck <em>indefinitely</em>, holding locks, waiting for a coordinator that might not come back for minutes. This is why 2PC is called a blocking protocol, and it's the concrete reason it doesn't scale to microservice fleets: the locks are held for the full round-trip duration of two network phases, across services with independent uptime, so the probability of the whole operation stalling on someone is the product of everyone's individual availability, not the max. 3PC (three-phase commit) adds a non-blocking wrinkle for the coordinator-crash case specifically, but it's rarely deployed — it still blocks under certain network partitions and adds a full extra round trip, so most systems solve this by making the coordinator itself highly available (backed by a consensus system, so a new coordinator can safely take over and read the persisted decision) rather than by adopting 3PC. That's the same majority-quorum machinery as <code>11-consensus-algorithms</code> — 2PC and consensus both require agreement before committing, which is why 2PC coordinators are frequently built on top of a Raft/Paxos group for their own availability instead of being a single fragile process.</p>
+
+      <h3>Saga — the mechanism</h3>
+      <p>A saga breaks the distributed transaction into a sequence of local transactions, each of which commits immediately and independently, paired with a <b>compensating transaction</b> that semantically undoes it if a later step fails. Reserve inventory → charge payment → schedule shipping; if shipping fails, run "cancel shipping" (no-op), "refund payment," "release inventory reservation" — in reverse order. No cross-service lock is ever held; each step is a normal local transaction with a normal local commit. The cost is that atomicity and isolation are both gone: there's a real window where inventory is reserved and payment hasn't been charged yet, and another transaction reading that state sees it. Sagas come in two coordination styles:</p>
+      <ul>
+        <li><b>Orchestration.</b> A central orchestrator (a saga coordinator, or a workflow engine like Temporal, AWS Step Functions, or Netflix Conductor) explicitly calls each step and decides what to do on failure. Easier to reason about, easier to test, easier to see the whole flow in one place — at the cost of a new central component that all steps depend on operationally.</li>
+        <li><b>Choreography.</b> There is no central coordinator; each service reacts to events published by the previous one (<code>PaymentCharged</code> → inventory service reserves stock → publishes <code>InventoryReserved</code> → shipping service schedules → ...), and on failure a service publishes a failure event that upstream services listen for to trigger their own compensations. No single point of control, but the overall flow is implicit — spread across N services' event handlers — and gets genuinely hard to trace once there are more than three or four steps.</li>
+      </ul>
+      <p><b>TCC (Try-Confirm/Cancel)</b> is a stricter variant that looks more like 2PC without the blocking: <i>Try</i> reserves resources (holds a soft, time-boxed reservation, not a hard lock), <i>Confirm</i> makes it permanent, <i>Cancel</i> releases the reservation. It gives you a real "prepare" phase — resources are provably available before you commit to the flow — while keeping each step's lock scoped to a short timeout instead of an open-ended coordinator round trip. It's common in payment systems (authorize-then-capture is literally TCC) precisely because "the money is available" needs to be confirmed before the rest of the saga proceeds.</p>
+
+      <h3>The trade-off that actually matters</h3>
+      <p>2PC buys real atomicity and isolation, at the cost of availability: every participant must be up and reachable at the same time, locks are held for the duration, and a slow or dead participant stalls everyone. Saga buys availability and horizontal independence — any service can be down without blocking the others' ability to process other work — at the cost of atomicity: there's a visible intermediate state, and correctness now depends on every compensating action actually working. A compensation that itself fails (the refund API times out, the inventory release hits a bug) leaves the system in a state that's neither committed nor rolled back, which is its own failure mode that needs retries, idempotency (<code>05-idempotency</code> — every step and every compensation must be safely retryable), and eventually a dead-letter queue with a human. In practice: 2PC is what you use <em>inside</em> a single transaction manager's blast radius — one database, one message broker, or Spanner's own cross-shard commit — and sagas are what you use once you've crossed a real service boundary and accepted that atomicity isn't coming back.</p>
+
+      <div class="fail-grid">
+        <div class="fail-card danger">
+          <h4>Coordinator blocking (2PC)</h4>
+          <p>Coordinator crashes after collecting all votes but before phase 2 — every participant that voted yes is stuck holding locks indefinitely, unable to decide unilaterally.</p>
+        </div>
+        <div class="fail-card danger">
+          <h4>Compensation failure (Saga)</h4>
+          <p>A compensating transaction itself fails or times out — the system is left neither committed nor rolled back, and now needs retries or manual intervention.</p>
+        </div>
+        <div class="fail-card">
+          <h4>Dirty reads of saga intermediate state</h4>
+          <p>A saga has no isolation — another transaction can observe inventory reserved but payment not yet charged, because each step commits independently and immediately.</p>
+        </div>
+        <div class="fail-card">
+          <h4>Non-idempotent step or compensation</h4>
+          <p>A retried saga step (or its compensation) re-executes and double-charges or double-releases, because the step wasn't designed to be safely repeatable.</p>
+        </div>
+      </div>
+      <p class="aside">In practice: XA/2PC shows up inside JMS/JTA-managed enterprise stacks and inside a single sharded database's own commit protocol (Spanner); almost nobody runs 2PC across independently-deployed microservices on purpose. Temporal, AWS Step Functions, and hand-rolled orchestrators are the common production home for sagas; choreography-via-Kafka-topics is common too but gets hard to debug past a handful of steps.</p>
+    </div>
+  </section>
+
+  <section id="visualization">
+    <h2>Visualization</h2>
+
+    <div class="viz-card">
+      <p class="viz-intro"><b>Live protocol simulator.</b> Pick <b>2PC</b> or <b>Saga</b>. In 2PC mode, click <b>Run transaction</b> to watch prepare/vote/commit packets actually travel node-to-node over the delay set by the slider; toggle <b>Inventory votes NO</b> to force an abort, or toggle <b>Crash coordinator after prepare</b> to watch participants get stuck holding locks after all votes are in — then click <b>Recover coordinator</b> to see it read its persisted decision and unblock them. In Saga mode, pick which step should fail and click <b>Run saga</b> to watch sequential local commits, then watch compensations cascade backward through the already-committed steps when the chosen step fails.</p>
+
+      <div class="btn-row" id="mode-buttons">
+        <button class="run-btn active" data-mode="2pc">Two-Phase Commit</button>
+        <button class="run-btn" data-mode="saga">Saga</button>
+      </div>
+
+      <div class="btn-row">
+        <span class="slider-label">Network delay: <b id="delay-val" style="color:var(--yellow)">700ms</b></span>
+        <input type="range" id="delay-slider" min="0" max="2000" step="50" value="700">
+      </div>
+
+      <div class="topo-area" id="topo-wrap">
+        <svg id="topo-svg"></svg>
+      </div>
+
+      <div class="btn-row" id="controls-2pc">
+        <button class="run-btn" id="btn-run-2pc">Run transaction</button>
+        <button class="run-btn secondary" id="btn-fail-vote">Inventory votes NO: OFF</button>
+        <button class="run-btn secondary" id="btn-crash-toggle">Crash coordinator after prepare: OFF</button>
+        <button class="run-btn danger-btn" id="btn-recover" style="display:none">Recover coordinator</button>
+      </div>
+
+      <div class="btn-row" id="controls-saga" style="display:none">
+        <button class="run-btn" id="btn-run-saga">Run saga</button>
+        <span class="slider-label">Fail step:</span>
+        <select id="fail-step-select">
+          <option value="none">None — saga succeeds</option>
+          <option value="Payment">Payment</option>
+          <option value="Inventory">Inventory</option>
+          <option value="Shipping">Shipping</option>
+        </select>
+      </div>
+
+      <div class="btn-row">
+        <button class="run-btn secondary" id="btn-reset">Reset</button>
+      </div>
+
+      <div class="flow-log" id="txn-log">Two-Phase Commit: Coordinator + Payment, Inventory, Shipping participants. Click "Run transaction" to start.</div>
+
+      <div class="stat-row">
+        <div class="stat">In-flight packets<b id="stat-inflight">0</b></div>
+        <div class="stat">Locks held / blocked<b id="stat-blocked" class="danger">0</b></div>
+        <div class="stat">Transactions committed<b id="stat-committed" class="good">0</b></div>
+        <div class="stat">Compensations run<b id="stat-compensated" class="danger">0</b></div>
+      </div>
+    </div>
+  </section>
+
+  <section id="interview-line">
+    <h2>Interview Line</h2>
+    <blockquote id="interview-quote">
+      "I basically never reach for two-phase commit across services — its real failure mode isn't the happy path, it's that a participant who voted yes is holding locks it can't unilaterally release, so if the coordinator dies between collecting votes and sending commit, everyone downstream is just stuck until it comes back. That's the same majority-agreement machinery Raft and Paxos use, which is exactly why the coordinators that do run 2PC in production — Spanner's cross-shard commit is the textbook example — build the coordinator itself on a consensus group instead of trusting a single process. For anything crossing an actual service boundary I reach for a saga instead: a sequence of local transactions, each with a compensating action, coordinated by an orchestrator I can actually test and trace. The trade I'm making explicitly is giving up isolation — there's a real window where inventory is reserved and payment hasn't cleared yet — for availability, and the thing that actually determines whether that trade works is whether every step and every compensation is idempotent, because retries are guaranteed to happen."
+    </blockquote>
+  </section>
+
+  <section id="takeaways">
+    <h2>Key Takeaways</h2>
+    <ul>
+      <li><b>2PC is a blocking protocol by design</b> — a participant that voted yes cannot decide anything on its own; a coordinator crash between vote-collection and phase 2 leaves it holding locks until the coordinator recovers, which is the concrete reason 2PC doesn't scale across independently-deployed services.</li>
+      <li><b>Production 2PC coordinators are built on consensus, not a single process</b> — Spanner's cross-shard commit runs 2PC on top of Paxos groups for exactly this reason, echoing <code>11-consensus-algorithms</code>: both need a majority to agree before committing.</li>
+      <li><b>Sagas trade atomicity for availability, not "get both"</b> — there is a real, observable intermediate state (inventory reserved, payment not yet charged), so anything reading mid-saga state needs to know that, sometimes via an explicit semantic lock/status flag on the record.</li>
+      <li><b>Every saga step and every compensation must be idempotent</b> — retries are not an edge case, they're the normal operating mode, which is the same non-negotiable idempotency requirement <code>05-idempotency</code> covers for at-least-once delivery in general.</li>
+      <li><b>Orchestration is easier to debug, choreography is easier to decouple</b> — Temporal/Step Functions-style orchestration keeps the whole flow in one place you can trace; Kafka-topic choreography avoids a central component but the flow is implicit across N services' handlers and gets hard to trace past a handful of steps.</li>
+      <li><b>TCC is 2PC's compromise for payments</b> — a time-boxed "try" reservation instead of an open-ended lock is exactly what authorize-then-capture is, which is why payment systems reach for it more often than raw 2PC or a plain saga.</li>
+    </ul>
+  </section>
+
+</main>
+
+<nav class="concept-nav">
+  <a href="../concepts/12-database-replication.html">← Previous: Database Replication</a>
+  <a href="../concepts/14-concurrency-control.html">Next: Concurrency Control (Optimistic, Pessimistic, MVCC) →</a>
+</nav>
+
+<script>
+(function() {
+  const POS = {
+    hub: { xPct: 50, yPct: 18 },
+    Payment: { xPct: 15, yPct: 78 },
+    Inventory: { xPct: 50, yPct: 78 },
+    Shipping: { xPct: 85, yPct: 78 }
+  };
+  const PART_NAMES = ['Payment', 'Inventory', 'Shipping'];
+
+  let mode = '2pc';
+  let nodes = [];
+  let packets = [];
+  let pendingEvents = [];
+  let packetSeq = 0;
+  let delayMs = 700;
+  let now = performance.now();
+
+  // 2PC state
+  let failVote = false;
+  let crashAfterPrepare = false;
+  let votesIn = {};
+  let phase2Decision = null;
+  let txnRunning = false;
+
+  // Saga state
+  let failStep = 'none';
+  let sagaOrder = ['Payment', 'Inventory', 'Shipping'];
+  let sagaRunning = false;
+
+  // stats
+  let blocked = 0, committed = 0, compensated = 0;
+
+  const wrap = document.getElementById('topo-wrap');
+  const svg = document.getElementById('topo-svg');
+  const logEl = document.getElementById('txn-log');
+  const logLines = [];
+
+  function pushLog(msg) {
+    logLines.push(msg);
+    if (logLines.length > 40) logLines.shift();
+    logEl.textContent = logLines.join('\n');
+    logEl.scrollTop = logEl.scrollHeight;
+  }
+
+  function nodeById(id) { return nodes.find(n => n.id === id); }
+  function nodeByName(name) { return nodes.find(n => n.name === name); }
+
+  function initNodes() {
+    nodes = [
+      { id: 0, name: mode === '2pc' ? 'Coordinator' : 'Orchestrator', role: 'hub', status: 'idle', crashed: false },
+      { id: 1, name: 'Payment', role: 'participant', status: 'idle', crashed: false },
+      { id: 2, name: 'Inventory', role: 'participant', status: 'idle', crashed: false },
+      { id: 3, name: 'Shipping', role: 'participant', status: 'idle', crashed: false }
+    ];
+  }
+
+  function setMode(newMode) {
+    mode = newMode;
+    document.querySelectorAll('#mode-buttons .run-btn').forEach(b => {
+      b.classList.toggle('active', b.dataset.mode === mode);
+    });
+    document.getElementById('controls-2pc').style.display = mode === '2pc' ? '' : 'none';
+    document.getElementById('controls-saga').style.display = mode === 'saga' ? '' : 'none';
+    resetState();
+    if (mode === '2pc') pushLog('Two-Phase Commit: Coordinator + Payment, Inventory, Shipping participants. Click "Run transaction" to start.');
+    else pushLog('Saga: Orchestrator runs Payment -> Inventory -> Shipping as independent local transactions. Click "Run saga" to start.');
+    render();
+  }
+
+  function resetState() {
+    initNodes();
+    packets = [];
+    pendingEvents = [];
+    votesIn = {};
+    phase2Decision = null;
+    txnRunning = false;
+    sagaRunning = false;
+    document.getElementById('btn-recover').style.display = 'none';
+    updateStats();
+  }
+
+  // ---------- packet mechanics ----------
+  function spawnPacket(fromName, toName, kind, label) {
+    const from = nodeByName(fromName), to = nodeByName(toName);
+    packets.push({
+      id: 'pk' + (packetSeq++),
+      fromId: from.id, toId: to.id,
+      kind, label,
+      sentAt: now, arriveAt: now + delayMs
+    });
+  }
+
+  function deliverDuePackets() {
+    const due = packets.filter(p => now >= p.arriveAt);
+    packets = packets.filter(p => now < p.arriveAt);
+    due.forEach(p => onDeliver(p));
+    if (due.length) { updateStats(); render(); }
+  }
+
+  function onDeliver(p) {
+    const to = nodeById(p.toId);
+    if (!to || to.crashed) { pushLog('Packet dropped — target unreachable.'); return; }
+    if (mode === '2pc') onDeliver2pc(p, to);
+    else onDeliverSaga(p, to);
+  }
+
+  // ---------- 2PC ----------
+  function runTxn2pc() {
+    if (txnRunning) return;
+    resetState();
+    txnRunning = true;
+    pushLog('Coordinator sends PREPARE to Payment, Inventory, Shipping.');
+    PART_NAMES.forEach(name => {
+      spawnPacket('Coordinator', name, 'prepare', 'PREPARE');
+    });
+    updateStats();
+    render();
+  }
+
+  function onDeliver2pc(p, to) {
+    if (p.kind === 'prepare') {
+      to.status = 'prepared';
+      const vote = (failVote && to.name === 'Inventory') ? 'no' : 'yes';
+      pushLog(to.name + ' locks its resource and votes ' + (vote === 'yes' ? 'YES' : 'NO') + '.');
+      spawnPacket(to.name, 'Coordinator', 'vote-' + vote, vote);
+    } else if (p.kind === 'vote-yes' || p.kind === 'vote-no') {
+      const voter = nodeById(p.fromId);
+      votesIn[voter.name] = p.kind === 'vote-yes' ? 'yes' : 'no';
+      if (Object.keys(votesIn).length === PART_NAMES.length) {
+        const decision = Object.values(votesIn).includes('no') ? 'abort' : 'commit';
+        phase2Decision = decision;
+        pushLog('All votes in: [' + PART_NAMES.map(n => n + '=' + votesIn[n]).join(', ') + '] -> decision: ' + decision.toUpperCase() + '.');
+        if (crashAfterPrepare) {
+          const coord = nodeByName('Coordinator');
+          coord.crashed = true;
+          coord.status = 'crashed';
+          blocked = PART_NAMES.length;
+          pushLog('Coordinator CRASHES before sending phase 2 — every participant that voted YES is now blocked, holding locks, unable to decide unilaterally.');
+          document.getElementById('btn-recover').style.display = '';
+          updateStats();
+        } else {
+          sendPhase2(decision);
+        }
+      }
+    } else if (p.kind === 'commit' || p.kind === 'abort') {
+      to.status = p.kind === 'commit' ? 'committed' : 'aborted';
+      pushLog(to.name + ' applies ' + p.kind.toUpperCase() + ' and releases its lock.');
+      checkTxnDone();
+    }
+  }
+
+  function sendPhase2(decision) {
+    pushLog('Coordinator sends ' + decision.toUpperCase() + ' to all participants.');
+    PART_NAMES.forEach(name => spawnPacket('Coordinator', name, decision, decision));
+    blocked = 0;
+    updateStats();
+  }
+
+  function checkTxnDone() {
+    const allDone = PART_NAMES.every(n => {
+      const s = nodeByName(n).status;
+      return s === 'committed' || s === 'aborted';
+    });
+    if (allDone) {
+      txnRunning = false;
+      if (phase2Decision === 'commit') committed++;
+      updateStats();
+    }
+  }
+
+  function recoverCoordinator() {
+    const coord = nodeByName('Coordinator');
+    if (!coord.crashed) return;
+    coord.crashed = false;
+    coord.status = 'active';
+    pushLog('Coordinator recovers, reads its persisted transaction log — decision was ' + phase2Decision.toUpperCase() + ' — and resends it to unblock participants.');
+    document.getElementById('btn-recover').style.display = 'none';
+    sendPhase2(phase2Decision);
+    render();
+  }
+
+  // ---------- Saga ----------
+  function runSaga() {
+    if (sagaRunning) return;
+    resetState();
+    sagaRunning = true;
+    pushLog('Orchestrator starts saga: Payment -> Inventory -> Shipping.');
+    runSagaStep(0);
+  }
+
+  function runSagaStep(idx) {
+    if (idx >= sagaOrder.length) {
+      pushLog('Saga completed — all steps committed.');
+      committed++;
+      sagaRunning = false;
+      updateStats();
+      return;
+    }
+    const name = sagaOrder[idx];
+    const svc = nodeByName(name);
+    svc.status = 'running';
+    pushLog('Orchestrator calls ' + name + ' (local transaction)...');
+    spawnPacket('Orchestrator', name, 'call:' + idx, 'call');
+    render();
+  }
+
+  function onDeliverSaga(p, to) {
+    if (p.kind.startsWith('call:')) {
+      const idx = Number(p.kind.split(':')[1]);
+      const willFail = failStep === to.name;
+      pendingEvents.push({ type: 'saga-exec', at: now + 250, idx, willFail, name: to.name });
+    } else if (p.kind === 'step-ok') {
+      const from = nodeById(p.fromId);
+      from.status = 'committed';
+      pushLog(from.name + ' committed locally.');
+      const idx = sagaOrder.indexOf(from.name);
+      runSagaStep(idx + 1);
+    } else if (p.kind === 'step-fail') {
+      const from = nodeById(p.fromId);
+      from.status = 'failed';
+      pushLog(from.name + ' FAILED — starting compensations for already-committed steps, in reverse order.');
+      const idx = sagaOrder.indexOf(from.name);
+      beginCompensation(idx - 1);
+    } else if (p.kind === 'compensate') {
+      pushLog('Compensating ' + to.name + ' (running its compensating transaction)...');
+      pendingEvents.push({ type: 'saga-comp-done', at: now + 250, name: to.name });
+    } else if (p.kind === 'comp-ack') {
+      const from = nodeById(p.fromId);
+      from.status = 'compensated';
+      compensated++;
+      pushLog(from.name + ' compensated.');
+      const idx = sagaOrder.indexOf(from.name);
+      updateStats();
+      beginCompensation(idx - 1);
+    }
+  }
+
+  function beginCompensation(idx) {
+    if (idx < 0) {
+      pushLog('Saga aborted — all prior steps compensated.');
+      sagaRunning = false;
+      updateStats();
+      return;
+    }
+    const name = sagaOrder[idx];
+    const svc = nodeByName(name);
+    if (svc.status !== 'committed') { beginCompensation(idx - 1); return; }
+    svc.status = 'compensating';
+    spawnPacket('Orchestrator', name, 'compensate', 'compensate');
+    render();
+  }
+
+  function processEvents() {
+    pendingEvents = pendingEvents.filter(ev => {
+      if (now < ev.at) return true;
+      if (ev.type === 'saga-exec') {
+        if (ev.willFail) spawnPacket(ev.name, 'Orchestrator', 'step-fail', 'FAIL');
+        else spawnPacket(ev.name, 'Orchestrator', 'step-ok', 'OK');
+      } else if (ev.type === 'saga-comp-done') {
+        spawnPacket(ev.name, 'Orchestrator', 'comp-ack', 'compensated');
+      }
+      return false;
+    });
+  }
+
+  // ---------- layout / render ----------
+  function pxPos(name) {
+    const w = wrap.clientWidth || 600;
+    const h = wrap.clientHeight || 320;
+    const key = name === 'Coordinator' || name === 'Orchestrator' ? 'hub' : name;
+    const p = POS[key];
+    return { x: (p.xPct / 100) * w, y: (p.yPct / 100) * h };
+  }
+
+  let nodeEls = {};
+  function ensureNodeEls() {
+    wrap.querySelectorAll('.txn-node').forEach(e => e.remove());
+    nodeEls = {};
+    nodes.forEach(n => {
+      const div = document.createElement('div');
+      div.className = 'txn-node';
+      wrap.appendChild(div);
+      nodeEls[n.id] = div;
+    });
+  }
+
+  function renderNodes() {
+    if (Object.keys(nodeEls).length !== nodes.length) ensureNodeEls();
+    nodes.forEach(n => {
+      const div = nodeEls[n.id];
+      const pos = pxPos(n.name);
+      div.style.left = pos.x + 'px';
+      div.style.top = pos.y + 'px';
+      let cls = 'txn-node ' + (n.role === 'hub' ? 'hub ' : '') + (n.crashed ? 'crashed' : n.status);
+      div.className = cls;
+      const roleLabel = n.role === 'hub' ? (mode === '2pc' ? 'coordinator' : 'orchestrator') : 'participant';
+      div.innerHTML =
+        '<div class="n-name">' + n.name + '</div>' +
+        '<div class="n-role">' + roleLabel + '</div>' +
+        '<div class="n-status">' + (n.crashed ? 'CRASHED' : n.status) + '</div>';
+    });
+  }
+
+  function edgesForMode() {
+    const hub = nodeByName(mode === '2pc' ? 'Coordinator' : 'Orchestrator');
+    return PART_NAMES.map(name => [hub, nodeByName(name)]);
+  }
+
+  function renderEdgesAndPackets() {
+    const w = wrap.clientWidth || 600;
+    const h = wrap.clientHeight || 320;
+    svg.setAttribute('viewBox', '0 0 ' + w + ' ' + h);
+    let html = '';
+    edgesForMode().forEach(([a, b]) => {
+      const pa = pxPos(a.name), pb = pxPos(b.name);
+      html += '<line x1="' + pa.x + '" y1="' + pa.y + '" x2="' + pb.x + '" y2="' + pb.y + '" stroke="#252a3d" stroke-width="1.5" opacity="0.6"/>';
+    });
+    packets.forEach(p => {
+      const from = nodeById(p.fromId), to = nodeById(p.toId);
+      if (!from || !to) return;
+      const pf = pxPos(from.name), pt = pxPos(to.name);
+      const progress = Math.min(1, Math.max(0, (now - p.sentAt) / Math.max(1, p.arriveAt - p.sentAt)));
+      const x = pf.x + (pt.x - pf.x) * progress;
+      const y = pf.y + (pt.y - pf.y) * progress;
+      let color = '#ffd700';
+      if (p.kind === 'abort' || p.kind === 'vote-no' || p.kind === 'step-fail') color = '#ff4757';
+      else if (p.kind === 'commit' || p.kind === 'vote-yes' || p.kind === 'step-ok') color = '#00ff88';
+      else if (p.kind === 'compensate' || p.kind === 'comp-ack') color = '#ff9500';
+      html += '<circle cx="' + x + '" cy="' + y + '" r="6" fill="' + color + '"/>';
+    });
+    svg.innerHTML = html;
+  }
+
+  function updateStats() {
+    document.getElementById('stat-inflight').textContent = String(packets.length);
+    document.getElementById('stat-blocked').textContent = String(blocked);
+    document.getElementById('stat-committed').textContent = String(committed);
+    document.getElementById('stat-compensated').textContent = String(compensated);
+  }
+
+  function render() {
+    renderNodes();
+    renderEdgesAndPackets();
+  }
+
+  function tick() {
+    now = performance.now();
+    processEvents();
+    deliverDuePackets();
+    render();
+    requestAnimationFrame(tick);
+  }
+
+  // ---------- controls ----------
+  document.querySelectorAll('#mode-buttons .run-btn').forEach(btn => {
+    btn.addEventListener('click', () => setMode(btn.dataset.mode));
+  });
+
+  document.getElementById('delay-slider').addEventListener('input', (e) => {
+    delayMs = Number(e.target.value);
+    document.getElementById('delay-val').textContent = delayMs + 'ms';
+  });
+
+  document.getElementById('btn-run-2pc').addEventListener('click', runTxn2pc);
+  document.getElementById('btn-fail-vote').addEventListener('click', (e) => {
+    failVote = !failVote;
+    e.target.textContent = 'Inventory votes NO: ' + (failVote ? 'ON' : 'OFF');
+    e.target.classList.toggle('toggle-on', failVote);
+  });
+  document.getElementById('btn-crash-toggle').addEventListener('click', (e) => {
+    crashAfterPrepare = !crashAfterPrepare;
+    e.target.textContent = 'Crash coordinator after prepare: ' + (crashAfterPrepare ? 'ON' : 'OFF');
+    e.target.classList.toggle('toggle-on', crashAfterPrepare);
+  });
+  document.getElementById('btn-recover').addEventListener('click', recoverCoordinator);
+
+  document.getElementById('btn-run-saga').addEventListener('click', runSaga);
+  document.getElementById('fail-step-select').addEventListener('change', (e) => {
+    failStep = e.target.value;
+  });
+
+  document.getElementById('btn-reset').addEventListener('click', () => {
+    blocked = 0; committed = 0; compensated = 0;
+    resetState();
+    if (mode === '2pc') pushLog('Reset. Coordinator + Payment, Inventory, Shipping participants.');
+    else pushLog('Reset. Orchestrator runs Payment -> Inventory -> Shipping.');
+    render();
+  });
+
+  initNodes();
+  updateStats();
+  requestAnimationFrame(tick);
+  window.addEventListener('resize', () => { render(); });
+})();
+</script>
+</body>
+</html>
+</content>

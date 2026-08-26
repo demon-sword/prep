@@ -1,0 +1,802 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1.0"/>
+<title>Consistency Trade-offs — Backend Concepts</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #0d0f17;
+    --surface: #141720;
+    --card: #1a1e2e;
+    --border: #252a3d;
+    --accent: #00d4ff;
+    --purple: #7c3aed;
+    --green: #00ff88;
+    --yellow: #ffd700;
+    --red: #ff4757;
+    --orange: #ff9500;
+    --text: #e2e8f0;
+    --text-dim: #8892a4;
+    --mono: 'JetBrains Mono', monospace;
+    --sans: 'Inter', system-ui, sans-serif;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--sans);
+    line-height: 1.6;
+  }
+  header {
+    padding: 48px 24px 32px;
+    max-width: 920px;
+    margin: 0 auto;
+    border-bottom: 1px solid var(--border);
+  }
+  .badge {
+    display: inline-block;
+    font-family: var(--mono);
+    font-size: 12px;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--accent);
+    background: rgba(0,212,255,0.08);
+    border: 1px solid rgba(0,212,255,0.3);
+    padding: 4px 10px;
+    border-radius: 4px;
+    margin-bottom: 14px;
+  }
+  h1 {
+    font-size: 32px;
+    margin: 0 0 12px;
+    font-weight: 700;
+    letter-spacing: -0.01em;
+  }
+  header p.desc {
+    color: var(--text-dim);
+    font-size: 16px;
+    max-width: 720px;
+    margin: 0;
+  }
+  main {
+    max-width: 920px;
+    margin: 0 auto;
+    padding: 0 24px 60px;
+  }
+  section {
+    margin-top: 48px;
+  }
+  h2 {
+    font-size: 13px;
+    font-family: var(--mono);
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    color: var(--purple);
+    margin-bottom: 20px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+  h2::after {
+    content: '';
+    flex: 1;
+    height: 1px;
+    background: var(--border);
+  }
+  h3 {
+    font-size: 18px;
+    color: var(--accent);
+    margin: 28px 0 10px;
+  }
+  h3:first-child { margin-top: 0; }
+  p { color: var(--text); margin: 8px 0; }
+  ul { padding-left: 22px; }
+  li { margin: 6px 0; }
+  code {
+    font-family: var(--mono);
+    background: rgba(124,58,237,0.12);
+    color: var(--purple);
+    padding: 2px 6px;
+    border-radius: 4px;
+    font-size: 0.9em;
+  }
+  pre {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 16px;
+    overflow-x: auto;
+    font-family: var(--mono);
+    font-size: 13.5px;
+    color: var(--green);
+    line-height: 1.5;
+  }
+  .aside {
+    margin-top: 10px;
+    font-size: 13.5px;
+    color: var(--text-dim);
+    border-left: 2px solid var(--border);
+    padding-left: 12px;
+    font-style: italic;
+  }
+  .card {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 22px 24px;
+  }
+  .fail-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+    gap: 14px;
+    margin-top: 12px;
+  }
+  .fail-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-left: 3px solid var(--red);
+    border-radius: 8px;
+    padding: 14px 16px;
+  }
+  .fail-card.orange { border-left-color: var(--orange); }
+  .fail-card h4 {
+    margin: 0 0 6px;
+    font-size: 14.5px;
+    color: var(--red);
+  }
+  .fail-card.orange h4 { color: var(--orange); }
+  .fail-card p { font-size: 13.5px; color: var(--text-dim); margin: 0; }
+
+  .spectrum {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 10px;
+    margin-top: 12px;
+  }
+  .spectrum .cell {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 12px 14px;
+    font-size: 13px;
+  }
+  .spectrum .cell b { display: block; margin-bottom: 4px; font-size: 13.5px; }
+  .spectrum .cell.strong b { color: var(--red); }
+  .spectrum .cell.sequential b { color: var(--orange); }
+  .spectrum .cell.causal b { color: var(--accent); }
+  .spectrum .cell.eventual b { color: var(--green); }
+  .spectrum .cell p { color: var(--text-dim); font-size: 12.5px; margin: 0; }
+
+  /* Visualization */
+  .viz-card {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 24px;
+  }
+  .viz-intro { color: var(--text-dim); font-size: 14.5px; margin-bottom: 18px; }
+  .viz-sub-title { font-family: var(--mono); font-size: 13px; color: var(--purple); text-transform: uppercase; letter-spacing: 0.08em; margin: 0 0 6px; }
+  .viz-block { margin-bottom: 34px; }
+  .viz-block:last-child { margin-bottom: 0; }
+  .controls-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 22px;
+    align-items: center;
+    margin-bottom: 16px;
+  }
+  .control-group { display: flex; flex-direction: column; gap: 6px; }
+  .control-group label { font-family: var(--mono); font-size: 12px; color: var(--text-dim); }
+  input[type=range] { width: 200px; accent-color: var(--accent); }
+  .btn-row { display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 16px; }
+  .run-btn {
+    font-family: var(--mono);
+    font-size: 13px;
+    background: var(--purple);
+    color: white;
+    border: none;
+    padding: 10px 18px;
+    border-radius: 6px;
+    cursor: pointer;
+    font-weight: 600;
+  }
+  .run-btn:hover { opacity: 0.88; }
+  .run-btn.secondary { background: var(--surface); border: 1px solid var(--border); color: var(--text); }
+  .run-btn.active { background: var(--accent); color: #04121a; }
+  .run-btn.on-a { background: var(--green); color: #04121a; }
+  .run-btn.on-c { background: var(--red); }
+
+  .pacelc-flow {
+    display: flex;
+    gap: 18px;
+    flex-wrap: wrap;
+  }
+  .pacelc-branch {
+    flex: 1;
+    min-width: 260px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 16px 18px;
+  }
+  .pacelc-branch h4 { margin: 0 0 10px; font-size: 14px; color: var(--text); font-family: var(--mono); }
+  .pacelc-result {
+    margin-top: 14px;
+    font-size: 13.5px;
+    border-radius: 8px;
+    padding: 12px 14px;
+    border: 1px solid var(--border);
+    background: var(--card);
+    color: var(--text-dim);
+    min-height: 60px;
+  }
+  .pacelc-result b { color: var(--accent); }
+
+  canvas#partition-canvas {
+    width: 100%;
+    height: 150px;
+    background: var(--surface);
+    border-radius: 8px;
+    border: 1px solid var(--border);
+    display: block;
+    margin-top: 14px;
+  }
+
+  canvas#quorum-canvas {
+    width: 100%;
+    height: 260px;
+    background: var(--surface);
+    border-radius: 8px;
+    border: 1px solid var(--border);
+    display: block;
+  }
+  .quorum-formula {
+    font-family: var(--mono);
+    font-size: 15px;
+    padding: 10px 14px;
+    border-radius: 8px;
+    margin-top: 14px;
+    border: 1px solid var(--border);
+  }
+  .quorum-formula.pass { color: var(--green); border-color: rgba(0,255,136,0.4); background: rgba(0,255,136,0.06); }
+  .quorum-formula.fail { color: var(--red); border-color: rgba(255,71,87,0.4); background: rgba(255,71,87,0.06); }
+
+  .stat-row {
+    display: flex;
+    gap: 24px;
+    margin-top: 14px;
+    flex-wrap: wrap;
+  }
+  .stat {
+    font-family: var(--mono);
+    font-size: 13px;
+    color: var(--text-dim);
+  }
+  .stat b { color: var(--yellow); font-size: 18px; display: block; }
+  .stat b.good { color: var(--green); }
+  .stat b.warn { color: var(--red); }
+  .divider { height: 1px; background: var(--border); margin: 20px 0; }
+
+  blockquote#interview-quote {
+    background: linear-gradient(135deg, rgba(0,212,255,0.06), rgba(124,58,237,0.06));
+    border-left: 4px solid var(--accent);
+    border-radius: 8px;
+    margin: 0;
+    padding: 22px 26px;
+    font-size: 16.5px;
+    color: var(--text);
+    font-style: italic;
+    position: relative;
+  }
+  blockquote#interview-quote::before {
+    content: '\201C';
+    font-size: 48px;
+    color: var(--accent);
+    opacity: 0.3;
+    position: absolute;
+    top: -6px;
+    left: 10px;
+    font-style: normal;
+  }
+  #takeaways ul { list-style: none; padding: 0; }
+  #takeaways li {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-left: 3px solid var(--green);
+    border-radius: 8px;
+    padding: 12px 16px;
+    margin-bottom: 10px;
+    font-size: 14.5px;
+  }
+  #takeaways li b { color: var(--green); }
+
+  nav.concept-nav {
+    max-width: 920px;
+    margin: 0 auto;
+    padding: 24px 24px 60px;
+    display: flex;
+    justify-content: space-between;
+    font-family: var(--mono);
+    font-size: 13.5px;
+  }
+  nav.concept-nav a {
+    color: var(--accent);
+    text-decoration: none;
+    border: 1px solid var(--border);
+    padding: 10px 16px;
+    border-radius: 6px;
+  }
+  nav.concept-nav a:hover { border-color: var(--accent); }
+  nav.concept-nav span.disabled {
+    color: var(--text-dim);
+    border: 1px solid var(--border);
+    padding: 10px 16px;
+    border-radius: 6px;
+    opacity: 0.4;
+  }
+  @media (max-width: 600px) {
+    h1 { font-size: 24px; }
+    .controls-row { flex-direction: column; align-items: flex-start; }
+    .spectrum { grid-template-columns: 1fr 1fr; }
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <span class="badge">consistency</span>
+  <h1>Consistency Trade-offs</h1>
+  <p class="desc">CAP restated correctly via PACELC, the consistency spectrum (strong/sequential/causal/eventual), session guarantees, database isolation levels, and quorum math (W+R&gt;N).</p>
+</header>
+
+<main>
+
+  <section id="theory">
+    <h2>Theory</h2>
+    <div class="card">
+      <h3>CAP, stated correctly</h3>
+      <p>Under a <b>network partition</b>, you must choose between <b>consistency</b> and <b>availability</b>. That's the whole theorem, and the framing people get wrong is treating it as a permanent three-way choice you make once for a system. Partitions are rare; the interesting trade-off <i>most of the time</i> is <b>latency vs consistency</b>, which is what PACELC adds:</p>
+      <pre>PACELC: if there's a Partition, choose Availability or Consistency;
+        Else (normal operation), choose Latency or Consistency.</pre>
+      <p>PACELC is the more useful model in an interview because it explains behavior on the 99.99% of days when there's no partition at all — CAP alone says nothing about that regime, and that's where most consistency decisions actually get made (do you read from the nearest replica, or pay a round trip to the leader?).</p>
+
+      <h3>The consistency spectrum</h3>
+      <div class="spectrum">
+        <div class="cell strong">
+          <b>Strong / linearizable</b>
+          <p>Every read sees the most recent write. Behaves as if there's one copy. Expensive — requires coordination, so latency scales with distance between replicas.</p>
+        </div>
+        <div class="cell sequential">
+          <b>Sequential</b>
+          <p>All operations appear in <i>some</i> consistent order every node agrees on, but not necessarily real-time order.</p>
+        </div>
+        <div class="cell causal">
+          <b>Causal</b>
+          <p>Causally related operations appear in order everywhere; concurrent operations may be seen in different orders. Often the sweet spot — prevents the anomalies users actually notice (a reply appearing before the comment it replies to).</p>
+        </div>
+        <div class="cell eventual">
+          <b>Eventual</b>
+          <p>Replicas converge if writes stop. Says nothing about when. Cheap and highly available.</p>
+        </div>
+      </div>
+
+      <h3>Session guarantees — the practical middle ground</h3>
+      <p>Full strong consistency is usually overkill; full eventual consistency produces baffling user experiences. Session guarantees split the difference — cheap to implement (route a session to the same replica, or track a version token) and they eliminate most user-visible weirdness:</p>
+      <ul>
+        <li><b>Read-your-writes</b> — a user always sees their own updates. The single most important one. Without it, a user edits their profile, reloads, and sees the old value.</li>
+        <li><b>Monotonic reads</b> — you never see time go backwards (read a value, then read an older value on a later request).</li>
+        <li><b>Monotonic writes</b> — your writes apply in the order you made them.</li>
+      </ul>
+
+      <h3>Isolation levels (the database-local cousin)</h3>
+      <p>Don't confuse consistency (across replicas) with isolation (across concurrent transactions) — interviewers listen for whether you keep these separate. Know the anomalies each level does and doesn't permit:</p>
+      <ul>
+        <li><b>Read uncommitted</b> → dirty reads</li>
+        <li><b>Read committed</b> → no dirty reads, but non-repeatable reads</li>
+        <li><b>Repeatable read</b> → no non-repeatable reads, but phantoms possible</li>
+        <li><b>Serializable</b> → transactions behave as if run one at a time</li>
+      </ul>
+      <p><b>Snapshot isolation</b> (what Postgres calls repeatable read) is common and has a specific named failure mode: <b>write skew</b>, where two transactions each read a consistent snapshot, each make a decision that's valid alone, and together violate an invariant. Classic example: two doctors on the same team both go off-call simultaneously because each independently sees that the other is still on call.</p>
+
+      <h3>Quorums</h3>
+      <p>With N replicas, W write acknowledgements required, R read responses required: if <code>W + R &gt; N</code>, the read set and write set are guaranteed to overlap on at least one node, so a read is guaranteed to see the latest acknowledged write. Common configuration: <code>N=3, W=2, R=2</code>. Tuning W and R trades write latency against read latency against fault tolerance — push W down and reads get slower (or need more replicas to guarantee freshness); push W up and you lose availability faster when nodes are down.</p>
+
+      <p class="aside">Where this appeared in the Simbian design: verdicts needed strong consistency and an audit trail because a regulator asking what we knew in January can't get a stale answer — but the dedup cache was fine eventually consistent, because a duplicate investigation costs money, not correctness. The move is to identify which data needs which consistency, rather than picking one level for the whole system.</p>
+    </div>
+  </section>
+
+  <section id="visualization">
+    <h2>Visualization</h2>
+    <div class="viz-card">
+
+      <div class="viz-block">
+        <p class="viz-sub-title">1. PACELC decision tree</p>
+        <p class="viz-intro">First decide: is there a partition right now? That flips which trade-off applies. Click through both branches to see what the system actually does to a request in each case.</p>
+
+        <div class="pacelc-flow">
+          <div class="pacelc-branch">
+            <h4>P — during a network partition</h4>
+            <div class="btn-row">
+              <button class="run-btn secondary" id="pacelc-a-btn">Choose Availability</button>
+              <button class="run-btn secondary" id="pacelc-c-btn">Choose Consistency</button>
+            </div>
+            <div class="pacelc-result" id="pacelc-p-result">Pick a side to see what happens to a request hitting the cut-off replica.</div>
+          </div>
+          <div class="pacelc-branch">
+            <h4>E — else, normal operation (no partition)</h4>
+            <div class="btn-row">
+              <button class="run-btn secondary" id="pacelc-l-btn">Choose Latency</button>
+              <button class="run-btn secondary" id="pacelc-cc-btn">Choose Consistency</button>
+            </div>
+            <div class="pacelc-result" id="pacelc-e-result">Pick a side to see the round trip a normal read takes.</div>
+          </div>
+        </div>
+
+        <canvas id="partition-canvas" width="850" height="150"></canvas>
+      </div>
+
+      <div class="divider"></div>
+
+      <div class="viz-block">
+        <p class="viz-sub-title">2. Quorum simulator — W + R &gt; N</p>
+        <p class="viz-intro">Drag N, W, R. Then simulate a write (highlights the W nodes it reached) and a read (highlights the R nodes it queries) to see whether the read set is guaranteed to overlap the write set.</p>
+
+        <div class="controls-row">
+          <div class="control-group">
+            <label>N (replicas): <span id="n-val">3</span></label>
+            <input type="range" id="n-slider" min="3" max="7" value="3">
+          </div>
+          <div class="control-group">
+            <label>W (write acks needed): <span id="w-val">2</span></label>
+            <input type="range" id="w-slider" min="1" max="7" value="2">
+          </div>
+          <div class="control-group">
+            <label>R (read responses needed): <span id="r-val">2</span></label>
+            <input type="range" id="r-slider" min="1" max="7" value="2">
+          </div>
+        </div>
+
+        <div class="quorum-formula" id="quorum-formula">W + R > N → 2 + 2 &gt; 3 → PASS: reads always see the latest write</div>
+
+        <div class="btn-row">
+          <button class="run-btn" id="write-btn">Simulate write</button>
+          <button class="run-btn secondary" id="read-btn">Simulate read</button>
+          <button class="run-btn secondary" id="quorum-reset-btn">Reset</button>
+        </div>
+
+        <canvas id="quorum-canvas" width="850" height="260"></canvas>
+
+        <div class="stat-row">
+          <div class="stat">Overlap nodes<b id="stat-overlap">—</b></div>
+          <div class="stat">Read result<b id="stat-result">—</b></div>
+          <div class="stat">Trials this session<b id="stat-trials">0</b></div>
+          <div class="stat">Stale reads observed<b id="stat-stale">0</b></div>
+        </div>
+      </div>
+
+    </div>
+  </section>
+
+  <section id="interview-line">
+    <h2>Interview Line</h2>
+    <blockquote id="interview-quote">
+      "Verdicts need strong consistency and an audit trail — a regulator asking what we knew in January can't get a stale answer. But the dedup cache is fine eventually consistent; a duplicate investigation costs money, not correctness. I'd rather be precise about which data needs which consistency than pick one level for everything."
+    </blockquote>
+  </section>
+
+  <section id="takeaways">
+    <h2>Key Takeaways</h2>
+    <ul>
+      <li><b>PACELC beats CAP in an interview because it explains the common case.</b> CAP only describes behavior during a partition, which is rare; PACELC's "else" branch is what governs latency-vs-consistency on every normal request.</li>
+      <li><b>Consistency (across replicas) and isolation (across transactions) are different axes.</b> Conflating them is a tell that someone hasn't operated a real multi-replica system — know both vocabularies and keep them separate.</li>
+      <li><b>Write skew is the failure mode snapshot isolation doesn't stop.</b> Two transactions each read a valid snapshot, each make a locally-valid decision, and together violate an invariant — the fix is either serializable isolation or an explicit constraint/lock on the invariant itself.</li>
+      <li><b>W + R &gt; N is a guarantee about overlap, not about which node you'll read.</b> N=3,W=2,R=2 is the standard because it tolerates one node down while still guaranteeing overlap; dropping to W=1 buys write latency at the cost of that guarantee.</li>
+      <li><b>Session guarantees are the 80/20 most teams actually need.</b> Read-your-writes alone (route a user's session to the same replica, or read-repair against a version token) kills most "why did my edit disappear" tickets without paying for full linearizability.</li>
+      <li><b>The senior move is picking consistency per data type, not per system.</b> This is the same instinct as choosing per-key ordering in <code>02-queues-backpressure</code> or per-endpoint idempotency in <code>05-idempotency</code> — decide at the granularity the trade-off actually applies to.</li>
+    </ul>
+  </section>
+
+</main>
+
+<nav class="concept-nav">
+  <a href="../concepts/02-queues-backpressure.html">← Previous: Queues and Backpressure</a>
+  <a href="../concepts/04-sharding-partitioning.html">Next: Sharding and Partitioning →</a>
+</nav>
+
+<script>
+(function() {
+  // ============= PACELC =============
+  const pAResult = document.getElementById('pacelc-p-result');
+  const pCBtn = document.getElementById('pacelc-c-btn');
+  const pABtn = document.getElementById('pacelc-a-btn');
+  const eResult = document.getElementById('pacelc-e-result');
+  const lBtn = document.getElementById('pacelc-l-btn');
+  const ccBtn = document.getElementById('pacelc-cc-btn');
+
+  let pChoice = null; // 'A' or 'C'
+  let eChoice = null; // 'L' or 'C'
+
+  const pCanvas = document.getElementById('partition-canvas');
+  const pCtx = pCanvas.getContext('2d');
+  const PW = pCanvas.width, PH = pCanvas.height;
+
+  function setActiveBtn(btn, group) {
+    group.forEach(b => b.classList.remove('on-a', 'on-c', 'active'));
+  }
+
+  pABtn.addEventListener('click', () => {
+    pChoice = 'A';
+    setActiveBtn(pABtn, [pABtn, pCBtn]);
+    pABtn.classList.add('on-a');
+    pAResult.innerHTML = '<b>Available:</b> the partitioned replica keeps answering reads/writes using what it has locally. The client gets a fast response — but it may be stale relative to the majority side. This is Dynamo, Cassandra (default), DNS.';
+    drawPartitionDiagram();
+  });
+  pCBtn.addEventListener('click', () => {
+    pChoice = 'C';
+    setActiveBtn(pCBtn, [pABtn, pCBtn]);
+    pCBtn.classList.add('on-c');
+    pAResult.innerHTML = '<b>Consistent:</b> the partitioned replica refuses to answer (or the majority side rejects requests that need the missing replica) rather than risk serving stale or conflicting data. The client gets an error/timeout instead of a wrong answer. This is etcd, ZooKeeper, most Raft-based systems.';
+    drawPartitionDiagram();
+  });
+  lBtn.addEventListener('click', () => {
+    eChoice = 'L';
+    setActiveBtn(lBtn, [lBtn, ccBtn]);
+    lBtn.classList.add('on-a');
+    eResult.innerHTML = '<b>Latency:</b> reads are served from the nearest replica without checking the leader. Fast (~1ms local read) but the value could be milliseconds to seconds behind the leader depending on replication lag. This is what "read from a follower" buys you.';
+    drawPartitionDiagram();
+  });
+  ccBtn.addEventListener('click', () => {
+    eChoice = 'C';
+    setActiveBtn(ccBtn, [lBtn, ccBtn]);
+    ccBtn.classList.add('on-c');
+    eResult.innerHTML = '<b>Consistency:</b> the read is routed to (or confirmed against) the leader, paying the round trip. Slower, but the value is guaranteed current. This is what "read your own write" via the primary buys you.';
+    drawPartitionDiagram();
+  });
+
+  function drawPartitionDiagram() {
+    pCtx.clearRect(0, 0, PW, PH);
+    const nodes = [
+      { x: 140, y: 75, label: 'Leader', cut: false },
+      { x: 420, y: 75, label: 'Replica B', cut: false },
+      { x: 700, y: 75, label: pChoice ? 'Replica C (partitioned)' : 'Replica C', cut: !!pChoice }
+    ];
+
+    // client
+    pCtx.fillStyle = '#1a1e2e';
+    pCtx.strokeStyle = '#00d4ff';
+    pCtx.lineWidth = 2;
+    pCtx.beginPath();
+    pCtx.arc(40, 75, 20, 0, Math.PI * 2);
+    pCtx.fill(); pCtx.stroke();
+    pCtx.fillStyle = '#e2e8f0';
+    pCtx.font = '10px JetBrains Mono';
+    pCtx.textAlign = 'center';
+    pCtx.fillText('Client', 40, 79);
+
+    // links
+    nodes.forEach((n, i) => {
+      const prevX = i === 0 ? 60 : nodes[i-1].x + 26;
+      pCtx.strokeStyle = (n.cut) ? '#ff4757' : '#252a3d';
+      pCtx.lineWidth = n.cut ? 2 : 1;
+      pCtx.setLineDash(n.cut ? [6,4] : []);
+      pCtx.beginPath();
+      pCtx.moveTo(prevX, 75);
+      pCtx.lineTo(n.x - 26, 75);
+      pCtx.stroke();
+      pCtx.setLineDash([]);
+      if (n.cut) {
+        pCtx.fillStyle = '#ff4757';
+        pCtx.font = '16px JetBrains Mono';
+        pCtx.fillText('✕', (prevX + n.x - 26) / 2, 70);
+      }
+    });
+
+    // nodes
+    nodes.forEach(n => {
+      pCtx.fillStyle = n.cut ? 'rgba(255,71,87,0.12)' : '#1a1e2e';
+      pCtx.strokeStyle = n.cut ? '#ff4757' : '#7c3aed';
+      pCtx.lineWidth = 2;
+      pCtx.beginPath();
+      pCtx.arc(n.x, 75, 26, 0, Math.PI * 2);
+      pCtx.fill(); pCtx.stroke();
+      pCtx.fillStyle = '#e2e8f0';
+      pCtx.font = '10px JetBrains Mono';
+      pCtx.textAlign = 'center';
+      pCtx.fillText(n.label, n.x, 118);
+    });
+
+    // status caption
+    pCtx.textAlign = 'left';
+    pCtx.font = '12px JetBrains Mono';
+    let caption = 'Toggle a branch above to animate the request path.';
+    let color = '#8892a4';
+    if (pChoice === 'A') { caption = 'Partition + Availability chosen → Replica C still answers locally. Possibly stale.'; color = '#ffd700'; }
+    if (pChoice === 'C') { caption = 'Partition + Consistency chosen → requests needing Replica C are rejected until it rejoins.'; color = '#ff4757'; }
+    if (!pChoice && eChoice === 'L') { caption = 'No partition + Latency chosen → read served from nearest replica without leader round trip.'; color = '#00d4ff'; }
+    if (!pChoice && eChoice === 'C') { caption = 'No partition + Consistency chosen → read routed to/confirmed by the leader. Slower, always current.'; color = '#00ff88'; }
+    pCtx.fillStyle = color;
+    pCtx.fillText(caption, 20, 20);
+  }
+  drawPartitionDiagram();
+
+  // ============= Quorum simulator =============
+  const nSlider = document.getElementById('n-slider');
+  const wSlider = document.getElementById('w-slider');
+  const rSlider = document.getElementById('r-slider');
+  const nVal = document.getElementById('n-val');
+  const wVal = document.getElementById('w-val');
+  const rVal = document.getElementById('r-val');
+  const formulaBox = document.getElementById('quorum-formula');
+  const writeBtn = document.getElementById('write-btn');
+  const readBtn = document.getElementById('read-btn');
+  const resetBtn = document.getElementById('quorum-reset-btn');
+  const statOverlap = document.getElementById('stat-overlap');
+  const statResult = document.getElementById('stat-result');
+  const statTrials = document.getElementById('stat-trials');
+  const statStale = document.getElementById('stat-stale');
+
+  let N = 3, W = 2, R = 2;
+  let writeSet = [];
+  let readSet = [];
+  let trials = 0, staleCount = 0;
+
+  function clampSliders() {
+    wSlider.max = N; rSlider.max = N;
+    if (W > N) { W = N; wSlider.value = N; }
+    if (R > N) { R = N; rSlider.value = N; }
+  }
+
+  function updateFormula() {
+    const pass = (W + R) > N;
+    formulaBox.textContent = `W + R > N  →  ${W} + ${R} > ${N}  →  ${pass ? 'PASS: reads always see the latest write' : 'FAIL: a stale read is possible'}`;
+    formulaBox.className = 'quorum-formula ' + (pass ? 'pass' : 'fail');
+  }
+
+  nSlider.addEventListener('input', () => {
+    N = parseInt(nSlider.value, 10);
+    nVal.textContent = N;
+    clampSliders();
+    wVal.textContent = W; rVal.textContent = R;
+    updateFormula();
+    resetSim();
+  });
+  wSlider.addEventListener('input', () => {
+    W = parseInt(wSlider.value, 10);
+    wVal.textContent = W;
+    updateFormula();
+    resetSim();
+  });
+  rSlider.addEventListener('input', () => {
+    R = parseInt(rSlider.value, 10);
+    rVal.textContent = R;
+    updateFormula();
+    resetSim();
+  });
+
+  function pickRandomSet(size, count) {
+    const idx = Array.from({ length: size }, (_, i) => i);
+    for (let i = idx.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [idx[i], idx[j]] = [idx[j], idx[i]];
+    }
+    return idx.slice(0, count).sort((a,b) => a - b);
+  }
+
+  writeBtn.addEventListener('click', () => {
+    writeSet = pickRandomSet(N, W);
+    readSet = [];
+    statResult.textContent = '—';
+    statOverlap.textContent = '—';
+    drawQuorumRing();
+  });
+
+  readBtn.addEventListener('click', () => {
+    if (writeSet.length === 0) { writeSet = pickRandomSet(N, W); }
+    // Adversarial-ish: if formula fails, bias toward minimal overlap to demonstrate the risk
+    const pass = (W + R) > N;
+    if (!pass) {
+      const complement = Array.from({ length: N }, (_, i) => i).filter(i => !writeSet.includes(i));
+      let candidate = complement.slice(0, R);
+      if (candidate.length < R) {
+        const remaining = writeSet.filter(i => !candidate.includes(i));
+        candidate = candidate.concat(remaining.slice(0, R - candidate.length));
+      }
+      readSet = candidate.sort((a,b) => a - b);
+    } else {
+      readSet = pickRandomSet(N, R);
+    }
+    const overlap = readSet.filter(i => writeSet.includes(i));
+    trials++;
+    const sawLatest = overlap.length > 0;
+    if (!sawLatest) staleCount++;
+    statOverlap.textContent = overlap.length + ' node' + (overlap.length === 1 ? '' : 's');
+    statResult.textContent = sawLatest ? 'sees latest ✓' : 'STALE ✕';
+    statResult.className = sawLatest ? 'good' : 'warn';
+    statTrials.textContent = trials;
+    statStale.textContent = staleCount;
+    drawQuorumRing();
+  });
+
+  resetBtn.addEventListener('click', () => resetSim(true));
+
+  function resetSim(hard) {
+    writeSet = []; readSet = [];
+    statOverlap.textContent = '—';
+    statResult.textContent = '—';
+    if (hard) { trials = 0; staleCount = 0; }
+    statTrials.textContent = trials;
+    statStale.textContent = staleCount;
+    drawQuorumRing();
+  }
+
+  const qCanvas = document.getElementById('quorum-canvas');
+  const qCtx = qCanvas.getContext('2d');
+  const QW = qCanvas.width, QH = qCanvas.height;
+
+  function drawQuorumRing() {
+    qCtx.clearRect(0, 0, QW, QH);
+    const cx = QW / 2, cy = QH / 2 - 10, radius = 90;
+
+    for (let i = 0; i < N; i++) {
+      const angle = (Math.PI * 2 * i) / N - Math.PI / 2;
+      const x = cx + radius * Math.cos(angle);
+      const y = cy + radius * Math.sin(angle);
+
+      const inWrite = writeSet.includes(i);
+      const inRead = readSet.includes(i);
+      const inBoth = inWrite && inRead;
+
+      qCtx.beginPath();
+      qCtx.arc(x, y, 24, 0, Math.PI * 2);
+      if (inBoth) {
+        qCtx.fillStyle = 'rgba(0,255,136,0.18)';
+        qCtx.strokeStyle = '#00ff88';
+      } else if (inWrite) {
+        qCtx.fillStyle = 'rgba(0,212,255,0.14)';
+        qCtx.strokeStyle = '#00d4ff';
+      } else if (inRead) {
+        qCtx.fillStyle = 'rgba(124,58,237,0.16)';
+        qCtx.strokeStyle = '#7c3aed';
+      } else {
+        qCtx.fillStyle = '#1a1e2e';
+        qCtx.strokeStyle = '#252a3d';
+      }
+      qCtx.lineWidth = inBoth ? 3 : 2;
+      qCtx.fill(); qCtx.stroke();
+
+      qCtx.fillStyle = '#e2e8f0';
+      qCtx.font = '11px JetBrains Mono';
+      qCtx.textAlign = 'center';
+      qCtx.fillText('N' + (i+1), x, y + 4);
+
+      let tag = '';
+      if (inBoth) tag = 'W+R';
+      else if (inWrite) tag = 'W';
+      else if (inRead) tag = 'R';
+      if (tag) {
+        qCtx.fillStyle = inBoth ? '#00ff88' : (inWrite ? '#00d4ff' : '#7c3aed');
+        qCtx.font = '10px JetBrains Mono';
+        qCtx.fillText(tag, x, y + 40);
+      }
+    }
+
+    // legend
+    qCtx.textAlign = 'left';
+    qCtx.font = '11px JetBrains Mono';
+    qCtx.fillStyle = '#00d4ff'; qCtx.fillText('● write set', 20, QH - 34);
+    qCtx.fillStyle = '#7c3aed'; qCtx.fillText('● read set', 20, QH - 18);
+    qCtx.fillStyle = '#00ff88'; qCtx.fillText('● overlap (guaranteed fresh)', 160, QH - 34);
+    qCtx.fillStyle = '#8892a4'; qCtx.fillText('N=' + N + ' W=' + W + ' R=' + R, 160, QH - 18);
+  }
+
+  updateFormula();
+  drawQuorumRing();
+})();
+</script>
+</body>
+</html>

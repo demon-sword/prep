@@ -1,0 +1,880 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1.0"/>
+  <title>Random Forest — Machine Learning Concepts</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com"/>
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet"/>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg:        #0d0f17;
+      --surface:   #141720;
+      --card:      #1a1e2e;
+      --border:    #252a3d;
+      --accent:    #00d4ff;
+      --purple:    #7c3aed;
+      --green:     #00ff88;
+      --yellow:    #ffd700;
+      --red:       #ff4757;
+      --orange:    #ff9500;
+      --text:      #e2e8f0;
+      --text-dim:  #8892a4;
+      --mono:      'JetBrains Mono', monospace;
+      --sans:      'Inter', system-ui, sans-serif;
+    }
+
+    html { scroll-behavior: smooth; }
+
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: var(--sans);
+      font-size: 16px;
+      line-height: 1.7;
+      min-height: 100vh;
+    }
+
+    header {
+      background: var(--surface);
+      border-bottom: 1px solid var(--border);
+      padding: 2rem 2rem 1.5rem;
+      max-width: 1100px;
+      margin: 0 auto;
+    }
+
+    .group-badge {
+      display: inline-block;
+      font-family: var(--mono);
+      font-size: 0.7rem;
+      font-weight: 700;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      color: var(--accent);
+      background: rgba(0, 212, 255, 0.1);
+      border: 1px solid rgba(0, 212, 255, 0.3);
+      padding: 0.2em 0.7em;
+      border-radius: 4px;
+      margin-bottom: 0.75rem;
+    }
+
+    header h1 {
+      font-size: clamp(1.6rem, 4vw, 2.4rem);
+      font-weight: 700;
+      color: var(--text);
+      line-height: 1.2;
+      margin-bottom: 0.5rem;
+    }
+
+    header h1 span.id {
+      color: var(--text-dim);
+      font-size: 0.55em;
+      font-family: var(--mono);
+      margin-right: 0.5rem;
+      vertical-align: middle;
+    }
+
+    header p.desc {
+      color: var(--text-dim);
+      font-size: 1.05rem;
+      max-width: 700px;
+    }
+
+    main {
+      max-width: 1100px;
+      margin: 0 auto;
+      padding: 0 2rem 4rem;
+    }
+
+    section { margin-top: 3rem; }
+
+    section > h2 {
+      font-size: 1.4rem;
+      font-weight: 700;
+      color: var(--accent);
+      border-bottom: 1px solid var(--border);
+      padding-bottom: 0.5rem;
+      margin-bottom: 1.5rem;
+    }
+
+    h3 {
+      font-size: 1.1rem;
+      font-weight: 600;
+      color: var(--yellow);
+      margin: 1.5rem 0 0.6rem;
+    }
+
+    p { margin-bottom: 1rem; color: var(--text); }
+
+    ul, ol { padding-left: 1.5rem; margin-bottom: 1rem; }
+    li { margin-bottom: 0.4rem; }
+
+    code {
+      font-family: var(--mono);
+      font-size: 0.85em;
+      background: rgba(0, 212, 255, 0.08);
+      color: var(--accent);
+      padding: 0.1em 0.35em;
+      border-radius: 3px;
+    }
+
+    .formula-block {
+      background: var(--card);
+      border-left: 3px solid var(--purple);
+      border-radius: 0 8px 8px 0;
+      padding: 0.8rem 1.2rem;
+      margin: 1rem 0;
+      font-family: var(--mono);
+      font-size: 0.95rem;
+      color: var(--text);
+    }
+
+    .callout {
+      background: rgba(124, 58, 237, 0.08);
+      border: 1px solid rgba(124, 58, 237, 0.3);
+      border-radius: 8px;
+      padding: 1rem 1.2rem;
+      margin: 1rem 0;
+    }
+
+    .callout strong { color: var(--purple); }
+
+    /* ── Visualization ── */
+    #visualization .viz-card {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 1.5rem;
+      margin-bottom: 1.5rem;
+    }
+
+    .viz-title { font-weight: 600; font-size: 1rem; color: var(--text); margin-bottom: 0.3rem; }
+    .viz-desc { font-size: 0.88rem; color: var(--text-dim); margin-bottom: 1.2rem; }
+
+    .controls {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 1.25rem;
+      align-items: center;
+      margin-bottom: 1.2rem;
+    }
+
+    .slider-row { display: flex; align-items: center; gap: 0.75rem; }
+
+    .slider-row label {
+      font-size: 0.82rem;
+      color: var(--text-dim);
+      white-space: nowrap;
+    }
+
+    .slider-row input[type="range"] {
+      accent-color: var(--accent);
+      width: 160px;
+    }
+
+    .slider-val {
+      font-family: var(--mono);
+      font-size: 0.85rem;
+      color: var(--accent);
+      min-width: 2.5rem;
+    }
+
+    .ctrl-btn {
+      font-family: var(--mono);
+      font-size: 0.8rem;
+      padding: 0.45em 1.1em;
+      border-radius: 6px;
+      border: 1px solid var(--accent);
+      background: rgba(0, 212, 255, 0.08);
+      color: var(--accent);
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+
+    .ctrl-btn:hover { background: rgba(0, 212, 255, 0.2); }
+    .ctrl-btn:active { transform: scale(0.97); }
+    .ctrl-btn.ghost { border-color: var(--border); background: transparent; color: var(--text-dim); }
+    .ctrl-btn.ghost:hover { border-color: var(--text-dim); }
+    .ctrl-btn.toggle-on { background: rgba(0, 255, 136, 0.12); border-color: var(--green); color: var(--green); }
+
+    canvas {
+      display: block;
+      border-radius: 8px;
+      background: var(--surface);
+      max-width: 100%;
+    }
+
+    .main-layout {
+      display: grid;
+      grid-template-columns: 1.3fr 1fr;
+      gap: 1.5rem;
+      align-items: start;
+    }
+
+    .side-panel {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 1.1rem;
+    }
+
+    .side-panel h4 {
+      font-size: 0.85rem;
+      font-weight: 700;
+      color: var(--text);
+      margin-bottom: 0.8rem;
+      letter-spacing: 0.02em;
+    }
+
+    .imp-row { margin-bottom: 0.9rem; }
+    .imp-label {
+      display: flex;
+      justify-content: space-between;
+      font-size: 0.78rem;
+      color: var(--text-dim);
+      margin-bottom: 0.3rem;
+      font-family: var(--mono);
+    }
+    .imp-track {
+      height: 10px;
+      background: var(--card);
+      border-radius: 5px;
+      overflow: hidden;
+      border: 1px solid var(--border);
+    }
+    .imp-fill {
+      height: 100%;
+      border-radius: 5px;
+      transition: width 0.25s ease;
+    }
+    .imp-fill.x { background: var(--accent); }
+    .imp-fill.y { background: var(--orange); }
+
+    .mini-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 0.6rem;
+      margin-top: 1.5rem;
+    }
+
+    .mini-tree {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 0.5rem;
+      text-align: center;
+    }
+
+    .mini-tree canvas { width: 100%; height: auto; border-radius: 5px; }
+
+    .mini-chip {
+      display: inline-block;
+      margin-top: 0.4rem;
+      font-family: var(--mono);
+      font-size: 0.65rem;
+      color: var(--text-dim);
+      background: rgba(255,255,255,0.03);
+      border: 1px solid var(--border);
+      border-radius: 4px;
+      padding: 0.15em 0.5em;
+    }
+
+    .legend {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 1rem;
+      margin-top: 0.8rem;
+    }
+
+    .legend-item {
+      display: flex;
+      align-items: center;
+      gap: 0.4rem;
+      font-size: 0.78rem;
+      color: var(--text-dim);
+    }
+
+    .legend-dot { width: 10px; height: 10px; border-radius: 2px; }
+    .legend-line { width: 16px; height: 2px; }
+
+    .readout-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.75rem;
+      margin-top: 1rem;
+    }
+
+    .readout {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 0.55rem 0.9rem;
+      font-size: 0.8rem;
+      color: var(--text-dim);
+      flex: 1;
+      min-width: 120px;
+    }
+
+    .readout strong { display: block; font-family: var(--mono); font-size: 1.05rem; margin-top: 0.2rem; }
+    .readout.hi strong { color: var(--red); }
+    .readout.lo strong { color: var(--green); }
+    .readout.mid strong { color: var(--accent); }
+
+    .hint {
+      font-size: 0.78rem;
+      color: var(--text-dim);
+      margin-top: 0.6rem;
+      font-style: italic;
+    }
+
+    /* ── Takeaways ── */
+    #takeaways ul { list-style: none; padding: 0; }
+
+    #takeaways li {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 1rem 1.2rem;
+      margin-bottom: 0.75rem;
+      padding-left: 3rem;
+      position: relative;
+    }
+
+    #takeaways li::before {
+      content: '→';
+      position: absolute;
+      left: 1rem;
+      color: var(--accent);
+      font-weight: 700;
+    }
+
+    /* ── Nav ── */
+    .concept-nav {
+      max-width: 1100px;
+      margin: 0 auto;
+      padding: 1.5rem 2rem 3rem;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      border-top: 1px solid var(--border);
+    }
+
+    .nav-link {
+      display: flex;
+      flex-direction: column;
+      gap: 0.2rem;
+      text-decoration: none;
+      padding: 0.6rem 1rem;
+      border-radius: 8px;
+      border: 1px solid var(--border);
+      background: var(--surface);
+      transition: all 0.2s;
+      max-width: 220px;
+    }
+
+    .nav-link:hover { border-color: var(--accent); background: rgba(0, 212, 255, 0.06); }
+    .nav-link.disabled { opacity: 0.3; pointer-events: none; }
+
+    .nav-dir {
+      font-size: 0.7rem;
+      font-family: var(--mono);
+      color: var(--text-dim);
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+    }
+
+    .nav-title { font-size: 0.88rem; color: var(--text); font-weight: 500; }
+
+    @media (max-width: 900px) {
+      .main-layout { grid-template-columns: 1fr; }
+      .mini-grid { grid-template-columns: repeat(3, 1fr); }
+    }
+
+    @media (max-width: 640px) {
+      header, main { padding-left: 1rem; padding-right: 1rem; }
+      .concept-nav { padding-left: 1rem; padding-right: 1rem; flex-direction: column; gap: 0.75rem; }
+      .nav-link { max-width: 100%; width: 100%; }
+      .slider-row input[type="range"] { width: 110px; }
+      .mini-grid { grid-template-columns: repeat(2, 1fr); }
+    }
+  </style>
+</head>
+<body>
+
+<header>
+  <div class="group-badge">Ensembles</div>
+  <h1><span class="id">13</span>Random Forest</h1>
+  <p class="desc">Bagging plus random feature subsampling — how decorrelating trees reduces variance further than bagging alone, and feature importance from impurity decrease.</p>
+</header>
+
+<main>
+
+  <!-- ── THEORY ── -->
+  <section id="theory">
+    <h2>Theory</h2>
+
+    <h3>From Bagging to Random Forest: Decorrelating via Feature Subsampling</h3>
+    <p>
+      Random Forest (Breiman, 2001) is bagging with one deliberate extra source of randomness injected at every split. Plain bagging (see <code>12-bagging-vs-boosting</code>) already trains each tree on an independent bootstrap resample of the rows, but every tree still gets to see <em>every</em> feature when choosing its splits. If one or two features are strongly predictive, nearly every bootstrapped tree will pick the same feature near the root, producing highly correlated trees — and averaging <code>B</code> trees with pairwise correlation <code>ρ</code> only reduces variance to <code>ρσ² + (1-ρ)σ²/B</code>, so a correlation floor of <code>ρσ²</code> survives no matter how large <code>B</code> gets. Random Forest attacks that floor directly: at <em>each split</em>, instead of searching all <code>p</code> features for the best split, it draws a random subset of <code>m &lt; p</code> candidate features and searches only among those. This forces different trees — and even different branches of the same tree — to build around different features, actively decorrelating the ensemble and pushing <code>ρ</code> down, which is exactly the lever that squeezes out variance beyond what bagging alone can reach.
+    </p>
+
+    <h3>Choosing max_features</h3>
+    <p>
+      The subsample size <code>m</code> is the key knob. scikit-learn's <code>RandomForestClassifier</code> defaults to <code>max_features='sqrt'</code> (≈ <code>√p</code> features considered per split), while <code>RandomForestRegressor</code> defaults to <code>max_features=1.0</code> (all features, i.e. bagging-with-bootstrap-only for splits, though row bootstrapping still applies) — the classification default reflects that classification boundaries typically need less per-split feature diversity to decorrelate usefully. Smaller <code>m</code> means more decorrelation (lower <code>ρ</code>) but each individual tree gets weaker, since it's sometimes forced to split on a mediocre feature when the best one wasn't sampled — this raises each tree's individual variance/bias slightly. The sweet spot balances the two effects, and in practice <code>√p</code> is a remarkably durable default across many tabular problems; <code>log2(p)</code> is the more aggressive alternative for very high-dimensional data. A further extreme is <strong>Extra Trees</strong> (<code>ExtraTreesClassifier</code>): it goes one step further by picking the split <em>threshold</em> randomly too (rather than the optimal SSE/Gini-minimizing threshold), trading a bit more per-tree bias for even lower correlation and faster training, since it skips the expensive threshold search entirely.
+    </p>
+
+    <h3>Feature Importance: Gini vs Permutation</h3>
+    <p>
+      Random Forest's default <code>.feature_importances_</code> is <strong>mean decrease in impurity (MDI)</strong>: for every split in every tree that uses feature <code>j</code>, accumulate the (sample-weighted) drop in Gini impurity or MSE that split produced, then average across trees. It's essentially free — a byproduct of training — but it has a well-known bias: it favors high-cardinality and continuous features simply because they offer more candidate thresholds to search over, so a random noise column with many unique values can outscore a genuinely predictive low-cardinality categorical. It also splits credit awkwardly among correlated features (if two features are near-duplicates, importance gets divided between them, making both look individually weak). The more trustworthy alternative is <strong>permutation importance</strong> (<code>sklearn.inspection.permutation_importance</code>): shuffle one feature's column in the held-out set and measure how much the model's score degrades. It's model-agnostic, uses out-of-sample data, and isn't biased toward high-cardinality features — but it costs one full re-scoring pass per feature per repeat, and it still under-credits importance shared across correlated features (shuffling one of two correlated columns barely hurts the model, since the other still carries the signal).
+    </p>
+
+    <h3>Out-of-Bag Error and Hyperparameters</h3>
+    <p>
+      Because each tree's bootstrap sample omits ~36.8% of rows on average, Random Forest inherits bagging's free out-of-bag (OOB) validation: <code>RandomForestClassifier(oob_score=True)</code> scores each row only on the subset of trees that never saw it during training, giving a near-unbiased generalization estimate without a separate CV loop — useful for fast iteration, though a true held-out test set is still worth keeping for a final reported number since OOB and CV can diverge slightly on small or non-iid data. The other major knobs are <code>n_estimators</code> (more trees almost never hurts test accuracy, only compute and memory — test error plateaus rather than degrading, unlike boosting), <code>max_depth</code>/<code>min_samples_leaf</code> (controls the bias of each individual tree; deep unpruned trees are the classic Random Forest base learner because they're already low-bias/high-variance, exactly what averaging is built to fix), and <code>bootstrap</code> (turning it off trains every tree on the full dataset, which removes the row-level diversity that OOB estimation depends on).
+    </p>
+
+    <h3>Production Reality</h3>
+    <p>
+      Random Forest is the "boring but robust" tabular baseline: near-default hyperparameters (<code>n_estimators=300–500</code>, <code>max_features='sqrt'</code>) are competitive with meaningful effort spent tuning gradient boosting, training parallelizes trivially across cores (<code>n_jobs=-1</code>) since every tree is independent, and it's far more forgiving of label noise and outliers than boosting because no tree obsessively re-targets a mislabeled row's residual. It also requires no feature scaling (splits are threshold comparisons, invariant to monotonic transforms) and handles nonlinear interactions natively. The costs: prediction latency and memory scale linearly with <code>n_estimators × tree depth</code> — a forest of 500 depth-20 trees can be tens to hundrems of MB serialized and noticeably slower at inference than a single boosted ensemble of similar accuracy, which is why latency-sensitive production services sometimes distill a Random Forest down or switch to LightGBM once accuracy needs are met. It also can't extrapolate beyond the range of training data (predictions are always bounded by leaf averages seen during training), which regularly bites time-series or trending-target use cases where linear or boosted-tree monotonic-constraint models degrade more gracefully.
+    </p>
+  </section>
+
+  <!-- ── VISUALIZATION ── -->
+  <section id="visualization">
+    <h2>Interactive Visualization</h2>
+
+    <div class="viz-card">
+      <div class="viz-title">Live Forest: Bootstrap + Feature Subsampling, Real CART Splits</div>
+      <div class="viz-desc">
+        90 points from two interleaved classes. Each tree is a <strong>real recursive Gini-impurity CART</strong> (brute-force threshold search, not canned) fit on its own bootstrap resample. Toggle <strong>feature subsampling</strong> to switch between plain bagging (every split considers both X and Y) and true Random Forest (every split considers only a randomly chosen single axis — mimicking <code>max_features=1</code> out of 2 features). Watch the aggregated decision boundary and the feature-importance bars change as trees decorrelate.
+      </div>
+
+      <div class="controls">
+        <div class="slider-row">
+          <label>Forest size (N trees)</label>
+          <input type="range" id="n-trees" min="1" max="30" step="1" value="12"/>
+          <span class="slider-val" id="n-trees-val">12</span>
+        </div>
+        <div class="slider-row">
+          <label>Max depth</label>
+          <input type="range" id="max-depth" min="1" max="6" step="1" value="3"/>
+          <span class="slider-val" id="max-depth-val">3</span>
+        </div>
+        <button class="ctrl-btn toggle-on" id="subsample-toggle">Feature subsampling: ON</button>
+        <button class="ctrl-btn ghost" id="resample-btn">Resample bootstraps</button>
+      </div>
+
+      <div class="main-layout">
+        <div>
+          <canvas id="forest-canvas" width="620" height="440"></canvas>
+          <div class="legend">
+            <div class="legend-item"><div class="legend-dot" style="background:var(--accent)"></div>Class A</div>
+            <div class="legend-item"><div class="legend-dot" style="background:var(--orange)"></div>Class B</div>
+            <div class="legend-item"><div class="legend-line" style="background:var(--text);height:2px"></div>Aggregate boundary (p = 0.5)</div>
+          </div>
+        </div>
+        <div class="side-panel">
+          <h4>Gini Feature Importance (this forest)</h4>
+          <div class="imp-row">
+            <div class="imp-label"><span>X (horizontal)</span><span id="imp-x-val">—</span></div>
+            <div class="imp-track"><div class="imp-fill x" id="imp-x-bar" style="width:0%"></div></div>
+          </div>
+          <div class="imp-row">
+            <div class="imp-label"><span>Y (vertical)</span><span id="imp-y-val">—</span></div>
+            <div class="imp-track"><div class="imp-fill y" id="imp-y-bar" style="width:0%"></div></div>
+          </div>
+          <div class="readout-row">
+            <div class="readout mid">Train accuracy<strong id="acc-val">—</strong></div>
+            <div class="readout mid">Avg. pairwise tree agreement<strong id="agree-val">—</strong></div>
+          </div>
+          <p class="hint">Higher pairwise agreement between trees means more correlated trees — turn feature subsampling OFF and watch agreement rise as every tree converges on the same dominant-feature splits.</p>
+        </div>
+      </div>
+
+      <div class="mini-grid" id="mini-grid"></div>
+      <p class="hint">Each mini-panel is one real tree in the forest: its own bootstrap sample (dots) and its own decision regions. The chip shows which feature(s) its root split was allowed to consider.</p>
+    </div>
+  </section>
+
+  <!-- ── TAKEAWAYS ── -->
+  <section id="takeaways">
+    <h2>Key Takeaways</h2>
+    <ul>
+      <li>
+        <strong>Random Forest = bagging + per-split feature subsampling — the second part is what makes it more than "BaggingClassifier with trees."</strong> Bagging alone leaves trees correlated because they all search the same full feature set; restricting each split to a random <code>m &lt; p</code> subset of features actively decorrelates trees and squeezes variance below what row-resampling alone can achieve.
+      </li>
+      <li>
+        <strong><code>max_features</code> defaults differ by task for a reason.</strong> scikit-learn uses <code>'sqrt'</code> (≈√p) for classification and <code>1.0</code> (all features) for regression by default — classification boundaries tend to benefit more from aggressive decorrelation, while regression targets often need every tree seeing enough signal to avoid excess per-tree bias. Don't blindly reuse one default across both task types.
+      </li>
+      <li>
+        <strong>Gini/MDI feature importance is biased toward high-cardinality and continuous features</strong> — a noise column with many unique values can outrank a genuinely predictive low-cardinality categorical purely because it offers more candidate split thresholds. For anything importance-critical (feature selection, stakeholder-facing explanations), use <code>sklearn.inspection.permutation_importance</code> on held-out data instead, and expect both methods to under-credit importance shared between correlated features.
+      </li>
+      <li>
+        <strong>OOB score is a nearly-free validation signal, but it's not a substitute for a real test set on non-iid data.</strong> <code>oob_score=True</code> exploits the ~36.8% of rows each tree never trains on, giving a fast generalization estimate — useful for quick hyperparameter iteration, but time-correlated or grouped data (multiple rows per user, time-series) can still leak signal across the bootstrap boundary in ways a proper grouped/temporal split would catch.
+      </li>
+      <li>
+        <strong>More trees essentially never hurts accuracy — it only costs compute and memory.</strong> Unlike boosting, Random Forest's test error plateaus as <code>n_estimators</code> grows since each new tree is an independent, unbiased vote being averaged in. The real production tradeoff at scale is inference latency and serialized model size (a 500-tree, depth-20 forest can be tens of MB and noticeably slower than a comparable boosted model), which is why teams sometimes cap tree count or switch to LightGBM once accuracy targets are already met.
+      </li>
+      <li>
+        <strong>Random Forest can't extrapolate.</strong> Every leaf prediction is bounded by the range of target values it saw during training, so on inputs that drift outside the training distribution (a trending time series, a metric that keeps climbing) predictions flatten out at the boundary instead of continuing the trend — a failure mode linear models and monotonic-constrained gradient boosting handle far more gracefully.
+      </li>
+    </ul>
+  </section>
+
+</main>
+
+<!-- ── NAV ── -->
+<nav class="concept-nav">
+  <a class="nav-link" href="./12-bagging-vs-boosting.html">
+    <span class="nav-dir">← Previous</span>
+    <span class="nav-title">Bagging vs Boosting</span>
+  </a>
+  <a class="nav-link" href="./14-gradient-boosting.html">
+    <span class="nav-dir">Next →</span>
+    <span class="nav-title">Gradient Boosting (XGBoost/LightGBM)</span>
+  </a>
+</nav>
+
+<script>
+// ─── Seeded RNG (mulberry32) for reproducible bootstraps ──────────────────
+function mulberry32(seed) {
+  return function() {
+    seed |= 0; seed = (seed + 0x6D2B79F5) | 0;
+    let t = Math.imul(seed ^ (seed >>> 15), 1 | seed);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+
+// ─── Data: two interleaved classes on [0,10] x [0,10] ─────────────────────
+const X_MIN = 0, X_MAX = 10, Y_MIN = 0, Y_MAX = 10;
+const dataRng = mulberry32(11);
+const DATA = [];
+// Class A: ring-ish cluster; Class B: surrounds it with a spiral-ish interleave
+for (let i = 0; i < 45; i++) {
+  const angle = dataRng() * Math.PI * 2;
+  const r = 1.2 + dataRng() * 1.6;
+  DATA.push({ x: 5 + Math.cos(angle) * r, y: 5 + Math.sin(angle) * r, label: 0 });
+}
+for (let i = 0; i < 45; i++) {
+  const angle = dataRng() * Math.PI * 2;
+  const r = 3.2 + dataRng() * 1.7;
+  DATA.push({ x: 5 + Math.cos(angle) * r, y: 5 + Math.sin(angle) * r, label: 1 });
+}
+// clip to bounds
+for (const p of DATA) {
+  p.x = Math.max(X_MIN + 0.1, Math.min(X_MAX - 0.1, p.x));
+  p.y = Math.max(Y_MIN + 0.1, Math.min(Y_MAX - 0.1, p.y));
+}
+
+// ─── CART: recursive Gini-impurity splitting ───────────────────────────────
+function gini(points) {
+  if (points.length === 0) return 0;
+  const p1 = points.reduce((s, p) => s + p.label, 0) / points.length;
+  const p0 = 1 - p1;
+  return 1 - p0 * p0 - p1 * p1;
+}
+
+function bestSplitForFeature(points, feature) {
+  const sorted = [...points].sort((a, b) => a[feature] - b[feature]);
+  let best = null;
+  for (let i = 1; i < sorted.length; i++) {
+    if (sorted[i][feature] === sorted[i - 1][feature]) continue;
+    const threshold = (sorted[i][feature] + sorted[i - 1][feature]) / 2;
+    const left = sorted.slice(0, i), right = sorted.slice(i);
+    const wg = (left.length / sorted.length) * gini(left) + (right.length / sorted.length) * gini(right);
+    const gain = gini(points) - wg;
+    if (best === null || gain > best.gain) best = { feature, threshold, gain, left, right };
+  }
+  return best;
+}
+
+function buildTree(points, depth, maxDepth, featureSubsample, rng, importance) {
+  const label1 = points.reduce((s, p) => s + p.label, 0) / points.length;
+  const majority = label1 >= 0.5 ? 1 : 0;
+  const leaf = { isLeaf: true, prob1: label1, majority, n: points.length };
+
+  if (depth >= maxDepth || points.length < 4 || gini(points) === 0) return leaf;
+
+  const candidates = featureSubsample
+    ? [rng() < 0.5 ? 'x' : 'y']   // max_features = 1 of 2
+    : ['x', 'y'];                 // max_features = 2 of 2 (plain bagging)
+
+  let best = null;
+  for (const f of candidates) {
+    const s = bestSplitForFeature(points, f);
+    if (s && (best === null || s.gain > best.gain)) best = s;
+  }
+  if (best === null || best.gain <= 1e-9) return leaf;
+
+  importance[best.feature] += best.gain * points.length;
+
+  return {
+    isLeaf: false,
+    feature: best.feature,
+    threshold: best.threshold,
+    rootFeatures: candidates,
+    left: buildTree(best.left, depth + 1, maxDepth, featureSubsample, rng, importance),
+    right: buildTree(best.right, depth + 1, maxDepth, featureSubsample, rng, importance)
+  };
+}
+
+function predictTree(tree, point) {
+  let node = tree;
+  while (!node.isLeaf) node = point[node.feature] < node.threshold ? node.left : node.right;
+  return node.prob1;
+}
+
+function bootstrapSample(points, rng) {
+  const out = [];
+  for (let i = 0; i < points.length; i++) out.push(points[Math.floor(rng() * points.length)]);
+  return out;
+}
+
+// ─── Forest state ───────────────────────────────────────────────────────
+let forest = [];   // { tree, sample, importance, rootFeatures }
+let forestSeed = 3;
+
+function buildForest() {
+  const featureSubsample = subsamplingOn;
+  const maxDepth = parseInt(document.getElementById('max-depth').value);
+  forest = [];
+  for (let t = 0; t < 30; t++) {
+    const rng = mulberry32(forestSeed * 10007 + t * 97);
+    const sample = bootstrapSample(DATA, rng);
+    const importance = { x: 0, y: 0 };
+    const tree = buildTree(sample, 0, maxDepth, featureSubsample, rng, importance);
+    forest.push({ tree, sample, importance, rootFeatures: tree.isLeaf ? ['x', 'y'] : tree.rootFeatures });
+  }
+}
+
+let subsamplingOn = true;
+
+function forestPredict(x, y, count) {
+  let sum = 0;
+  for (let i = 0; i < count; i++) sum += predictTree(forest[i].tree, { x, y });
+  return sum / count;
+}
+
+function pairwiseAgreement(count) {
+  if (count < 2) return null;
+  const gridN = 12;
+  const votes = [];
+  for (let t = 0; t < count; t++) {
+    const v = [];
+    for (let i = 0; i <= gridN; i++) for (let j = 0; j <= gridN; j++) {
+      const x = X_MIN + (X_MAX - X_MIN) * i / gridN;
+      const y = Y_MIN + (Y_MAX - Y_MIN) * j / gridN;
+      v.push(predictTree(forest[t].tree, { x, y }) >= 0.5 ? 1 : 0);
+    }
+    votes.push(v);
+  }
+  let sum = 0, pairs = 0;
+  for (let i = 0; i < count; i++) for (let j = i + 1; j < count; j++) {
+    let agree = 0;
+    for (let k = 0; k < votes[i].length; k++) if (votes[i][k] === votes[j][k]) agree++;
+    sum += agree / votes[i].length;
+    pairs++;
+  }
+  return pairs ? sum / pairs : null;
+}
+
+// ─── Canvas helpers ─────────────────────────────────────────────────────
+function setupCanvas(canvas, displayH) {
+  const dpr = window.devicePixelRatio || 1;
+  const displayW = canvas.parentElement.clientWidth || canvas.width;
+  canvas.style.width = displayW + 'px';
+  canvas.style.height = displayH + 'px';
+  canvas.width = displayW * dpr;
+  canvas.height = displayH * dpr;
+  const ctx = canvas.getContext('2d');
+  ctx.scale(dpr, dpr);
+  return { ctx, W: displayW, H: displayH };
+}
+
+function toPx(x, y, W, H, pad) {
+  const px = pad + (x - X_MIN) / (X_MAX - X_MIN) * (W - 2 * pad);
+  const py = H - pad - (y - Y_MIN) / (Y_MAX - Y_MIN) * (H - 2 * pad);
+  return [px, py];
+}
+
+function blend(prob1) {
+  // accent (class 0) -> orange (class 1)
+  const c0 = [0, 212, 255], c1 = [255, 149, 0];
+  const r = Math.round(c0[0] + (c1[0] - c0[0]) * prob1);
+  const g = Math.round(c0[1] + (c1[1] - c0[1]) * prob1);
+  const b = Math.round(c0[2] + (c1[2] - c0[2]) * prob1);
+  return `rgb(${r},${g},${b})`;
+}
+
+// ─── Render main forest canvas ──────────────────────────────────────────
+function renderMain() {
+  const canvas = document.getElementById('forest-canvas');
+  const { ctx, W, H } = setupCanvas(canvas, 440);
+  const pad = 26;
+  const count = parseInt(document.getElementById('n-trees').value);
+
+  ctx.fillStyle = '#141720';
+  ctx.fillRect(0, 0, W, H);
+
+  // heatmap grid
+  const cell = 8;
+  for (let px = pad; px < W - pad; px += cell) {
+    for (let py = pad; py < H - pad; py += cell) {
+      const x = X_MIN + (px - pad) / (W - 2 * pad) * (X_MAX - X_MIN);
+      const y = Y_MAX - (py - pad) / (H - 2 * pad) * (Y_MAX - Y_MIN);
+      const prob1 = forestPredict(x, y, count);
+      ctx.fillStyle = blend(prob1);
+      ctx.globalAlpha = 0.28;
+      ctx.fillRect(px, py, cell + 1, cell + 1);
+    }
+  }
+  ctx.globalAlpha = 1;
+
+  ctx.strokeStyle = '#252a3d';
+  ctx.lineWidth = 1;
+  ctx.strokeRect(pad, pad, W - 2 * pad, H - 2 * pad);
+
+  // decision boundary contour (approx via marching along grid crossing 0.5)
+  ctx.strokeStyle = '#e2e8f0';
+  ctx.lineWidth = 1.5;
+  const res = 90;
+  let prevRow = null;
+  for (let i = 0; i <= res; i++) {
+    const x = X_MIN + (X_MAX - X_MIN) * i / res;
+    const row = [];
+    for (let j = 0; j <= res; j++) {
+      const y = Y_MIN + (Y_MAX - Y_MIN) * j / res;
+      row.push(forestPredict(x, y, count));
+    }
+    if (prevRow) {
+      for (let j = 0; j < res; j++) {
+        const a = prevRow[j], b = row[j];
+        if ((a - 0.5) * (b - 0.5) < 0) {
+          const yA = Y_MIN + (Y_MAX - Y_MIN) * j / res;
+          const [px, py] = toPx(x, yA, W, H, pad);
+          ctx.fillStyle = '#e2e8f0';
+          ctx.fillRect(px - 0.5, py - 0.5, 1.5, 1.5);
+        }
+      }
+    }
+    prevRow = row;
+  }
+
+  // data points
+  for (const p of DATA) {
+    const [px, py] = toPx(p.x, p.y, W, H, pad);
+    ctx.beginPath();
+    ctx.arc(px, py, 3.2, 0, Math.PI * 2);
+    ctx.fillStyle = p.label === 0 ? '#00d4ff' : '#ff9500';
+    ctx.fill();
+    ctx.strokeStyle = 'rgba(13,15,23,0.8)';
+    ctx.lineWidth = 1;
+    ctx.stroke();
+  }
+
+  // metrics
+  let correct = 0;
+  for (const p of DATA) if ((forestPredict(p.x, p.y, count) >= 0.5 ? 1 : 0) === p.label) correct++;
+  document.getElementById('acc-val').textContent = (100 * correct / DATA.length).toFixed(1) + '%';
+
+  const agree = pairwiseAgreement(count);
+  document.getElementById('agree-val').textContent = agree === null ? '—' : (100 * agree).toFixed(1) + '%';
+
+  // feature importance aggregated across first `count` trees
+  let impX = 0, impY = 0;
+  for (let t = 0; t < count; t++) { impX += forest[t].importance.x; impY += forest[t].importance.y; }
+  const total = impX + impY || 1;
+  const pctX = 100 * impX / total, pctY = 100 * impY / total;
+  document.getElementById('imp-x-bar').style.width = pctX + '%';
+  document.getElementById('imp-y-bar').style.width = pctY + '%';
+  document.getElementById('imp-x-val').textContent = pctX.toFixed(1) + '%';
+  document.getElementById('imp-y-val').textContent = pctY.toFixed(1) + '%';
+
+  document.getElementById('n-trees-val').textContent = count;
+  document.getElementById('max-depth-val').textContent = document.getElementById('max-depth').value;
+}
+
+// ─── Render mini-tree grid ───────────────────────────────────────────────
+function renderMiniGrid() {
+  const grid = document.getElementById('mini-grid');
+  grid.innerHTML = '';
+  const count = parseInt(document.getElementById('n-trees').value);
+  const showN = Math.min(count, 6);
+
+  for (let t = 0; t < showN; t++) {
+    const wrap = document.createElement('div');
+    wrap.className = 'mini-tree';
+    const canvas = document.createElement('canvas');
+    canvas.width = 180; canvas.height = 130;
+    wrap.appendChild(canvas);
+    const chip = document.createElement('div');
+    chip.className = 'mini-chip';
+    const feats = forest[t].rootFeatures.map(f => f.toUpperCase()).join(', ');
+    chip.textContent = `Tree ${t + 1} · root candidates: ${feats}`;
+    wrap.appendChild(chip);
+    grid.appendChild(wrap);
+
+    const ctx = canvas.getContext('2d');
+    const W = 180, H = 130, pad = 6;
+    ctx.fillStyle = '#141720';
+    ctx.fillRect(0, 0, W, H);
+
+    const cell = 6;
+    for (let px = pad; px < W - pad; px += cell) {
+      for (let py = pad; py < H - pad; py += cell) {
+        const x = X_MIN + (px - pad) / (W - 2 * pad) * (X_MAX - X_MIN);
+        const y = Y_MAX - (py - pad) / (H - 2 * pad) * (Y_MAX - Y_MIN);
+        const prob1 = predictTree(forest[t].tree, { x, y });
+        ctx.fillStyle = blend(prob1);
+        ctx.globalAlpha = 0.35;
+        ctx.fillRect(px, py, cell + 1, cell + 1);
+      }
+    }
+    ctx.globalAlpha = 1;
+    ctx.strokeStyle = '#252a3d';
+    ctx.strokeRect(pad, pad, W - 2 * pad, H - 2 * pad);
+
+    for (const p of forest[t].sample) {
+      const px = pad + (p.x - X_MIN) / (X_MAX - X_MIN) * (W - 2 * pad);
+      const py = H - pad - (p.y - Y_MIN) / (Y_MAX - Y_MIN) * (H - 2 * pad);
+      ctx.beginPath();
+      ctx.arc(px, py, 1.6, 0, Math.PI * 2);
+      ctx.fillStyle = p.label === 0 ? '#00d4ff' : '#ff9500';
+      ctx.fill();
+    }
+  }
+}
+
+function renderAll() {
+  renderMain();
+  renderMiniGrid();
+}
+
+// ─── Controls ───────────────────────────────────────────────────────────
+document.getElementById('n-trees').addEventListener('input', renderAll);
+document.getElementById('max-depth').addEventListener('input', () => { buildForest(); renderAll(); });
+document.getElementById('subsample-toggle').addEventListener('click', (e) => {
+  subsamplingOn = !subsamplingOn;
+  e.target.textContent = 'Feature subsampling: ' + (subsamplingOn ? 'ON' : 'OFF');
+  e.target.classList.toggle('toggle-on', subsamplingOn);
+  buildForest();
+  renderAll();
+});
+document.getElementById('resample-btn').addEventListener('click', () => {
+  forestSeed = Math.floor(Math.random() * 100000);
+  buildForest();
+  renderAll();
+});
+window.addEventListener('resize', renderAll);
+
+// ─── Init ───────────────────────────────────────────────────────────────
+buildForest();
+renderAll();
+document.fonts.ready.then(renderAll);
+</script>
+</body>
+</html>

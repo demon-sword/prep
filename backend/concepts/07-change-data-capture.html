@@ -1,0 +1,607 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1.0"/>
+<title>Change Data Capture (CDC) — Backend Concepts</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #0d0f17;
+    --surface: #141720;
+    --card: #1a1e2e;
+    --border: #252a3d;
+    --accent: #00d4ff;
+    --purple: #7c3aed;
+    --green: #00ff88;
+    --yellow: #ffd700;
+    --red: #ff4757;
+    --orange: #ff9500;
+    --text: #e2e8f0;
+    --text-dim: #8892a4;
+    --mono: 'JetBrains Mono', monospace;
+    --sans: 'Inter', system-ui, sans-serif;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--sans);
+    line-height: 1.6;
+  }
+  header {
+    padding: 48px 24px 32px;
+    max-width: 920px;
+    margin: 0 auto;
+    border-bottom: 1px solid var(--border);
+  }
+  .badge {
+    display: inline-block;
+    font-family: var(--mono);
+    font-size: 12px;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--accent);
+    background: rgba(0,212,255,0.08);
+    border: 1px solid rgba(0,212,255,0.3);
+    padding: 4px 10px;
+    border-radius: 4px;
+    margin-bottom: 14px;
+  }
+  h1 {
+    font-size: 32px;
+    margin: 0 0 12px;
+    font-weight: 700;
+    letter-spacing: -0.01em;
+  }
+  header p.desc {
+    color: var(--text-dim);
+    font-size: 16px;
+    max-width: 720px;
+    margin: 0;
+  }
+  main {
+    max-width: 920px;
+    margin: 0 auto;
+    padding: 0 24px 60px;
+  }
+  section {
+    margin-top: 48px;
+  }
+  h2 {
+    font-size: 13px;
+    font-family: var(--mono);
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    color: var(--purple);
+    margin-bottom: 20px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+  h2::after {
+    content: '';
+    flex: 1;
+    height: 1px;
+    background: var(--border);
+  }
+  h3 {
+    font-size: 18px;
+    color: var(--accent);
+    margin: 28px 0 10px;
+  }
+  h3:first-child { margin-top: 0; }
+  p { color: var(--text); margin: 8px 0; }
+  ul { padding-left: 22px; }
+  li { margin: 6px 0; }
+  ol { padding-left: 22px; }
+  ol li { margin: 6px 0; }
+  code {
+    font-family: var(--mono);
+    background: rgba(124,58,237,0.12);
+    color: var(--purple);
+    padding: 2px 6px;
+    border-radius: 4px;
+    font-size: 0.9em;
+  }
+  .aside {
+    margin-top: 10px;
+    font-size: 13.5px;
+    color: var(--text-dim);
+    border-left: 2px solid var(--border);
+    padding-left: 12px;
+    font-style: italic;
+  }
+  .card {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 22px 24px;
+  }
+  .fail-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+    gap: 14px;
+    margin-top: 12px;
+  }
+  .fail-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-left: 3px solid var(--accent);
+    border-radius: 8px;
+    padding: 14px 16px;
+  }
+  .fail-card h4 {
+    margin: 0 0 6px;
+    font-size: 14.5px;
+    color: var(--accent);
+  }
+  .fail-card p { font-size: 13.5px; color: var(--text-dim); margin: 0; }
+  .fail-card.danger { border-left-color: var(--red); }
+  .fail-card.danger h4 { color: var(--red); }
+
+  /* Visualization shared */
+  .viz-card {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 24px;
+    margin-bottom: 24px;
+  }
+  .viz-intro { color: var(--text-dim); font-size: 14.5px; margin-bottom: 18px; }
+  .btn-row { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; margin-top: 14px; }
+  .run-btn {
+    font-family: var(--mono);
+    font-size: 13px;
+    background: var(--purple);
+    color: white;
+    border: none;
+    padding: 10px 18px;
+    border-radius: 6px;
+    cursor: pointer;
+    font-weight: 600;
+  }
+  .run-btn:hover { opacity: 0.88; }
+  .run-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+  .run-btn.secondary { background: var(--surface); border: 1px solid var(--border); color: var(--text-dim); }
+  .run-btn.secondary:hover { color: var(--text); border-color: var(--accent); }
+  .run-btn.toggle-on { background: var(--green); color: #0d0f17; }
+  .run-btn.toggle-danger { background: var(--red); color: white; }
+
+  svg#cdc-svg { width: 100%; height: 400px; background: var(--surface); border-radius: 8px; border: 1px solid var(--border); }
+  .cdc-label { fill: var(--text); font-family: var(--mono); font-size: 13px; font-weight: 700; }
+  .cdc-sub { fill: var(--text-dim); font-family: var(--mono); font-size: 10.5px; }
+
+  .flow-log {
+    margin-top: 14px;
+    font-family: var(--mono);
+    font-size: 13px;
+    color: var(--green);
+    min-height: 40px;
+    white-space: pre-line;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 10px 12px;
+  }
+  .flow-log.danger { color: var(--red); }
+
+  .stat-row {
+    display: flex;
+    gap: 24px;
+    margin-top: 16px;
+    flex-wrap: wrap;
+  }
+  .stat {
+    font-family: var(--mono);
+    font-size: 13px;
+    color: var(--text-dim);
+  }
+  .stat b { color: var(--yellow); font-size: 18px; display: block; }
+  .stat b.danger { color: var(--red); }
+  .stat b.good { color: var(--green); }
+
+  .divider { height: 1px; background: var(--border); margin: 32px 0; }
+
+  blockquote#interview-quote {
+    background: linear-gradient(135deg, rgba(0,212,255,0.06), rgba(124,58,237,0.06));
+    border-left: 4px solid var(--accent);
+    border-radius: 8px;
+    margin: 0;
+    padding: 22px 26px;
+    font-size: 16.5px;
+    color: var(--text);
+    font-style: italic;
+    position: relative;
+  }
+  blockquote#interview-quote::before {
+    content: '\201C';
+    font-size: 48px;
+    color: var(--accent);
+    opacity: 0.3;
+    position: absolute;
+    top: -6px;
+    left: 10px;
+    font-style: normal;
+  }
+  #takeaways ul { list-style: none; padding: 0; }
+  #takeaways li {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-left: 3px solid var(--green);
+    border-radius: 8px;
+    padding: 12px 16px;
+    margin-bottom: 10px;
+    font-size: 14.5px;
+  }
+  #takeaways li b { color: var(--green); }
+
+  nav.concept-nav {
+    max-width: 920px;
+    margin: 0 auto;
+    padding: 24px 24px 60px;
+    display: flex;
+    justify-content: space-between;
+    font-family: var(--mono);
+    font-size: 13.5px;
+  }
+  nav.concept-nav a {
+    color: var(--accent);
+    text-decoration: none;
+    border: 1px solid var(--border);
+    padding: 10px 16px;
+    border-radius: 6px;
+  }
+  nav.concept-nav a:hover { border-color: var(--accent); }
+  nav.concept-nav span.disabled {
+    color: var(--text-dim);
+    border: 1px solid var(--border);
+    padding: 10px 16px;
+    border-radius: 6px;
+    opacity: 0.4;
+  }
+  @media (max-width: 600px) {
+    h1 { font-size: 24px; }
+    .btn-row { flex-direction: column; align-items: flex-start; }
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <span class="badge">data</span>
+  <h1>Change Data Capture (CDC)</h1>
+  <p class="desc">Why dual writes aren't atomic, log-based CDC off the replication log (WAL/binlog/oplog) vs trigger-based vs query-based, and the transactional outbox pattern for explicit event-schema control.</p>
+</header>
+
+<main>
+
+  <section id="theory">
+    <h2>Theory</h2>
+    <div class="card">
+      <h3>The problem it solves</h3>
+      <p>You have data in a database. Something else needs to know when it changes — a search index, a cache, an analytics warehouse, another service. The naive options are all bad:</p>
+      <ul>
+        <li><b>Dual writes</b> (write to the DB, then publish an event) — not atomic. The process can die between the two writes, leaving them permanently inconsistent. <b>This is the anti-pattern CDC exists to replace, and naming it is a strong signal in an interview.</b></li>
+        <li><b>Polling for changes</b> — high latency, high load on the source table, misses deletes, misses intermediate states between polls.</li>
+      </ul>
+      <p><b>CDC reads the database's own replication log</b> — the WAL in Postgres, the binlog in MySQL, the oplog in MongoDB — and turns committed changes into a stream of events. Because it reads the log the database already writes for its own replication, the events are exactly the committed changes, in commit order, with no extra write path to fall out of sync with the source of truth.</p>
+
+      <h3>Log-based vs the alternatives</h3>
+      <div class="fail-grid">
+        <div class="fail-card">
+          <h4>Log-based</h4>
+          <p><b>Debezium</b> is the standard tool. Low overhead (reads a log the DB already writes), no schema changes required, captures deletes, preserves commit ordering. Requires access to the replication stream and some operational care (log retention, connector lag monitoring).</p>
+        </div>
+        <div class="fail-card">
+          <h4>Trigger-based</h4>
+          <p>Database triggers write to an audit table, which is then polled or streamed. Works on databases without log access, but adds write-path overhead inside the same transaction and can affect commit latency.</p>
+        </div>
+        <div class="fail-card danger">
+          <h4>Query-based</h4>
+          <p>Poll <code>WHERE updated_at > last_seen</code>. Simple to build, but misses deletes entirely, misses intermediate updates between polls, needs a reliable, indexed timestamp column, and has a race at the polling boundary.</p>
+        </div>
+      </div>
+
+      <h3>The transactional outbox</h3>
+      <p>The pattern to know when log-based CDC isn't available, or when you want explicit control over the event schema rather than raw row diffs:</p>
+      <ol>
+        <li>In the <b>same transaction</b> as the business write, insert a row into an <code>outbox</code> table.</li>
+        <li>A separate relay process reads the outbox and publishes to the message broker.</li>
+        <li>Mark the row published — or, more commonly, let CDC itself read the outbox table as its source, so you get log-based delivery with an application-controlled event schema.</li>
+      </ol>
+      <p>Because the business write and the outbox insert share a transaction, they're atomic — the pair either both commit or both roll back, closing the exact gap dual writes leave open. The relay (or CDC connector) is at-least-once, so consumers still need to be idempotent.</p>
+
+      <h3>Semantics</h3>
+      <p>CDC events are usually <b>at-least-once</b> and ordered <i>per key</i> (per row, or per Kafka partition keyed by row id) — not globally ordered across the whole stream. Consumers must be idempotent (see <code>05-idempotency</code>). Many CDC events are naturally idempotent if you treat them as <b>upserts of the full row state</b> rather than deltas — applying the same "row is now X" event twice produces the same result both times; applying "increment by 1" twice does not. That's another instance of "derive state rather than mutate it."</p>
+      <p>Two more things worth knowing:</p>
+      <ul>
+        <li><b>Snapshot plus stream</b> — a new consumer needs the current state of the table before it can meaningfully apply the change stream on top of it. Tools handle this with an initial full-table snapshot followed by streaming from the log position the snapshot was taken at, so nothing is missed and nothing is double-applied.</li>
+        <li><b>Schema evolution</b> — the source table's schema will change over the system's lifetime. Consumers must tolerate added columns without breaking; a schema registry (Avro/Protobuf with Confluent Schema Registry, for example) enforces compatibility rules on both sides.</li>
+      </ul>
+
+      <h3>Where it's used</h3>
+      <p>Cache invalidation, search index maintenance, materialized views, data warehouse replication, the strangler-fig migration pattern (dual-running an old and a new system off the same source of truth), and event-driven architectures generally.</p>
+
+      <p class="aside">Where this appeared in the Simbian design: alert enrichment data was originally dual-written to Postgres and a search index in the same request handler — a crash between the two writes left the index permanently stale for that alert with no automatic way to detect it. Switching to CDC off the Postgres WAL (via Debezium) removed the second write path entirely; the index became a consumer of committed changes instead of a second thing the request handler had to get right.</p>
+    </div>
+  </section>
+
+  <section id="visualization">
+    <h2>Visualization</h2>
+
+    <div class="viz-card">
+      <p class="viz-intro"><b>Dual write vs. CDC vs. transactional outbox.</b> Pick a strategy, then step through a write. In <b>dual write</b> mode you can crash the process between the DB write and the event publish — the DB and the event bus go permanently out of sync and nothing detects it. In <b>CDC</b> mode there's only one write path (the DB); the event stream is derived from the replication log after commit, so there's nothing to crash between. In <b>transactional outbox</b> mode the business row and the outbox row commit atomically in one transaction, then a relay (or CDC reading the outbox table) publishes at-least-once.</p>
+
+      <div class="btn-row">
+        <button class="run-btn toggle-danger" id="mode-dual">Dual Write</button>
+        <button class="run-btn secondary" id="mode-cdc">CDC (log-based)</button>
+        <button class="run-btn secondary" id="mode-outbox">Transactional Outbox</button>
+      </div>
+
+      <svg id="cdc-svg" viewBox="0 0 760 400"></svg>
+
+      <div class="btn-row">
+        <button class="run-btn" id="cdc-step">Step write →</button>
+        <button class="run-btn secondary" id="cdc-crash">Crash mid-write (dual write only)</button>
+        <button class="run-btn secondary" id="cdc-reset">Reset</button>
+      </div>
+
+      <div class="flow-log" id="cdc-log">Mode: Dual Write. Step through a write and watch what happens if the process dies between the two writes.</div>
+
+      <div class="stat-row">
+        <div class="stat">Writes committed<b id="cdc-stat-writes">0</b></div>
+        <div class="stat">Events published<b id="cdc-stat-events">0</b></div>
+        <div class="stat">Permanent inconsistencies<b id="cdc-stat-drift" class="good">0</b></div>
+      </div>
+    </div>
+  </section>
+
+  <section id="interview-line">
+    <h2>Interview Line</h2>
+    <blockquote id="interview-quote">
+      "Rather than dual-writing to the DB and the event bus — which isn't atomic and drifts permanently the first time a process dies between the two — I'd use CDC off the replication log, or a transactional outbox if I need control over the event schema. Consumers are idempotent because CDC is at-least-once."
+    </blockquote>
+  </section>
+
+  <section id="takeaways">
+    <h2>Key Takeaways</h2>
+    <ul>
+      <li><b>Dual writes aren't atomic — naming that is the whole interview signal.</b> A crash between the DB write and the event publish leaves them permanently inconsistent, and nothing in the naive design detects it, let alone repairs it.</li>
+      <li><b>CDC reads a log the database already writes for replication</b> — the WAL in Postgres, binlog in MySQL, oplog in MongoDB — so there's no second write path to fall out of sync with. Debezium is the standard tool for turning that log into a Kafka stream.</li>
+      <li><b>The transactional outbox is the pattern when you need explicit event-schema control</b> — the business write and the outbox insert commit in the same DB transaction, so they're atomic by construction; a relay or CDC connector then delivers at-least-once from the outbox table.</li>
+      <li><b>CDC events are at-least-once and ordered per key, not globally</b> — consumers must be idempotent (see <code>05-idempotency</code>). Treating events as upserts of full row state rather than deltas gets you idempotency for free in most cases.</li>
+      <li><b>A new consumer needs snapshot + stream</b> — an initial full-table snapshot followed by streaming from the log position the snapshot was taken at, or the consumer starts with an empty view and silently drops history.</li>
+      <li>CDC is dual writes' fix inside one system boundary; the same "derive rather than mutate" instinct taken further — events as the actual source of truth instead of derived from row changes — is <b>Event Sourcing</b> (<code>16-event-sourcing-cqrs</code>).</li>
+    </ul>
+  </section>
+
+</main>
+
+<nav class="concept-nav">
+  <a href="../concepts/06-circuit-breakers-bulkheads.html">← Previous: Circuit Breakers and Bulkheads</a>
+  <a href="../concepts/08-rate-limiting.html">Next: Rate Limiting →</a>
+</nav>
+
+<script>
+(function() {
+  const NS = 'http://www.w3.org/2000/svg';
+  const svg = document.getElementById('cdc-svg');
+
+  function el(tag, attrs) {
+    const e = document.createElementNS(NS, tag);
+    for (const k in attrs) e.setAttribute(k, attrs[k]);
+    return e;
+  }
+  function text(x, y, str, cls, color) {
+    const t = el('text', { x, y, 'text-anchor': 'middle', class: cls || 'cdc-label' });
+    if (color) t.setAttribute('fill', color);
+    t.textContent = str;
+    return t;
+  }
+
+  let mode = 'dual'; // 'dual' | 'cdc' | 'outbox'
+  let stats = { writes: 0, events: 0, drift: 0 };
+  let step = 0; // progress within current write sequence
+  let crashed = false;
+
+  const boxes = {
+    app:    { x: 60,  y: 60,  w: 130, h: 60, label: 'App / Service' },
+    db:     { x: 320, y: 60,  w: 130, h: 60, label: 'Database' },
+    outbox: { x: 320, y: 170, w: 130, h: 50, label: 'outbox table' },
+    log:    { x: 320, y: 250, w: 130, h: 50, label: 'WAL / binlog' },
+    relay:  { x: 540, y: 170, w: 150, h: 50, label: 'Relay / CDC connector' },
+    bus:    { x: 580, y: 60,  w: 130, h: 60, label: 'Event Bus' },
+    idx:    { x: 580, y: 300, w: 130, h: 60, label: 'Search Index (consumer)' }
+  };
+
+  function drawBox(b, id, color) {
+    svg.appendChild(el('rect', { x: b.x, y: b.y, width: b.w, height: b.h, rx: 8, fill: '#1a1e2e', stroke: color || '#252a3d', 'stroke-width': 2, id }));
+    svg.appendChild(text(b.x + b.w/2, b.y + b.h/2 + 5, b.label, 'cdc-label', color));
+  }
+
+  function arrow(x1, y1, x2, y2, id, dashed) {
+    const attrs = { x1, y1, x2, y2, stroke: '#8892a4', 'stroke-width': 2, 'marker-end': 'url(#arrow2)' };
+    if (id) attrs.id = id;
+    if (dashed) attrs['stroke-dasharray'] = '5,4';
+    svg.appendChild(el('line', attrs));
+  }
+
+  function drawArrowMarker() {
+    const defs = el('defs', {});
+    const marker = el('marker', { id: 'arrow2', markerWidth: 10, markerHeight: 10, refX: 8, refY: 3, orient: 'auto' });
+    marker.appendChild(el('path', { d: 'M0,0 L8,3 L0,6 Z', fill: '#8892a4' }));
+    defs.appendChild(marker);
+    svg.appendChild(defs);
+  }
+
+  function draw() {
+    svg.innerHTML = '';
+    drawArrowMarker();
+
+    if (mode === 'dual') {
+      drawBox(boxes.app, 'b-app');
+      drawBox(boxes.db, 'b-db');
+      drawBox(boxes.bus, 'b-bus');
+      drawBox({ x: 580, y: 170, w: 130, h: 50, label: 'Consumer' }, 'b-idx2');
+      arrow(190, 90, 320, 90, 'arrow-db');
+      svg.appendChild(text(255, 78, '1. write DB', 'cdc-sub'));
+      arrow(190, 90, 580, 90, 'arrow-bus');
+      svg.appendChild(text(390, 40, '2. publish event (separate call)', 'cdc-sub'));
+      arrow(645, 120, 645, 170, 'arrow-consume');
+      svg.appendChild(text(730, 15, mode === 'dual' ? 'no atomicity between 1 and 2' : '', 'cdc-sub', '#ff4757'));
+      svg.appendChild(text(390, 350, 'If the process dies after step 1 but before step 2 completes,', 'cdc-sub'));
+      svg.appendChild(text(390, 368, 'the DB has the write and the event bus never learns about it. Permanent drift.', 'cdc-sub'));
+    } else if (mode === 'cdc') {
+      drawBox(boxes.app, 'b-app');
+      drawBox(boxes.db, 'b-db');
+      drawBox(boxes.log, 'b-log');
+      drawBox(boxes.relay, 'b-relay');
+      drawBox(boxes.bus, 'b-bus');
+      drawBox(boxes.idx, 'b-idx');
+      arrow(190, 90, 320, 90, 'arrow-db');
+      svg.appendChild(text(255, 78, '1. write DB (only write path)', 'cdc-sub'));
+      arrow(385, 120, 385, 250, 'arrow-log');
+      svg.appendChild(text(430, 190, 'DB writes its own', 'cdc-sub'));
+      svg.appendChild(text(430, 204, 'replication log', 'cdc-sub'));
+      arrow(450, 275, 540, 195, 'arrow-relay');
+      svg.appendChild(text(500, 245, '2. connector tails log', 'cdc-sub'));
+      arrow(615, 170, 630, 120, 'arrow-toBus');
+      svg.appendChild(text(680, 135, '3. emit event', 'cdc-sub'));
+      arrow(645, 220, 645, 300, 'arrow-toIdx');
+      svg.appendChild(text(390, 355, 'Only one write path. Events are derived from committed log entries —', 'cdc-sub'));
+      svg.appendChild(text(390, 372, 'there is nothing to crash "between", so nothing can drift.', 'cdc-sub'));
+    } else {
+      drawBox(boxes.app, 'b-app');
+      drawBox(boxes.db, 'b-db');
+      drawBox(boxes.outbox, 'b-outbox');
+      drawBox(boxes.relay, 'b-relay');
+      drawBox(boxes.bus, 'b-bus');
+      drawBox(boxes.idx, 'b-idx');
+      arrow(190, 90, 320, 90, 'arrow-db');
+      svg.appendChild(text(255, 70, '1. write row +', 'cdc-sub'));
+      arrow(190, 100, 320, 190, 'arrow-outbox');
+      svg.appendChild(text(240, 130, 'insert outbox row', 'cdc-sub'));
+      svg.appendChild(text(255, 108, 'SAME transaction', 'cdc-sub', '#00ff88'));
+      arrow(450, 195, 540, 195, 'arrow-relay');
+      svg.appendChild(text(500, 215, '2. relay reads outbox', 'cdc-sub'));
+      arrow(615, 170, 630, 120, 'arrow-toBus');
+      svg.appendChild(text(680, 135, '3. publish', 'cdc-sub'));
+      arrow(645, 220, 645, 300, 'arrow-toIdx');
+      svg.appendChild(text(390, 355, 'Row write + outbox insert commit atomically (one transaction) —', 'cdc-sub'));
+      svg.appendChild(text(390, 372, 'the relay/CDC delivery after that is at-least-once, so consumers stay idempotent.', 'cdc-sub'));
+    }
+  }
+
+  function log(msg, danger) {
+    const l = document.getElementById('cdc-log');
+    l.textContent = msg;
+    l.className = 'flow-log' + (danger ? ' danger' : '');
+  }
+
+  function updateStats() {
+    document.getElementById('cdc-stat-writes').textContent = stats.writes;
+    document.getElementById('cdc-stat-events').textContent = stats.events;
+    const driftEl = document.getElementById('cdc-stat-drift');
+    driftEl.textContent = stats.drift;
+    driftEl.className = stats.drift > 0 ? 'danger' : 'good';
+  }
+
+  function highlight(ids, color) {
+    ids.forEach(id => {
+      const node = document.getElementById(id);
+      if (node) node.setAttribute('stroke', color);
+    });
+  }
+
+  function stepWrite() {
+    if (mode === 'dual') {
+      if (step === 0) {
+        stats.writes++;
+        highlight(['b-db'], '#00ff88');
+        log('Step 1/2 — wrote to the database. Event bus has not been told yet.');
+        step = 1;
+      } else if (step === 1 && !crashed) {
+        stats.events++;
+        highlight(['b-bus'], '#00ff88');
+        log('Step 2/2 — published the event. DB and event bus are consistent. (Click "Crash mid-write" before this step to see the failure mode.)');
+        step = 0;
+      } else if (crashed) {
+        log('Process already crashed between step 1 and step 2 — nothing left to step.', true);
+      }
+      updateStats();
+    } else if (mode === 'cdc') {
+      stats.writes++;
+      highlight(['b-db'], '#00ff88');
+      setTimeout(() => { highlight(['b-log'], '#00ff88'); log('DB commit appended to the replication log (WAL/binlog).'); }, 250);
+      setTimeout(() => { highlight(['b-relay'], '#00ff88'); log('CDC connector (e.g. Debezium) tails the log and reads the committed change.'); }, 550);
+      setTimeout(() => {
+        stats.events++;
+        highlight(['b-bus', 'b-idx'], '#00ff88');
+        log('Event emitted to the bus, consumer applies it as an idempotent upsert. One write path — nothing to crash between.');
+        updateStats();
+      }, 900);
+    } else {
+      stats.writes++;
+      highlight(['b-db', 'b-outbox'], '#00ff88');
+      log('Business row + outbox row committed atomically in one DB transaction.');
+      setTimeout(() => { highlight(['b-relay'], '#00ff88'); log('Relay (or CDC on the outbox table) reads the new outbox row.'); }, 400);
+      setTimeout(() => {
+        stats.events++;
+        highlight(['b-bus', 'b-idx'], '#00ff88');
+        log('Event published at-least-once. Because the outbox insert was transactional with the business write, there is no drift — only possible duplicate delivery, which idempotent consumers absorb.');
+        updateStats();
+      }, 800);
+    }
+    updateStats();
+  }
+
+  function crashMidWrite() {
+    if (mode !== 'dual') {
+      log('Crash simulation only applies to the Dual Write mode — CDC and the outbox pattern have no gap to crash inside.', true);
+      return;
+    }
+    if (step !== 1) {
+      log('Step the write once first (commit the DB write), then crash before the event publish.', true);
+      return;
+    }
+    crashed = true;
+    stats.drift++;
+    highlight(['b-db'], '#ff4757');
+    log('💥 Process crashed after the DB write, before the event publish. DB says the write happened; the event bus and every downstream consumer (cache, index, warehouse) never find out. This drift is permanent until someone notices and manually reconciles.', true);
+    updateStats();
+  }
+
+  function resetAll() {
+    step = 0;
+    crashed = false;
+    draw();
+    if (mode === 'dual') log('Mode: Dual Write. Step through a write and watch what happens if the process dies between the two writes.');
+    else if (mode === 'cdc') log('Mode: CDC (log-based). The event stream is derived from the DB\'s own replication log — there is only one write path.');
+    else log('Mode: Transactional Outbox. The business write and the outbox insert commit atomically in the same DB transaction.');
+  }
+
+  function setMode(newMode) {
+    mode = newMode;
+    document.getElementById('mode-dual').className = mode === 'dual' ? 'run-btn toggle-danger' : 'run-btn secondary';
+    document.getElementById('mode-cdc').className = mode === 'cdc' ? 'run-btn toggle-on' : 'run-btn secondary';
+    document.getElementById('mode-outbox').className = mode === 'outbox' ? 'run-btn toggle-on' : 'run-btn secondary';
+    resetAll();
+  }
+
+  document.getElementById('mode-dual').addEventListener('click', () => setMode('dual'));
+  document.getElementById('mode-cdc').addEventListener('click', () => setMode('cdc'));
+  document.getElementById('mode-outbox').addEventListener('click', () => setMode('outbox'));
+  document.getElementById('cdc-step').addEventListener('click', stepWrite);
+  document.getElementById('cdc-crash').addEventListener('click', crashMidWrite);
+  document.getElementById('cdc-reset').addEventListener('click', () => { stats = { writes: 0, events: 0, drift: 0 }; updateStats(); resetAll(); });
+
+  draw();
+  updateStats();
+})();
+</script>
+</body>
+</html>
