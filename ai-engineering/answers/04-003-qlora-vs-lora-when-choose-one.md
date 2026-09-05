@@ -76,7 +76,7 @@ bnb_config = BitsAndBytesConfig(
 )
 
 model = AutoModelForCausalLM.from_pretrained(
-    "meta-llama/Meta-Llama-3-8B",
+    BASE_MODEL_ID,  # a small open-weight base model (7–8B class)
     quantization_config=bnb_config,
     device_map="auto",
 )
@@ -90,12 +90,12 @@ lora_config = LoraConfig(
 )
 
 model = get_peft_model(model, lora_config)
-# Peak VRAM for Llama 3 8B: ~9 GB — fits on an RTX 3090 24GB
+# Peak VRAM for a 7–8B-class model: ~9 GB — fits on an RTX 3090 24GB
 ```
 
 ### Example / Tradeoff
 
-**Concrete comparison — Llama 3 13B fine-tuned for legal document summarization:**
+**Concrete comparison — a 13B-class open-weight model fine-tuned for legal document summarization:**
 
 | Metric | LoRA (BF16 base) | QLoRA (NF4 base) |
 |--------|-----------------|-----------------|
@@ -123,7 +123,7 @@ QLoRA adds a quantization step: the frozen weights are converted to 4-bit NF4 fo
 
 Critically, the LoRA adapter matrices — the parts that are actually trained — remain in BF16 the whole time. So the forward pass dequantizes the frozen weights on-the-fly to BF16 for the matrix multiply, then immediately drops them. The gradient only flows through the small adapter matrices.
 
-In practice: a Llama 3 13B model needs about 28 GB of VRAM with standard BF16 LoRA — that's two A100s. With QLoRA, the same model fits in 14 GB — a single A100 40GB, and the cloud GPU cost drops from ~$80 to ~$20 for the same training run.
+In practice: a 13B-class open-weight model needs about 28 GB of VRAM with standard BF16 LoRA — that's two A100s. With QLoRA, the same model fits in 14 GB — a single A100 40GB, and the cloud GPU cost drops from ~$80 to ~$20 for the same training run.
 
 The tradeoff is a small quality loss — typically 2–3 ROUGE-L points or 1–2 points on task-specific evals — because the 4-bit representation introduces quantization error in the base model activations. For most production tasks, that's acceptable. For high-stakes domains — medical coding, legal contract review — I'd benchmark both and decide based on the quality delta."
 

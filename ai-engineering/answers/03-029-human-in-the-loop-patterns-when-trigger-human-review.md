@@ -79,7 +79,7 @@ Critical (medical triage, legal filings, security changes):
 ```
 
 ### Example / Tradeoff
-A support-ticket agent (LangGraph + GPT-4o) uses `interrupt_before=["send_reply", "issue_refund"]`. For standard replies (confidence > 0.85, no refund), it runs fully autonomously — 80% of tickets resolved without human touch. For anything triggering the interrupt (15% of tickets), a reviewer approves in the UI within 2 minutes. The remaining 5% (escalations, angry customers flagged by sentiment classifier) go directly to human agents.
+A support-ticket agent (LangGraph + a frontier model) uses `interrupt_before=["send_reply", "issue_refund"]`. For standard replies (confidence > 0.85, no refund), it runs fully autonomously — 80% of tickets resolved without human touch. For anything triggering the interrupt (15% of tickets), a reviewer approves in the UI within 2 minutes. The remaining 5% (escalations, angry customers flagged by sentiment classifier) go directly to human agents.
 
 **Latency vs safety tradeoff:** Synchronous HITL adds 2–10 min median wait to high-risk actions. Async shadow review adds zero latency but catches issues after the fact. The choice depends on reversibility: async is acceptable for outbound drafts (can be recalled), synchronous is required for payments or deletions.
 

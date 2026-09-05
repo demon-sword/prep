@@ -1,0 +1,1236 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Dream11 — Leaderboard &amp; Winner Declaration</title>
+<meta name="description" content="Backend architecture for a fantasy-sports live leaderboard, match completion and exactly-once winner declaration. Mermaid diagrams + animated contest lifecycle state machine.">
+<style>
+:root{
+  --bg:#0f1219; --surface:#171c28; --surface2:#1e2536; --surface3:#232b3d;
+  --text:#e8ecf4; --muted:#8b95a8; --border:#2d3548;
+  --accent:#ff5a5f; --accent-soft:rgba(255,90,95,.13);
+  --eventual:#5b9bd5; --provisional:#ffc000; --final:#a97ce0; --money:#3ddc84; --danger:#e74c3c;
+  --code-bg:#11151f;
+  --mono:"JetBrains Mono",ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+  --sans:"Inter",system-ui,-apple-system,"Segoe UI",sans-serif;
+  --shadow:0 8px 32px rgba(0,0,0,.35);
+}
+@media (prefers-color-scheme: light){
+  :root{
+    --bg:#f5f6f8; --surface:#fff; --surface2:#f0f2f6; --surface3:#e7eaf0;
+    --text:#161a23; --muted:#5c6472; --border:#dde1e9;
+    --accent:#d6323b; --accent-soft:rgba(214,50,59,.09);
+    --eventual:#2f6fae; --provisional:#a97800; --final:#7440b8; --money:#0a8f45; --danger:#c0392b;
+    --code-bg:#f2f4f8; --shadow:0 4px 20px rgba(0,0,0,.08);
+  }
+}
+*,*::before,*::after{box-sizing:border-box}
+html{scroll-behavior:smooth;scroll-padding-top:64px}
+body{margin:0;background:var(--bg);color:var(--text);font-family:var(--sans);line-height:1.62;
+  -webkit-font-smoothing:antialiased}
+a{color:var(--accent)}
+code,pre,.mono{font-family:var(--mono)}
+
+/* ---------- chrome ---------- */
+header.top{position:sticky;top:0;z-index:50;background:color-mix(in srgb,var(--surface) 92%,transparent);
+  backdrop-filter:blur(12px);border-bottom:1px solid var(--border);padding:.6rem 1.25rem;
+  display:flex;align-items:center;gap:1rem;flex-wrap:wrap}
+header.top h1{margin:0;font-size:.95rem;font-weight:700;letter-spacing:-.01em;white-space:nowrap}
+header.top h1 .dot{color:var(--accent)}
+nav.toc{display:flex;gap:.15rem;flex-wrap:wrap;margin-left:auto}
+nav.toc a{font-size:.75rem;color:var(--muted);text-decoration:none;padding:.28rem .55rem;border-radius:6px}
+nav.toc a:hover{background:var(--surface2);color:var(--text)}
+
+main{max-width:1160px;margin:0 auto;padding:2rem 1.25rem 5rem}
+
+.hero{border:1px solid var(--border);background:linear-gradient(150deg,var(--surface),var(--surface2));
+  border-radius:14px;padding:1.75rem;margin-bottom:2.25rem;box-shadow:var(--shadow)}
+.hero h2{margin:0 0 .6rem;font-size:1.6rem;letter-spacing:-.02em}
+.hero p{margin:0 0 1rem;color:var(--muted);max-width:74ch}
+.hero .kbd{font-family:var(--mono);font-size:.78rem;background:var(--surface3);border:1px solid var(--border);
+  border-radius:5px;padding:.08rem .35rem;color:var(--text)}
+
+.stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:.7rem}
+.stat{background:var(--bg);border:1px solid var(--border);border-radius:9px;padding:.7rem .85rem}
+.stat b{display:block;font-family:var(--mono);font-size:1.28rem;color:var(--accent);letter-spacing:-.02em}
+.stat span{font-size:.72rem;color:var(--muted);text-transform:uppercase;letter-spacing:.05em}
+
+section{margin:0 0 3.25rem;scroll-margin-top:64px}
+section>h3{font-size:1.28rem;margin:0 0 .3rem;letter-spacing:-.02em;display:flex;align-items:center;gap:.6rem}
+section>h3::before{content:"";width:4px;height:1.15em;background:var(--accent);border-radius:2px;flex:none}
+section>.lede{color:var(--muted);margin:0 0 1.25rem;max-width:80ch}
+
+h4{font-size:.95rem;margin:1.75rem 0 .6rem;letter-spacing:-.01em}
+p{max-width:82ch}
+
+.card{background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:1.15rem 1.25rem;margin:1rem 0}
+.card>h5{margin:0 0 .5rem;font-size:.82rem;text-transform:uppercase;letter-spacing:.07em;color:var(--muted)}
+
+.note{border-left:3px solid var(--accent);background:var(--accent-soft);padding:.75rem 1rem;border-radius:0 8px 8px 0;margin:1rem 0}
+.note.good{border-color:var(--money);background:color-mix(in srgb,var(--money) 10%,transparent)}
+.note.warn{border-color:var(--provisional);background:color-mix(in srgb,var(--provisional) 12%,transparent)}
+.note p{margin:0}
+.note strong{color:var(--text)}
+
+pre{background:var(--code-bg);border:1px solid var(--border);border-radius:10px;padding:1rem;overflow-x:auto;
+  font-size:.78rem;line-height:1.65;margin:1rem 0}
+pre code{color:var(--text)}
+p code,li code,td code{background:var(--surface2);border:1px solid var(--border);border-radius:4px;
+  padding:.05rem .32rem;font-size:.84em}
+
+table{width:100%;border-collapse:collapse;font-size:.85rem;margin:1rem 0;display:block;overflow-x:auto}
+th,td{text-align:left;padding:.5rem .7rem;border-bottom:1px solid var(--border);vertical-align:top}
+th{font-size:.72rem;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);font-weight:600;white-space:nowrap}
+tbody tr:hover{background:var(--surface2)}
+
+.diagram{background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:1rem;margin:1rem 0;overflow-x:auto}
+.diagram .mermaid{display:flex;justify-content:center;min-width:520px}
+.cap{font-size:.76rem;color:var(--muted);text-align:center;margin-top:.6rem}
+
+/* ---------- state machine ---------- */
+.sm-wrap{background:var(--surface);border:1px solid var(--border);border-radius:14px;overflow:hidden;margin:1.25rem 0}
+.sm-bar{display:flex;align-items:center;gap:.5rem;padding:.7rem .9rem;border-bottom:1px solid var(--border);
+  background:var(--surface2);flex-wrap:wrap}
+.btn{font:inherit;font-size:.78rem;padding:.35rem .75rem;border-radius:7px;border:1px solid var(--border);
+  background:var(--surface);color:var(--text);cursor:pointer;transition:.15s;display:inline-flex;align-items:center;gap:.35rem}
+.btn:hover{border-color:var(--accent);color:var(--accent)}
+.btn.primary{background:var(--accent);border-color:var(--accent);color:#fff;font-weight:600}
+.btn.primary:hover{filter:brightness(1.1);color:#fff}
+.btn:disabled{opacity:.4;cursor:not-allowed}
+.seg{display:flex;border:1px solid var(--border);border-radius:7px;overflow:hidden}
+.seg button{font:inherit;font-size:.74rem;padding:.35rem .7rem;background:var(--surface);color:var(--muted);
+  border:0;cursor:pointer;border-right:1px solid var(--border)}
+.seg button:last-child{border-right:0}
+.seg button.on{background:var(--accent-soft);color:var(--accent);font-weight:600}
+.sm-bar .spacer{margin-left:auto}
+.sm-step{font-family:var(--mono);font-size:.74rem;color:var(--muted)}
+
+.sm-body{display:grid;grid-template-columns:1fr 330px}
+@media(max-width:900px){.sm-body{grid-template-columns:1fr}}
+.sm-canvas{padding:.5rem;overflow-x:auto}
+.sm-canvas svg{width:100%;min-width:760px;height:auto;display:block}
+
+.n-box{fill:var(--surface2);stroke:var(--border);stroke-width:1.5;rx:9;transition:.25s}
+.n-lab{font-family:var(--mono);font-size:11px;font-weight:600;fill:var(--text);pointer-events:none}
+.n-sub{font-family:var(--sans);font-size:9.5px;fill:var(--muted);pointer-events:none}
+.n-g{cursor:pointer}
+.n-g:hover .n-box{stroke:var(--accent)}
+.n-g.done .n-box{stroke-opacity:.9}
+.n-g.active .n-box{stroke-width:2.5;filter:drop-shadow(0 0 9px currentColor)}
+.edge{fill:none;stroke:var(--border);stroke-width:1.6;marker-end:url(#ah);transition:.25s}
+.edge.lit{stroke:var(--accent);stroke-width:2.4;marker-end:url(#ah-lit)}
+.edge.past{stroke-opacity:.75}
+.e-lab{font-family:var(--mono);font-size:9px;fill:var(--muted);opacity:0;transition:.2s}
+.e-lab.show{opacity:1;fill:var(--accent)}
+.token{fill:var(--accent);filter:drop-shadow(0 0 6px var(--accent))}
+
+.sm-panel{border-left:1px solid var(--border);padding:1rem;background:var(--bg);font-size:.8rem;
+  max-height:520px;overflow-y:auto}
+@media(max-width:900px){.sm-panel{border-left:0;border-top:1px solid var(--border);max-height:none}}
+.sm-panel h4{margin:0 0 .1rem;font-family:var(--mono);font-size:.9rem;letter-spacing:-.01em}
+.sm-panel .tagline{color:var(--muted);font-size:.76rem;margin:0 0 .85rem}
+.pill{display:inline-block;font-size:.63rem;font-family:var(--mono);text-transform:uppercase;letter-spacing:.06em;
+  padding:.12rem .45rem;border-radius:999px;border:1px solid currentColor;margin-bottom:.5rem}
+.kv{margin:0 0 .7rem}
+.kv dt{font-size:.63rem;text-transform:uppercase;letter-spacing:.07em;color:var(--muted);margin-bottom:.12rem}
+.kv dd{margin:0 0 .6rem;font-size:.79rem;line-height:1.5}
+.kv dd code{font-size:.75rem}
+.kv dd.inv{border-left:2px solid var(--money);padding-left:.55rem;color:var(--text)}
+.kv dd.fail{border-left:2px solid var(--danger);padding-left:.55rem}
+
+/* ---------- interactive widgets ---------- */
+.builder{display:grid;grid-template-columns:1fr 300px;gap:1rem}
+@media(max-width:880px){.builder{grid-template-columns:1fr}}
+.squad{display:grid;grid-template-columns:repeat(auto-fill,minmax(112px,1fr));gap:.4rem}
+.pl{background:var(--surface2);border:1px solid var(--border);border-radius:7px;padding:.4rem .5rem;cursor:pointer;
+  font-size:.72rem;transition:.13s;position:relative;user-select:none}
+.pl:hover{border-color:var(--accent)}
+.pl.sel{background:var(--accent-soft);border-color:var(--accent)}
+.pl .nm{font-family:var(--mono);font-weight:600;display:block}
+.pl .pts{color:var(--muted);font-size:.68rem}
+.pl .cvc{position:absolute;top:3px;right:4px;display:flex;gap:2px}
+.pl .cvc b{font-size:.56rem;font-family:var(--mono);padding:.02rem .22rem;border-radius:3px;border:1px solid var(--border);
+  background:var(--surface);color:var(--muted)}
+.pl .cvc b.on{background:var(--accent);border-color:var(--accent);color:#fff}
+.bits{font-family:var(--mono);font-size:.68rem;word-break:break-all;line-height:1.9}
+.bits i{font-style:normal;padding:.08rem .1rem;border-radius:2px}
+.bits i.mask1{background:var(--accent);color:#fff}
+.bits i.mask0{color:var(--muted)}
+.bits i.cap{background:var(--final);color:#fff}
+.bits i.vc{background:var(--eventual);color:#fff}
+.bits i.pad{color:var(--border)}
+
+.hist{background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:1rem;margin:1rem 0}
+.bars{display:flex;align-items:flex-end;gap:1px;height:130px;margin:.75rem 0 .35rem}
+.bars div{flex:1;background:var(--eventual);opacity:.45;border-radius:1px 1px 0 0;transition:.12s}
+.bars div.above{background:var(--accent);opacity:.85}
+.bars div.me{background:var(--money);opacity:1}
+.axis{display:flex;justify-content:space-between;font-family:var(--mono);font-size:.66rem;color:var(--muted)}
+input[type=range]{width:100%;accent-color:var(--accent)}
+.readout{display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:.6rem;margin-top:.9rem}
+.readout div{background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:.55rem .7rem}
+.readout b{display:block;font-family:var(--mono);font-size:1.05rem;color:var(--accent)}
+.readout span{font-size:.67rem;color:var(--muted);text-transform:uppercase;letter-spacing:.05em}
+
+footer{border-top:1px solid var(--border);padding:1.75rem 1.25rem;text-align:center;color:var(--muted);font-size:.8rem}
+</style>
+</head>
+<body>
+
+<header class="top">
+  <h1>Dream11 <span class="dot">·</span> Leaderboard &amp; Winner Declaration</h1>
+  <nav class="toc">
+    <a href="#req">Requirements</a>
+    <a href="#arch">Architecture</a>
+    <a href="#live">Live path</a>
+    <a href="#tricks">The 3 tricks</a>
+    <a href="#sm">State machine</a>
+    <a href="#settle">Settlement</a>
+    <a href="#stack">Stack</a>
+    <a href="#tradeoffs">Trade-offs</a>
+    <a href="./dream11-design-doc.md">MD ↗</a>
+  </nav>
+</header>
+
+<main>
+
+<div class="hero">
+  <h2>How 10 million ranks stay fresh — and how one of them gets paid</h2>
+  <p>Two systems wearing one UI. Until the last ball, the leaderboard is <em>eventually consistent and
+  disposable</em>: approximate, recomputable, cheap to throw away. The moment the match ends it becomes
+  <em>transactional, idempotent and auditable</em>, because now it decides who gets ₹1 crore.
+  The interesting engineering is the seam between them.</p>
+  <div class="stats">
+    <div class="stat"><b>40</b><span>ints of real state</span></div>
+    <div class="stat"><b>8 B</b><span>per fantasy team</span></div>
+    <div class="stat"><b>130 MB</b><span>for a 10M contest</span></div>
+    <div class="stat"><b>&lt;100 ms</b><span>full recompute</span></div>
+    <div class="stat"><b>O(1)</b><span>rank lookup</span></div>
+    <div class="stat"><b>₹0.00</b><span>allowed drift</span></div>
+  </div>
+</div>
+
+<!-- ═══════════════ REQUIREMENTS ═══════════════ -->
+<section id="req">
+  <h3>1 · Requirements &amp; the constraints that shape everything</h3>
+  <p class="lede">Three constraints do most of the design work. Say them out loud early in an interview.</p>
+
+  <table>
+    <thead><tr><th>Metric</th><th>Target</th><th>Why it matters</th></tr></thead>
+    <tbody>
+      <tr><td>Leaderboard staleness</td><td>≤ 30 s, bounded</td><td>Nobody can perceive faster. Batching buys 100× write reduction.</td></tr>
+      <tr><td>Rank read p99</td><td>&lt; 100 ms</td><td>It is a pull-to-refresh; it must feel instant.</td></tr>
+      <tr><td>Peak read QPS</td><td>1–2 M/s</td><td>Everyone opens the app in the last over.</td></tr>
+      <tr><td>Contest recompute</td><td>&lt; 100 ms for 10 M teams</td><td>Achievable — see §4.</td></tr>
+      <tr><td>Payout correctness</td><td><b>exactly once</b>, ₹0.00 drift</td><td>Non-negotiable. Everything in §5–6 exists for this line.</td></tr>
+    </tbody>
+  </table>
+
+  <div class="card">
+    <h5>The three constraints</h5>
+    <p><b>1. Matches are scheduled.</b> You know the exact minute traffic goes 30×. Capacity planning is a
+    calendar problem, not an autoscaling problem — reactive HPA lags by minutes and minutes is the whole event.</p>
+    <p><b>2. Provider data is revised.</b> Scorecard corrections, DLS, super overs, disputed catches.
+    You <em>cannot</em> pay out on the <code>MATCH_COMPLETE</code> event.</p>
+    <p><b>3. Rosters freeze at lock.</b> After the deadline, team composition is immutable — which is exactly
+    what makes an in-memory compute engine safe and rebuildable.</p>
+  </div>
+</section>
+
+<!-- ═══════════════ ARCHITECTURE ═══════════════ -->
+<section id="arch">
+  <h3>2 · Backend architecture</h3>
+  <p class="lede">Seven services. Six are boring and off-the-shelf. One — Leaderboard Compute — is bespoke,
+  and that is where the engineering budget goes.</p>
+
+  <div class="diagram">
+    <pre class="mermaid">
+flowchart TB
+  PROV["Sports Data Provider<br/>Sportradar / Opta<br/>WebSocket + REST poll"]
+
+  subgraph WRITE["Pre-match write path"]
+    CTS["Contest + Team Service<br/>Java 21 · Spring Boot"]
+    AUR[("Aurora PostgreSQL<br/>sharded by contest_id")]
+    RC[("Redis<br/>sharded seat counters")]
+  end
+
+  subgraph LIVEP["Live scoring path"]
+    ING["Ingestion · Go"]
+    K{{"Kafka / MSK"}}
+    SCO["Scoring · Flink<br/>versioned rule engine"]
+    LBC["Leaderboard Compute<br/>Go / Rust · STATEFUL<br/>sharded by team_id hash"]
+    COORD["Snapshot Coordinator<br/>merge histograms + top-K"]
+  end
+
+  subgraph SERVE["Serving"]
+    AS[("Aerospike<br/>scores · histograms · top-K")]
+    LBQ["Leaderboard Query · Go<br/>stateless · HPA"]
+    CDN["CloudFront / Fastly<br/>10s TTL + ETag"]
+  end
+
+  subgraph MONEY["Settlement — the money half"]
+    TMP["Temporal<br/>SettleContest workflow"]
+    LED[("Aurora PostgreSQL<br/>double-entry ledger")]
+  end
+
+  S3[("S3 + Object Lock<br/>raw feed · epoch snapshots<br/>final scorecards")]
+
+  PROV -->|"ball-by-ball"| ING
+  ING -->|"raw verbatim"| S3
+  ING -->|"dedup match_id+seq"| K
+  CTS --> AUR
+  CTS --> RC
+  CTS -->|"at lock: roster"| K
+
+  K -->|"match.events"| SCO
+  SCO -->|"player.points · 40 ints"| K
+  K -->|"player.points"| LBC
+  K -->|"team.roster COMPACTED"| LBC
+  LBC --> COORD
+  COORD -->|"pointer flip"| AS
+  COORD -->|"epoch dump"| S3
+  AS --> LBQ --> CDN
+
+  K -->|"contest.lifecycle"| TMP
+  TMP --> LED
+  TMP -->|"final scores"| AS
+  TMP --> S3
+</pre>
+    <p class="cap">Everything left of the pointer flip is disposable. Everything inside <b>Settlement</b> is permanent.</p>
+  </div>
+
+  <table>
+    <thead><tr><th>#</th><th>Service</th><th>Language</th><th>Store</th><th>Why this choice</th></tr></thead>
+    <tbody>
+      <tr><td>1</td><td>Contest &amp; Team</td><td>Java 21 / Spring Boot</td><td>Aurora PG (sharded)</td><td>Rich domain logic, real transactions, team velocity.</td></tr>
+      <tr><td>2</td><td>Ingestion</td><td>Go</td><td>Redis (dedup TTL)</td><td>Tiny, I/O bound, must never GC-pause on a WebSocket frame.</td></tr>
+      <tr><td>3</td><td>Scoring</td><td>Flink <em>or</em> Kafka Streams</td><td>RocksDB state</td><td>Exactly-once via checkpoints + transactional sink. KStreams if you don't already run Flink.</td></tr>
+      <tr><td>4</td><td><b>Leaderboard Compute</b></td><td><b>Go / Rust</b></td><td>in-memory + S3</td><td>The one bespoke service: memory layout control, zero GC pause during the final over.</td></tr>
+      <tr><td>5</td><td>Leaderboard Query</td><td>Go</td><td>Aerospike</td><td>Stateless — scale to 500 pods in seconds.</td></tr>
+      <tr><td>6</td><td>Settlement</td><td>Go/Java + <b>Temporal</b></td><td>Aurora PG</td><td>Durable execution, human-in-the-loop, queryable at 2 AM during a dispute.</td></tr>
+      <tr><td>7</td><td>Wallet / Ledger</td><td>Java</td><td>Aurora PG</td><td>Integer money, strict constraints, no float anywhere in the system.</td></tr>
+    </tbody>
+  </table>
+
+  <h4>Kafka topic design</h4>
+  <table>
+    <thead><tr><th>Topic</th><th>Parts</th><th>Key</th><th>Retention</th><th>Note</th></tr></thead>
+    <tbody>
+      <tr><td><code>match.events</code></td><td>64</td><td><code>match_id</code></td><td>7 d</td><td>Ordering per match. Never more than ~50 live matches, so 64 is forever.</td></tr>
+      <tr><td><code>player.points</code></td><td>64</td><td><code>match_id</code></td><td>7 d</td><td>~40 int32s per message. Tiny.</td></tr>
+      <tr><td><code>team.roster</code></td><td>256</td><td><code>contest_id</code></td><td><b>compacted</b></td><td>Rebuilds Leaderboard Compute state after a pod eviction.</td></tr>
+      <tr><td><code>contest.lifecycle</code></td><td>32</td><td><code>contest_id</code></td><td>30 d</td><td>Drives the Temporal workflows.</td></tr>
+    </tbody>
+  </table>
+
+  <div class="note">
+    <p><strong>Overselling a mega contest</strong> is the only hard problem in the write path.
+    <code>UPDATE contests SET filled = filled + 1 WHERE filled &lt; capacity</code> makes one row incandescent
+    ten minutes before lock. Fix: <b>64 sharded sub-counters</b> keyed <code>(contest_id, shard)</code>, claim from
+    <code>hash(user_id) % 64</code>, fall through to neighbours on exhaustion.</p>
+  </div>
+</section>
+
+<!-- ═══════════════ LIVE PATH ═══════════════ -->
+<section id="live">
+  <h3>3 · The live path — one ball to one rank</h3>
+  <p class="lede">Note where the batching happens, and note that the atomic pointer flip is the last write.</p>
+
+  <div class="diagram">
+    <pre class="mermaid">
+sequenceDiagram
+  autonumber
+  participant P as Provider
+  participant I as Ingestion
+  participant K as Kafka
+  participant S as Scoring
+  participant L as LB Compute
+  participant C as Coordinator
+  participant A as Aerospike
+  participant Q as Query
+  participant U as User app
+
+  P->>I: ball event (at-least-once, may reorder)
+  I->>I: SETNX evt:match:seq — drop duplicates
+  I->>K: match.events (key = match_id)
+  K->>S: consume in partition order
+  S->>S: ruleset vX → 40 player points (int32 ×100)
+  S->>K: player.points {epoch 427, is_final false}
+
+  Note over L: batched every 10–30s, NOT per ball
+  K->>L: player.points epoch 427
+  L->>L: score ~500k distinct signatures ≈ 3 ms
+  L->>L: scatter to 10M teams + histogram ≈ 40 ms
+  L->>C: local {histogram, topK}
+  C->>C: element-wise add hist, merge topK
+  C->>A: SET lb:c:e427:hist / :topk
+  C->>A: SET lb:c:current = 427
+  Note over A: single atomic pointer flip — no torn reads
+
+  U->>Q: GET /leaderboard?around=me (If-Epoch-At-Least 426)
+  Q->>A: current → 427, my score, histogram
+  Q->>Q: rank = suffix[bucket+1] + 1
+  Q-->>U: {rank, score, epoch 427}
+</pre>
+    <p class="cap">Top-100 bytes are identical for every user → served from CDN at &gt;95% hit rate. Only the personal rank touches origin.</p>
+  </div>
+
+  <div class="note warn">
+    <p><strong>Monotonicity beats freshness.</strong> A rank that reads 4000 → 3800 → 4000 across consecutive
+    refreshes looks like a bug and generates support tickets. Every response carries <code>epoch</code>; the client
+    echoes the highest it has seen as <code>If-Epoch-At-Least</code>; the server serves only <code>epoch ≥ N</code>.
+    <b>Bounded staleness is fine. Going backwards is not.</b></p>
+  </div>
+
+  <div class="note">
+    <p><strong>Add jitter to polling.</strong> A synchronised 30-second refresh across ten million clients is a
+    self-inflicted DDoS every thirty seconds. Prefer SSE carrying only <code>{"epoch":427}</code> — "something
+    changed, refetch from cache" — so the payload still comes from the CDN.</p>
+  </div>
+</section>
+
+<!-- ═══════════════ THE THREE TRICKS ═══════════════ -->
+<section id="tricks">
+  <h3>4 · The three tricks that make this cheap</h3>
+  <p class="lede">The naive framing is "10 M teams × recompute on every ball = disaster." The real state is 40 integers.</p>
+
+  <h4>4.1 — Don't score users, score players</h4>
+  <p>A match has ≤ 40 players in the squad universe. That is the <em>entire</em> scoring state. A team is
+  <code>11 players + captain (2×) + vice-captain (1.5×)</code>, so a team score is a <b>dot product</b> of a
+  40-slot points vector with a sparse multiplier vector. The expensive stage's output is 40 ints, not 10 M rows.</p>
+
+  <h4>4.2 — Bit-pack the team, and de-duplication becomes free</h4>
+  <p>Click players to build an XI, then set captain and vice-captain. Watch the 64-bit signature — two users who
+  pick identically produce the <em>same</em> integer, so dedup is just a hash-map key.</p>
+
+  <div class="card">
+    <div class="builder">
+      <div>
+        <div class="squad" id="squad"></div>
+        <p style="font-size:.74rem;color:var(--muted);margin:.7rem 0 0">
+          Click a card to select/deselect (max 11). Use the <b>C</b> / <b>V</b> chips on a selected card to set
+          captain and vice-captain.</p>
+      </div>
+      <div>
+        <div style="background:var(--code-bg);border:1px solid var(--border);border-radius:9px;padding:.75rem">
+          <div style="font-size:.65rem;text-transform:uppercase;letter-spacing:.07em;color:var(--muted);margin-bottom:.4rem">uint64 signature</div>
+          <div class="bits" id="bits"></div>
+          <div style="margin-top:.55rem;font-family:var(--mono);font-size:.8rem" id="sighex"></div>
+        </div>
+        <div class="readout" style="grid-template-columns:1fr 1fr">
+          <div><b id="bSel">0</b><span>selected</span></div>
+          <div><b id="bPts">0.0</b><span>team points</span></div>
+          <div><b id="bRank">—</b><span>rank in 10M</span></div>
+          <div><b id="bTwins">—</b><span>identical teams</span></div>
+          <div><b id="bPrize">—</b><span>prize slab</span></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <pre><code>┌──────────────── 40 bits ────────────────┬── 6 ──┬── 6 ──┬─ 12 ─┐
+│  selection bitmask (exactly 11 bits set) │  cap  │  vc   │ pad  │  = uint64
+└──────────────────────────────────────────┴───────┴───────┴──────┘</code></pre>
+
+  <div class="note good">
+    <p><strong>A fantasy team is 8 bytes.</strong> Millions of users pick the same popular XI, so distinct
+    signatures are 1–2 orders of magnitude fewer than teams: <b>10 M teams → ~500 k distinct signatures.</b>
+    You score the 500 k, then scatter.</p>
+  </div>
+
+  <h4>4.3 — Rank with a histogram, not a sorted list</h4>
+  <p>You do <em>not</em> need a sorted array of 10 M entries to answer "what is my rank?". Fantasy points are
+  discrete and bounded, so bucket them and keep a suffix sum. Drag the slider — the rank below is computed the
+  same way production would compute it.</p>
+
+  <div class="hist">
+    <div class="bars" id="bars"></div>
+    <div class="axis"><span>0 pts</span><span>300</span><span>600</span><span>900</span><span id="axMax">1200 pts</span></div>
+    <input type="range" id="scoreSlider" min="100" max="1100" step="5" value="640">
+    <div class="readout">
+      <div><b id="hScore">640.0</b><span>your points</span></div>
+      <div><b id="hBucket">1280</b><span>bucket index</span></div>
+      <div><b id="hAbove">0</b><span>teams above you</span></div>
+      <div><b id="hRank">1</b><span>your rank</span></div>
+      <div><b id="hPct">0%</b><span>percentile</span></div>
+      <div><b id="hPrize">—</b><span>prize slab</span></div>
+    </div>
+    <pre style="margin-bottom:0"><code>bucket    = points_x100 / 50            // ~4000 buckets covers 0–2000 points
+count[b] += 1                           // O(n) build, one pass
+suffix[b] = Σ count[b..MAX]             // O(buckets) scan, 4000 adds
+
+my_rank   = suffix[my_bucket + 1] + 1   // O(1) — competition ranking</code></pre>
+  </div>
+
+  <div class="note good">
+    <p><strong>Histograms are mergeable.</strong> Shard teams across N nodes, build a local histogram on each, and
+    the coordinator just <em>adds the arrays element-wise</em>. Top-K merges the same way. Both operations are
+    associative, so the distributed merge is trivially correct — that is the whole reason this shape beats a sorted
+    structure in a distributed system.</p>
+  </div>
+
+  <div class="diagram">
+    <pre class="mermaid">
+flowchart LR
+  R[("team.roster<br/>compacted topic")] --> S1 & S2 & S3 & S4
+  PP["player.points<br/>epoch 427"] --> S1 & S2 & S3 & S4
+  subgraph SH["Leaderboard Compute — sharded by team_id hash"]
+    S1["shard 0<br/>2.5M teams<br/>hist[4000]"]
+    S2["shard 1<br/>2.5M teams<br/>hist[4000]"]
+    S3["shard 2<br/>2.5M teams<br/>hist[4000]"]
+    S4["shard 3<br/>2.5M teams<br/>hist[4000]"]
+  end
+  S1 & S2 & S3 & S4 --> M["Coordinator<br/>hist = Σ hist_i element-wise<br/>topK = merge topK_i"]
+  M -->|"write immutable snapshot"| A[("lb:c:e427:hist<br/>lb:c:e427:topk")]
+  A --> F["SET lb:c:current = 427<br/>single atomic pointer flip"]
+</pre>
+  </div>
+
+  <h4>The epoch loop</h4>
+<pre><code>func (s *Shard) RecomputeEpoch(pp *PlayerPoints) *Snapshot {
+    // 1. dense 40-slot points vector, fixed point (×100)
+    var pts [40]int32
+    for _, p := range pp.Points { pts[s.slot[p.PlayerID]] = p.PointsX100 }
+
+    // 2. score each DISTINCT signature: ~500k × 11 mul-adds ≈ 5.5M ops ≈ 3 ms
+    for sig := range s.sigTable {
+        mask, capIdx, vcIdx := decode(sig)
+        var total int32
+        for slot := range bits(mask) {
+            m := int32(100)                       // 1.00×
+            if slot == capIdx { m = 200 } else if slot == vcIdx { m = 150 }
+            total += pts[slot] * m / 100
+        }
+        s.sigScore[sig] = total
+    }
+
+    // 3. scatter to teams + build histogram in ONE pass: 10M gathers ≈ 40 ms
+    var hist [4000]int32
+    for i, sig := range s.teamSig {
+        sc := s.sigScore[sig]
+        s.teamScore[i] = sc
+        hist[sc/50]++                             // 0.5-point buckets
+    }
+    return &amp;Snapshot{Epoch: pp.Epoch, Hist: hist, TopK: s.localTopK()}
+}</code></pre>
+
+  <table>
+    <thead><tr><th>Structure</th><th>Size for a 10 M-team contest</th></tr></thead>
+    <tbody>
+      <tr><td><code>team_id[] → signature (uint64)</code></td><td>10 M × 8 B = <b>80 MB</b></td></tr>
+      <tr><td><code>team_id[] → score (int32)</code></td><td>10 M × 4 B = <b>40 MB</b></td></tr>
+      <tr><td>~500 k distinct signatures → score</td><td><b>6 MB</b></td></tr>
+      <tr><td>histogram (4000 × int32)</td><td><b>16 KB</b></td></tr>
+      <tr><td><b>Total</b></td><td><b>≈ 130 MB · &lt; 100 ms per epoch · single core</b></td></tr>
+    </tbody>
+  </table>
+
+  <div class="note">
+    <p><strong>Compute is not the bottleneck.</strong> This is the thing most candidates get wrong. You shard for
+    memory headroom, HA and many concurrent contests — not because the math is hard.</p>
+  </div>
+
+  <h4>Rebuilding in-memory state after an eviction</h4>
+  <p>A pod holding 10 M teams <em>will</em> get evicted mid-match. Recovery: load the last epoch snapshot from S3,
+  replay the compacted <code>team.roster</code> topic from that offset, replay <code>player.points</code> from that
+  epoch. <b>Cold start under 30 seconds</b> — and it is deterministic, because rosters are frozen at lock so the
+  compacted topic is static for the whole match. Run shards as a <code>StatefulSet</code> with a warm standby
+  consuming the same partitions.</p>
+</section>
+
+<!-- ═══════════════ STATE MACHINE ═══════════════ -->
+<section id="sm">
+  <h3>5 · Contest lifecycle — the animated state machine</h3>
+  <p class="lede">This is where the design changes character. Press <b>Play</b> and watch the consistency model
+  flip from <span style="color:var(--eventual)">eventual</span> → <span style="color:var(--provisional)">provisional</span>
+  → <span style="color:var(--final)">final</span> → <span style="color:var(--money)">money</span>.
+  Click any state to inspect it.</p>
+
+  <div class="sm-wrap">
+    <div class="sm-bar">
+      <button class="btn primary" id="smPlay">▶ Play</button>
+      <button class="btn" id="smPrev">◀ Prev</button>
+      <button class="btn" id="smNext">Next ▶</button>
+      <button class="btn" id="smReset">↺ Reset</button>
+      <div class="seg" id="smFlow">
+        <button data-flow="happy" class="on">Happy path</button>
+        <button data-flow="disputed">Disputed scorecard</button>
+        <button data-flow="abandoned">Match abandoned</button>
+      </div>
+      <span class="spacer"></span>
+      <span class="sm-step" id="smStep">step 1 / 8</span>
+    </div>
+    <div class="sm-body">
+      <div class="sm-canvas">
+        <svg id="smSvg" viewBox="0 0 1060 430" role="img" aria-label="Contest lifecycle state machine">
+          <defs>
+            <marker id="ah" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto">
+              <path d="M0,0 L10,5 L0,10 z" fill="var(--border)"/>
+            </marker>
+            <marker id="ah-lit" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto">
+              <path d="M0,0 L10,5 L0,10 z" fill="var(--accent)"/>
+            </marker>
+          </defs>
+          <g id="smEdges"></g>
+          <g id="smNodes"></g>
+          <circle id="smToken" class="token" r="5" opacity="0"/>
+        </svg>
+      </div>
+      <aside class="sm-panel" id="smPanel"></aside>
+    </div>
+  </div>
+
+  <div class="note warn">
+    <p><strong>Why the provisional window exists.</strong> Provider data gets revised — scorecard corrections, DLS
+    adjustments, super overs, retroactive stat fixes, disputed catches. If you pay out the instant the feed says
+    <code>MATCH_COMPLETE</code>, you will eventually pay the wrong person and be unable to claw it back.
+    That "winnings will be credited after review" banner is a <b>deliberate architectural decision</b>, not a UX
+    afterthought.</p>
+  </div>
+
+  <div class="note">
+    <p><strong>At <code>FINALIZED</code>, recompute from scratch</strong> off the immutable final 40-vector. Never
+    settle from incrementally accumulated in-memory state — you want a computation you can reproduce and defend in
+    an audit six months later.</p>
+  </div>
+</section>
+
+<!-- ═══════════════ SETTLEMENT ═══════════════ -->
+<section id="settle">
+  <h3>6 · Winner declaration &amp; settlement</h3>
+  <p class="lede">Everything above is disposable. This is the half that has to be right the first time.</p>
+
+  <h4>Tie handling — pool and split the occupied ranks</h4>
+  <p>Prizes are rank-range based, so ties must pool the prizes for every rank the tied group occupies:</p>
+  <div class="note">
+    <p>3 teams tie for rank 2 → they occupy ranks <b>2, 3, 4</b> → <code>(₹50L + ₹25L + ₹10L) / 3 = ₹28.33L each</code>.</p>
+  </div>
+  <p>Then round <b>deterministically</b>: after rounding to paise, the residual is assigned by a fixed rule (lowest
+  <code>team_id</code>, or a house rounding account) so that <code>Σ payouts == prize_pool</code> exactly. A
+  leaderboard that is off by ₹0.03 fails reconciliation and blocks the entire settlement run.</p>
+
+  <div class="diagram">
+    <pre class="mermaid">
+sequenceDiagram
+  autonumber
+  participant K as Kafka lifecycle
+  participant T as Temporal SettleContest
+  participant A as Aerospike
+  participant H as Human reviewer
+  participant DB as Aurora ledger
+  participant N as Notifications
+
+  K->>T: MatchCompleted{contest_id}
+  T->>A: FreezeScores — pin final epoch
+  T->>T: ReconcileWithOfficialScorecard
+  alt scorecard mismatch
+    T->>H: signal "manual-approval"
+    Note over T: workflow blocks DURABLY<br/>survives deploys and restarts
+    H-->>T: approve / re-score
+  end
+  T->>A: recompute from immutable 40-vector
+  T->>T: ComputePayouts — ties pooled, residual assigned
+  loop batches of 500
+    T->>DB: BEGIN
+    DB->>DB: INSERT payout UNIQUE(contest_id, team_id)
+    DB->>DB: DR prize_pool / CR user_wallet
+    T->>DB: COMMIT
+  end
+  T->>DB: Reconcile Σ payouts == prize_pool
+  T->>K: ContestSettled
+  K->>N: push "You won ₹X"
+</pre>
+  </div>
+
+  <h4>Exactly-once is a database constraint, not a messaging guarantee</h4>
+<pre><code>CREATE TABLE ledger_entry (
+  id              BIGSERIAL PRIMARY KEY,
+  account_id      BIGINT NOT NULL,
+  amount_paise    BIGINT NOT NULL,        -- integers only. never NUMERIC, never float
+  direction       CHAR(2) NOT NULL CHECK (direction IN ('DR','CR')),
+  contest_id      BIGINT,
+  idempotency_key TEXT   NOT NULL,
+  created_at      TIMESTAMPTZ NOT NULL DEFAULT now(),
+  UNIQUE (idempotency_key, account_id)    -- &lt;&lt;&lt; exactly-once lives HERE
+);
+
+-- idempotency_key = sha256(contest_id | team_id | settlement_run_id)</code></pre>
+
+  <div class="note good">
+    <p>Temporal retries. Workers crash. Kafka redelivers. The unique index makes every one of those a <b>no-op</b>.
+    Say this line explicitly in an interview — it is what separates a real answer from a hand-wave.</p>
+  </div>
+
+<pre><code>func SettleContest(ctx workflow.Context, contestID string) error {
+    workflow.ExecuteActivity(ctx, FreezeScores, contestID).Get(ctx, nil)
+
+    var ok bool
+    workflow.ExecuteActivity(ctx, ReconcileWithOfficialScorecard, contestID).Get(ctx, &amp;ok)
+    if !ok {
+        // durable block — survives worker restarts, deploys, a weekend
+        workflow.GetSignalChannel(ctx, "manual-approval").Receive(ctx, nil)
+    }
+
+    var payouts []Payout
+    workflow.ExecuteActivity(ctx, ComputePayouts, contestID).Get(ctx, &amp;payouts)
+
+    for _, batch := range chunk(payouts, 500) {
+        workflow.ExecuteActivity(ctx, CreditWallets, batch).Get(ctx, nil)
+    }
+    return workflow.ExecuteActivity(ctx, Reconcile, contestID).Get(ctx, nil)
+}</code></pre>
+
+  <p><b>Reconciliation runs after every settlement:</b> <code>Σ payouts == prize pool</code>,
+  <code>count(payouts) == count(winners)</code>, wallet deltas match ledger deltas. Alert and freeze on mismatch.
+  Corrections go through maker-checker with a <b>reversing ledger entry</b> — never an <code>UPDATE</code> on a
+  settled row. Abandoned matches reuse the identical machinery in reverse.</p>
+</section>
+
+<!-- ═══════════════ STACK ═══════════════ -->
+<section id="stack">
+  <h3>7 · Full technology stack</h3>
+  <table>
+    <thead><tr><th>Concern</th><th>Technology</th><th>Rationale</th></tr></thead>
+    <tbody>
+      <tr><td>Event backbone</td><td><b>Kafka (MSK)</b></td><td>Ordered per partition; log compaction rebuilds compute state.</td></tr>
+      <tr><td>Stream processing</td><td><b>Flink</b> or Kafka Streams</td><td>Exactly-once checkpoints + transactional sink.</td></tr>
+      <tr><td>Hot store</td><td><b>Aerospike</b> or Redis Cluster</td><td>Hybrid memory — index in RAM, data on NVMe → sub-ms at TB scale across many concurrent matches.</td></tr>
+      <tr><td>Source of truth</td><td><b>Aurora PostgreSQL</b></td><td>Real transactions, constraints, integer money.</td></tr>
+      <tr><td>Workflow</td><td><b>Temporal</b></td><td>Durable execution, human-in-the-loop signals, queryable state, retries you didn't write.</td></tr>
+      <tr><td>Compute engine</td><td><b>Go / Rust</b></td><td>Memory layout control, no GC pause during the final over.</td></tr>
+      <tr><td>CRUD services</td><td>Java 21 / Spring Boot</td><td>Velocity. Don't rewrite CRUD in Rust.</td></tr>
+      <tr><td>Edge</td><td>CloudFront / Fastly + Envoy</td><td>Top-K is identical bytes for millions of users.</td></tr>
+      <tr><td>Analytics</td><td>ClickHouse (or Druid)</td><td>"How did my rank move" over 10 M rows.</td></tr>
+      <tr><td>Object store</td><td>S3 + Object Lock (WORM)</td><td>Raw feed + final scorecards = dispute evidence.</td></tr>
+      <tr><td>Metrics / tracing</td><td>Prometheus + Grafana, OpenTelemetry → Tempo</td><td>VictoriaMetrics if cardinality blows up.</td></tr>
+      <tr><td>Flags</td><td>LaunchDarkly / Unleash</td><td>You <em>will</em> need to kill live leaderboards mid-match.</td></tr>
+      <tr><td>Orchestration</td><td>EKS + Karpenter</td><td><b>Scheduled</b> pre-scaling driven by the match calendar.</td></tr>
+    </tbody>
+  </table>
+
+  <table>
+    <thead><tr><th>Metric</th><th>Value to quote</th></tr></thead>
+    <tbody>
+      <tr><td>Contest recompute, 10 M teams</td><td>&lt; 100 ms, single core</td></tr>
+      <tr><td>Epoch cadence</td><td>10–30 s, or on a material event</td></tr>
+      <tr><td>Peak leaderboard QPS</td><td>1–2 M req/s</td></tr>
+      <tr><td>Served from CDN</td><td>&gt; 95 %</td></tr>
+      <tr><td>Origin QPS after caching</td><td>50–100 k/s → ~200 Go pods</td></tr>
+      <tr><td>Memory per 10 M-team contest</td><td>≈ 130 MB</td></tr>
+      <tr><td>Settlement</td><td>~10 M ledger writes, 500/txn, minutes</td></tr>
+    </tbody>
+  </table>
+</section>
+
+<!-- ═══════════════ TRADE-OFFS ═══════════════ -->
+<section id="tradeoffs">
+  <h3>8 · Trade-offs worth defending</h3>
+
+  <div class="card">
+    <h5>Why not a Redis ZSET for everything?</h5>
+    <p><code>ZADD</code> of 10 M members every 20 s is ~500 k ops/s of write churn <em>per contest</em>, plus ~1 GB of
+    skiplist overhead. The histogram gives O(1) rank at 16 KB. Use <code>ZSET</code> only for contests under ~100 k
+    teams where exact "players near me" ordering matters and the cost is negligible — <b>one interface, two
+    implementations selected by contest size.</b></p>
+  </div>
+  <div class="card">
+    <h5>Why not compute rank per user on read?</h5>
+    <p>Read amplification is the enemy: 10 M users refreshing versus 10 M scores computed once per epoch.
+    Precompute wins by four orders of magnitude. (And why not Spark? Minutes of latency. Wrong tool.)</p>
+  </div>
+  <div class="card">
+    <h5>Why Go/Rust for one service and Java everywhere else?</h5>
+    <p>Exactly one service is latency-and-layout critical. Optimise there, keep velocity everywhere else.
+    Polyglot is a cost — pay it once, deliberately.</p>
+  </div>
+  <div class="card">
+    <h5>Why Temporal and not a Kafka consumer for settlement?</h5>
+    <p>You need durable blocking on human approval, queryable workflow state at 2 AM during a dispute, and retry
+    semantics you didn't hand-roll. A consumer group gives you none of that.</p>
+  </div>
+
+  <h4>Interview cheat sheet</h4>
+  <ol>
+    <li><b>Clarify:</b> contest sizes (2 → 10 M), freshness (10–30 s is fine), is money involved (yes → the second half changes).</li>
+    <li><b>Reduce the problem:</b> "a match is 40 numbers."</li>
+    <li><b>Bit-pack + dedup:</b> 8 bytes per team, 10 M → 500 k distinct.</li>
+    <li><b>Histogram ranking:</b> O(1) rank, mergeable across shards, 16 KB.</li>
+    <li><b>Immutable snapshots + atomic pointer flip:</b> no torn leaderboards.</li>
+    <li><b>Monotonic epochs:</b> ranks never go backwards on refresh.</li>
+    <li><b>CDN the top-K:</b> it is the same bytes for everyone.</li>
+    <li><b>State machine at match end:</b> provisional → review → finalized → settled.</li>
+    <li><b>Exactly-once = unique constraint</b>, not delivery semantics.</li>
+    <li><b>Reconcile every settlement</b>, and never <code>UPDATE</code> a settled row.</li>
+  </ol>
+</section>
+
+</main>
+
+<footer>
+  Companion write-up: <a href="./dream11-design-doc.md">dream11-design-doc.md</a> ·
+  <a href="../README.md">system-design conventions</a> ·
+  <a href="../../index.html">prep index</a>
+</footer>
+
+<script type="module">
+import mermaid from 'https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.esm.min.mjs';
+const dark = !window.matchMedia('(prefers-color-scheme: light)').matches;
+mermaid.initialize({
+  startOnLoad: true,
+  theme: 'base',
+  securityLevel: 'loose',
+  themeVariables: dark ? {
+    background:'#171c28', primaryColor:'#1e2536', primaryTextColor:'#e8ecf4', primaryBorderColor:'#2d3548',
+    lineColor:'#6b7688', secondaryColor:'#232b3d', tertiaryColor:'#11151f',
+    clusterBkg:'#11151f', clusterBorder:'#2d3548', fontFamily:'Inter, system-ui, sans-serif', fontSize:'13px',
+    actorBkg:'#1e2536', actorBorder:'#ff5a5f', actorTextColor:'#e8ecf4', signalColor:'#8b95a8',
+    signalTextColor:'#c8d0dd', labelBoxBkgColor:'#1e2536', labelBoxBorderColor:'#2d3548',
+    noteBkgColor:'#2a2130', noteBorderColor:'#ff5a5f', noteTextColor:'#e8ecf4'
+  } : {
+    background:'#ffffff', primaryColor:'#f0f2f6', primaryTextColor:'#161a23', primaryBorderColor:'#c9cfdb',
+    lineColor:'#7a8394', clusterBkg:'#f7f8fb', clusterBorder:'#dde1e9',
+    fontFamily:'Inter, system-ui, sans-serif', fontSize:'13px',
+    actorBkg:'#f0f2f6', actorBorder:'#d6323b', noteBkgColor:'#fdf3f3', noteBorderColor:'#d6323b'
+  }
+});
+</script>
+
+<script>
+/* ══════════════════════ 1. CONTEST LIFECYCLE STATE MACHINE ══════════════════════ */
+const KIND = {
+  eventual:   {c:'var(--eventual)',   pill:'eventually consistent'},
+  provisional:{c:'var(--provisional)',pill:'provisional — not money yet'},
+  final:      {c:'var(--final)',      pill:'strongly consistent'},
+  money:      {c:'var(--money)',      pill:'transactional · exactly-once'},
+  danger:     {c:'var(--danger)',     pill:'terminal — refund path'}
+};
+
+const NODES = [
+  {id:'pre_match', x:40,  y:50,  label:'PRE_MATCH',      sub:'teams editable',      kind:'eventual'},
+  {id:'locked',    x:250, y:50,  label:'LOCKED',         sub:'rosters immutable',   kind:'eventual'},
+  {id:'live',      x:460, y:50,  label:'LIVE',           sub:'epochs every 10–30s', kind:'eventual'},
+  {id:'frozen',    x:670, y:50,  label:'SCORING_FROZEN', sub:'provisional ranks',   kind:'provisional'},
+  {id:'manual',    x:880, y:190, label:'MANUAL_REVIEW',  sub:'human maker-checker', kind:'provisional'},
+  {id:'review',    x:670, y:190, label:'UNDER_REVIEW',   sub:'reconcile scorecard', kind:'provisional'},
+  {id:'finalized', x:460, y:190, label:'FINALIZED',      sub:'ranks immutable',     kind:'final'},
+  {id:'settling',  x:250, y:190, label:'SETTLING',       sub:'crediting wallets',   kind:'money'},
+  {id:'settled',   x:40,  y:190, label:'SETTLED',        sub:'reconciled',          kind:'money'},
+  {id:'abandoned', x:460, y:340, label:'ABANDONED',      sub:'no result',           kind:'danger'},
+  {id:'refunding', x:250, y:340, label:'REFUNDING',      sub:'reverse the ledger',  kind:'danger'},
+  {id:'refunded',  x:40,  y:340, label:'REFUNDED',       sub:'entry fee returned',  kind:'danger'}
+];
+
+const EDGES = [
+  {id:'e1', d:'M190,77 H244',   lab:'deadline timer fires',  lx:217, ly:40},
+  {id:'e2', d:'M400,77 H454',   lab:'first ball bowled',     lx:427, ly:40},
+  {id:'e3', d:'M610,77 H664',   lab:'provider MATCH_COMPLETE', lx:637, ly:40},
+  {id:'e4', d:'M745,104 V184',  lab:'auto — verification window', lx:754, ly:148, anchor:'start'},
+  {id:'e5', d:'M670,217 H616',  lab:'scorecard reconciles ✓', lx:643, ly:180},
+  {id:'e6', d:'M460,217 H406',  lab:'Temporal starts settlement', lx:433, ly:180},
+  {id:'e7', d:'M250,217 H196',  lab:'reconciliation passes', lx:223, ly:180},
+  {id:'e8', d:'M820,217 H874',  lab:'mismatch / dispute ✗',  lx:847, ly:180},
+  {id:'e9', d:'M955,244 V284 H745 V250', lab:'corrected + re-scored', lx:868, ly:298},
+  {id:'e10',d:'M500,104 V150 H430 V318 H535 V334', lab:'no result / washout', lx:424, ly:256, anchor:'end'},
+  {id:'e11',d:'M460,367 H406',  lab:'auto — reverse ledger', lx:433, ly:330},
+  {id:'e12',d:'M250,367 H196',  lab:'reconciliation passes', lx:223, ly:330}
+];
+
+const DETAIL = {
+  pre_match:{
+    trigger:'Contest created and opened for entries',
+    owner:'Contest + Team Service — Java 21 / Spring Boot',
+    writes:'Aurora <code>contest</code>, <code>team</code>; Redis sharded seat counters',
+    sees:'"Join contest", teams fully editable',
+    model:'Strongly consistent per contest row (optimistic locking on <code>version</code>)',
+    inv:'<code>filled ≤ capacity</code> — never oversell a fixed-size contest',
+    fail:'Hot-row contention 10 min before lock → 64 sharded sub-counters keyed <code>(contest_id, shard)</code>'
+  },
+  locked:{
+    trigger:'Deadline timer fires at match start',
+    owner:'Contest + Team Service',
+    writes:'Immutable <code>team_snapshot</code>; every team published to the <b>compacted</b> <code>team.roster</code> topic',
+    sees:'Teams greyed out, "Contest locked"',
+    model:'Point of no return — single writer, fenced by <code>locked_at</code>',
+    inv:'Team <code>signature</code> is immutable from here. <b>This is what makes an in-memory compute engine safe.</b>',
+    fail:'Late-join race → the lock is a fenced write; a join arriving after <code>locked_at</code> is rejected, not queued'
+  },
+  live:{
+    trigger:'First ball bowled',
+    owner:'Ingestion (Go) → Scoring (Flink) → Leaderboard Compute (Go/Rust)',
+    writes:'Aerospike epoch snapshots; S3 epoch dumps; ClickHouse rank history',
+    sees:'Ranks refreshing every 10–30 s, "LIVE" pill',
+    model:'<b>Eventually consistent</b>, bounded staleness ≤ 30 s, <b>monotonic per client</b>',
+    inv:'<code>epoch</code> never decreases for a given client — ranks must not go backwards on refresh',
+    fail:'Pod eviction → rebuild from S3 snapshot + replay compacted roster topic, cold start &lt; 30 s'
+  },
+  frozen:{
+    trigger:'Provider sends <code>MATCH_COMPLETE</code>',
+    owner:'Scoring Service emits the <code>is_final=true</code> epoch',
+    writes:'Final 40-player vector pinned to S3 with Object Lock (WORM)',
+    sees:'Ranks stop moving. Banner: <b>"Winnings will be credited after review"</b>',
+    model:'Frozen but <b>PROVISIONAL</b> — displayed, not owed',
+    inv:'No further epochs are accepted for this match',
+    fail:'A late provider correction does <b>not</b> unfreeze this state — it is handled in review, as a new version'
+  },
+  review:{
+    trigger:'Automatic on freeze',
+    owner:'Temporal activity <code>ReconcileWithOfficialScorecard</code>',
+    writes:'Nothing user-visible; a reconciliation report to S3',
+    sees:'Same provisional ranks and banner',
+    model:'Verification window — minutes to hours. <b>The whole reason payouts are not instant.</b>',
+    inv:'Recomputed points must match the provider’s official scorecard exactly before any money moves',
+    fail:'Mismatch → MANUAL_REVIEW. The workflow blocks <em>durably</em> on a signal, surviving deploys'
+  },
+  manual:{
+    trigger:'Reconciliation mismatch, dispute, DLS adjustment, super over',
+    owner:'Ops + risk team — maker-checker',
+    writes:'Corrected event log as a <b>new version</b>; re-score with a pinned <code>ruleset_version</code>',
+    sees:'Still provisional, with an SLA message',
+    model:'Human in the loop. Temporal holds the workflow open indefinitely — days if needed',
+    inv:'Every correction is an <b>append</b>, never an in-place edit. The original stays in S3',
+    fail:'None technical — this state exists so every other state can stay simple and automatic'
+  },
+  finalized:{
+    trigger:'Reconciliation passes, or a human approval signal arrives',
+    owner:'Leaderboard Compute (fresh recompute) → Settlement',
+    writes:'<code>contest.state = FINALIZED</code>, final rank table, payout plan',
+    sees:'Final rank and "You won ₹X" — credit still pending',
+    model:'<b>Strongly consistent.</b> Recomputed from scratch off the immutable 40-vector, never from live in-memory state',
+    inv:'Ties pool across occupied ranks; <code>Σ payouts == prize_pool</code> to the paise',
+    fail:'Rounding drift → residual assigned deterministically (lowest <code>team_id</code> or a house account)'
+  },
+  settling:{
+    trigger:'Temporal advances past FINALIZED',
+    owner:'Settlement Service + Wallet/Ledger',
+    writes:'<code>payout</code> rows + double-entry <code>ledger_entry</code>, batches of 500 per transaction',
+    sees:'"Credited to your winnings"',
+    model:'ACID per batch. <b>Exactly-once via <code>UNIQUE(idempotency_key, account_id)</code></b>',
+    inv:'<code>idempotency_key = sha256(contest_id | team_id | settlement_run_id)</code>',
+    fail:'Worker crash mid-batch → retry is a <b>no-op</b>, because the unique index rejects the duplicate'
+  },
+  settled:{
+    trigger:'Reconciliation job passes',
+    owner:'Settlement Service',
+    writes:'<code>contest.state = SETTLED</code>; emit <code>ContestSettled</code> → notifications, TDS, statements',
+    sees:'Winnings in wallet, withdrawable after TDS',
+    model:'Final and immutable',
+    inv:'<code>Σ payouts == prize_pool</code> AND <code>count(payouts) == count(winners)</code>',
+    fail:'Mismatch → freeze + page on-call. Corrections only ever via a <b>reversing entry</b>, never an UPDATE'
+  },
+  abandoned:{
+    trigger:'No result, washout, or match called off',
+    owner:'Contest lifecycle',
+    writes:'<code>contest.state = ABANDONED</code>',
+    sees:'"Match abandoned — entry fee will be refunded"',
+    model:'Terminal for scoring; no leaderboard is ever finalized from here',
+    inv:'A partial match that produces a DLS result is <b>not</b> abandoned — it goes through normal review',
+    fail:'Ambiguous abandonment → route to MANUAL_REVIEW rather than guessing'
+  },
+  refunding:{
+    trigger:'Automatic on abandonment',
+    owner:'Settlement Service — the same Temporal machinery, reversed',
+    writes:'Reversing ledger entries: DR house / CR user wallet, <code>entry_fee_paise</code>',
+    sees:'"Refund processing"',
+    model:'Exactly-once, identical idempotency scheme to payouts',
+    inv:'Refund equals the entry fee exactly — never partial, never with a fee deducted',
+    fail:'Retry safe by construction; the unique key is <code>sha256(contest_id|team_id|refund_run_id)</code>'
+  },
+  refunded:{
+    trigger:'Reconciliation passes',
+    owner:'Settlement Service',
+    writes:'<code>contest.state = REFUNDED</code>',
+    sees:'Entry fee back in wallet',
+    model:'Final and immutable',
+    inv:'<code>Σ refunds == Σ entry fees collected</code>',
+    fail:'Mismatch → freeze + alert, same as settlement'
+  }
+};
+
+const FLOWS = {
+  happy: [{n:'pre_match'},{n:'locked',e:'e1'},{n:'live',e:'e2'},{n:'frozen',e:'e3'},
+          {n:'review',e:'e4'},{n:'finalized',e:'e5'},{n:'settling',e:'e6'},{n:'settled',e:'e7'}],
+  disputed: [{n:'pre_match'},{n:'locked',e:'e1'},{n:'live',e:'e2'},{n:'frozen',e:'e3'},
+             {n:'review',e:'e4'},{n:'manual',e:'e8'},{n:'review',e:'e9'},{n:'finalized',e:'e5'},
+             {n:'settling',e:'e6'},{n:'settled',e:'e7'}],
+  abandoned: [{n:'pre_match'},{n:'locked',e:'e1'},{n:'live',e:'e2'},{n:'abandoned',e:'e10'},
+              {n:'refunding',e:'e11'},{n:'refunded',e:'e12'}]
+};
+
+const SVGNS = 'http://www.w3.org/2000/svg';
+const el = (t, a) => { const n = document.createElementNS(SVGNS, t);
+  for (const k in a) n.setAttribute(k, a[k]); return n; };
+
+const gEdges = document.getElementById('smEdges');
+const gNodes = document.getElementById('smNodes');
+const token  = document.getElementById('smToken');
+const panel  = document.getElementById('smPanel');
+const nodeEls = {}, edgeEls = {}, labEls = {};
+
+EDGES.forEach(e => {
+  const p = el('path', {d:e.d, class:'edge', id:'p_'+e.id});
+  gEdges.appendChild(p); edgeEls[e.id] = p;
+  const t = el('text', {x:e.lx, y:e.ly, class:'e-lab',
+                        'text-anchor': e.anchor || 'middle'});
+  t.textContent = e.lab; gEdges.appendChild(t); labEls[e.id] = t;
+});
+
+NODES.forEach(n => {
+  const g = el('g', {class:'n-g', 'data-id':n.id});
+  g.style.color = KIND[n.kind].c;
+  const r = el('rect', {x:n.x, y:n.y, width:150, height:54, class:'n-box'});
+  const t1 = el('text', {x:n.x+75, y:n.y+23, class:'n-lab', 'text-anchor':'middle'});
+  t1.textContent = n.label;
+  const t2 = el('text', {x:n.x+75, y:n.y+39, class:'n-sub', 'text-anchor':'middle'});
+  t2.textContent = n.sub;
+  g.append(r, t1, t2);
+  g.addEventListener('click', () => { stop(); const i = flow().findIndex(s => s.n === n.id);
+    if (i >= 0) goTo(i, false); else render(n.id, -1); });
+  gNodes.appendChild(g); nodeEls[n.id] = {g, r};
+});
+
+let flowKey = 'happy', idx = 0, timer = null, raf = null;
+const flow = () => FLOWS[flowKey];
+
+function paint(activeId, upto) {
+  const seen = new Set(), seenE = new Set();
+  if (upto >= 0) flow().slice(0, upto+1).forEach(s => { seen.add(s.n); if (s.e) seenE.add(s.e); });
+  NODES.forEach(n => {
+    const {g, r} = nodeEls[n.id];
+    const on = n.id === activeId, done = seen.has(n.id);
+    g.classList.toggle('active', on);
+    g.classList.toggle('done', done);
+    r.style.stroke = on ? KIND[n.kind].c : (done ? KIND[n.kind].c : '');
+    r.style.strokeOpacity = on ? 1 : (done ? .55 : '');
+    r.style.fill = on ? 'color-mix(in srgb, currentColor 16%, var(--surface2))'
+                      : (done ? 'color-mix(in srgb, currentColor 7%, var(--surface2))' : '');
+  });
+  EDGES.forEach(e => {
+    const cur = upto >= 0 && flow()[upto] && flow()[upto].e === e.id;
+    edgeEls[e.id].classList.toggle('lit', cur);
+    edgeEls[e.id].classList.toggle('past', seenE.has(e.id) && !cur);
+    labEls[e.id].classList.toggle('show', cur);
+  });
+}
+
+function render(nodeId, upto) {
+  paint(nodeId, upto);
+  const n = NODES.find(x => x.id === nodeId), d = DETAIL[nodeId], k = KIND[n.kind];
+  panel.innerHTML =
+    '<span class="pill" style="color:' + k.c + '">' + k.pill + '</span>' +
+    '<h4 style="color:' + k.c + '">' + n.label + '</h4>' +
+    '<p class="tagline">' + d.trigger + '</p>' +
+    '<dl class="kv">' +
+      '<dt>Owning service</dt><dd>' + d.owner + '</dd>' +
+      '<dt>Writes</dt><dd>' + d.writes + '</dd>' +
+      '<dt>What the user sees</dt><dd>' + d.sees + '</dd>' +
+      '<dt>Consistency model</dt><dd>' + d.model + '</dd>' +
+      '<dt>Invariant</dt><dd class="inv">' + d.inv + '</dd>' +
+      '<dt>Failure mode</dt><dd class="fail">' + d.fail + '</dd>' +
+    '</dl>';
+  document.getElementById('smStep').textContent =
+    upto >= 0 ? 'step ' + (upto+1) + ' / ' + flow().length : 'inspecting · ' + n.label;
+}
+
+function animateEdge(edgeId, done) {
+  const path = edgeEls[edgeId];
+  if (!path) return done();
+  const len = path.getTotalLength(), t0 = performance.now(), dur = 620;
+  token.setAttribute('opacity', 1);
+  cancelAnimationFrame(raf);
+  (function step(now) {
+    const p = Math.min(1, (now - t0) / dur);
+    const pt = path.getPointAtLength(len * p);
+    token.setAttribute('cx', pt.x); token.setAttribute('cy', pt.y);
+    if (p < 1) raf = requestAnimationFrame(step);
+    else { token.setAttribute('opacity', 0); done(); }
+  })(t0);
+}
+
+function goTo(i, animate) {
+  idx = Math.max(0, Math.min(flow().length - 1, i));
+  const s = flow()[idx];
+  if (animate && s.e) { paint(null, idx - 1); animateEdge(s.e, () => render(s.n, idx)); }
+  else render(s.n, idx);
+}
+
+let playing = false;
+function tick() {
+  if (idx >= flow().length - 1) { stop(); return; }
+  goTo(idx + 1, true);
+  timer = setTimeout(tick, 2500);
+}
+function stop() { playing = false; clearTimeout(timer); cancelAnimationFrame(raf);
+  token.setAttribute('opacity', 0); document.getElementById('smPlay').textContent = '▶ Play'; }
+function play() {
+  if (playing) return stop();
+  playing = true; document.getElementById('smPlay').textContent = '❚❚ Pause';
+  if (idx >= flow().length - 1) { idx = 0; goTo(0, false); }
+  timer = setTimeout(tick, 700);
+}
+
+document.getElementById('smPlay').onclick  = play;
+document.getElementById('smNext').onclick  = () => { stop(); goTo(idx + 1, true); };
+document.getElementById('smPrev').onclick  = () => { stop(); goTo(idx - 1, false); };
+document.getElementById('smReset').onclick = () => { stop(); goTo(0, false); };
+document.querySelectorAll('#smFlow button').forEach(b => b.onclick = () => {
+  stop();
+  document.querySelectorAll('#smFlow button').forEach(x => x.classList.remove('on'));
+  b.classList.add('on'); flowKey = b.dataset.flow; goTo(0, false);
+});
+goTo(0, false);
+
+/* ══════════════════════ 2. SQUAD DATA (shared by both widgets) ══════════════════════ */
+const SQUAD = [
+  {pos:'WK', code:'P01', pts:64.5,  sel:.71}, {pos:'WK', code:'P02', pts:21.0,  sel:.18},
+  {pos:'BAT',code:'P03', pts:118.5, sel:.88}, {pos:'BAT',code:'P04', pts:92.0,  sel:.76},
+  {pos:'BAT',code:'P05', pts:47.5,  sel:.54}, {pos:'BAT',code:'P06', pts:12.0,  sel:.31},
+  {pos:'BAT',code:'P07', pts:73.5,  sel:.62}, {pos:'BAT',code:'P08', pts:8.5,   sel:.22},
+  {pos:'BAT',code:'P09', pts:55.0,  sel:.44}, {pos:'BAT',code:'P10', pts:31.5,  sel:.29},
+  {pos:'AR', code:'P11', pts:104.0, sel:.83}, {pos:'AR', code:'P12', pts:68.5,  sel:.67},
+  {pos:'AR', code:'P13', pts:39.0,  sel:.41}, {pos:'AR', code:'P14', pts:81.5,  sel:.58},
+  {pos:'AR', code:'P15', pts:16.5,  sel:.19}, {pos:'AR', code:'P16', pts:52.0,  sel:.37},
+  {pos:'BWL',code:'P17', pts:97.5,  sel:.79}, {pos:'BWL',code:'P18', pts:60.0,  sel:.64},
+  {pos:'BWL',code:'P19', pts:43.5,  sel:.48}, {pos:'BWL',code:'P20', pts:25.0,  sel:.26},
+  {pos:'BWL',code:'P21', pts:86.0,  sel:.55}, {pos:'BWL',code:'P22', pts:10.5,  sel:.15}
+];
+
+// the theoretical ceiling: best XI, best captain, second-best as vice-captain.
+// The leaderboard distribution is truncated here, so a perfect team really is rank 1.
+const MAXPTS = (() => {
+  const top = SQUAD.map(p => p.pts).sort((a,b) => b-a).slice(0,11);
+  return top.reduce((a,b) => a+b, 0) + top[0] + top[1] * 0.5;
+})();
+
+/* ══════════════════════ 3. HISTOGRAM RANKING ══════════════════════ */
+const TOTAL = 10_000_000, BUCKETS = 4000;   // 0.5-point buckets → 0–2000 points
+const MAXB  = Math.floor(MAXPTS * 2);
+const counts = new Float64Array(BUCKETS);
+(function build() {
+  let sum = 0;
+  for (let b = 0; b <= MAXB; b++) {
+    const pts = b / 2;
+    // bulk of the field, plus a thinner shoulder from differentiated captain picks
+    const d = Math.exp(-((pts - 600) ** 2) / (2 * 105 ** 2))
+            + 0.10 * Math.exp(-((pts - 745) ** 2) / (2 * 95 ** 2));
+    counts[b] = d; sum += d;
+  }
+  for (let b = 0; b <= MAXB; b++) counts[b] = Math.round(counts[b] / sum * TOTAL);
+})();
+const suffix = new Float64Array(BUCKETS + 1);
+for (let b = BUCKETS - 1; b >= 0; b--) suffix[b] = suffix[b + 1] + counts[b];
+
+const rankOf = pts => {
+  const b = Math.max(0, Math.min(BUCKETS - 1, Math.floor(pts * 2)));
+  return {bucket: b, above: suffix[b + 1], rank: suffix[b + 1] + 1};
+};
+
+const SLABS = [
+  [1,1,'₹1 Cr'], [2,2,'₹50 L'], [3,3,'₹25 L'], [4,10,'₹5 L'], [11,100,'₹50,000'],
+  [101,1000,'₹5,000'], [1001,10000,'₹500'], [10001,100000,'₹100'], [100001,3000000,'₹49']
+];
+const slabOf = r => { for (const [a,b,p] of SLABS) if (r >= a && r <= b) return p; return 'no prize'; };
+const fmt = n => Math.round(n).toLocaleString('en-IN');
+
+const BARS = 80, PER = 30;                  // 80 bars × 30 buckets = 0–1200 points
+const barEls = [];
+(function bars() {
+  const host = document.getElementById('bars');
+  let max = 0; const agg = [];
+  for (let i = 0; i < BARS; i++) {
+    let s = 0; for (let j = i*PER; j < (i+1)*PER; j++) s += counts[j];
+    agg.push(s); if (s > max) max = s;
+  }
+  agg.forEach(v => { const d = document.createElement('div');
+    d.style.height = Math.max(1, v / max * 100) + '%'; host.appendChild(d); barEls.push(d); });
+})();
+
+function drawHist(pts) {
+  const {bucket, above, rank} = rankOf(pts);
+  const myBar = Math.min(BARS - 1, Math.floor(bucket / PER));
+  barEls.forEach((d, i) => {
+    d.classList.toggle('me', i === myBar);
+    d.classList.toggle('above', i > myBar);
+  });
+  document.getElementById('hScore').textContent  = pts.toFixed(1);
+  document.getElementById('hBucket').textContent = bucket;
+  document.getElementById('hAbove').textContent  = fmt(above);
+  document.getElementById('hRank').textContent   = fmt(rank);
+  document.getElementById('hPct').textContent    = (100 - rank / TOTAL * 100).toFixed(3) + '%';
+  document.getElementById('hPrize').textContent  = slabOf(rank);
+}
+const slider = document.getElementById('scoreSlider');
+slider.min = 150; slider.max = Math.floor(MAXPTS); slider.step = 0.5; slider.value = 760;
+slider.addEventListener('input', () => drawHist(+slider.value));
+drawHist(+slider.value);
+document.getElementById('axMax').textContent = '1200 pts';
+
+/* ══════════════════════ 4. BIT-PACKED TEAM BUILDER ══════════════════════ */
+let sel = new Set([0,2,3,4,6,10,11,13,16,17,20]), cap = 2, vc = 10;
+
+const squadHost = document.getElementById('squad');
+SQUAD.forEach((p, i) => {
+  const d = document.createElement('div');
+  d.className = 'pl'; d.dataset.i = i;
+  d.innerHTML = '<span class="nm">' + p.pos + ' · ' + p.code + '</span>' +
+                '<span class="pts">' + p.pts.toFixed(1) + ' pts</span>' +
+                '<span class="cvc"><b data-r="c">C</b><b data-r="v">V</b></span>';
+  d.addEventListener('click', ev => {
+    const role = ev.target.dataset && ev.target.dataset.r;
+    if (role && sel.has(i)) {
+      if (role === 'c') { if (vc === i) vc = cap; cap = i; }
+      else              { if (cap === i) cap = vc; vc = i; }
+    } else {
+      if (sel.has(i)) { if (i === cap || i === vc) return; sel.delete(i); }
+      else if (sel.size < 11) sel.add(i);
+      else return;
+    }
+    drawTeam();
+  });
+  squadHost.appendChild(d);
+});
+
+function drawTeam() {
+  document.querySelectorAll('.pl').forEach(d => {
+    const i = +d.dataset.i, on = sel.has(i);
+    d.classList.toggle('sel', on);
+    d.querySelector('.cvc').style.display = on ? 'flex' : 'none';
+    d.querySelector('[data-r=c]').classList.toggle('on', i === cap);
+    d.querySelector('[data-r=v]').classList.toggle('on', i === vc);
+  });
+
+  // pack: [39..0 selection mask][45..40 captain][51..46 vice-captain][63..52 pad]
+  let mask = 0n;
+  sel.forEach(i => { mask |= 1n << BigInt(i); });
+  const sig = mask | (BigInt(cap) << 40n) | (BigInt(vc) << 46n);
+
+  const bitStr = i => (mask >> BigInt(i)) & 1n ? '1' : '0';
+  let html = '';
+  for (let i = 39; i >= 0; i--) html += '<i class="mask' + bitStr(i) + '">' + bitStr(i) + '</i>';
+  html += ' <i class="cap">' + cap.toString(2).padStart(6, '0') + '</i>';
+  html += ' <i class="vc">'  + vc.toString(2).padStart(6, '0')  + '</i>';
+  html += ' <i class="pad">' + '0'.repeat(12) + '</i>';
+  document.getElementById('bits').innerHTML = html;
+  document.getElementById('sighex').innerHTML =
+    '<span style="color:var(--muted)">0x</span>' + sig.toString(16).padStart(16, '0').toUpperCase();
+
+  let pts = 0, prob = 1;
+  sel.forEach(i => {
+    const m = i === cap ? 2 : (i === vc ? 1.5 : 1);
+    pts += SQUAD[i].pts * m;
+    prob *= SQUAD[i].sel;
+  });
+  prob *= SQUAD[cap].sel * 0.42 * SQUAD[vc].sel * 0.38;   // C/VC choice narrows it further
+
+  const r = rankOf(pts);
+  document.getElementById('bSel').textContent  = sel.size;
+  document.getElementById('bPts').textContent  = pts.toFixed(1);
+  document.getElementById('bRank').textContent = sel.size === 11 ? fmt(r.rank) : '—';
+  document.getElementById('bTwins').textContent =
+    sel.size === 11 ? '≈ ' + fmt(Math.max(1, TOTAL * prob)) : '—';
+  document.getElementById('bPrize').textContent = sel.size === 11 ? slabOf(r.rank) : '—';
+}
+drawTeam();
+</script>
+</body>
+</html>

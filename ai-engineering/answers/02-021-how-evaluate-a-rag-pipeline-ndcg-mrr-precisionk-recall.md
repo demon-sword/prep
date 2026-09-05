@@ -76,7 +76,7 @@ On a customer support RAG over 50K docs: baseline Recall@5 = 61% with dense-only
 
 NDCG vs MRR: for customer support QA (one correct answer), MRR is most interpretable to stakeholders — "on average, the right doc is the 1.3rd result." NDCG is better for search where docs have tiered relevance (a doc that partially answers is better than an irrelevant one).
 
-**Tradeoff:** RAGAS faithfulness uses an LLM judge — costs money (~$0.001/query at gpt-4o-mini). For 10K golden queries, that's $10/eval run. Use a cheaper judge for nightly runs and gpt-4o for pre-release gates.
+**Tradeoff:** RAGAS faithfulness uses an LLM judge — costs money (~$0.001/query at claude-haiku-4-5). For 10K golden queries, that's $10/eval run. Use a cheaper judge for nightly runs and claude-sonnet-5 for pre-release gates.
 
 ---
 
@@ -93,7 +93,7 @@ For generation, I use RAGAS — an open-source framework that measures four thin
 The workflow is: build a golden dataset of 200–500 annotated (question, answer, relevant doc IDs) triples, run offline eval before every deploy, and gate on regressions — I block any deploy where Recall@5 drops more than 3 points or Faithfulness falls below 0.8."
 
 **Tradeoff / production angle (1 min):**
-"In production I sample about 5% of live traffic and run RAGAS faithfulness asynchronously — it adds cost (about a dollar per thousand queries at gpt-4o-mini), but it's worth it to catch model drift. I also track business metrics: deflection rate for support use cases, p95 latency under 3 seconds, and thumbs-down rate. The key thing I've learned is that you can have great NDCG and still have poor deflection rate — because the user experience depends on how well the answer is synthesized, not just whether the right doc was retrieved. So you need both layers."
+"In production I sample about 5% of live traffic and run RAGAS faithfulness asynchronously — it adds cost (about a dollar per thousand queries at claude-haiku-4-5), but it's worth it to catch model drift. I also track business metrics: deflection rate for support use cases, p95 latency under 3 seconds, and thumbs-down rate. The key thing I've learned is that you can have great NDCG and still have poor deflection rate — because the user experience depends on how well the answer is synthesized, not just whether the right doc was retrieved. So you need both layers."
 
 **Wrap-up (30s):**
 "So the mental model is: retrieval metrics catch the 'we didn't find the right doc' failures, RAGAS catches the 'we found the doc but the LLM hallucinated' failures, and production metrics catch the 'technically correct but useless in practice' failures. Happy to go deeper on any layer — RAGAS internals, how to build the golden dataset, or the production monitoring setup."
@@ -104,8 +104,8 @@ The workflow is: build a golden dataset of 200–500 annotated (question, answer
 
 - **Mistake:** Only mentioning BLEU/ROUGE for RAG evaluation — **Better:** Explain that BLEU/ROUGE are n-gram overlap metrics designed for MT/summarization; they miss faithfulness entirely (a hallucinated answer with good vocabulary scores well). Use RAGAS Faithfulness + Answer Relevancy for generative eval.
 - **Mistake:** Skipping retrieval metrics entirely and only evaluating the final answer — **Better:** Explicitly separate retrieval eval (Recall@5, MRR, NDCG) from generation eval (RAGAS). The most common RAG failures are retrieval failures, not generation failures — if you only measure the final answer, you can't distinguish "retrieved wrong doc → hallucinated" from "retrieved right doc → hallucinated."
-- **Mistake:** Saying "I'd use human evaluators" without mentioning the scalability problem — **Better:** Human eval is the gold standard for a 50-query spot check, but not scalable. Use RAGAS LLM-as-judge for automated eval at scale, validated against human labels on a calibration set. Also mention the cost tradeoff: gpt-4o judge is expensive; gpt-4o-mini is 10× cheaper and good enough for nightly runs.
-- **Mistake:** Omitting the golden dataset build process — **Better:** Explain how to create it: start with historical support tickets that have known resolutions, add SME-annotated edge cases, and use synthetic generation (have GPT-4 generate questions from each doc, then human-review). Stress that the golden set must grow with production failures.
+- **Mistake:** Saying "I'd use human evaluators" without mentioning the scalability problem — **Better:** Human eval is the gold standard for a 50-query spot check, but not scalable. Use RAGAS LLM-as-judge for automated eval at scale, validated against human labels on a calibration set. Also mention the cost tradeoff: claude-sonnet-5 judge is expensive; claude-haiku-4-5 is 10× cheaper and good enough for nightly runs.
+- **Mistake:** Omitting the golden dataset build process — **Better:** Explain how to create it: start with historical support tickets that have known resolutions, add SME-annotated edge cases, and use synthetic generation (have a frontier model generate questions from each doc, then human-review). Stress that the golden set must grow with production failures.
 
 ---
 

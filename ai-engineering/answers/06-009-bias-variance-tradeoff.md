@@ -48,9 +48,9 @@ Generalization error decomposes as **Error = Bias² + Variance + Irreducible Noi
 ### Example / Tradeoff
 **Random Forest as a variance reducer:** A single deep decision tree (max_depth=None) memorizes training noise — 99% train accuracy, 78% validation accuracy on a 50K-record churn dataset (high variance). A Random Forest with 200 trees at max_features=sqrt(p) reduces variance by averaging over decorrelated trees — train 94%, validation 89% (bias ↑ slightly, variance ↓ sharply). The ensemble pays a small bias cost for a large variance gain.
 
-**LoRA fine-tuning angle:** When fine-tuning Llama 3 8B on a 2K-example code-review dataset with rank 64, the model may overfit (high variance) — validation loss diverges after epoch 2. Fix: reduce rank to 16, add dropout=0.1 to LoRA layers, increase the dataset via data augmentation. This is the bias-variance tradeoff applied to parameter-efficient fine-tuning.
+**LoRA fine-tuning angle:** When fine-tuning a small open-weight model (7–8B class) on a 2K-example code-review dataset with rank 64, the model may overfit (high variance) — validation loss diverges after epoch 2. Fix: reduce rank to 16, add dropout=0.1 to LoRA layers, increase the dataset via data augmentation. This is the bias-variance tradeoff applied to parameter-efficient fine-tuning.
 
-**Double-descent caveat (modern LLMs):** Very large over-parameterized models (GPT-4, Llama 3 70B) exhibit *double descent* — as parameters grow beyond the interpolation threshold, test error can decrease again even without explicit regularization. The classical U-curve understates this regime, but for practical fine-tuning on small datasets the traditional tradeoff still holds.
+**Double-descent caveat (modern LLMs):** Very large over-parameterized models (a frontier model, a 70B-class open-weight model) exhibit *double descent* — as parameters grow beyond the interpolation threshold, test error can decrease again even without explicit regularization. The classical U-curve understates this regime, but for practical fine-tuning on small datasets the traditional tradeoff still holds.
 
 ---
 
@@ -68,10 +68,10 @@ If training error is low but there's a large gap to validation error, that's hig
 
 A concrete example: on a 50K churn dataset, a single deep decision tree got 99% train, 78% validation — classic overfitting. Switching to a 200-tree Random Forest brought it to 94%/89% — the ensemble averages over decorrelated trees, buying down variance at a small bias cost.
 
-In the LLM fine-tuning world, the same principle applies. Fine-tuning Llama 3 8B on 2K examples with LoRA rank 64 often overfits by epoch 2. I'd drop rank to 16 and add dropout to the LoRA layers — essentially reducing model capacity relative to dataset size."
+In the LLM fine-tuning world, the same principle applies. Fine-tuning a small open-weight model (7–8B class) on 2K examples with LoRA rank 64 often overfits by epoch 2. I'd drop rank to 16 and add dropout to the LoRA layers — essentially reducing model capacity relative to dataset size."
 
 **Tradeoff / production angle (1 min):**
-"One nuance worth mentioning: very large over-parameterized models exhibit double descent — past the interpolation point, adding more parameters can reduce test error again, which defies the classical U-curve. That's why GPT-4 style models generalize despite having billions of parameters. But for fine-tuning on small task-specific datasets, the classical tradeoff still bites, and you still need learning curves and validation monitoring."
+"One nuance worth mentioning: very large over-parameterized models exhibit double descent — past the interpolation point, adding more parameters can reduce test error again, which defies the classical U-curve. That's why a frontier model style models generalize despite having billions of parameters. But for fine-tuning on small task-specific datasets, the classical tradeoff still bites, and you still need learning curves and validation monitoring."
 
 **Wrap-up (30s):**
 "So my diagnostic flow is: plot learning curves, identify whether the gap is train-high (bias) or train-val-gap (variance), then pick the appropriate lever — capacity for bias, regularization/data for variance. Happy to go deeper on any specific technique."

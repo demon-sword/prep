@@ -35,7 +35,7 @@ Key behaviors:
 - **Multiple stop sequences** — you can pass a list; generation halts at the first match (OpenAI: up to 4; Anthropic: array).
 - **Stop tokens vs stop strings** — some engines expose a lower-level `stop_token_ids` list; the string form is more portable across tokenizers.
 - **Inclusive vs exclusive** — most APIs exclude the stop sequence from the returned text (OpenAI, Anthropic). The `finish_reason` field (`"stop"` vs `"length"`) tells you which termination path fired.
-- **EOS token** — the model also has a built-in end-of-sequence token (e.g., `<|endoftext|>` for GPT, `<|eot_id|>` for Llama 3). Stop sequences are caller-defined overrides on top of this.
+- **EOS token** — the model also has a built-in end-of-sequence token (e.g., `<|endoftext|>` for GPT, `<|eot_id|>` for a modern open-weight model). Stop sequences are caller-defined overrides on top of this.
 - **Streaming** — in streaming mode the engine buffers the last `max(len(stop_seq))` bytes before emitting, so it can withhold a match that's still arriving mid-token.
 
 ### Example / Tradeoff

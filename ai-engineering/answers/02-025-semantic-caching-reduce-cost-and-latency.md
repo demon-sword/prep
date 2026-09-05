@@ -45,9 +45,9 @@ Semantic caching stores LLM responses keyed by the *meaning* of a query rather t
 - **Cache backend**: GPTCache (open-source, pluggable backends), Redis + FAISS for custom implementations, or Zep for agent memory + caching combined.
 
 **Math at scale:**
-At 1M queries/day with a 30% semantic cache hit rate and avg LLM cost of $0.01/query:
-- Without cache: $10,000/day
-- With 30% hit rate: $7,000/day → **$3,000/day saved**
+At 1M queries/day with a 30% semantic cache hit rate and avg LLM cost of $0.0225/query:
+- Without cache: $22,500/day
+- With 30% hit rate: $15,750/day → **$6,750/day saved**
 - Latency: 30% of requests return in ~10ms vs 3–5s → meaningful p95 improvement
 
 ### Example / Tradeoff

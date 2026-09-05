@@ -45,8 +45,8 @@ The architecture has **six layers**, each with a distinct responsibility:
 - Tools: LangGraph (`StateGraph`), custom Python loop, or CrewAI depending on multi-agent needs
 
 **3. LLM reasoning layer**
-- GPT-4o (or Claude 3.5 Sonnet) for planning/synthesis steps requiring deep reasoning
-- GPT-4o-mini for routing, tool-arg generation, and simple extraction (3–5× cheaper)
+- A frontier model (or a frontier model) for planning/synthesis steps requiring deep reasoning
+- A small fast model for routing, tool-arg generation, and simple extraction (3–5× cheaper)
 - Prompt: system persona + tool schema + conversation history (sliding window ≤8K tokens) + current observation
 - Temperature: 0.0 for deterministic tool dispatch; 0.7 for open-ended synthesis
 
@@ -73,7 +73,7 @@ The architecture has **six layers**, each with a distinct responsibility:
 ### Example / Tradeoff
 
 **Support-ticket routing agent (production example):**
-- Stack: LangGraph `StateGraph` + GPT-4o-mini (routing) + GPT-4o (drafting) + 5 tools (ticket_lookup, kb_search, draft_response, escalate_to_human, update_ticket_status)
+- Stack: LangGraph `StateGraph` + a small fast model (routing) + a frontier model (drafting) + 5 tools (ticket_lookup, kb_search, draft_response, escalate_to_human, update_ticket_status)
 - HITL: `interrupt_before(['update_ticket_status', 'escalate_to_human'])` — human approves any status change
 - Checkpointing: Redis-backed `MemorySaver` — restart from last good step on worker crash
 - Observability: LangSmith trace per ticket; p95 step count = 4, p95 wall-clock = 8s, cost/ticket ≈ $0.012
@@ -97,7 +97,7 @@ The architecture has **six layers**, each with a distinct responsibility:
 **Core explanation (2–3 min):**
 "Starting at the top — the **interface layer** accepts user input, creates or resumes a session stored in Redis, and streams the response back. Below that is the **loop controller** — this is where I'd enforce hard limits: max 15 iterations, a wall-clock timeout of 120 seconds, and a per-step token budget. Without these, you get cost explosions in production.
 
-The **LLM layer** is tiered: GPT-4o-mini for tool dispatch and argument generation, GPT-4o for synthesis or planning steps that need deep reasoning — about a 3–5× cost difference. Both use temperature 0 for deterministic tool calls. The prompt is: system persona + typed tool schemas + sliding window of the last N turns + the current observation.
+The **LLM layer** is tiered: a small fast model for tool dispatch and argument generation, a frontier model for synthesis or planning steps that need deep reasoning — about a 3–5× cost difference. Both use temperature 0 for deterministic tool calls. The prompt is: system persona + typed tool schemas + sliding window of the last N turns + the current observation.
 
 The **tool layer** is critical for safety. Every tool has a strict JSON schema with constrained enums and concrete examples in the description — this alone cuts hallucinated tool args by 40–60%. Pre-call middleware runs schema validation, PII scrubbing via Presidio, and auth injection. Write operations go through sandboxed execution — E2B or Docker with network egress restricted. Every write tool gets an idempotency key, and retries use exponential backoff up to 3 attempts.
 
@@ -116,7 +116,7 @@ The **tool layer** is critical for safety. Every tool has a strict JSON schema w
 ## Pitfalls
 
 - **Mistake:** Describing a ReAct loop with no budget caps, no HITL, no sandboxing — "just an LLM calling tools" — **Better:** Immediately lead with the three required production guardrails — `max_iterations`, HITL trigger for irreversible actions, and sandboxed execution for code/write tools; explain that without these, agents loop indefinitely and rack up unbounded costs.
-- **Mistake:** Using GPT-4o for every step in the loop without mentioning model tiering — **Better:** Distinguish routing/dispatch steps (GPT-4o-mini, cheap) from reasoning/synthesis steps (GPT-4o), and explain how model tiering cuts cost per task by 60–80% without sacrificing quality.
+- **Mistake:** Using a frontier model for every step in the loop without mentioning model tiering — **Better:** Distinguish routing/dispatch steps (a small fast model, cheap) from reasoning/synthesis steps (a frontier model), and explain how model tiering cuts cost per task by 60–80% without sacrificing quality.
 - **Mistake:** Treating memory as "just the context window" — **Better:** Describe the four memory types (working/episodic/semantic/procedural) and explain that a production agent retrieves relevant past context from Pinecone/Redis rather than stuffing everything into one prompt, which would blow the context window and inflate cost.
 
 ---
@@ -133,4 +133,4 @@ The **tool layer** is critical for safety. Every tool has a strict JSON schema w
 
 ## One-liner recall
 
-> A production agent wraps the ReAct loop in six layers — session/interface, loop controller (max_iterations + wall-clock timeout), tiered LLM (GPT-4o-mini for dispatch, GPT-4o for synthesis), sandboxed tool execution (E2B/Docker + idempotency keys), four-tier memory (working/episodic/semantic/procedural in Redis+Pinecone), and step-level observability with HITL on irreversible actions via LangGraph `interrupt_before`.
+> A production agent wraps the ReAct loop in six layers — session/interface, loop controller (max_iterations + wall-clock timeout), tiered LLM (a small fast model for dispatch, a frontier model for synthesis), sandboxed tool execution (E2B/Docker + idempotency keys), four-tier memory (working/episodic/semantic/procedural in Redis+Pinecone), and step-level observability with HITL on irreversible actions via LangGraph `interrupt_before`.

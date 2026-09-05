@@ -57,7 +57,7 @@ User query
 **Phase 3 — Generation**
 
 - System prompt: *"Answer using only the provided context. If the answer is not in the context, say 'I don't have that information.' Cite sources as [Doc Title, Section]."*
-- Model: GPT-4o-mini for ≤3K context (fast, cheap); GPT-4o for complex multi-doc synthesis
+- Model: a small fast model for ≤3K context (fast, cheap); a frontier model for complex multi-doc synthesis
 - Temperature: 0 (determinism matters for enterprise Q&A)
 - Output: answer + inline citations + confidence hint ("Based on 3 documents from…")
 
@@ -83,7 +83,7 @@ Golden dataset: 100 curated Q&A pairs from SMEs, run on every model/prompt chang
 Polling Confluence every 15 min keeps docs fresh but creates embedding churn (~$0.002/1K tokens × N changed pages/day). Webhook-triggered incremental re-embedding (only changed pages) cuts cost 80% but requires reliable webhook infrastructure. Start with polling, migrate to webhooks at scale.
 
 **Key tradeoff — model size vs latency:**
-GPT-4o at T=0 costs ~$0.005/query; GPT-4o-mini at ~$0.0005/query. For a 10K-employee company with 5K queries/day that's $25/day vs $2.50/day. Route simple factual questions (short context, high retrieval confidence) to mini; escalate to full GPT-4o when cross-encoder confidence < 0.6.
+A frontier model at T=0 costs ~$0.020/query; a small fast model ~$0.004/query. For a 10K-employee company with 5K queries/day that's $100/day vs $20/day. Route simple factual questions (short context, high retrieval confidence) to the small model; escalate to the frontier model when cross-encoder confidence < 0.6.
 
 ---
 
@@ -101,7 +101,7 @@ GPT-4o at T=0 costs ~$0.005/query; GPT-4o-mini at ~$0.0005/query. For a 10K-empl
 
 **Retrieval:** Every query first enforces ACL — filter by the user's group membership before even hitting the vector store. Then I run hybrid search: dense top-20 plus BM25 top-20, fuse with Reciprocal Rank Fusion, and cross-encoder rerank down to 5 chunks using Cohere Rerank or an MS-MARCO model. The context assembly order matters — I place the highest-scored chunk first, because of the 'lost in the middle' problem.
 
-**Generation:** System prompt explicitly says 'answer only from context, cite your sources, say you don't know if it's absent.' Temperature zero. GPT-4o-mini for simple queries, GPT-4o for complex synthesis — routing based on context length and reranker confidence score."
+**Generation:** System prompt explicitly says 'answer only from context, cite your sources, say you don't know if it's absent.' Temperature zero. A small fast model for simple queries, a frontier model for complex synthesis — routing based on context length and reranker confidence score."
 
 **Tradeoff / production angle (1 min):**
 "The two biggest production challenges are freshness and evaluation. For freshness, I'd start with polling and move to webhook-triggered incremental re-embedding once I've proven the system works — that cuts embedding cost by ~80%. For eval, I'd build a golden dataset of 100 curated Q&A pairs from domain experts and run RAGAS faithfulness and context recall on every deploy. If faithfulness drops more than 5 percentage points, the deploy is blocked. I'd also track deflection rate in production — if 'I don't have that information' responses exceed 10% on topics we *should* cover, that signals a retrieval problem, not a generation problem."
@@ -114,7 +114,7 @@ GPT-4o at T=0 costs ~$0.005/query; GPT-4o-mini at ~$0.0005/query. For a 10K-empl
 ## Pitfalls
 
 - **Mistake:** Describing a simple vector search with no ACL enforcement — **Better:** Explicitly cover how user group membership filters vector store queries at retrieval time; a knowledge base assistant that leaks confidential docs to unauthorized users is a P0 incident.
-- **Mistake:** Saying "I'd just use OpenAI embeddings and GPT-4" without addressing freshness or stale indexes — **Better:** Explain the ingestion loop (webhook vs polling), incremental re-embedding on doc changes, and how you detect embedding drift over time.
+- **Mistake:** Saying "I'd just use off-the-shelf embeddings and a frontier model" without addressing freshness or stale indexes — **Better:** Explain the ingestion loop (webhook vs polling), incremental re-embedding on doc changes, and how you detect embedding drift over time.
 - **Mistake:** Skipping evaluation and saying "users will give thumbs up/down" — **Better:** Describe a structured RAGAS-based golden dataset eval (faithfulness ≥ 0.85, context recall ≥ 0.80) run on every prompt or model change, plus production metrics (deflection rate, p95 latency).
 - **Mistake:** Ignoring format heterogeneity — **Better:** Call out that internal docs include PDFs, Confluence pages, Slack threads, and code; each needs a different parser, and tables/code blocks need special chunking treatment to avoid splitting logical units.
 

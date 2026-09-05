@@ -44,7 +44,7 @@ Agent behavior is a composite of at least four independently mutable layers: sys
 - Use a blue-green deployment: route 5% of traffic to the new image, observe metrics (success rate, avg turns, cost/query) for 30 min, then flip 100% or roll back to the previous image.
 
 **Layer 4 — Model**
-- Pin `model_version` in agent config (e.g. `gpt-4o-2024-11-20`). When a provider releases a new snapshot, run golden-dataset regression before promoting to production. If regression fails, keep the pinned old snapshot.
+- Pin `model_version` in agent config (e.g. `claude-sonnet-5-2024-11-20`). When a provider releases a new snapshot, run golden-dataset regression before promoting to production. If regression fails, keep the pinned old snapshot.
 
 **Canary / shadow deployment flow:**
 1. Tag new agent config version → deploy to `canary` slot (5% traffic).
@@ -78,7 +78,7 @@ Tool schemas get versioned the same way. If I rename a parameter or add a requir
 
 Orchestration logic — the actual LangGraph DAG or ReAct loop code — is Docker-image-tagged and deployed blue-green. I route 5% of real traffic to the new image, measure turn count, success-signal rate, and cost-per-query, and auto-promote or auto-rollback based on thresholds. If p95 turn count increases by more than 20% on canary, we roll back the image automatically.
 
-Model versions are pinned explicitly in the agent config — `gpt-4o-2024-11-20` — and I run a golden-dataset regression before promoting any model snapshot change. This avoids surprises when OpenAI silently updates a model."
+Model versions are pinned explicitly in the agent config — `claude-sonnet-5-2024-11-20` — and I run a golden-dataset regression before promoting any model snapshot change. This avoids surprises when OpenAI silently updates a model."
 
 **Tradeoff / production angle (1 min):**
 "The main tension is configuration complexity vs rollback speed. A single flat Git repo works for one or two agents, but with ten agents across three teams, you need a dedicated prompt registry and per-agent config namespacing or you get prompt version collisions. The other gotcha is that shadow mode for irreversible tools — like sending emails or calling external APIs — requires mock interceptors in canary, otherwise you shadow-blast customers. That's a runtime safety concern that's easy to forget during deployment."

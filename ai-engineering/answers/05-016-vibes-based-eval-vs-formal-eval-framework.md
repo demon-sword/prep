@@ -39,7 +39,7 @@ A formal framework has four layers:
 |-------|------|------|------|
 | **1. Golden dataset** | 100–500 (query, expected output) pairs covering core use-cases, edge cases, and known failure modes | Hand-curated + LLM-assisted augmentation | Offline, every deploy |
 | **2. Automated metrics** | RAGAS Faithfulness + Answer Relevancy + Context Recall; BERTScore F1 for semantic similarity; pass-rate@k for non-deterministic tasks | RAGAS, deepeval, promptfoo | CI gate pre-deploy |
-| **3. LLM-as-judge** | GPT-4o (or Claude) scores a random 5–10% sample on dimensions like helpfulness, groundedness, and tone; cheaper than hand labelling | GPT-4o judge with structured rubric | Nightly batch |
+| **3. LLM-as-judge** | a frontier model (or Claude) scores a random 5–10% sample on dimensions like helpfulness, groundedness, and tone; cheaper than hand labelling | a frontier model judge with structured rubric | Nightly batch |
 | **4. Production telemetry** | Thumbs-up/down, CSAT, deflection rate, p95 latency; async RAGAS faithfulness on 100% of traffic via Kafka sidecar | Grafana + PagerDuty, async Kafka pipeline | Real-time, 24/7 |
 
 **Deployment gate pattern:**
@@ -75,12 +75,12 @@ At one company building a customer-support RAG chatbot, the team iterated for si
 **Core explanation (2–3 min):**
 "Vibes-based eval is what every team starts with — you read some outputs, they seem fine, you ship. The problem is it has zero statistical power: you can't detect a 3-point drop in faithfulness, and you have no regression protection when you change a prompt or swap models.
 
-A formal eval framework has four layers. First, a golden dataset — I'd curate 200–500 labelled (query, expected output) pairs from production logs, known failures, and adversarial edge cases, and version-control it in git. Second, automated metrics running in CI: RAGAS Faithfulness and Context Recall for RAG systems, or BERTScore F1 for semantic similarity tasks, with explicit pass/fail thresholds — say, Faithfulness ≥ 0.85 blocks the merge if it drops. Third, an LLM-as-judge on a random 5–10% sample nightly, using GPT-4o with a structured rubric for dimensions like groundedness and helpfulness. And fourth, production telemetry: thumbs-down rate, CSAT, deflection rate, all streaming into Grafana with PagerDuty alerts.
+A formal eval framework has four layers. First, a golden dataset — I'd curate 200–500 labelled (query, expected output) pairs from production logs, known failures, and adversarial edge cases, and version-control it in git. Second, automated metrics running in CI: RAGAS Faithfulness and Context Recall for RAG systems, or BERTScore F1 for semantic similarity tasks, with explicit pass/fail thresholds — say, Faithfulness ≥ 0.85 blocks the merge if it drops. Third, an LLM-as-judge on a random 5–10% sample nightly, using a frontier model with a structured rubric for dimensions like groundedness and helpfulness. And fourth, production telemetry: thumbs-down rate, CSAT, deflection rate, all streaming into Grafana with PagerDuty alerts.
 
 The deployment gate then looks like: CI passes → shadow deploy → 1% canary → 24-hour hold → full rollout, with auto-revert if deflection rate shifts by more than 2 percentage points."
 
 **Tradeoff / production angle (1 min):**
-"The real cost is golden dataset maintenance — you need to refresh it as the product evolves, maybe one engineer-day per month. The risk of skipping that is your eval diverges from reality and you're back to vibes. The LLM-as-judge layer is the other cost lever: at $0.01/1K tokens for GPT-4o-mini, judging 5% of 1M queries/day is about $500/month — easily justified by one avoided production incident.
+"The real cost is golden dataset maintenance — you need to refresh it as the product evolves, maybe one engineer-day per month. The risk of skipping that is your eval diverges from reality and you're back to vibes. The LLM-as-judge layer is the other cost lever: at $0.01/1K tokens for a small fast model, judging 5% of 1M queries/day is about $500/month — easily justified by one avoided production incident.
 
 One failure mode I'd flag: having thresholds that are too lenient initially because the golden dataset is small. I'd rather start strict and relax than let regressions through."
 

@@ -339,7 +339,7 @@
   <ul>
     <li><strong>fp16 / bf16</strong>: Standard inference precision. bf16 has wider dynamic range (same exponent bits as fp32), favored by modern hardware. No quality loss vs fp32 in practice.</li>
     <li><strong>int8 (W8A8)</strong>: Weights and activations quantized to 8-bit integers. Achievable with <code>bitsandbytes</code>, GPTQ, or SmoothQuant. Typical quality impact: &lt;1% degradation on most benchmarks. ~2x memory reduction, ~1.5–2x throughput gain on supported hardware.</li>
-    <li><strong>int4 (W4A16 / NF4)</strong>: 4-bit weights, fp16 activations. Used in QLoRA (<code>NF4</code> format) and GPTQ. ~4x memory reduction. Works surprisingly well for decoder-only models; some tasks see 2–5% degradation. <code>llama.cpp</code> runs Llama 3 70B in int4 on a single 48 GB GPU.</li>
+    <li><strong>int4 (W4A16 / NF4)</strong>: 4-bit weights, fp16 activations. Used in QLoRA (<code>NF4</code> format) and GPTQ. ~4x memory reduction. Works surprisingly well for decoder-only models; some tasks see 2–5% degradation. <code>llama.cpp</code> runs a 70B-class open-weight model in int4 on a single 48 GB GPU.</li>
     <li><strong>GGUF / GGML</strong>: Quantization formats for CPU inference, popularized by <code>llama.cpp</code>. Support mixed-precision per tensor (sensitive layers kept at higher precision).</li>
     <li><strong>AWQ (Activation-aware Weight Quantization)</strong>: Keeps 1% of weights at fp16 (those with high activation magnitudes), the rest at int4. Better quality than uniform int4 at same bit-width.</li>
   </ul>
@@ -349,11 +349,11 @@
 
   <h3>3. KV Cache Management</h3>
   <p>
-    During autoregressive decoding, each attention layer must recompute attention over all previous tokens — or cache the Key and Value tensors to avoid redundant computation. The KV cache grows as: <code>2 × num_layers × num_kv_heads × head_dim × seq_len × bytes/elem</code>. For Llama 3 70B (80 layers, 8 GQA heads, 128 head_dim, fp16): each token uses <code>2 × 80 × 8 × 128 × 2 = 327,680 bytes ≈ 320 KB</code>. A 4096-token sequence fills ~1.3 GB — per request.
+    During autoregressive decoding, each attention layer must recompute attention over all previous tokens — or cache the Key and Value tensors to avoid redundant computation. The KV cache grows as: <code>2 × num_layers × num_kv_heads × head_dim × seq_len × bytes/elem</code>. For a 70B-class open-weight model (80 layers, 8 GQA heads, 128 head_dim, fp16): each token uses <code>2 × 80 × 8 × 128 × 2 = 327,680 bytes ≈ 320 KB</code>. A 4096-token sequence fills ~1.3 GB — per request.
   </p>
   <ul>
     <li><strong>PagedAttention</strong> (vLLM): Stores KV cache in non-contiguous pages (like virtual memory), eliminating fragmentation. Allows near-zero wasted KV cache memory and enables sharing across requests with common prefixes.</li>
-    <li><strong>GQA (Grouped Query Attention)</strong>: Multiple query heads share a single K/V head (Llama 3, Mistral). Reduces KV cache size by <code>num_q_heads / num_kv_heads</code>.</li>
+    <li><strong>GQA (Grouped Query Attention)</strong>: Multiple query heads share a single K/V head (a modern open-weight model, Mistral). Reduces KV cache size by <code>num_q_heads / num_kv_heads</code>.</li>
     <li><strong>MQA (Multi-Query Attention)</strong>: Extreme case — all query heads share one K/V pair. Used in PaLM, Falcon.</li>
     <li><strong>KV cache offloading</strong>: Move KV cache to CPU RAM when GPU VRAM is full. Adds latency (~50–200ms per layer on NVLink) but allows longer contexts.</li>
     <li><strong>Prompt caching</strong>: Cache the KV state for a fixed system prompt prefix across requests. Anthropic charges 10% for cache writes, 1% for cache hits. vLLM calls this "prefix caching."</li>
@@ -405,7 +405,7 @@
     </div>
     <div class="card">
       <h4>llama.cpp</h4>
-      <p>CPU + GPU inference in GGUF format. Runs Llama 3 70B on a Mac Studio or dual RTX 3090s. int4 quantization with per-layer mixed precision.</p>
+      <p>CPU + GPU inference in GGUF format. Runs a 70B-class open-weight model on a Mac Studio or dual RTX 3090s. int4 quantization with per-layer mixed precision.</p>
     </div>
   </div>
 </section>
@@ -430,7 +430,7 @@
 
   <!-- Throughput comparison chart -->
   <div class="bar-section">
-    <h3>Throughput Comparison (Llama 3 70B, A100 80GB, tokens/sec)</h3>
+    <h3>Throughput Comparison (a 70B-class open-weight model, A100 80GB, tokens/sec)</h3>
     <p style="color:var(--text-dim); font-size:.85rem; margin-bottom:1rem;">Approximate relative throughput for a typical chat workload. Click a bar to highlight it.</p>
     <div id="bar-chart"></div>
   </div>
@@ -442,9 +442,9 @@
   <ul>
     <li><strong>Diagnose before optimizing:</strong> Profiling is non-negotiable. Decode is almost always memory-bandwidth-bound at batch=1; prefill is almost always compute-bound for long prompts. The interventions are different — apply the wrong fix and you gain nothing.</li>
     <li><strong>Continuous batching is the highest-leverage systems win:</strong> vLLM's PagedAttention + continuous batching typically yields 10–20x throughput improvement over naïve HuggingFace <code>generate()</code> with zero model changes. Do this first.</li>
-    <li><strong>int4 quantization on 70B+ models is production-safe:</strong> AWQ / GPTQ int4 on Llama 3 70B loses &lt;2% quality on most evals while fitting in 40 GB VRAM instead of 140 GB. The tradeoff is worthwhile for most applications.</li>
+    <li><strong>int4 quantization on 70B+ models is production-safe:</strong> AWQ / GPTQ int4 on a 70B-class open-weight model loses &lt;2% quality on most evals while fitting in 40 GB VRAM instead of 140 GB. The tradeoff is worthwhile for most applications.</li>
     <li><strong>Speculative decoding's speedup is acceptance-rate dependent:</strong> If draft and target models are misaligned (different tokenizer, different domain), acceptance rate collapses and you spend more compute than you save. Test empirically. 2.5–3x is realistic for well-matched pairs.</li>
-    <li><strong>KV cache is the memory budget killer at long context:</strong> A 128K-context request on Llama 3 70B occupies ~40 GB of KV cache alone. GQA reduces this by 8x vs MHA; prefix caching amortizes it across requests with shared system prompts.</li>
+    <li><strong>KV cache is the memory budget killer at long context:</strong> A 128K-context request on a 70B-class open-weight model occupies ~40 GB of KV cache alone. GQA reduces this by 8x vs MHA; prefix caching amortizes it across requests with shared system prompts.</li>
     <li><strong>FlashAttention is free quality:</strong> It produces mathematically identical outputs to standard attention — it's a pure systems optimization. If you're not using it (via <code>torch.nn.functional.scaled_dot_product_attention</code> in PyTorch 2.0+), you're leaving 2–4x prefill speed on the table.</li>
   </ul>
 </section>
@@ -572,7 +572,7 @@ const RESULTS = {
   'decode-no-quant': [
     { name: 'Continuous Batching (vLLM)', desc: 'Zero quality impact. PagedAttention + iteration-level scheduling. Single biggest systems win for throughput.', badges: [{cls:'badge-speedup',txt:'10–20×'}] },
     { name: 'Flash Attention 2', desc: 'Lossless speedup for prefill + memory efficiency. Enable via torch.nn.functional.scaled_dot_product_attention.', badges: [{cls:'badge-speedup',txt:'2–4× prefill'}] },
-    { name: 'GQA / MQA', desc: 'Architecture-level: use a model with Grouped Query Attention to reduce KV cache pressure. Llama 3, Mistral all use GQA.', badges: [{cls:'badge-memory',txt:'KV Cache'}] },
+    { name: 'GQA / MQA', desc: 'Architecture-level: use a model with Grouped Query Attention to reduce KV cache pressure. a modern open-weight model, Mistral all use GQA.', badges: [{cls:'badge-memory',txt:'KV Cache'}] },
   ],
   'decode-int8': [
     { name: 'SmoothQuant / W8A8', desc: 'Weights and activations quantized to int8. ~1.5× memory reduction, <1% quality loss. bitsandbytes LLM.int8() or TensorRT-LLM.', badges: [{cls:'badge-speedup',txt:'1.5–2×'},{cls:'badge-quality',txt:'<1% loss'}] },
@@ -600,7 +600,7 @@ const RESULTS = {
   ],
   'memory-kv': [
     { name: 'PagedAttention (vLLM)', desc: 'Non-contiguous KV pages eliminate fragmentation. Enables prefix sharing — requests with same prefix share KV cache pages.', badges: [{cls:'badge-memory',txt:'Paging'}] },
-    { name: 'GQA / MQA Models', desc: 'Switch to a model that uses Grouped Query Attention. Llama 3 uses 8 KV heads vs 64 query heads → 8× KV cache reduction.', badges: [{cls:'badge-memory',txt:'8× reduction'}] },
+    { name: 'GQA / MQA Models', desc: 'Switch to a model that uses Grouped Query Attention. a modern open-weight model uses 8 KV heads vs 64 query heads → 8× KV cache reduction.', badges: [{cls:'badge-memory',txt:'8× reduction'}] },
     { name: 'KV Cache Offloading', desc: 'Offload KV cache to CPU DRAM. Enables longer contexts at cost of latency (~50–200ms/layer on NVLink). Last resort.', badges: [{cls:'badge-memory',txt:'VRAM relief'},{cls:'badge-tradeoff',txt:'Latency'}] },
     { name: 'Streaming / Window Attention', desc: 'Process only a sliding window of recent tokens. Sacrifices full context for memory efficiency. Mistral uses 4K sliding window.', badges: [{cls:'badge-tradeoff',txt:'Context loss'}] },
   ],

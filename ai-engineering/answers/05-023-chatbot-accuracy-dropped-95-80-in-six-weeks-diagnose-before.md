@@ -52,7 +52,7 @@ Work through five investigation layers in order:
 - Did any connector (Confluence, Salesforce, etc.) auth token expire or a webhook stop firing?
 
 **4. Isolate model and prompt changes (Day 3–4)**
-- Review deployment log for the six-week window: any prompt template changes, model version bumps (gpt-4o-2024-05-13 → gpt-4o-2024-08-06), temperature or top_p tweaks?
+- Review deployment log for the six-week window: any prompt template changes, model version bumps (claude-sonnet-5-2024-05-13 → claude-sonnet-5-2024-08-06), temperature or top_p tweaks?
 - Pin the model version and replay 50 golden queries from the old and new config side-by-side.
 - Check token budget: did context length grow past the model's reliable attention window, triggering lost-in-the-middle degradation?
 

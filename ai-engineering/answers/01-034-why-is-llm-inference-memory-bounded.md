@@ -61,9 +61,9 @@ LLM inference during the **decode phase** is memory-bandwidth-bound, not compute
 - Naïve HuggingFace serving: ~400 tokens/s throughput at batch=1, stalls at batch=8 (OOM).
 - vLLM with PagedAttention: ~2,400 tokens/s at batch=32+ — ~6× improvement, same hardware.
 
-**GQA (Grouped Query Attention)** directly attacks KV cache bandwidth: Llama 3 70B uses 8 KV heads instead of 64, reducing KV cache size by 8×, freeing HBM for larger batches.
+**GQA (Grouped Query Attention)** directly attacks KV cache bandwidth: a 70B-class open-weight model uses 8 KV heads instead of 64, reducing KV cache size by 8×, freeing HBM for larger batches.
 
-**Quantization (INT8/INT4):** halving weight size halves memory-bandwidth requirement per step, nearly doubling decode throughput — e.g., AWQ INT4 on Llama 3 70B cuts per-step weight load from ~140 GB to ~35 GB, roughly 4× faster decode on bandwidth-limited GPUs.
+**Quantization (INT8/INT4):** halving weight size halves memory-bandwidth requirement per step, nearly doubling decode throughput — e.g., AWQ INT4 on a 70B-class open-weight model cuts per-step weight load from ~140 GB to ~35 GB, roughly 4× faster decode on bandwidth-limited GPUs.
 
 **Speculative decoding** side-steps per-step bandwidth cost: a small draft model proposes N tokens, the large model verifies all N in one prefill-like step (compute-bound again), accepting tokens that match. Effective throughput can double at no accuracy cost.
 
@@ -82,7 +82,7 @@ The KV cache makes this worse. Every decode step also loads cached keys and valu
 The primary fix is batch size: if you serve 64 requests simultaneously, one weight-load services 64 tokens, pushing arithmetic intensity up toward the compute-bound region. But bigger batches demand more KV cache memory — which is exactly what vLLM's PagedAttention solves. It treats KV cache blocks like OS virtual memory pages, allocating them on demand rather than reserving contiguous chunks upfront. In practice this gives 2–4× more effective batch capacity on the same hardware."
 
 **Tradeoff / production angle (1 min):**
-"There are several complementary levers. GQA — which Llama 3 uses — reduces KV heads from 64 to 8, shrinking KV cache by 8× and freeing HBM headroom for more concurrent requests. Quantization (INT4/INT8) halves or quarters the weight data per step, nearly linearly improving decode throughput on bandwidth-limited cards. Speculative decoding converts the bottleneck from many small memory-bound steps to fewer large compute-bound verification steps, roughly doubling throughput for low-entropy outputs.
+"There are several complementary levers. GQA — which a modern open-weight model uses — reduces KV heads from 64 to 8, shrinking KV cache by 8× and freeing HBM headroom for more concurrent requests. Quantization (INT4/INT8) halves or quarters the weight data per step, nearly linearly improving decode throughput on bandwidth-limited cards. Speculative decoding converts the bottleneck from many small memory-bound steps to fewer large compute-bound verification steps, roughly doubling throughput for low-entropy outputs.
 
 The tradeoff to watch is that quantization trades accuracy for bandwidth; speculative decoding adds latency variance on high-entropy outputs; and aggressive batching increases p99 latency for individual requests even as throughput climbs."
 

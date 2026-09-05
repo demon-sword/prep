@@ -53,10 +53,10 @@ You still need a frozen reference model `π_ref` (the SFT checkpoint) to compute
 | Infrastructure | Requires online rollout generation; needs 4× GPU memory headroom | Standard SFT setup; no rollouts |
 | Stability | PPO is notoriously finicky (reward hacking, KL collapse) | Stable, reproducible like any SFT run |
 | Data | Can incorporate online human feedback or AI feedback in the loop | Offline preference dataset required upfront |
-| Performance ceiling | Higher — RL can explore beyond the dataset; used by GPT-4, Claude 2 | Slightly lower ceiling on complex tasks, but closes the gap on instruction following |
+| Performance ceiling | Higher — RL can explore beyond the dataset; used by a frontier model, Claude 2 | Slightly lower ceiling on complex tasks, but closes the gap on instruction following |
 | When to use | When you can generate rollouts, have human annotators in loop, or need frontier performance | When you have a fixed preference dataset, limited infra, or need fast iteration |
 
-**Real examples:** Meta's Llama 3 used a combination of SFT + RLHF for chat alignment. Mistral-7B-Instruct-v0.2 was aligned with DPO. TRL (HuggingFace) ships both `PPOTrainer` and `DPOTrainer` — DPO has ~3× fewer lines of config.
+**Real examples:** Meta's a modern open-weight model used a combination of SFT + RLHF for chat alignment. A small open-weight model (7–8B class)-Instruct-v0.2 was aligned with DPO. TRL (HuggingFace) ships both `PPOTrainer` and `DPOTrainer` — DPO has ~3× fewer lines of config.
 
 **IPO, KTO, SimPO** are DPO variants that address specific failure modes (distribution shift, need for paired data) — worth mentioning at senior level.
 
@@ -73,7 +73,7 @@ You still need a frozen reference model `π_ref` (the SFT checkpoint) to compute
 DPO skips all of that. Rafailov et al. showed you can rearrange the RLHF objective so that the reward model is implicit in the policy itself. The loss operates directly on preference triplets and is essentially a binary cross-entropy over log-probability ratios between the current policy and a frozen reference. No rollouts, no reward model, no four-model setup. It trains like standard SFT — stable, reproducible, fast to iterate."
 
 **Tradeoff / production angle (1 min):**
-"In practice: if you have a fixed offline preference dataset and limited infra, DPO is the obvious choice. HuggingFace TRL's DPOTrainer lets you go from SFT checkpoint to aligned model in hours. If you need frontier performance — especially on tasks that require exploring beyond your dataset, like RLHF with live human feedback in the loop — PPO is worth the complexity. That's why GPT-4 and Claude 2 used RLHF. The newer DPO variants like IPO and SimPO address some of DPO's edge cases around distribution shift."
+"In practice: if you have a fixed offline preference dataset and limited infra, DPO is the obvious choice. HuggingFace TRL's DPOTrainer lets you go from SFT checkpoint to aligned model in hours. If you need frontier performance — especially on tasks that require exploring beyond your dataset, like RLHF with live human feedback in the loop — PPO is worth the complexity. That's why a frontier model and Claude 2 used RLHF. The newer DPO variants like IPO and SimPO address some of DPO's edge cases around distribution shift."
 
 **Wrap-up (30s):**
 "So my heuristic: reach for DPO first — it's 80% of the benefit at 20% of the complexity. Graduate to PPO-based RLHF only when you're doing frontier model training with online feedback or when DPO's ceiling is measurably insufficient for your task. Happy to go deeper on reward hacking or the KL penalty math."

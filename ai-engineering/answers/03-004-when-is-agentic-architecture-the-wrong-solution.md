@@ -35,7 +35,7 @@ Five concrete situations where agents are the wrong call:
 |-----------|----------------------|--------------------|
 | **Fixed, enumerable workflow** | Developer already knows the path; LLM control flow adds cost and variance with no benefit | Deterministic chain / LangChain Sequential / DAG |
 | **Latency-critical path** (< 500 ms SLO) | Each agent step = 1+ LLM call + tool latency; 3–5 steps easily adds 3–10 s | Single prompt with structured output, or pre-built pipeline |
-| **Budget-constrained at scale** (≥1M req/day) | 5-step GPT-4o agent at $0.30/task = $300K/day; a single GPT-4o-mini prompt = ~$2K/day | Prompt-engineered single call or distilled fine-tune |
+| **Budget-constrained at scale** (≥1M req/day) | 5-step a frontier model agent at $0.30/task = $300K/day; a single a small fast model prompt = ~$2K/day | Prompt-engineered single call or distilled fine-tune |
 | **High-stakes, low-tolerance for errors** (financial, medical, legal) | Non-deterministic path makes auditability near-impossible; compounded errors at each step | Deterministic pipeline with HITL gates and explicit audit trail |
 | **Simple classification or extraction** | One structured-output LLM call is sufficient; routing + tools add complexity with no benefit | `response_format: json_schema` single call |
 
@@ -60,7 +60,7 @@ Contrast with a multi-tool **research agent** that searches the web, reads 10 PD
 **Core explanation (2–3 min):**
 "The clearest signal that an agent is wrong is when you can enumerate all the valid execution paths at design time. If the sequence is always 'classify → look up → respond,' that's a chain — a deterministic DAG in code, not an LLM-controlled loop. Forcing that into an agent adds 3–5 extra LLM calls, unpredictable path variance, and exponential debugging complexity, with zero upside.
 
-The second red flag is a latency or cost SLO that agents can't meet. A 3-step agent on GPT-4o is realistically 5–8 seconds of wall-clock time and 15–30 cents per task. At 1M requests a day that's $150K–300K/day. A single GPT-4o-mini prompt with structured output handles most extraction and classification tasks in under a second for about $2/thousand.
+The second red flag is a latency or cost SLO that agents can't meet. A 3-step agent on a frontier model is realistically 5–8 seconds of wall-clock time and 15–30 cents per task. At 1M requests a day that's $150K–300K/day. A single a small fast model prompt with structured output handles most extraction and classification tasks in under a second for about $2/thousand.
 
 Third: error compounding. If each step in a 5-step agent has a 10% failure probability, you only succeed 59% of the time overall. A well-engineered single-step pipeline at 95% is more reliable than a 5-step agent where each step is 99% reliable.
 
@@ -80,7 +80,7 @@ Finally, debugging. When your 5-step agent fails, you don't know which step brok
 
 - **Mistake:** Saying "agents are always more powerful so they're the right default" — **Better:** Argue the opposite: agents are a last resort when simpler pipelines can't handle the open-endedness. Default to chains; justify agents by listing what a pipeline can't do.
 - **Mistake:** Listing "agents are bad because they're non-deterministic" without explaining *why* that matters in practice — **Better:** Quantify: 5-step agent at 90% per-step reliability = 59% end-to-end success; trace the debuggability problem (which step failed? why?); mention the need for LangSmith/Arize Phoenix for observability.
-- **Mistake:** Not mentioning cost at scale — **Better:** Give concrete math: 5-step GPT-4o agent at $0.30/task × 1M req/day = $300K/day vs. a single GPT-4o-mini prompt at ~$2/thousand = ~$2K/day.
+- **Mistake:** Not mentioning cost at scale — **Better:** Give concrete math: 5-step a frontier model agent at $0.30/task × 1M req/day = $300K/day vs. a single a small fast model prompt at ~$2/thousand = ~$2K/day.
 
 ---
 

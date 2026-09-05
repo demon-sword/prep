@@ -11,7 +11,7 @@
 ## Framing
 
 ### Why this question is asked
-Interviewers ask this to probe whether you understand the full model-development lifecycle for a specialized domain—not just "call GPT-4." Math is a canonical hard case because it requires exact symbolic reasoning, step-by-step correctness, and verifiable answers, which exposes gaps in data curation, training-objective design, and evaluation strategy that generic approaches can't paper over.
+Interviewers ask this to probe whether you understand the full model-development lifecycle for a specialized domain—not just "call a frontier model." Math is a canonical hard case because it requires exact symbolic reasoning, step-by-step correctness, and verifiable answers, which exposes gaps in data curation, training-objective design, and evaluation strategy that generic approaches can't paper over.
 
 ### Trigger phrases
 - "How would you build a model to solve math word problems?"
@@ -31,13 +31,13 @@ Building a math-capable model requires four sequential phases: (1) curating high
 ### Mechanism
 
 **Phase 1 — Data curation:**
-- **Sources:** GSM8K (8.5K grade-school word problems), MATH (12.5K competition problems), NuminaMath, AoPS forum posts, synthetic data from a stronger teacher model (GPT-4o generating scratchpad solutions).
+- **Sources:** GSM8K (8.5K grade-school word problems), MATH (12.5K competition problems), NuminaMath, AoPS forum posts, synthetic data from a stronger teacher model (a frontier model generating scratchpad solutions).
 - **Format:** Every example is a `(problem, chain-of-thought scratchpad, final answer)` triple. The CoT must be step-by-step, not shortcut. Use `\boxed{}` delimiters so answer extraction is deterministic.
 - **Quality gates:** Filter by: (a) answer verifiability (LaTeX `\boxed{}` parseable), (b) scratchpad plausibility (does the reasoning reach the stated answer?), (c) difficulty distribution (easy 40% / medium 40% / hard 20% to prevent mode collapse on easy problems).
 - **Synthetic augmentation:** Rejection sampling — generate N solutions from a weaker model, keep only correct ones (verified by symbolic solver or strong oracle LLM); this is how DeepSeek-Math and Qwen-Math scale their datasets cheaply.
 
 **Phase 2 — Supervised Fine-Tuning (SFT):**
-- Start from a strong base: Llama 3 8B / Qwen2.5-Math-7B / Mistral 7B.
+- Start from a strong base: a small open-weight base model (7–8B class), ideally one already specialized for math.
 - Use LoRA (rank 32–64, α=64, target `q_proj`, `v_proj`, `gate_proj`) or full fine-tune if you have >4 A100s.
 - Training objective: standard next-token cross-entropy over the *full* response (problem + scratchpad + answer) — not just the answer token. This teaches the scratchpad format.
 - Hyperparameters: 2–3 epochs, LR 2e-5 (cosine decay), batch size 32–128, gradient checkpointing.
@@ -45,7 +45,7 @@ Building a math-capable model requires four sequential phases: (1) curating high
 
 **Phase 3 — Post-training (alignment):**
 - **Option A — Outcome Reward Model (ORM) + RL:** Binary reward (correct final answer = +1, incorrect = 0). Use PPO or GRPO (Group Relative Policy Optimization, DeepSeek-R1 style) to optimize policy. Simple to implement; reward hacking risk if scratchpad is ignored.
-- **Option B — Process Reward Model (PRM):** Train a step-level verifier (e.g., PRM800K dataset from OpenAI). Each reasoning step gets a score; RL optimizes *step quality*, not just final answer. More robust, harder to reward hack; used in o1/o3 and DeepSeek-R1.
+- **Option B — Process Reward Model (PRM):** Train a step-level verifier (e.g., PRM800K dataset from OpenAI). Each reasoning step gets a score; RL optimizes *step quality*, not just final answer. More robust, harder to reward hack; used in frontier reasoning models and DeepSeek-R1.
 - **Option C — DPO on preference pairs:** Generate K solutions per problem, label correct/incorrect, train DPO. Simpler than RL; no online rollout needed. Works well when correctness signal is clean.
 - **In practice (2025–2026):** GRPO/STaR-style self-improvement (fine-tune on correct self-generated solutions iteratively) has shown strong results for models like DeepSeek-R1-Zero without labeled preference data.
 
@@ -58,18 +58,18 @@ Building a math-capable model requires four sequential phases: (1) curating high
 
 ### Example / Tradeoff
 
-**Qwen2.5-Math-7B-Instruct (2024):** SFT on synthetic NuminaMath CoT → ORM-guided MCTS for solution selection → DPO on correct vs incorrect pairs → achieves 95.2% on GSM8K and 83.6% on MATH, rivaling GPT-4o on math despite being 7B parameters. Key: high-quality synthetic CoT data + step-level verification outweighs raw scale.
+**Qwen2.5-Math-7B-Instruct (2024):** SFT on synthetic NuminaMath CoT → ORM-guided MCTS for solution selection → DPO on correct vs incorrect pairs → achieves 95.2% on GSM8K and 83.6% on MATH, rivaling the frontier models of the day on math despite being 7B parameters. Key: high-quality synthetic CoT data + step-level verification outweighs raw scale.
 
 **Tradeoff table:**
 
 | Phase | Cheap path | Better path | When to invest |
 |-------|-----------|-------------|----------------|
-| Data | GSM8K + MATH public data | Synthetic CoT via GPT-4o + rejection sampling | Domain-specific problems exist |
+| Data | GSM8K + MATH public data | Synthetic CoT via a frontier model + rejection sampling | Domain-specific problems exist |
 | SFT | LoRA on 1× A100 | Full fine-tune multi-GPU | If base model is weak at format |
 | Post-training | DPO on correct/incorrect pairs | PRM + GRPO online RL | MATH Level 5 / competition bar |
 | Eval | pass@1 on GSM8K | Held-out domain set + step-level PRM score | Production deployment |
 
-**Cost example:** LoRA fine-tune Llama 3 8B on 50K examples ≈ 4 hours on 2× A100 80GB ≈ $80 on Lambda Cloud. PRM training adds another ~$200. Serving: vLLM with 4-bit GPTQ, 8K context, ~4ms/token on A10G.
+**Cost example:** LoRA fine-tune a 7–8B-class open-weight base model on 50K examples ≈ 4 hours on 2× A100 80GB ≈ $80 on Lambda Cloud. PRM training adds another ~$200. Serving: vLLM with 4-bit GPTQ, 8K context, ~4ms/token on A10G.
 
 ---
 
@@ -79,9 +79,9 @@ Building a math-capable model requires four sequential phases: (1) curating high
 "I'd structure this as four phases: data curation, supervised fine-tuning, post-training alignment, and evaluation. The key insight for math specifically is that answers are verifiable — we know ground truth — so we can use stronger training signals than language tasks typically allow."
 
 **Core explanation (2–3 min):**
-"For data, I'd start with public datasets like GSM8K and the MATH benchmark, but the real leverage is synthetic CoT generation — use GPT-4o to produce step-by-step scratchpad solutions, then filter by correctness with a symbolic verifier or oracle LLM. Rejection sampling is how DeepSeek-Math and Qwen-Math scaled without massive human annotation. Every example needs a `(problem, scratchpad, \\boxed{answer})` triple — the scratchpad format teaches the model to reason, not just pattern-match.
+"For data, I'd start with public datasets like GSM8K and the MATH benchmark, but the real leverage is synthetic CoT generation — use a frontier model to produce step-by-step scratchpad solutions, then filter by correctness with a symbolic verifier or oracle LLM. Rejection sampling is how DeepSeek-Math and Qwen-Math scaled without massive human annotation. Every example needs a `(problem, scratchpad, \\boxed{answer})` triple — the scratchpad format teaches the model to reason, not just pattern-match.
 
-"For SFT, I'd start from a strong base like Qwen2.5-Math-7B or Llama 3 8B and fine-tune with LoRA (rank 32–64) using cross-entropy over the full response — not just the answer token. This is important: you need the model to learn the scratchpad format, not shortcut to the answer. Two to three epochs, LR 2e-5, gets you from ~55% to ~75–80% on GSM8K.
+"For SFT, I'd start from a strong base — a small open-weight model in the 7–8B class, ideally one already math-specialized — and fine-tune with LoRA (rank 32–64) using cross-entropy over the full response — not just the answer token. This is important: you need the model to learn the scratchpad format, not shortcut to the answer. Two to three epochs, LR 2e-5, gets you from ~55% to ~75–80% on GSM8K.
 
 "For post-training, the decision is between DPO and process reward models. DPO is simpler — generate K solutions, label correct vs incorrect, train on preference pairs. But for harder competition math, a step-level Process Reward Model like PRM800K plus GRPO-style RL is more robust because it can't reward-hack by producing wrong scratchpads with correct answers. DeepSeek-R1 used GRPO self-improvement with almost no labeled data.
 

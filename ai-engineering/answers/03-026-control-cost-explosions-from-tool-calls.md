@@ -46,23 +46,23 @@ If any limit is exceeded, the orchestrator stops the loop and returns whatever p
 
 The system prompt is re-sent every turn. Aggressively compress it:
 - Keep system prompt under 500 tokens; move reference content to a retrieval tool
-- Prune tool-call history: keep only the last N turns in context (sliding window) or summarize prior turns with a cheap model (GPT-4o-mini at $0.15/M tokens) into a one-paragraph state summary
+- Prune tool-call history: keep only the last N turns in context (sliding window) or summarize prior turns with a cheap model (a small fast model at $1/M tokens) into a one-paragraph state summary
 - Use LangChain's `ConversationSummaryBufferMemory` or a custom summarization step at turn 5+
 
 At 10 turns, a naive agent sending the full history on every call costs ~10× the single-call baseline. A sliding window of 3 turns reduces this to ~3×.
 
 **Layer 3 — Model tiering (use the cheapest model that works)**
 
-Not every step needs GPT-4o. Assign models by task complexity:
+Not every step needs a frontier model. Assign models by task complexity:
 
 | Step | Model | Approx cost |
 |------|-------|-------------|
-| Tool-result summarization | GPT-4o-mini | $0.15/M input |
-| Tool selection (simple) | GPT-4o-mini | $0.15/M input |
-| Multi-step reasoning / synthesis | GPT-4o | $2.50/M input |
-| Code generation / verification | Claude 3.5 Sonnet | $3.00/M input |
+| Tool-result summarization | a small fast model | $1/M input |
+| Tool selection (simple) | a small fast model | $1/M input |
+| Multi-step reasoning / synthesis | a frontier model | $5/M input |
+| Code generation / verification | a frontier model | $5/M input |
 
-A LangGraph conditional edge can route based on task type or turn count: use GPT-4o-mini for the first 3 turns; escalate to GPT-4o only when the agent hits a reasoning-heavy step.
+A LangGraph conditional edge can route based on task type or turn count: use a small fast model for the first 3 turns; escalate to a frontier model only when the agent hits a reasoning-heavy step.
 
 **Layer 4 — Tool-call caching and deduplication**
 
@@ -89,13 +89,13 @@ LangGraph's `interrupt_before` node handles this without breaking the resumable 
 
 | Config | Cost/query | Daily cost |
 |--------|-----------|------------|
-| Naive agent, GPT-4o, 10 turns, no caching | $0.25 | $250K/day |
-| Turn cap=5, model tiering (GPT-4o-mini for 4 turns), 30% cache hit | $0.04 | $40K/day |
-| Turn cap=3, full GPT-4o-mini, 50% cache hit | $0.008 | $8K/day |
+| Naive agent, a frontier model, 10 turns, no caching | $0.25 | $250K/day |
+| Turn cap=5, model tiering (a small fast model for 4 turns), 30% cache hit | $0.04 | $40K/day |
+| Turn cap=3, full a small fast model, 50% cache hit | $0.008 | $8K/day |
 
 The 30× cost reduction (naive → tiered+cached) comes almost entirely from model tiering and cache hits, not from sacrificing capability.
 
-**Real pattern:** Support-ticket agents at scale typically cap at 5 turns, use GPT-4o-mini for tool selection and result summarization, escalate to GPT-4o only when the agent emits a `NEED_ESCALATION` structured output. This alone cuts per-query cost from ~$0.20 to ~$0.03.
+**Real pattern:** Support-ticket agents at scale typically cap at 5 turns, use a small fast model for tool selection and result summarization, escalate to a frontier model only when the agent emits a `NEED_ESCALATION` structured output. This alone cuts per-query cost from ~$0.20 to ~$0.03.
 
 ---
 
@@ -107,9 +107,9 @@ The 30× cost reduction (naive → tiered+cached) comes almost entirely from mod
 **Core explanation (2–3 min):**
 "The first and most important layer is hard limits in the orchestrator — not in the prompt. I set a `max_turns` ceiling (usually 5–10 depending on task complexity), a `max_tokens_per_task` cap, and a wall-clock timeout. If any of these are hit, the loop stops and returns a partial result or escalates to a human. This is the non-negotiable baseline.
 
-"The second big lever is context compression. In a naive agent, the full tool-call history is appended to the prompt on every turn. At turn 10, you're sending ~10× the baseline context. The fix is a sliding window — keep only the last 3 turns in context — or a summarization step that compresses prior turns into a one-paragraph state summary using a cheap model like GPT-4o-mini. This alone can cut token costs by 60–70%.
+"The second big lever is context compression. In a naive agent, the full tool-call history is appended to the prompt on every turn. At turn 10, you're sending ~10× the baseline context. The fix is a sliding window — keep only the last 3 turns in context — or a summarization step that compresses prior turns into a one-paragraph state summary using a cheap model like a small fast model. This alone can cut token costs by 60–70%.
 
-"The third lever is model tiering. Not every step in the agent loop needs GPT-4o. I assign GPT-4o-mini for tool selection, result summarization, and routine data extraction — it's about 15× cheaper per token. I only escalate to GPT-4o or Claude Sonnet when the agent hits a reasoning-heavy synthesis step. In LangGraph, I implement this as a conditional edge that checks the step type before routing to the LLM call.
+"The third lever is model tiering. Not every step in the agent loop needs a frontier model. I assign a small fast model for tool selection, result summarization, and routine data extraction — it's about 5× cheaper per token. I only escalate to a frontier model or Claude Sonnet when the agent hits a reasoning-heavy synthesis step. In LangGraph, I implement this as a conditional edge that checks the step type before routing to the LLM call.
 
 "At the tool layer, I add semantic caching — hash the tool name plus arguments, cache the response in Redis with a TTL matched to data freshness. I also deduplicate: if the agent calls `get_order(123)` twice in the same session, the second call returns the cached result. And I use OpenAI's parallel tool calls feature to batch multiple tool requests into a single LLM turn when possible."
 
@@ -125,7 +125,7 @@ The 30× cost reduction (naive → tiered+cached) comes almost entirely from mod
 
 - **Mistake:** Saying "I'd add a max_iterations parameter to the prompt" — **Better:** Hard limits must be enforced in orchestrator code, not prompts; the LLM will often ignore a prompt-level iteration instruction when it believes more turns are needed, so `max_turns` must be a Python/code-level guard that stops the loop unconditionally
 - **Mistake:** Focusing only on per-turn LLM cost without mentioning context token inflation across turns — **Better:** Explain that the system prompt and tool-call history are re-sent on every turn (doubling, tripling cost per turn), so context pruning and summarization are required to prevent quadratic cost growth in long sessions
-- **Mistake:** Not mentioning model tiering — **Better:** Articulate that not all steps need the frontier model; routing tool-selection and summarization turns to GPT-4o-mini (15× cheaper) while reserving GPT-4o for synthesis steps is the single highest-ROI cost lever in practice
+- **Mistake:** Not mentioning model tiering — **Better:** Articulate that not all steps need the frontier model; routing tool-selection and summarization turns to a small fast model (5× cheaper) while reserving a frontier model for synthesis steps is the single highest-ROI cost lever in practice
 
 ---
 
@@ -141,4 +141,4 @@ The 30× cost reduction (naive → tiered+cached) comes almost entirely from mod
 
 ## One-liner recall
 
-> Control agent cost explosions with three compounding levers: orchestrator hard limits (max_turns=5–10, token cap, wall-clock timeout in code not prompts), model tiering (GPT-4o-mini for routine steps, GPT-4o only for synthesis), and context compression + tool-call caching to prevent the quadratic token growth that accumulates across turns.
+> Control agent cost explosions with three compounding levers: orchestrator hard limits (max_turns=5–10, token cap, wall-clock timeout in code not prompts), model tiering (a small fast model for routine steps, a frontier model only for synthesis), and context compression + tool-call caching to prevent the quadratic token growth that accumulates across turns.

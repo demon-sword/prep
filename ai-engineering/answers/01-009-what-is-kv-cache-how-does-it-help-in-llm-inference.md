@@ -35,7 +35,7 @@ During the **prefill phase**, the prompt is processed in parallel and all K/V te
 **PagedAttention (vLLM):** The KV cache for a request can be fragmented across non-contiguous GPU memory blocks (like OS paging), eliminating internal fragmentation and enabling much higher throughput. vLLM reports 2–4× throughput gain over naive contiguous allocation because GPU memory is shared more efficiently across concurrent requests.
 
 ### Example / Tradeoff
-A 4K-token conversation with GPT-4 scale model: without KV cache each decode step re-processes all 4K tokens (~quadratic cost). With KV cache each step processes exactly 1 new token. Time-to-first-token (TTFT) reflects prefill cost; inter-token latency (ITL) reflects per-decode-step cost. vLLM, TGI (Hugging Face Text Generation Inference), and TensorRT-LLM all implement KV cache as the baseline optimization.
+A 4K-token conversation with a frontier model scale model: without KV cache each decode step re-processes all 4K tokens (~quadratic cost). With KV cache each step processes exactly 1 new token. Time-to-first-token (TTFT) reflects prefill cost; inter-token latency (ITL) reflects per-decode-step cost. vLLM, TGI (Hugging Face Text Generation Inference), and TensorRT-LLM all implement KV cache as the baseline optimization.
 
 **Tradeoff:** Cache is memory-hungry. A long context or large batch fills GPU HBM, forcing smaller batch sizes (lower throughput). Solutions include quantized KV cache (KVQuant: 4-bit K/V ≈ 4× memory reduction with minimal quality loss), sliding-window attention (Mistral's approach — cache only last W tokens), and cache eviction policies (SnapKV, H2O). There's an inherent tension: longer contexts → bigger cache → less room for batching → lower throughput.
 

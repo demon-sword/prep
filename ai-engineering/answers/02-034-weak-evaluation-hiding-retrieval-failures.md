@@ -34,7 +34,7 @@ The failure pattern unfolds in three stages:
 
 1. **No retrieval-layer metrics**: Teams deploy with only end-to-end eval (human thumbs-up, BLEU on answers, or LLM-as-judge on final response). Retrieval precision, recall, NDCG, and MRR are never measured.
 
-2. **Masking by generation**: GPT-4o-mini fills in plausible answers from partial or irrelevant chunks. Answer quality scores stay at 85%+ even as context precision drops from 0.8 to 0.5. The vibes are fine.
+2. **Masking by generation**: a small fast model fills in plausible answers from partial or irrelevant chunks. Answer quality scores stay at 85%+ even as context precision drops from 0.8 to 0.5. The vibes are fine.
 
 3. **Delayed signal**: Only when the model can't compensate — new question domains, schema drift, embedding model changes — does end-to-end quality collapse visibly. By then the retrieval failure has been festering for weeks.
 
@@ -65,8 +65,8 @@ The failure pattern unfolds in three stages:
 A real pattern: a legal-tech team updated their chunking strategy (fixed-size → semantic) and saw end-to-end LLM-judge scores stay flat at 84%. They assumed parity. Six weeks later users started complaining that clause references were wrong. Root cause: NDCG@10 had dropped from 0.72 to 0.51 because semantic chunks were breaking mid-clause — but the LLM filled in plausible (wrong) clauses from adjacent context. A 100-question golden dataset with document-level Recall@5 tracking would have surfaced the regression on day 1 of the chunking change.
 
 **Tradeoff: eval cost vs eval coverage**
-- Running RAGAS with GPT-4o-mini as judge: ~$0.002/question → $0.20/100-question golden set per deploy
-- Running with GPT-4o: ~$0.02/question → $2/100 questions, higher accuracy for faithfulness
+- Running RAGAS with a small fast model as judge: ~$0.002/question → $0.20/100-question golden set per deploy
+- Running with a frontier model: ~$0.02/question → $2/100 questions, higher accuracy for faithfulness
 - Offline NDCG on retrieval layer requires pre-labeled relevance judgments (one-time human effort ~2–8 hours for 100 questions, then automated thereafter)
 - The cost of one production hallucination incident (eng time + user trust) far exceeds the eval infrastructure cost
 
@@ -85,7 +85,7 @@ The fix is a two-layer eval framework with a golden dataset. Layer one is the re
 The diagnostic split between these two is the key insight: if `context_recall` drops but `faithfulness` stays high, the retriever is missing relevant chunks. If `faithfulness` drops but retrieval looks fine, the generator is hallucinating. If both drop, you likely have data quality or embedding drift. That split tells you exactly where to debug."
 
 **Tradeoff / production angle (1 min):**
-"In production I'd wire up three additional signals: log retrieved chunk IDs and cosine scores for every query to Langfuse or Weave so you have retrieval telemetry, run shadow retrieval against a new index for 5% of traffic before any index cutover, and alert on cosine score distribution shifts — a sudden drop in mean similarity is often the first signal of embedding or schema drift, days before user complaints arrive. The cost of this eval infrastructure is minimal — a 100-question golden set costs about $0.20 to run with GPT-4o-mini — but it catches regressions before they become incidents."
+"In production I'd wire up three additional signals: log retrieved chunk IDs and cosine scores for every query to Langfuse or Weave so you have retrieval telemetry, run shadow retrieval against a new index for 5% of traffic before any index cutover, and alert on cosine score distribution shifts — a sudden drop in mean similarity is often the first signal of embedding or schema drift, days before user complaints arrive. The cost of this eval infrastructure is minimal — a 100-question golden set costs about $0.20 to run with a small fast model — but it catches regressions before they become incidents."
 
 **Wrap-up (30s):**
 "So the summary is: weak eval hides retrieval failures by measuring the wrong layer. The fix is a two-layer golden-dataset framework that instruments retrieval (Recall@5, NDCG, RAGAS context_recall) and generation (faithfulness, answer_relevancy) independently, gates deployments on both, and wires production telemetry to surface drift before users do. Happy to go deeper on golden dataset construction or the RAGAS diagnostic split."

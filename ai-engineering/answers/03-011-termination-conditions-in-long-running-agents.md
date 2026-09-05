@@ -79,7 +79,7 @@ graph.add_conditional_edges("agent", should_continue, {
 
 For a customer support agent, `max_iterations=15`, `wall_clock_timeout=30s`, and stuck detection after 3 identical tool calls. Exceeding any ceiling routes to a canned escalation response rather than silently hanging.
 
-**Tradeoff:** Tighter limits (lower `max_iterations`) improve cost predictability but increase false-positive timeouts on legitimately complex tasks. Production solution: tiered limits — `max_iterations=10` for Tier 1 (GPT-4o-mini), override to `25` for Tier 2 (GPT-4o) on escalated tasks.
+**Tradeoff:** Tighter limits (lower `max_iterations`) improve cost predictability but increase false-positive timeouts on legitimately complex tasks. Production solution: tiered limits — `max_iterations=10` for Tier 1 (a small fast model), override to `25` for Tier 2 (a frontier model) on escalated tasks.
 
 ---
 
@@ -98,7 +98,7 @@ Third, a progress monitor for 'stuck' detection. I track whether the last K acti
 In LangGraph, all of this lives in a `should_continue` conditional edge function that's evaluated after every node."
 
 **Tradeoff / production angle (1 min):**
-"The tension is between tight limits — which control cost and prevent runaway — and flexibility for legitimately complex tasks. My solution is tiered limits: default `max_iterations=15` for fast-path GPT-4o-mini tasks, and an escalation path that re-issues the same task with `max_iterations=30` and GPT-4o if the first attempt hits a limit and the task is high-value. I also instrument every termination event with its reason code so I can monitor the distribution — if I'm seeing 20% `TIMEOUT_ITERATIONS`, my limit is too tight or the tasks are mis-scoped."
+"The tension is between tight limits — which control cost and prevent runaway — and flexibility for legitimately complex tasks. My solution is tiered limits: default `max_iterations=15` for fast-path a small fast model tasks, and an escalation path that re-issues the same task with `max_iterations=30` and a frontier model if the first attempt hits a limit and the task is high-value. I also instrument every termination event with its reason code so I can monitor the distribution — if I'm seeing 20% `TIMEOUT_ITERATIONS`, my limit is too tight or the tasks are mis-scoped."
 
 **Wrap-up (30s):**
 "The summary is: four independent termination conditions (success, error, budget, stuck), enforced in orchestrator code, with structured output for success/failure signals and progress monitoring for stuck detection. Happy to go deeper on any of these layers."

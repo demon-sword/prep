@@ -51,7 +51,7 @@ Class imbalance occurs when one class is substantially rarer than others (e.g., 
 |-----------|-----------|------|
 | **SMOTE** (Synthetic Minority Over-sampling) | Interpolates new minority samples between k-nearest neighbors | Can create unrealistic samples in sparse regions |
 | Random under-sampling | Drop majority examples | Discards real signal |
-| LLM augmentation (2026) | GPT-4o generates synthetic minority examples for NLP tasks | Distribution shift if generations are OOD |
+| LLM augmentation (2026) | a frontier model generates synthetic minority examples for NLP tasks | Distribution shift if generations are OOD |
 
 **Layer 4 — Threshold tuning**
 The default 0.5 decision threshold is rarely optimal under imbalance. Plot the **PR curve** and find the threshold that maximizes F-beta for your business objective. In fraud detection, you might set threshold at 0.2 to capture 90% recall (few missed frauds) at the cost of more false positives (extra reviews).
@@ -78,7 +78,7 @@ The default 0.5 decision threshold is rarely optimal under imbalance. Plot the *
 
 On the algorithm side, the cheapest and usually most effective fix is class weighting — `class_weight='balanced'` in sklearn, or `scale_pos_weight` in XGBoost. This re-weights the loss function so each minority example counts proportionally more. For neural networks I use focal loss, which dynamically downweights easy majority examples.
 
-If algorithm fixes aren't enough, I go to data-level remediation. SMOTE synthesizes new minority examples by interpolating between k-nearest minority neighbors — it's effective for tabular data but can create unrealistic samples in sparse regions. For NLP tasks in 2026, I've used GPT-4o to generate synthetic minority examples and then filter them with a human or automated quality gate.
+If algorithm fixes aren't enough, I go to data-level remediation. SMOTE synthesizes new minority examples by interpolating between k-nearest minority neighbors — it's effective for tabular data but can create unrealistic samples in sparse regions. For NLP tasks in 2026, I've used a frontier model to generate synthetic minority examples and then filter them with a human or automated quality gate.
 
 The last layer is threshold tuning, which is often overlooked. The default 0.5 threshold is wrong under imbalance. I plot the PR curve and pick the threshold that hits the business SLO — for fraud, that might be 'recall ≥ 0.90' even if it means precision of 0.40 and a larger review queue."
 

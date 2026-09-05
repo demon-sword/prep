@@ -35,46 +35,46 @@ Sequenced optimization stack (measure first, then apply in order):
 **Step 0 — Profile before optimizing**
 - Measure per-query token breakdown: system prompt / retrieved context / output
 - Measure cost distribution: which query types account for the most spend?
-- Example: at 1M queries/day with GPT-4o ($2.50/M input, $10/M output), 2K input + 500 output tokens = ~$0.0105/query → $10,500/day
+- Example: at 1M queries/day with a frontier model ($5/M input, $25/M output), 2K input + 500 output tokens = ~$0.0225/query → $22,500/day
 
 **Step 1 — Skip the LLM call entirely (semantic + exact-match cache)**
 - Exact-match response cache in Redis: 5-15% hit rate for FAQ workloads, ~$0 cost per hit
 - Semantic cache (GPTCache + FAISS/Redis): cosine similarity > 0.93 on query embedding — covers paraphrased repeats; 20-35% hit rate on support/FAQ traffic
 - Embedding cache: store query embeddings by hash to avoid re-embedding repeat queries
-- At 30% semantic cache hit rate: $10,500/day × 0.70 = $7,350/day saved → $2.68M/year
+- At 30% semantic cache hit rate: $22,500/day × 0.70 = $15,750/day — a saving of $6,750/day, or ~$2.46M/year
 
 **Step 2 — Route to a cheaper model (model tiering)**
-- Complexity classifier (lightweight: token count + TF-IDF topic signal + GPT-4o-mini confidence score) routes easy queries to GPT-4o-mini ($0.15/M input, $0.60/M output) — a 16× price difference on input tokens
-- FAQ-style queries (≥60% of most support workloads) → GPT-4o-mini or self-hosted Llama 3 8B
-- Hard queries (multi-step reasoning, long context, compliance) → GPT-4o / Claude 3.5 Sonnet
+- Complexity classifier (lightweight: token count + TF-IDF topic signal + a small fast model confidence score) routes easy queries to a small fast model ($1/M input, $5/M output) — a 5× price difference on input tokens
+- FAQ-style queries (≥60% of most support workloads) → a small fast model or self-hosted a small open-weight model (7–8B class)
+- Hard queries (multi-step reasoning, long context, compliance) → frontier models
 - Impact: 60% of traffic at 1/16th cost cuts total API spend by ~50%
 
 **Step 3 — Reduce tokens sent**
 - Prompt compression via LLMLingua: 30-50% reduction in system prompt + few-shot examples with <2% quality loss
 - Cross-encoder reranking to top-3 retrieved chunks (from top-20) before generation: reduces context from ~4K to ~1K tokens
 - Anthropic prompt caching: prefix cache on static system prompt (~90% discount on cached prefix tokens)
-- max_tokens constraint + "be concise, respond in ≤3 sentences" instruction: output tokens cost 3-10× more than input; cutting average output from 500→200 tokens saves ~60% of output spend
+- max_tokens constraint + "be concise, respond in ≤3 sentences" instruction: output tokens cost 5× more than input; cutting average output from 500→200 tokens saves ~60% of output spend
 - Combined: 40-60% token reduction possible before quality degrades meaningfully
 
 **Step 4 — Improve throughput (self-hosted path)**
-- Migrate high-volume, latency-tolerant workloads to self-hosted Llama 3 70B (vLLM + PagedAttention)
+- Migrate high-volume, latency-tolerant workloads to self-hosted a 70B-class open-weight model (vLLM + PagedAttention)
 - PagedAttention eliminates KV cache fragmentation → near-100% GPU utilization → 2-3× batch throughput improvement
-- At 1M queries/day, self-hosting breakeven vs GPT-4o-mini is typically ~$50K/month in API spend (≈ 2 A100 nodes fully loaded)
+- Note the 2026 reality: self-hosting is no longer primarily a cost play — hosted small-tier models are cheap enough that the cheap tier is a small share of a blended bill. Justify it on data residency, latency control, or a fine-tuned task-specific model, and measure your own GPU economics rather than quoting a published break-even figure
 
 **Step 5 — Quantization (self-hosted)**
 - AWQ/GPTQ INT4: ~4× VRAM reduction, 1-3% quality loss — validate on golden dataset (skip for math/code)
 - INT8 bitsandbytes: ~2× VRAM reduction, <1% quality loss — safe default
 
 ### Example / Tradeoff
-**Concrete before/after at 1M queries/day (GPT-4o baseline):**
+**Concrete before/after at 1M queries/day (a frontier model baseline):**
 
 | Lever | Daily Cost | Reduction |
 |-------|-----------|-----------|
-| Baseline (GPT-4o, no optimization) | ~$10,500/day | — |
-| + Semantic cache (30% hit) | ~$7,350/day | 30% |
-| + Model tiering (60% → GPT-4o-mini) | ~$3,200/day | 70% |
-| + Prompt compression + reranking (40% token reduction) | ~$1,900/day | 82% |
-| + Self-hosted Llama 3 8B for cheapest tier | ~$900/day (hosting cost) | ~91% |
+| Baseline (a frontier model, no optimization) | ~$22,500/day | — |
+| + Semantic cache (30% hit) | ~$15,750/day | 30% |
+| + Model tiering (60% → a small fast model) | ~$8,190/day | 64% |
+| + Prompt compression + reranking (40% token reduction) | ~$6,700/day | 70% |
+| + Prompt caching on the static prefix + `max_tokens` discipline | ~$2,400/day | ~89% |
 
 Key tradeoff: each layer adds complexity and potential quality risk — measure quality regression with a golden dataset at each step before shipping.
 
@@ -88,9 +88,9 @@ Key tradeoff: each layer adds complexity and potential quality risk — measure 
 **Core explanation (2–3 min):**
 "The first and highest-ROI step is skipping the LLM call entirely with a multi-layer cache. I'd start with exact-match Redis for literally identical queries — maybe 5-15% hit on FAQ workloads. On top of that, a semantic cache using GPTCache with cosine similarity above 0.93 on the query embedding catches paraphrased repeats. At a 30% combined cache hit rate, that alone cuts daily cost by 30%.
 
-The second step is model tiering. Not all queries need GPT-4o at $2.50 per million input tokens — GPT-4o-mini is $0.15, a 16× difference. I'd build a lightweight complexity router — token count, topic classifier, confidence threshold — to send 60% of FAQ-style traffic to the cheap model. That typically cuts the remaining API spend roughly in half.
+The second step is model tiering. Not all queries need a frontier model at $5 per million input tokens — the small tier is $1, a 5× difference. I'd build a lightweight complexity router — token count, topic classifier, confidence threshold — to send 60% of FAQ-style traffic to the cheap model. That typically cuts the remaining API spend roughly in half.
 
-Third, I'd reduce tokens. Prompt compression with LLMLingua gives 30-50% reduction in system prompt length. Cross-encoder reranking from top-20 to top-3 retrieved chunks before generation cuts context from 4K to 1K tokens. And I'd add a max_tokens constraint with a conciseness instruction — output tokens cost 3-10× more than input, so cutting average output from 500 to 200 tokens is a huge lever people often miss."
+Third, I'd reduce tokens. Prompt compression with LLMLingua gives 30-50% reduction in system prompt length. Cross-encoder reranking from top-20 to top-3 retrieved chunks before generation cuts context from 4K to 1K tokens. And I'd add a max_tokens constraint with a conciseness instruction — output tokens cost 5× more than input, so cutting average output from 500 to 200 tokens is a huge lever people often miss."
 
 **Tradeoff / production angle (1 min):**
 "If we're self-hosting, I'd add PagedAttention via vLLM to eliminate KV cache fragmentation and improve batch throughput 2-3×, and AWQ/GPTQ INT4 quantization for a 4× VRAM reduction at 1-3% quality cost — but I'd always validate against a golden dataset before shipping quantization changes, especially for math or code tasks where the quality drop is higher.
@@ -106,8 +106,8 @@ The tradeoff I'd flag: each optimization layer adds complexity and a potential q
 
 - **Mistake:** "I'd just add caching" without specifying cache layers, thresholds, or TTL — **Better:** Name all three layers (exact-match → semantic at cosine > 0.93 → embedding hash cache), state the expected hit rate for each, and mention TTL tied to data freshness; hit rate and threshold tuning are where the real work is.
 - **Mistake:** "I'd switch to a smaller model" without mentioning a complexity router or quality validation — **Better:** Explain that routing everything to a cheap model degrades quality on hard queries; you need a classifier to route correctly, and you gate deployment on golden-dataset quality regression <2%.
-- **Mistake:** Ignoring output token cost and focusing only on input tokens — **Better:** State that output tokens cost 3-10× more than input on most providers (GPT-4o: $2.50/M in vs $10/M out); controlling output length via max_tokens and conciseness instructions is often the single biggest lever in summarization or code generation workloads.
-- **Mistake:** Jumping to self-hosted quantization/PagedAttention before exhausting API-level levers — **Better:** Self-hosting breakeven vs GPT-4o-mini is ~$50K/month API spend; below that threshold, managed API + caching + tiering is almost always cheaper when you factor in engineering and infrastructure cost.
+- **Mistake:** Ignoring output token cost and focusing only on input tokens — **Better:** State that output tokens cost 5× more than input on most providers (a frontier model: $5/M in vs $25/M out); controlling output length via max_tokens and conciseness instructions is often the single biggest lever in summarization or code generation workloads.
+- **Mistake:** Jumping to self-hosted quantization/PagedAttention before exhausting API-level levers — **Better:** The cost case for self-hosting has weakened — hosted small-tier models are cheap enough that the cheap tier is a small share of a blended bill. Justify self-hosting on data residency, latency control, or a fine-tuned task-specific model, and measure your own GPU economics rather than quoting a published break-even figure.
 
 ---
 

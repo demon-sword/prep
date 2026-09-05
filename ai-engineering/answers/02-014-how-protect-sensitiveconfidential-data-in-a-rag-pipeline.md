@@ -68,7 +68,7 @@ Sensitive data protection in RAG requires controls at **five distinct layers**: 
 **Concrete stack (regulated HR knowledge base):**
 - Presidio → MinHash dedup → parent-child chunker → Pinecone (ACL metadata) + Elasticsearch (doc security plugin)
 - Retrieval: Okta group resolution → Pinecone metadata filter `{"acl": {"$in": groups}}` + ES doc-level security
-- Generation: GPT-4o-mini T=0 with grounding prompt + Presidio post-gen scan
+- Generation: a small fast model at T=0 with grounding prompt + Presidio post-gen scan
 - Logging: Langfuse with PII fields redacted via custom middleware before storage
 
 **Tradeoff — pseudonymization vs redaction:**

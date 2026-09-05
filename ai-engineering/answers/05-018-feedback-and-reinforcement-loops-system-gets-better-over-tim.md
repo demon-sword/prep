@@ -83,7 +83,7 @@ For knowledge staleness (vs behavior improvement):
 
 **Customer support chatbot improvement loop (concrete):**
 - Week 1: 40K interactions, 1,200 thumbs-down events, 800 heavy edits filtered to 600 valid preference pairs
-- Weekly DPO LoRA fine-tune on Llama 3 8B (rank 16, 4h on 4×A100, ~$50 compute)
+- Weekly DPO LoRA fine-tune on a small open-weight model (7–8B class) (rank 16, 4h on 4×A100, ~$50 compute)
 - Golden dataset regression gate: Faithfulness must stay ≥0.85 on 200-question golden set
 - After 8 weeks: CSAT 74% → 82%, deflection rate 61% → 71%
 

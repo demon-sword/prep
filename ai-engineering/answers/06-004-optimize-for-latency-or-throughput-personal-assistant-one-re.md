@@ -43,7 +43,7 @@ The key insight is that latency and throughput pull in opposite directions:
 
 **For a personal assistant (one interactive user, one request at a time):**
 1. **Optimize for TTFT (time to first token)** — stream tokens as they're generated so the user sees a response immediately, even if total generation takes 5s. vLLM and TGI both support streaming via SSE.
-2. **Use the smallest model that meets quality bar** — a 7B distilled model at 200ms vs a 70B model at 2s. Model tiering (Gemini Flash / GPT-4o-mini / Claude Haiku for routine turns) directly cuts p50 latency.
+2. **Use the smallest model that meets quality bar** — a 7B distilled model at 200ms vs a 70B model at 2s. Model tiering (Gemini Flash / a small fast model / Claude Haiku for routine turns) directly cuts p50 latency.
 3. **Avoid unnecessary batching** — batch size = 1 is correct for a dedicated single-user assistant. Batching other users' requests into the same inference call would add queue-wait latency.
 4. **Semantic caching** — if the assistant handles repeated queries (e.g., "what's my calendar today?"), a Redis semantic cache with cosine > 0.93 delivers ~10ms responses vs 800ms inference.
 5. **Prompt compression** — LLMLingua or conversation summarization reduces prefill tokens, which directly reduces time-to-first-token.
@@ -52,7 +52,7 @@ The key insight is that latency and throughput pull in opposite directions:
 
 ### Example / Tradeoff
 A voice-powered personal assistant (think Apple Siri or a Claude mobile agent): the UX bar is <500ms TTFT so the user doesn't feel they're waiting. The architecture choices are:
-- **GPT-4o-mini** for calendar/todo queries (latency: ~150ms TTFT, cost: $0.15/1M tokens) vs **GPT-4o** for complex reasoning (latency: ~400ms TTFT, cost: $2.50/1M tokens)
+- **A small fast model** for calendar/todo queries (latency: ~150ms TTFT, cost: $1/1M tokens) vs **A frontier model** for complex reasoning (latency: ~400ms TTFT, cost: $5/1M tokens)
 - **Streaming SSE** to the frontend — user sees "I checked your calendar…" immediately
 - **Semantic cache** in Redis for repeated patterns ("do I have meetings today?" answered from cache in 8ms)
 - **Batch size = 1** on the vLLM server for this user's session; other users get separate sessions, not co-batched
@@ -77,7 +77,7 @@ Third, semantic caching. For a personal assistant, many queries are semantically
 
 Fourth, prompt compression. Tools like LLMLingua reduce the number of prefill tokens by 30–50% without significant quality loss, directly cutting time-to-first-token.
 
-A concrete example: a voice assistant with a 500ms TTFT SLO. GPT-4o-mini for routine queries, GPT-4o for complex ones, streaming enabled, semantic cache in Redis. The cache alone hits 25-30% of queries in a personal assistant context."
+A concrete example: a voice assistant with a 500ms TTFT SLO. A small fast model for routine queries, a frontier model for complex ones, streaming enabled, semantic cache in Redis. The cache alone hits 25-30% of queries in a personal assistant context."
 
 **Tradeoff / production angle (1 min):**
 "The calculus flips when you're serving many concurrent users. At 10k QPS, throughput is the optimization objective — you want high batch utilization, large `--max-num-seqs` in vLLM, PagedAttention for KV cache sharing, and aggressive caching at every layer. But you'd also accept higher p95 latency per user, maybe 2-3 seconds instead of 500ms. That's fine for a shared API but not for a voice assistant where the user is staring at a spinner.
@@ -92,7 +92,7 @@ One pitfall: people conflate throughput and scalability. A system can handle hig
 ## Pitfalls
 
 - **Mistake:** Saying "optimize for throughput to handle more users" when the question specifies a personal assistant handling one request — **Better:** Recognize the scenario immediately: single interactive user = latency first. TTFT is the metric that matters. Batching is the wrong lever here.
-- **Mistake:** Defining latency and throughput in the abstract without connecting them to concrete architectural choices (model size, batch size, streaming) — **Better:** Name the specific levers: streaming SSE reduces *perceived* TTFT; model tiering (GPT-4o-mini vs GPT-4o) cuts *actual* TTFT by 3-10x; semantic caching eliminates inference latency for repeated queries.
+- **Mistake:** Defining latency and throughput in the abstract without connecting them to concrete architectural choices (model size, batch size, streaming) — **Better:** Name the specific levers: streaming SSE reduces *perceived* TTFT; model tiering (a small fast model vs a frontier model) cuts *actual* TTFT by 3-10x; semantic caching eliminates inference latency for repeated queries.
 - **Mistake:** Treating "reduce latency" as synonymous with "use a faster GPU" — **Better:** GPU is rarely the bottleneck for a single interactive request. The primary levers are model selection, prompt size (prefill latency), and avoiding unnecessary wait (batching). Streaming is a UX latency fix even without changing inference speed.
 
 ---

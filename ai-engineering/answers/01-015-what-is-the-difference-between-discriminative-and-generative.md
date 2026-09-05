@@ -34,7 +34,7 @@ Whether you can anchor an LLM-centric answer in the underlying probabilistic fra
 |---|---|---|---|
 | Discriminative | P(y \| x) | forward pass → class label / score | Logistic regression, BERT for classification, SVM |
 | Generative (joint) | P(x, y) | sample x from P(x \| y) | Naïve Bayes, GMM, VAE |
-| Generative (autoregressive) | P(x) = ∏ P(x_t \| x_{<t}) | sequential token sampling | GPT-4, Claude, LLaMA 3 |
+| Generative (autoregressive) | P(x) = ∏ P(x_t \| x_{<t}) | sequential token sampling | a frontier model, Claude, LLaMA 3 |
 | Generative (diffusion) | P(x) via denoising score | iterative denoising from Gaussian noise | Stable Diffusion, DALL·E 3 |
 
 Discriminative models are typically **more accurate on their target task** given the same data because they don't waste capacity modeling the input distribution. Generative models pay for their ability to synthesize with higher complexity and higher hallucination risk.

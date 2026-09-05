@@ -53,7 +53,7 @@ Three layers of mitigation, applied in order of cost:
 - Use **Platt scaling** or **temperature scaling** to calibrate raw logits into calibrated probabilities first, then tune threshold on a held-out validation set.
 
 **In LLM fine-tuning contexts**
-- For rare-class instruction following (e.g., only 50 examples of a specific refusal pattern), use **LoRA with higher rank** on those layers + **data augmentation** (paraphrase with GPT-4, back-translation).
+- For rare-class instruction following (e.g., only 50 examples of a specific refusal pattern), use **LoRA with higher rank** on those layers + **data augmentation** (paraphrase with a frontier model, back-translation).
 - **Few-shot prompting** or **retrieval-augmented classification** can outperform fine-tuning entirely when minority class examples number fewer than ~100.
 
 ### Example / Tradeoff

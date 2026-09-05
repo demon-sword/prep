@@ -79,10 +79,10 @@ FlashAttention solves this with two ideas: tiling and online softmax. It splits 
 
 FlashAttention-2 added parallelization across the sequence dimension and reduced non-matmul work, getting another 2× on A100s. FlashAttention-3, targeting H100s, adds asynchronous warp specialization and FP8.
 
-In practice: vLLM, TGI, and TensorRT-LLM all use FlashAttention by default. It's what enables serving 128K-context models like Llama 3's extended variants without out-of-memory errors."
+In practice: vLLM, TGI, and TensorRT-LLM all use FlashAttention by default. It's what enables serving the 1M-token context windows that are now standard at the frontier without out-of-memory errors."
 
 **Tradeoff / production angle (1 min):**
-"The key production implication is memory: FlashAttention reduces attention-layer memory from O(N²) to O(N), which is why 128K-token context windows are now feasible on single A100 80GB cards. The tradeoff is that it requires custom CUDA kernels — you can't implement it in pure PyTorch. But since every major inference framework ships it, you get it for free. The remaining bottleneck at very long contexts (1M+) is FLOPs — FlashAttention doesn't change the O(N²) compute complexity, just the memory and bandwidth. That's where state-space models like Mamba become relevant."
+"The key production implication is memory: FlashAttention reduces attention-layer memory from O(N²) to O(N), which is why very long context windows became feasible at all. The tradeoff is that it requires custom CUDA kernels — you can't implement it in pure PyTorch. But since every major inference framework ships it, you get it for free. The remaining bottleneck at very long contexts (1M+) is FLOPs — FlashAttention doesn't change the O(N²) compute complexity, just the memory and bandwidth. That's where state-space models like Mamba become relevant."
 
 **Wrap-up (30s):**
 "So in short: FlashAttention is an IO-aware kernel that tiles the attention computation to stay in SRAM, gives you exact attention (no approximation), 3–4× speedup, and O(N) memory — making long-context serving economically viable. Happy to go deeper into the tiling algorithm or how it interacts with GQA and KV cache."
@@ -103,7 +103,7 @@ In practice: vLLM, TGI, and TensorRT-LLM all use FlashAttention by default. It's
 |----------|--------------|
 | [Q9: What is KV cache? How does it help in LLM inference?](01-009-what-is-kv-cache-how-does-it-help-in-llm-inference.md) | FlashAttention speeds up attention computation; KV cache avoids recomputing K/V tokens — complementary optimizations |
 | [Q34: Why is LLM inference memory-bounded?](01-034-why-is-llm-inference-memory-bounded.md) | FlashAttention is the direct answer to the memory-bandwidth bottleneck explained in Q34 |
-| [Q23: What is grouped query attention (GQA)?](01-023-what-is-grouped-query-attention-gqa-how-does-it-differ-from.md) | GQA and FlashAttention are both used together in production (e.g. Llama 3) — GQA reduces KV heads, FA speeds up the kernel |
+| [Q23: What is grouped query attention (GQA)?](01-023-what-is-grouped-query-attention-gqa-how-does-it-differ-from.md) | GQA and FlashAttention are both used together in production (e.g. A modern open-weight model) — GQA reduces KV heads, FA speeds up the kernel |
 
 ---
 

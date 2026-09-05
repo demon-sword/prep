@@ -58,7 +58,7 @@ Compute TCR against the golden task set offline, and track it in production via 
 
 Goal drift is the hardest failure to detect because the agent appears to make progress but toward the wrong objective.
 
-- **Offline** — goal-adherence score: after each completed trajectory, use an LLM judge (GPT-4o with a rubric) to score `[0–1]` whether the final output satisfies the original task description. Include the full trajectory in the judge prompt so it can detect intermediate drift.
+- **Offline** — goal-adherence score: after each completed trajectory, use an LLM judge (a frontier model with a rubric) to score `[0–1]` whether the final output satisfies the original task description. Include the full trajectory in the judge prompt so it can detect intermediate drift.
 - **Online** — cosine drift tracking: embed the user's original goal at turn 0; embed each agent step summary. If the cosine similarity between the step embedding and the original goal embedding drops below a threshold (e.g., 0.65) for two consecutive steps, fire a goal-drift alert.
 - **Context precision on retrieved knowledge**: if the agent uses RAG internally, measure RAGAS `context_precision` — low precision means retrieved docs are off-topic, which is a leading indicator of hallucinated tool args.
 
@@ -82,7 +82,7 @@ Goal drift is the hardest failure to detect because the agent appears to make pr
 - After fix: 94% accuracy, arg hallucination rate dropped from 18% → 3%.
 - TCR in production: 91% within 5 turns, 7% reach the turn cap (escalated to human), 2% crash.
 
-**Tradeoff — LLM judge cost vs. proxy metrics:** LLM-judge evaluation at scale costs ~$0.02/run with GPT-4o (150 tokens input + 50 output). At 10K runs/day that's $200/day. Use LLM judge on a sampled 5% of production runs and 100% of golden-dataset regression runs; use cheaper proxy metrics (cosine drift, TCR, tool error rate) for the other 95%.
+**Tradeoff — LLM judge cost vs. proxy metrics:** LLM-judge evaluation at scale costs ~$0.02/run with a frontier model (150 tokens input + 50 output). At 10K runs/day that's $200/day. Use LLM judge on a sampled 5% of production runs and 100% of golden-dataset regression runs; use cheaper proxy metrics (cosine drift, TCR, tool error rate) for the other 95%.
 
 ---
 
@@ -99,7 +99,7 @@ For action advancement, I'd measure steps-to-completion relative to the expert t
 Goal drift is the sneakiest failure. The agent appears busy but is answering the wrong question. Offline, I'd use an LLM judge with a rubric that gets the full trajectory and scores whether the final output satisfies the original goal. In production I'd embed the user's goal at turn zero and embed each step summary, then alert when cosine similarity drops below 0.65 for two consecutive steps — that's a reliable leading indicator before the user gets a useless response."
 
 **Tradeoff / production angle (1 min):**
-"The main practical tradeoff is LLM-judge eval cost versus proxy metric coverage. Running GPT-4o as a judge on every production run costs $200/day at 10K runs. I'd run the judge on a 5% sample plus 100% of golden-dataset regression runs, and use cheaper signals — cosine drift, TCR, tool error rate — for everything else. The risk is the proxies miss subtle goal-drift cases that the judge would catch; I'd calibrate the proxy thresholds against the judge on a quarterly basis.
+"The main practical tradeoff is LLM-judge eval cost versus proxy metric coverage. Running a frontier model as a judge on every production run costs $200/day at 10K runs. I'd run the judge on a 5% sample plus 100% of golden-dataset regression runs, and use cheaper signals — cosine drift, TCR, tool error rate — for everything else. The risk is the proxies miss subtle goal-drift cases that the judge would catch; I'd calibrate the proxy thresholds against the judge on a quarterly basis.
 
 The other important operational note: connect eval to deployment gates. If tool selection accuracy on the golden dataset drops below 85% after a prompt or tool-schema change, that should block the release — same way test coverage gates block a code deploy."
 

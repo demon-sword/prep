@@ -39,7 +39,7 @@ Text summarization condenses source text into a shorter form while preserving th
 - Weakness: can be choppy, misses cross-sentence synthesis, fails on structured tables.
 
 **2. Abstractive summarization**
-- An LLM (GPT-4o, Claude 3.5 Sonnet, Mistral) reads the source and generates a coherent summary in its own words.
+- An LLM (frontier models, Mistral) reads the source and generates a coherent summary in its own words.
 - For short docs (< ~10k tokens): single-call prompting — stuff the full document into context with a system prompt specifying format, length, and tone.
 - For long docs: **Map-Reduce** pattern (LangChain `MapReduceDocumentsChain`):
   1. Split into chunks (e.g., 2,000-token windows with 200-token overlap).
@@ -67,10 +67,10 @@ Text summarization condenses source text into a shorter form while preserving th
 
 At a legal-tech company processing 10k contracts/day:
 - **Extraction** for key-clause identification (no hallucination tolerated for dates, obligations).
-- **Abstractive Map-Reduce** (GPT-4o-mini for map, GPT-4o for reduce) for executive summaries shown to clients — Map parallelizes across 4 chunks simultaneously, keeping p95 latency ≈ 8s for a 40-page contract.
+- **Abstractive Map-Reduce** (a small fast model for map, a frontier model for reduce) for executive summaries shown to clients — Map parallelizes across 4 chunks simultaneously, keeping p95 latency ≈ 8s for a 40-page contract.
 - **Faithfulness score** via RAGAS thresholded at 0.85 before returning summary to user; below threshold, fall back to extractive.
 
-Cost tradeoff: GPT-4o-mini for map steps at $0.15/1M input tokens vs GPT-4o at $2.50/1M — 90%+ token volume handled cheaply; only the final reduce step uses the expensive model.
+Cost tradeoff: a small fast model for map steps at $1/1M input tokens vs a frontier model at $5/1M — 90%+ token volume handled cheaply; only the final reduce step uses the expensive model.
 
 ---
 
@@ -98,7 +98,7 @@ On evaluation: ROUGE is a floor, not a ceiling, especially for abstractive outpu
 
 ## Pitfalls
 
-- **Mistake:** Describing only abstractive summarization (just "use GPT-4 to summarize") without mentioning extractive or hybrid approaches — **Better:** Explain the tradeoff triangle: extractive = zero hallucination / choppy; abstractive = fluent / hallucination risk; then choose based on the doc type and safety requirement.
+- **Mistake:** Describing only abstractive summarization (just "use a frontier model to summarize") without mentioning extractive or hybrid approaches — **Better:** Explain the tradeoff triangle: extractive = zero hallucination / choppy; abstractive = fluent / hallucination risk; then choose based on the doc type and safety requirement.
 - **Mistake:** Not addressing long-document handling — saying "just put it in context" without a strategy — **Better:** Name Map-Reduce vs Refine patterns explicitly, explain the latency vs coherence tradeoff between them, and give a concrete chunk size (e.g., 2k tokens with 200-token overlap).
 - **Mistake:** Citing only ROUGE as the evaluation metric — **Better:** Note that ROUGE measures n-gram overlap, which rewards verbatim copies and penalizes legitimate paraphrases; production systems should also track faithfulness (RAGAS) and entity-level accuracy on a golden set.
 

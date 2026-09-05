@@ -48,11 +48,11 @@ Over-reasoning occurs when an agent's LLM core produces increasingly elaborate p
 - **Reflection gating**: if using a reflection loop (Reflexion pattern), limit reflection to 1–2 passes per task, not unlimited retries.
 
 **Layer 4 — Model selection and temperature**
-- Use a reasoning-capable model (o1, o3, Claude 3.7 Sonnet) only when deep thinking is justified (complex multi-step math, code). For routing, tool selection, and simpler sub-tasks, use a smaller model (GPT-4o-mini, Claude 3.5 Haiku) with `temperature=0` — smaller models tend to be more action-oriented and less verbose.
+- Use a reasoning-capable model (o1, o3, a frontier model.7 Sonnet) only when deep thinking is justified (complex multi-step math, code). For routing, tool selection, and simpler sub-tasks, use a smaller model (a small fast model, a frontier model Haiku) with `temperature=0` — smaller models tend to be more action-oriented and less verbose.
 
 ### Example / Tradeoff
 
-**Concrete example:** A code-review agent built on GPT-4o repeatedly re-planned its analysis (generating 5 nested sub-task lists) without ever calling the `read_file` tool. Root cause: the system prompt said "carefully analyze the code" with no step limit. Fix: (1) added `max_iterations=8` in LangGraph, (2) changed system prompt to `"You have 3 analysis steps and 2 tool calls"`, (3) set `max_tokens=400` per step. Result: p95 task completion time dropped from 45s to 12s, and the agent completed tasks successfully on 94% of runs vs 71% before.
+**Concrete example:** A code-review agent built on a frontier model repeatedly re-planned its analysis (generating 5 nested sub-task lists) without ever calling the `read_file` tool. Root cause: the system prompt said "carefully analyze the code" with no step limit. Fix: (1) added `max_iterations=8` in LangGraph, (2) changed system prompt to `"You have 3 analysis steps and 2 tool calls"`, (3) set `max_tokens=400` per step. Result: p95 task completion time dropped from 45s to 12s, and the agent completed tasks successfully on 94% of runs vs 71% before.
 
 **Tradeoff:** Hard step limits can cause premature termination on genuinely complex tasks. Mitigate by making the cap adaptive: start at `max_iterations=8`, allow the agent to request an extension (emit `{"action": "request_extension", "reason": "..."}`) which triggers HITL — a human approves one additional budget block. This preserves flexibility without open-ended looping.
 

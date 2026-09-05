@@ -33,7 +33,7 @@ Huge PDFs can't be chunked naively because meaning is distributed: a table heade
 
 **1. Structure-aware extraction (before chunking)**
 - Use a PDF parser that understands layout: **PyMuPDF** (fast, open-source), **Adobe PDF Extract API**, or **AWS Textract** for scanned/complex docs.
-- Extract: plain-text blocks, tables (convert to Markdown), images (store separately or caption with GPT-4o Vision), headers/footers (detect via font size/position heuristics).
+- Extract: plain-text blocks, tables (convert to Markdown), images (store separately or caption with a vision-capable model), headers/footers (detect via font size/position heuristics).
 - Identify document sections: use heading hierarchy (H1→H2→H3) to build a **section tree**.
 
 **2. Global metadata injection**
@@ -56,7 +56,7 @@ Huge PDFs can't be chunked naively because meaning is distributed: a table heade
 
 ### Example / Tradeoff
 
-**Stack:** PyMuPDF → custom section-tree extractor → LlamaIndex `SentenceWindowNodeParser` (child=256 tokens, window=3 sentences) → Pinecone (with metadata filters) → GPT-4o-mini with document preamble injection.
+**Stack:** PyMuPDF → custom section-tree extractor → LlamaIndex `SentenceWindowNodeParser` (child=256 tokens, window=3 sentences) → Pinecone (with metadata filters) → a small fast model with document preamble injection.
 
 **Tradeoff — chunk size:**
 | Smaller chunks (128–256 tokens) | Larger chunks (512–1024 tokens) |

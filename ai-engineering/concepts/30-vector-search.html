@@ -420,14 +420,17 @@
 
     <h3>HNSW — Hierarchical Navigable Small World</h3>
     <p>
-      HNSW (Malkov & Yashunin, 2018) is the gold-standard ANN index for in-memory retrieval. It builds a multi-layer graph where each node (vector) connects to its nearest neighbors. During search, the algorithm begins at the top (sparse) layer — which acts like a highway network — and greedy-descends to the dense bottom layer, narrowing the candidate set with each step. The navigable small-world structure guarantees that any node can be reached in O(log N) hops.
+      HNSW (Malkov & Yashunin, 2018) is the gold-standard ANN index for in-memory retrieval. It builds a multi-layer graph where each node (vector) connects to its nearest neighbors. During search, the algorithm begins at the top (sparse) layer — which acts like a highway network — and greedy-descends to the dense bottom layer, narrowing the candidate set with each step. The skip-list-like layer hierarchy over a navigable small-world graph makes the hop count scale <em>empirically</em> logarithmically: under the paper's small-world assumptions, greedy search reaches the target region in expected O(log N) hops. This is a scaling observation, not a proof of correctness — HNSW is an <strong>approximate</strong> index and offers <strong>no formal recall guarantee</strong>. Recall is tuned, not guaranteed: with sensible beam widths you land at ~0.95–0.99 recall@10, and pushing higher costs latency.
     </p>
     <p>
-      Key parameters: <code>M</code> (max neighbors per node, typically 16–64) controls index size and recall; <code>efConstruction</code> (build-time beam width, 100–500) controls index quality vs build time; <code>ef</code> (query-time beam width) is tunable at runtime — higher ef = higher recall, higher latency.
+      Key parameters: <code>M</code> (max neighbors per node per layer, typically 16–64) controls index size and recall; <code>efConstruction</code> (build-time beam width, 100–500) controls index quality vs build time; <code>ef</code> (query-time beam width, called <code>efSearch</code> in some libraries) is tunable at runtime — higher ef = higher recall, higher latency. Recall is a dial on <code>ef</code>, never a property of the index.
     </p>
     <div class="formula">
-      Build time: O(N · M · log N) &nbsp;|&nbsp; Query time: O(log N) &nbsp;|&nbsp; Memory: ~(M + N·dim)·4 bytes
+      Build time: O(N · M · log N) &nbsp;|&nbsp; Query time: ~O(log N) expected &nbsp;|&nbsp; Memory: ≈ N · (M + dim) · 4 bytes
     </div>
+    <p>
+      Note the memory formula scales the link term with <code>N</code>: <em>every</em> one of the N nodes stores its own neighbor list, so you pay <code>dim</code> float32s (4 B each) for the raw vector plus on the order of <code>M</code> node ids (4 B each) per vector. The rule of thumb above is the low end — layer 0 actually allows up to <code>2·M</code> neighbors per node, and the sparse upper layers add a further ~1/(1−1/M) multiplier (≈3% at M=32, ≈7% at M=16), so the true link cost sits between M and ~2·M links per vector.
+    </p>
     <p>
       HNSW is the default index in <strong>pgvector</strong> (PostgreSQL), <strong>Weaviate</strong>, <strong>Qdrant</strong>, and <strong>Chroma</strong>. It supports single-pass query without a two-stage pipeline and handles dynamic insertions without full rebuild.
     </p>
@@ -481,7 +484,7 @@
 
     <h3>Production Numbers & Tools</h3>
     <p>
-      At 10M vectors (1024d, float32): HNSW index ~40GB RAM, build time ~30min on 32 CPUs. IVF+PQ (m=64): ~640MB RAM, &gt;98% recall@10 achievable. Query latency: HNSW ~1ms, IVF+PQ ~5ms. Managed solutions: <strong>Pinecone</strong> (serverless, ~$0.04/1M queries), <strong>Weaviate Cloud</strong>, <strong>Qdrant Cloud</strong>. Self-hosted: pgvector (PostgreSQL extension, HNSW support added v0.5), Qdrant (Rust, HNSW + scalar quantization), Milvus (scale-out, Kafka-backed).
+      At 10M vectors (1024d, float32, M=16): the flat vector payload alone is 10e6 · 1024 · 4 = <strong>~41GB</strong>; the HNSW graph adds 10e6 · 2·16 · 4 ≈ 1.28GB of layer-0 links plus ~0.04GB of upper-layer links, so the whole index is <strong>~42GB RAM — about 1.03× flat</strong>, not a multiple of it. Build time ~30min on 32 CPUs. The overhead ratio only gets interesting when <code>dim</code> is small relative to <code>M</code>: at 128d with M=64 the flat payload is 5.1GB and the links are another 5.2GB, i.e. ~2× flat. IVF+PQ (m=64): ~640MB RAM, ~98% recall@10 achievable with enough <code>nprobe</code>. Query latency: HNSW ~1ms, IVF+PQ ~5ms. Managed solutions: <strong>Pinecone</strong> (serverless, ~$0.04/1M queries), <strong>Weaviate Cloud</strong>, <strong>Qdrant Cloud</strong>. Self-hosted: pgvector (PostgreSQL extension, HNSW support added v0.5), Qdrant (Rust, HNSW + scalar quantization), Milvus (scale-out, Kafka-backed).
     </p>
 
     <div class="callout">
@@ -494,7 +497,7 @@
       </thead>
       <tbody>
         <tr><td>Flat (exact)</td><td>N·dim·4B</td><td>O(N)</td><td>O(N·dim)</td><td>100%</td><td>&lt;100K vectors</td></tr>
-        <tr><td>HNSW</td><td>~10× flat</td><td>O(N log N)</td><td>O(log N)</td><td>95–99%</td><td>In-memory, low latency</td></tr>
+        <tr><td>HNSW</td><td>~1.03–2× flat</td><td>O(N log N)</td><td>~O(log N) expected</td><td>95–99% (tuned via ef)</td><td>In-memory, low latency</td></tr>
         <tr><td>IVF</td><td>~flat + centroids</td><td>O(N)</td><td>O(√N)</td><td>90–97%</td><td>Disk-based, billion scale</td></tr>
         <tr><td>IVF+PQ</td><td>32–64× smaller</td><td>O(N)</td><td>O(√N)</td><td>85–95%</td><td>Billion scale, RAM-constrained</td></tr>
       </tbody>
@@ -561,7 +564,7 @@
     <h2>Key Takeaways</h2>
     <ul>
       <li>
-        <strong>HNSW dominates for low-latency in-memory retrieval.</strong> At &lt;50M vectors with &gt;8GB RAM headroom, HNSW + <code>ef=50</code> delivers &lt;5ms P99 at &gt;98% recall@10 — the default choice for Qdrant, Weaviate, and pgvector. For billion-scale, IVF+PQ is unavoidable.
+        <strong>HNSW dominates for low-latency in-memory retrieval — but its recall is tuned, not guaranteed.</strong> The layered small-world graph buys <em>empirically</em> logarithmic search (expected O(log N) hops), not a correctness proof; HNSW + <code>ef=50</code> typically lands ~0.95–0.99 recall@10 at &lt;5ms P99, and you trade latency for recall by raising <code>ef</code>. Budget RAM at ~1.03–2× the flat vector size (10M × 1024d with M=16 ≈ 41GB flat → ~42GB indexed). Default choice for Qdrant, Weaviate, and pgvector; for billion-scale, IVF+PQ is unavoidable.
       </li>
       <li>
         <strong>Two-stage retrieval is non-negotiable at production scale.</strong> Bi-encoder ANN retrieval finds candidates cheap and fast; cross-encoder reranking adds 30–60% nDCG lift at the cost of 200–500ms. Always budget latency for reranking in your SLA.

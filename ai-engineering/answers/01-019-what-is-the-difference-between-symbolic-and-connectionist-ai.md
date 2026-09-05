@@ -39,7 +39,7 @@ Understanding of the two paradigms' mechanics, failure modes, and how modern LLM
 | Data requirement | Low (rules encode priors) | High (millions–trillions of tokens) |
 | Interpretability | High — every step auditable | Low — weights are opaque |
 | Failure mode | Combinatorial explosion; rule gaps cause silent failures | Hallucination; spurious correlations; OOD collapse |
-| Classic systems | Cyc, MYCIN, IBM Watson (Jeopardy version), Prolog | GPT-4, Claude, LLaMA, diffusion models |
+| Classic systems | Cyc, MYCIN, IBM Watson (Jeopardy version), Prolog | a frontier model, Claude, LLaMA, diffusion models |
 
 **How connectionist AI works (LLM path):** Input tokens → dense embedding → stacked transformer layers (attention + FFN) → next-token probability distribution → autoregressive generation. The "knowledge" lives as statistical co-occurrence patterns compressed into billions of floating-point weights.
 

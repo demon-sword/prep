@@ -69,7 +69,7 @@ if stuck_count >= 3:
 
 ### Example / Tradeoff
 
-**Support ticket agent (LangGraph):** A GPT-4o-mini agent routes, drafts, and resolves tickets. Termination signals in priority order:
+**Support ticket agent (LangGraph):** A small-fast-model agent routes, drafts, and resolves tickets. Termination signals in priority order:
 1. `RESOLVE_TICKET` tool called with a resolution summary → orchestrator marks ticket closed, exits loop
 2. `ESCALATE_TO_HUMAN` tool called → loop exits, human queue receives the ticket
 3. `max_iterations=12` exceeded → force-emit `ESCALATE_TO_HUMAN` with reason `"max_iterations exceeded"`

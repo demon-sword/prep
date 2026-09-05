@@ -14,7 +14,7 @@
 Tokenization sits at the foundation of every LLM — it determines vocabulary size, context window efficiency, cost per call, and whether domain-specific terms get split into nonsense. Interviewers probe this to see whether candidates understand the latent assumptions baked into pre-trained models *before* they are applied to specialized domains (legal, medical, code), and whether they can reason about cost/context tradeoffs in production.
 
 ### Trigger phrases
-- "Why does GPT-4 struggle with arithmetic / rare words / legal terms?"
+- "Why does a frontier model struggle with arithmetic / rare words / legal terms?"
 - "How does tokenization affect cost and context window usage?"
 - "What tokenizer does BERT use vs GPT? Why does it matter?"
 - "Our domain has lots of abbreviations — should we retrain the tokenizer?"
@@ -59,13 +59,13 @@ Tokenization is the process of converting raw text into discrete integer IDs tha
 
 | Algorithm | Vocab size | OOV handling | Sequence length (English) | Domain gap risk |
 |-----------|-----------|--------------|--------------------------|-----------------|
-| BPE (GPT-4, tiktoken) | 100K | Byte fallback — no UNK | ~1 token / 4 chars | Medium — arithmetic, medical codes |
+| BPE (a frontier model, tiktoken) | 100K | Byte fallback — no UNK | ~1 token / 4 chars | Medium — arithmetic, medical codes |
 | WordPiece (BERT) | 30K | `[UNK]` for truly unseen bytes | ~1 token / 4 chars | Higher — fixed vocab, no byte fallback |
 | Character-level | 256–5K | None | ~1 token / 1 char | None — but 4–5× longer sequences |
 | SentencePiece Unigram (T5, LLaMA) | 32K–64K | Byte fallback | ~1 token / 4 chars | Low — language-agnostic |
 
 **Concrete production impact — medical domain:**
-GPT-4's tiktoken (BPE, 100K vocab) splits "hepatosplenomegaly" into 6–7 tokens. A clinical NLP team found their average note consumed **28% more tokens** than expected, inflating API costs and sometimes truncating context. Options: (1) use a domain-retrained tokenizer (requires fine-tuning from scratch), (2) add a pre-processing step to expand abbreviations, (3) switch to a model whose tokenizer was trained on biomedical text (e.g., BioGPT, ClinicalBERT).
+A frontier model's tiktoken (BPE, 100K vocab) splits "hepatosplenomegaly" into 6–7 tokens. A clinical NLP team found their average note consumed **28% more tokens** than expected, inflating API costs and sometimes truncating context. Options: (1) use a domain-retrained tokenizer (requires fine-tuning from scratch), (2) add a pre-processing step to expand abbreviations, (3) switch to a model whose tokenizer was trained on biomedical text (e.g., BioGPT, ClinicalBERT).
 
 **Arithmetic failure root cause:** GPT tokenizers split digits individually only for multi-digit numbers in certain contexts. "8 + 7 = 15" might tokenize "15" as one token but "153" as two — the model has never seen "153" as a unit; it must learn carry rules from character patterns, which it struggles with compared to a calculator.
 

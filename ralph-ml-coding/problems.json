@@ -1,0 +1,514 @@
+[
+  {
+    "id": "01-train-test-split",
+    "title": "Implement a Seeded Train-Test Split",
+    "slug": "train-test-split",
+    "group": "data-prep",
+    "description": "Shuffle a dataset with a seeded RNG and slice it into train and test partitions, returning index arrays rather than silently copying the data. The non-trivial part is that the split must be a true permutation — every row appearing exactly once across the two halves — and byte-identical across runs for a fixed seed, including when the test fraction rounds ambiguously.",
+    "depth": "intro",
+    "difficulty": "easy",
+    "io_contract": "train_test_split(X: np.ndarray, y: np.ndarray, test_size: float, seed: int) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]  # X_train, X_test, y_train, y_test",
+    "verify": "Assert the union of train and test row indices is an exact permutation of 0..n-1 with empty intersection, that the test partition has round(test_size * n) rows, that rows of X still line up with their y labels after shuffling, and that two calls with the same seed return identical arrays while a different seed does not.",
+    "followups": [
+      "Why shuffle before splitting instead of taking the last 20% of rows?",
+      "How does this change for time-series data where rows are ordered?",
+      "When is a single held-out split not enough to trust the estimate?"
+    ]
+  },
+  {
+    "id": "02-minibatch-loader",
+    "title": "Implement a Shuffling Mini-Batch Data Loader",
+    "slug": "minibatch-loader",
+    "group": "data-prep",
+    "description": "An epoch iterator that reshuffles the index order every epoch and yields fixed-size batches of features and labels. The subtlety is the ragged final batch: dropping it silently discards data every epoch, keeping it means downstream code cannot assume a static batch dimension.",
+    "depth": "intro",
+    "difficulty": "easy",
+    "io_contract": "iterate_minibatches(X: np.ndarray, y: np.ndarray, batch_size: int, seed: int, drop_last: bool) -> Iterator[tuple[np.ndarray, np.ndarray]]",
+    "verify": "Collect every batch of one epoch and assert the concatenated rows are a permutation of the original dataset when drop_last is False, that the batch count equals ceil(n/batch_size) versus floor(n/batch_size) under the two drop_last settings, that each batch keeps X and y aligned, and that consecutive epochs from one loader use different orders while two loaders built with the same seed produce identical order sequences.",
+    "followups": [
+      "Why reshuffle every epoch instead of shuffling the dataset once?",
+      "What breaks if the last batch has a single row and the model uses batch norm?",
+      "How would you shuffle a dataset far too large to hold in memory?"
+    ]
+  },
+  {
+    "id": "03-stratified-kfold",
+    "title": "Implement Stratified K-Fold Cross-Validation Splits",
+    "slug": "stratified-kfold",
+    "group": "data-prep",
+    "description": "Generate k train/validation index pairs that preserve the class proportions of the full dataset in every fold. The hard part is distributing each class's shuffled indices round-robin across folds, so a class with 7 members and k=5 spreads out instead of piling into one or two folds.",
+    "depth": "core",
+    "difficulty": "medium",
+    "io_contract": "stratified_kfold(y: np.ndarray, k: int, seed: int) -> list[tuple[np.ndarray, np.ndarray]]  # (train_idx, val_idx) for each of the k folds",
+    "verify": "Assert the k validation index sets are pairwise disjoint and together cover 0..n-1 exactly once, that each fold's train and val indices are disjoint, that every fold's per-class count is within one of the ideal proportional count, and cross-check the fold sizes and per-class counts against sklearn.model_selection.StratifiedKFold on the same labels.",
+    "followups": [
+      "When does stratification actually change your CV estimate versus plain KFold?",
+      "How would you stratify on a continuous target?",
+      "What do you do with a class that has fewer members than k?"
+    ]
+  },
+  {
+    "id": "04-smote",
+    "title": "Implement SMOTE Minority Oversampling",
+    "slug": "smote",
+    "group": "data-prep",
+    "description": "Synthesize new minority-class rows by interpolating between a minority point and one of its k minority-class nearest neighbours at a random position along the segment. Getting it right means excluding a point from its own neighbour list and handling a minority class with fewer than k+1 members, where the naive neighbour search returns fewer candidates than requested.",
+    "depth": "advanced",
+    "difficulty": "medium",
+    "io_contract": "smote(X: np.ndarray, y: np.ndarray, minority_label: int, n_synthetic: int, k: int, seed: int) -> tuple[np.ndarray, np.ndarray]  # X_resampled, y_resampled",
+    "verify": "Recompute the minority neighbour sets by brute force and assert every synthetic row is a convex combination x + lam * (neighbour - x) with lam in [0, 1] to within 1e-9 for some genuine k-neighbour of some minority point, that exactly n_synthetic rows were appended and all carry the minority label, and that the original rows come back unmodified.",
+    "followups": [
+      "Why must SMOTE run inside the CV loop rather than before the split?",
+      "What happens when the minority class is multi-modal or contains outliers?",
+      "How does SMOTE compare with class weights in the loss function?"
+    ]
+  },
+  {
+    "id": "05-linear-regression-gd",
+    "title": "Implement Linear Regression with Gradient Descent",
+    "slug": "linear-regression-gd",
+    "group": "regression",
+    "description": "Fit weights and a bias by repeatedly stepping down the MSE gradient, recording the loss each iteration. The parts that actually break: omitting the 2/n normalization so a working learning rate silently depends on dataset size, and not tracking loss to notice divergence when the step is too large for unscaled features.",
+    "depth": "intro",
+    "difficulty": "easy",
+    "io_contract": "fit_linear_gd(X: np.ndarray, y: np.ndarray, lr: float, n_iters: int) -> tuple[np.ndarray, float, list[float]]  # weights, bias, loss_history",
+    "verify": "On data generated from known coefficients, assert the fitted weights and bias match the closed-form least-squares solution (np.linalg.lstsq on the augmented design matrix) to within 1e-3 after enough iterations, and assert the loss history is monotonically non-increasing.",
+    "followups": [
+      "How do you choose the learning rate without a grid search?",
+      "Why does feature scaling change how many iterations you need?",
+      "When would you use stochastic or mini-batch gradient descent instead of full-batch?"
+    ]
+  },
+  {
+    "id": "06-normal-equation",
+    "title": "Implement Linear Regression via the Normal Equation",
+    "slug": "normal-equation",
+    "group": "regression",
+    "description": "Solve for the closed-form OLS coefficients on a design matrix with an intercept column appended. The non-trivial bit is not forming an explicit inverse of X^T X at all — use a solve or lstsq — because the Gram matrix is singular the moment two features are collinear or n is smaller than d.",
+    "depth": "intro",
+    "difficulty": "easy",
+    "io_contract": "fit_linear_normal(X: np.ndarray, y: np.ndarray) -> tuple[np.ndarray, float]  # weights, bias",
+    "verify": "Compare weights and bias against sklearn.linear_model.LinearRegression fitted on the same data to within 1e-8, and independently assert the residual vector is orthogonal to every column of the augmented design matrix (max abs of X_aug.T @ r below 1e-8), which is the defining property of the OLS solution.",
+    "followups": [
+      "When is the normal equation the wrong choice compared to gradient descent?",
+      "What exactly goes wrong when two features are perfectly correlated?",
+      "What is the time complexity in n and d, and which term dominates for wide data?"
+    ]
+  },
+  {
+    "id": "07-ridge-closed-form",
+    "title": "Implement Ridge Regression in Closed Form",
+    "slug": "ridge-closed-form",
+    "group": "regression",
+    "description": "Add an L2 penalty to the closed-form solution, solving (X^T X + lam * I) w = X^T y. The detail interviewers watch for is that the intercept must not be penalized — the penalty matrix carries a zero in the bias position — and that lam is only comparable across features when they are standardized first.",
+    "depth": "core",
+    "difficulty": "easy",
+    "io_contract": "fit_ridge(X: np.ndarray, y: np.ndarray, lam: float) -> tuple[np.ndarray, float]  # weights, bias",
+    "verify": "Compare against sklearn.linear_model.Ridge(alpha=lam, fit_intercept=True) to within 1e-6, assert lam=0 reproduces the plain OLS solution, assert the L2 norm of the weight vector decreases monotonically as lam sweeps upward, and assert the fit still succeeds on a deliberately rank-deficient X where OLS raises or blows up.",
+    "followups": [
+      "Why does the ridge penalty make a singular X^T X invertible?",
+      "Why is the intercept excluded from the penalty?",
+      "How does ridge differ from lasso in what it does to individual weights?"
+    ]
+  },
+  {
+    "id": "08-logistic-regression",
+    "title": "Implement Logistic Regression with Cross-Entropy Loss",
+    "slug": "logistic-regression",
+    "group": "classification",
+    "description": "Gradient descent on the binary cross-entropy of a sigmoid over a linear score. Two things sink naive implementations: exp overflowing for large-magnitude logits, and log(0) producing NaN once a prediction saturates — both fixed by a branch-stable sigmoid and computing the loss from logits rather than from clipped probabilities.",
+    "depth": "core",
+    "difficulty": "medium",
+    "io_contract": "fit_logistic(X: np.ndarray, y: np.ndarray, lr: float, n_iters: int) -> tuple[np.ndarray, float, list[float]]  # weights, bias, loss_history",
+    "verify": "Check the analytic gradient of the loss against a central finite-difference estimate to a relative error below 1e-6, assert the loss stays finite for logits of magnitude 1000 in both directions, assert the loss history is non-increasing, and assert accuracy above 0.95 on a linearly separable synthetic set.",
+    "followups": [
+      "Why cross-entropy instead of MSE on the sigmoid output?",
+      "What happens to the weights when the two classes are perfectly separable?",
+      "How would you add L2 regularization to the gradient update?"
+    ]
+  },
+  {
+    "id": "09-softmax-regression",
+    "title": "Implement Multinomial Logistic Regression",
+    "slug": "softmax-regression",
+    "group": "classification",
+    "description": "Extend logistic regression to K classes with a softmax over class scores and one-hot targets. The gradient is deceptively simple — X^T (P - Y) — but only if the softmax subtracts a per-row max before exponentiating and the weight matrix keeps a consistent (d, K) orientation through both the forward pass and the update.",
+    "depth": "core",
+    "difficulty": "medium",
+    "io_contract": "fit_softmax_regression(X: np.ndarray, y: np.ndarray, n_classes: int, lr: float, n_iters: int) -> tuple[np.ndarray, np.ndarray]  # W of shape (d, n_classes), b of shape (n_classes,)",
+    "verify": "Finite-difference check every entry of the W and b gradients against the loss to a relative error below 1e-6, assert the predicted probability rows sum to 1 to 1e-12 and stay finite for logits of magnitude 1000, and assert test accuracy is within 0.02 of sklearn.linear_model.LogisticRegression trained multinomially on the same synthetic data.",
+    "followups": [
+      "Why is softmax regression over-parameterized, and does that matter in practice?",
+      "How does one-vs-rest differ from a true multinomial fit?",
+      "What changes when the classes are heavily imbalanced?"
+    ]
+  },
+  {
+    "id": "10-naive-bayes",
+    "title": "Implement Multinomial Naive Bayes with Laplace Smoothing",
+    "slug": "naive-bayes",
+    "group": "classification",
+    "description": "Estimate class priors and per-feature conditional likelihoods from a document-term count matrix, then classify by the argmax of summed log probabilities. Smoothing is the whole exercise: without the +alpha in the numerator and alpha * vocab_size in the denominator, one word never seen with a class zeroes that class's entire posterior.",
+    "depth": "core",
+    "difficulty": "medium",
+    "io_contract": "class MultinomialNB(alpha: float) with fit(X: np.ndarray, y: np.ndarray) -> None, predict_log_proba(X: np.ndarray) -> np.ndarray and predict(X: np.ndarray) -> np.ndarray",
+    "verify": "Compare predicted labels and joint log-likelihoods against sklearn.naive_bayes.MultinomialNB(alpha=alpha) on the same count matrix to within 1e-8, assert a test document containing a token never seen with a given class still receives a finite (not -inf) score for that class, and assert the same-class ranking is unchanged when all counts are scaled by a constant.",
+    "followups": [
+      "Why work in log space rather than multiplying probabilities directly?",
+      "What independence assumption is being violated on real text, and why does the model still work?",
+      "How would you handle continuous features instead of counts?"
+    ]
+  },
+  {
+    "id": "11-knn-kdtree",
+    "title": "Implement k-Nearest Neighbours with a KD-Tree",
+    "slug": "knn-kdtree",
+    "group": "classification",
+    "description": "Build a KD-tree by recursively splitting on the median of a cycling axis, then answer queries with a search that keeps a bounded max-heap of the k best candidates. The correctness hinge is the prune test: the far subtree must still be descended whenever the distance to the splitting plane is smaller than the current k-th best distance, or the query silently returns wrong neighbours.",
+    "depth": "advanced",
+    "difficulty": "hard",
+    "io_contract": "build_kdtree(X: np.ndarray) -> KDNode and knn_query(tree: KDNode, q: np.ndarray, k: int) -> tuple[np.ndarray, np.ndarray]  # neighbour indices, distances (both sorted ascending)",
+    "verify": "For 200 random queries, compare against a brute-force argsort over all pairwise distances and assert the returned index sets and sorted distances match exactly; also count visited nodes and assert the average is well below n on 2-D data, which proves the pruning branch actually fires rather than the tree degenerating into a full scan.",
+    "followups": [
+      "At what dimensionality does a KD-tree stop beating brute force, and why?",
+      "How would you handle ties at the k-th distance deterministically?",
+      "What changes if approximate neighbours are acceptable?"
+    ]
+  },
+  {
+    "id": "12-gini-entropy-split",
+    "title": "Implement Best-Split Search with Gini and Entropy",
+    "slug": "gini-entropy-split",
+    "group": "classification",
+    "description": "Scan every feature and every candidate threshold to find the split that maximizes information gain under either impurity measure. What separates a working answer from a quadratic one is sorting each feature once and updating the left/right class counts incrementally as the threshold sweeps, instead of recomputing impurity over both halves at every candidate.",
+    "depth": "core",
+    "difficulty": "medium",
+    "io_contract": "best_split(X: np.ndarray, y: np.ndarray, criterion: str) -> tuple[int, float, float]  # feature_index, threshold, gain",
+    "verify": "Compare the chosen feature, threshold and gain against a deliberately naive O(n^2 d) reference that recomputes both child impurities from scratch for every candidate threshold, and separately assert gini and entropy both return 0 on a pure node and return 0.5 and 1.0 respectively on a balanced binary node.",
+    "followups": [
+      "When do Gini and entropy actually select different splits?",
+      "How do you handle a categorical feature with many levels?",
+      "Why does raw information gain favour high-cardinality features, and what fixes it?"
+    ]
+  },
+  {
+    "id": "13-cart-tree",
+    "title": "Implement a CART Decision Tree",
+    "slug": "cart-tree",
+    "group": "classification",
+    "description": "Recursively apply the best split to grow a binary tree with stopping rules on depth, minimum samples and zero gain, plus a predict that routes each row down to a leaf. The bugs live in the base cases: a node where every candidate split leaves one child empty must become a leaf rather than recursing forever on the same rows.",
+    "depth": "advanced",
+    "difficulty": "hard",
+    "io_contract": "class DecisionTree(max_depth: int, min_samples_split: int, criterion: str) with fit(X: np.ndarray, y: np.ndarray) -> None and predict(X: np.ndarray) -> np.ndarray",
+    "verify": "Assert training accuracy is exactly 1.0 when grown without a depth limit on a dataset with no duplicated feature rows, compare test accuracy against sklearn.tree.DecisionTreeClassifier configured with the same max_depth, min_samples_split and criterion to within 0.05, and assert a node whose rows are all one class is emitted as a childless leaf.",
+    "followups": [
+      "How would you add cost-complexity post-pruning?",
+      "What makes a single deep tree overfit so badly compared to a forest?",
+      "How does the split criterion change for a regression target?"
+    ]
+  },
+  {
+    "id": "14-gradient-boosting-stumps",
+    "title": "Implement Gradient Boosting with Decision Stumps",
+    "slug": "gradient-boosting-stumps",
+    "group": "classification",
+    "description": "Fit an additive ensemble of depth-1 trees, each trained on the negative gradient of log-loss with respect to the current additive score. The step that trips people up is shrinkage: each stump's leaf values must be scaled by the learning rate before being added to the running score, and the ensemble starts from the log-odds of the base rate rather than from zero.",
+    "depth": "advanced",
+    "difficulty": "medium",
+    "io_contract": "class GradientBoostingStumps(n_stages: int, lr: float) with fit(X: np.ndarray, y: np.ndarray) -> None and predict_proba(X: np.ndarray) -> np.ndarray",
+    "verify": "Assert training log-loss is non-increasing across stages, that all predicted probabilities lie strictly in (0, 1), that the stage-0 prediction equals the base rate of the training labels to 1e-9, and that test accuracy is within 0.05 of sklearn.ensemble.GradientBoostingClassifier with matching n_estimators, learning_rate and max_depth=1.",
+    "followups": [
+      "Why fit the residual gradient rather than reweighting samples like AdaBoost?",
+      "What does the learning rate trade off against the number of stages?",
+      "Which regularization terms does XGBoost add that are missing here?"
+    ]
+  },
+  {
+    "id": "15-kmeans",
+    "title": "Implement K-Means with K-Means++ Initialization",
+    "slug": "kmeans",
+    "group": "clustering",
+    "description": "Lloyd's assign-and-update iteration run to convergence on top of D^2-weighted seeding. Two cases must be handled explicitly: a centroid that loses all its points, which has to be reseeded at the farthest point instead of producing a NaN mean, and the k-means++ sampling weights when duplicate points make a squared distance exactly zero.",
+    "depth": "core",
+    "difficulty": "medium",
+    "io_contract": "kmeans(X: np.ndarray, k: int, seed: int, max_iter: int) -> tuple[np.ndarray, np.ndarray, float]  # centroids, labels, inertia",
+    "verify": "Assert inertia is non-increasing across iterations, independently recompute the argmin assignment against the returned centroids and assert it equals the returned labels, assert the returned inertia matches a fresh sum of squared distances to 1e-9, assert final inertia is within 5% of sklearn.cluster.KMeans(n_clusters=k, n_init=10) on the same data, and run a dataset engineered to empty a cluster asserting no NaN centroid appears.",
+    "followups": [
+      "How would you pick k?",
+      "Why does k-means++ beat random initialization on both convergence speed and final inertia?",
+      "What cluster shapes does k-means fundamentally fail on?"
+    ]
+  },
+  {
+    "id": "16-pca",
+    "title": "Implement PCA via SVD and via Eigendecomposition",
+    "slug": "pca",
+    "group": "dimensionality-reduction",
+    "description": "Center the data and recover the same principal axes two ways: as eigenvectors of the covariance matrix and as right singular vectors of the centered matrix. The gotcha is sign ambiguity — the two routes return components that may differ by a factor of -1, so any comparison has to be up to sign — and that the SVD route is the numerically stable one because forming X^T X squares the condition number.",
+    "depth": "core",
+    "difficulty": "medium",
+    "io_contract": "pca_svd(X: np.ndarray, n_components: int) -> tuple[np.ndarray, np.ndarray, np.ndarray] and pca_eig(X: np.ndarray, n_components: int) -> tuple[np.ndarray, np.ndarray, np.ndarray]  # components (k, d), explained_variance (k,), mean (d,)",
+    "verify": "Assert components @ components.T equals the identity to 1e-8 (orthonormality), that explained_variance is sorted descending and sums to the total variance of the centered data when k equals d, that pca_svd and pca_eig agree component-by-component up to sign to 1e-6, and that both match sklearn.decomposition.PCA components up to sign to 1e-6.",
+    "followups": [
+      "Why always center, but not always scale?",
+      "Why is eigendecomposing X^T X numerically worse than taking the SVD of X?",
+      "How do you choose the number of components to keep?"
+    ]
+  },
+  {
+    "id": "17-precision-recall-f1",
+    "title": "Implement Precision Recall and F1 Score",
+    "slug": "precision-recall-f1",
+    "group": "evaluation",
+    "description": "Derive the four confusion counts from label arrays and compute the three metrics, with macro and micro averaging over multiple classes. The case that must not crash is a class the model never predicts: precision is 0/0 there, and the answer has to be a documented convention (zero) rather than a NaN that silently poisons the macro average.",
+    "depth": "intro",
+    "difficulty": "easy",
+    "io_contract": "precision_recall_f1(y_true: np.ndarray, y_pred: np.ndarray, average: str) -> tuple[float, float, float]",
+    "verify": "Compare against sklearn.metrics.precision_recall_fscore_support with the matching average setting on random multi-class labels to within 1e-9, including a case where one class is never predicted (assert 0.0, not NaN) and a case where one class never appears in y_true; separately assert micro-averaged precision, recall and F1 are all equal to accuracy in the single-label multi-class setting.",
+    "followups": [
+      "When is accuracy actively misleading?",
+      "Which of precision or recall do you optimize for a fraud model, and why?",
+      "What does the beta parameter change in F-beta?"
+    ]
+  },
+  {
+    "id": "18-roc-auc",
+    "title": "Implement ROC-AUC from Scratch",
+    "slug": "roc-auc",
+    "group": "evaluation",
+    "description": "Sweep every distinct score threshold to trace the TPR/FPR curve and integrate it with the trapezoid rule, or equivalently compute the rank-based Mann-Whitney statistic. Tied scores are the trap: they must collapse into a single threshold point and receive averaged ranks, otherwise the curve gains spurious staircase steps and the area comes out wrong.",
+    "depth": "core",
+    "difficulty": "medium",
+    "io_contract": "roc_auc(y_true: np.ndarray, y_score: np.ndarray) -> float",
+    "verify": "Match sklearn.metrics.roc_auc_score to within 1e-9 on random scores, on scores with many deliberate ties, and on a perfectly separable set (expect exactly 1.0); assert an all-ties score vector yields exactly 0.5; and assert the threshold-sweep integration and the rank-based formula agree with each other to 1e-12.",
+    "followups": [
+      "What is the probabilistic interpretation of AUC?",
+      "Why can AUC look excellent on a heavily imbalanced dataset while the model is useless in production?",
+      "When would you report PR-AUC instead?"
+    ]
+  },
+  {
+    "id": "19-softmax-cross-entropy",
+    "title": "Implement Numerically Stable Softmax and Cross-Entropy",
+    "slug": "softmax-cross-entropy",
+    "group": "neural-nets",
+    "description": "A softmax with the max-subtraction shift and a cross-entropy that consumes logits directly, together with the combined backward pass. The whole exercise is the log-sum-exp shift that stops exp overflowing at a logit of 1000, and the log(0) that appears the moment you compose a separately computed softmax with a naive log.",
+    "depth": "core",
+    "difficulty": "medium",
+    "io_contract": "softmax(logits: np.ndarray, axis: int) -> np.ndarray and cross_entropy_from_logits(logits: np.ndarray, labels: np.ndarray) -> tuple[float, np.ndarray]  # mean loss, dlogits",
+    "verify": "Assert softmax rows sum to 1 to within 1e-12 and stay finite for logits of +1000 and -1000, assert the shifted softmax equals a naive exp/sum implementation to 1e-12 on small logits, assert softmax is invariant to adding a constant to a whole row, and finite-difference check dlogits against the returned loss to a relative error below 1e-6.",
+    "followups": [
+      "Why does the combined softmax-plus-cross-entropy gradient reduce to (p - y) / n?",
+      "What does subtracting the row max do to the mathematical result?",
+      "How does this change under a temperature-scaled softmax?"
+    ]
+  },
+  {
+    "id": "20-two-layer-backprop",
+    "title": "Implement a Two-Layer Neural Net with Manual Backprop",
+    "slug": "two-layer-backprop",
+    "group": "neural-nets",
+    "description": "Forward through affine, ReLU, affine and softmax cross-entropy, then hand-derive every gradient back to the first layer's weights and bias. Two errors account for most wrong answers: the transpose in dW = A.T @ dZ, and applying the ReLU backward mask to the post-activation instead of the pre-activation.",
+    "depth": "advanced",
+    "difficulty": "hard",
+    "io_contract": "class TwoLayerNet(d_in: int, d_hidden: int, n_classes: int, seed: int) with forward(X: np.ndarray) -> np.ndarray, loss_and_grads(X: np.ndarray, y: np.ndarray) -> tuple[float, dict[str, np.ndarray]] and step(grads: dict, lr: float) -> None",
+    "verify": "Finite-difference check every parameter gradient (W1, b1, W2, b2) against the scalar loss to a relative error below 1e-6, assert every gradient array has exactly the shape of its parameter, and train on a two-moons-style synthetic set asserting training accuracy above 0.95 with a monotone-ish decreasing loss.",
+    "followups": [
+      "Why does He initialization matter specifically for ReLU layers?",
+      "What are dead ReLUs, and how would you detect them in this implementation?",
+      "How would you add a second hidden layer without rewriting the backward pass by hand again?"
+    ]
+  },
+  {
+    "id": "21-gradient-check",
+    "title": "Implement Numerical Gradient Checking",
+    "slug": "gradient-check",
+    "group": "neural-nets",
+    "description": "A generic checker that perturbs each parameter by plus and minus eps and compares the central difference against the analytic gradient using relative error. The details that make it usable: central differences (error O(eps^2), not the O(eps) of a forward difference), a relative-error denominator guarded against zero, and knowing that ReLU kinks produce legitimate false failures.",
+    "depth": "core",
+    "difficulty": "easy",
+    "io_contract": "grad_check(f: Callable[[np.ndarray], float], grad_fn: Callable[[np.ndarray], np.ndarray], theta: np.ndarray, eps: float) -> float  # max relative error over all entries",
+    "verify": "Run against a quadratic with an exactly known gradient and assert the returned relative error is below 1e-7, then run against a deliberately bugged gradient (a dropped factor of 2 on one coordinate) and assert the checker reports an error above 1e-2, and assert the checker itself never divides by zero when both gradients are zero.",
+    "followups": [
+      "Why central differences and not forward differences?",
+      "How do you choose eps, and what happens at 1e-10?",
+      "Why does gradient checking fail on ReLU and dropout, and what do you do about it?"
+    ]
+  },
+  {
+    "id": "22-dropout",
+    "title": "Implement Inverted Dropout Forward and Backward",
+    "slug": "dropout",
+    "group": "neural-nets",
+    "description": "Sample a Bernoulli mask at train time, scale surviving activations by 1/(1-p) so the expectation matches eval time, and pass through unchanged when not training. The interviewer is checking that the identical mask is reused in the backward pass and that the inverted scaling lives in training rather than as a rescale at inference.",
+    "depth": "core",
+    "difficulty": "medium",
+    "io_contract": "dropout_forward(X: np.ndarray, p: float, training: bool, seed: int) -> tuple[np.ndarray, np.ndarray] and dropout_backward(dout: np.ndarray, mask: np.ndarray) -> np.ndarray  # out, mask, then dX",
+    "verify": "Assert eval-mode output equals the input exactly and p=0 is the identity, assert that over 100k elements the train-mode output mean matches the input mean within 1% (proving inverted scaling preserves the expectation) and the dropped fraction is within 1% of p, and finite-difference check dropout_backward against the forward pass with the mask held fixed to below 1e-8.",
+    "followups": [
+      "Why invert the scale at train time rather than scaling at test time?",
+      "How does dropout interact with batch norm placed in the same block?",
+      "What is the relationship between dropout and model ensembling?"
+    ]
+  },
+  {
+    "id": "23-batchnorm",
+    "title": "Implement Batch Normalization Forward and Backward",
+    "slug": "batchnorm",
+    "group": "neural-nets",
+    "description": "Normalize each feature over the batch, apply the learnable gain and shift, maintain running statistics for eval mode, then derive the backward pass. The backward is the hard part: the batch mean and variance both depend on every input in the batch, so dx has three coupled terms and cannot be written as a simple elementwise product with dout.",
+    "depth": "advanced",
+    "difficulty": "hard",
+    "io_contract": "batchnorm_forward(x: np.ndarray, gamma: np.ndarray, beta: np.ndarray, running_mean: np.ndarray, running_var: np.ndarray, momentum: float, eps: float, training: bool) -> tuple[np.ndarray, tuple] and batchnorm_backward(dout: np.ndarray, cache: tuple) -> tuple[np.ndarray, np.ndarray, np.ndarray]  # dx, dgamma, dbeta",
+    "verify": "With gamma=1 and beta=0, assert training-mode output has per-feature mean 0 and variance 1 to within 1e-6; finite-difference check dx, dgamma and dbeta against a scalar function of the output to a relative error below 1e-7; assert the running statistics converge to the true data mean and variance after many forward passes; and assert eval mode uses the running statistics rather than the batch's own.",
+    "followups": [
+      "Why does the dx expression have three terms instead of one?",
+      "What goes wrong with batch size 1, or with a batch that is far from i.i.d.?",
+      "Why is layer norm preferred over batch norm in transformers?"
+    ]
+  },
+  {
+    "id": "24-adam",
+    "title": "Implement the Adam Optimizer",
+    "slug": "adam",
+    "group": "optimization",
+    "description": "Exponential moving averages of the gradient and its square, bias-corrected, with epsilon in the denominator outside the square root. Bias correction is the piece people skip and it matters most in the first dozen steps, where an uncorrected first moment is biased toward zero and the effective step comes out far too small.",
+    "depth": "core",
+    "difficulty": "medium",
+    "io_contract": "class Adam(shape: tuple, lr: float, beta1: float, beta2: float, eps: float) with step(params: np.ndarray, grads: np.ndarray) -> np.ndarray  # returns updated params",
+    "verify": "Hand-compute the first three updates for a fixed constant gradient and assert the implementation matches them to 1e-12; assert the very first step magnitude is approximately lr (the bias-correction signature) whereas a variant with bias correction removed produces a measurably smaller first step; and minimize a convex quadratic from a fixed start asserting the loss falls below 1e-8 within 500 steps.",
+    "followups": [
+      "What exactly does bias correction fix, and when is it negligible?",
+      "When does SGD with momentum still beat Adam?",
+      "What does AdamW change, and why is it not equivalent to L2 in the loss?"
+    ]
+  },
+  {
+    "id": "25-scaled-dot-product-attention",
+    "title": "Implement Scaled Dot-Product Attention",
+    "slug": "scaled-dot-product-attention",
+    "group": "transformers",
+    "description": "Compute QK^T scaled by 1/sqrt(d_k), apply a causal or padding mask, softmax, and take the weighted sum of V. Two things must be right: masking by adding a large negative value before the softmax rather than zeroing weights afterwards, and the 1/sqrt(d_k) scale, without which a large d_k drives the softmax into near one-hot saturation with vanishing gradients.",
+    "depth": "core",
+    "difficulty": "medium",
+    "io_contract": "scaled_dot_product_attention(Q: np.ndarray, K: np.ndarray, V: np.ndarray, mask: np.ndarray | None) -> tuple[np.ndarray, np.ndarray]  # output, attn_weights",
+    "verify": "Assert attention weight rows sum to 1 to within 1e-12 and are non-negative, assert masked positions receive exactly zero weight under a causal mask, assert the output at position t is bit-unchanged when rows after t of K and V are perturbed (true causality, not just a zeroed weight), and match a hand-computed 2x2 example to 1e-12.",
+    "followups": [
+      "Why divide by sqrt(d_k) rather than by d_k?",
+      "What is the memory cost in sequence length, and what do FlashAttention-style kernels change about it?",
+      "How does a padding mask differ from a causal mask in practice?"
+    ]
+  },
+  {
+    "id": "26-multi-head-attention",
+    "title": "Implement Multi-Head Attention",
+    "slug": "multi-head-attention",
+    "group": "transformers",
+    "description": "Project Q, K and V, reshape into heads, attend per head, then concatenate and apply the output projection. The whole difficulty is reshape-and-transpose bookkeeping between (batch, seq, n_heads * d_head) and (batch, n_heads, seq, d_head) — a transpose applied in the wrong order silently mixes the head and time axes and still produces output of the correct shape.",
+    "depth": "advanced",
+    "difficulty": "hard",
+    "io_contract": "class MultiHeadAttention(d_model: int, n_heads: int, seed: int) with forward(x: np.ndarray, mask: np.ndarray | None) -> tuple[np.ndarray, np.ndarray]  # output (batch, seq, d_model), per-head attn weights",
+    "verify": "Assert the output shape equals the input shape, assert that with n_heads=1 the result equals a direct scaled-dot-product-attention call on the same projections to 1e-10, assert per-head attention rows sum to 1, and compare the full output against a reference built with an explicit per-head Python loop over slices of the projection matrices to 1e-10 (which catches a wrongly ordered transpose that a shape check would pass).",
+    "followups": [
+      "Why several heads instead of one head with a larger d_k?",
+      "What does KV caching change at inference time, and which tensors are cached?",
+      "How does grouped-query attention alter these shapes and the parameter count?"
+    ]
+  },
+  {
+    "id": "27-layer-norm",
+    "title": "Implement Layer Normalization",
+    "slug": "layer-norm",
+    "group": "transformers",
+    "description": "Normalize over the feature axis of each token independently, apply the learnable gain and bias, and derive the backward pass. What separates it from batch norm is that statistics are per example, so behaviour is identical in training and eval and there are no running statistics to maintain — but dx still has the three-term structure because the mean and variance depend on every feature in the row.",
+    "depth": "core",
+    "difficulty": "medium",
+    "io_contract": "layernorm_forward(x: np.ndarray, gamma: np.ndarray, beta: np.ndarray, eps: float) -> tuple[np.ndarray, tuple] and layernorm_backward(dout: np.ndarray, cache: tuple) -> tuple[np.ndarray, np.ndarray, np.ndarray]  # dx, dgamma, dbeta",
+    "verify": "With gamma=1 and beta=0, assert each row of the output has mean 0 and variance 1 to within 1e-6; assert the output is unchanged when a constant is added to a whole row and unchanged when a row is scaled by a positive constant; and finite-difference check dx, dgamma and dbeta to a relative error below 1e-7.",
+    "followups": [
+      "Why layer norm and not batch norm inside a transformer block?",
+      "What is the difference between pre-norm and post-norm blocks for training stability?",
+      "What does RMSNorm drop, and why does it still work?"
+    ]
+  },
+  {
+    "id": "28-positional-encoding",
+    "title": "Implement Sinusoidal Positional Encodings",
+    "slug": "positional-encoding",
+    "group": "transformers",
+    "description": "Build the (max_len, d_model) table of sines and cosines over geometrically spaced frequencies. The implementation detail that matters is computing the frequency term in log space as exp(-log(10000) * 2i / d_model) rather than as a direct power that underflows for large d_model, and putting sin on even dimensions with cos on odd.",
+    "depth": "core",
+    "difficulty": "easy",
+    "io_contract": "sinusoidal_positional_encoding(max_len: int, d_model: int) -> np.ndarray  # shape (max_len, d_model)",
+    "verify": "Assert the shape and that all values lie in [-1, 1] with no NaN for d_model=1024, assert every row has L2 norm sqrt(d_model / 2) to 1e-6, assert that for a fixed offset k each (sin, cos) pair of PE(pos + k) is the same 2x2 rotation of the pair in PE(pos) to 1e-8, and compare rows 0 and 1 against hand-computed values.",
+    "followups": [
+      "Why does this scheme let a model handle sequence positions longer than it saw in training?",
+      "How do learned positional embeddings compare in practice?",
+      "What does RoPE do differently, and where in the block is it applied?"
+    ]
+  },
+  {
+    "id": "29-tfidf",
+    "title": "Implement a TF-IDF Vectorizer",
+    "slug": "tfidf",
+    "group": "nlp",
+    "description": "Build a vocabulary from a corpus, compute term frequencies and smoothed inverse document frequencies, and L2-normalize each document row. The variants are what make it fiddly: which smoothing (the +1s in log((1 + n) / (1 + df)) + 1) and whether normalization runs before or after IDF weighting decide whether your numbers match anyone else's.",
+    "depth": "core",
+    "difficulty": "medium",
+    "io_contract": "class TfidfVectorizer with fit(corpus: list[str]) -> None, transform(corpus: list[str]) -> np.ndarray and a vocabulary_ dict[str, int] attribute",
+    "verify": "Compare the dense matrix against sklearn.feature_extraction.text.TfidfVectorizer on the same corpus with matching smooth_idf and l2 norm defaults to within 1e-9, assert every non-empty row has unit L2 norm, assert a term appearing in every document receives the minimum IDF in the vocabulary, and assert an unseen term at transform time is dropped rather than raising.",
+    "followups": [
+      "Why log-scale the IDF at all?",
+      "What should happen when a transform-time document contains only unseen terms?",
+      "When would you reach for BM25 instead?"
+    ]
+  },
+  {
+    "id": "30-cosine-topk",
+    "title": "Implement Cosine Similarity and Top-K Retrieval",
+    "slug": "cosine-topk",
+    "group": "nlp",
+    "description": "Normalize the embedding matrix once so cosine similarity collapses to a single matrix product, then return the k highest-scoring corpus rows per query. The efficiency point is np.argpartition rather than a full argsort of every row, and the correctness point is guarding a zero-norm vector from turning the whole score row into NaN.",
+    "depth": "intro",
+    "difficulty": "easy",
+    "io_contract": "cosine_topk(queries: np.ndarray, corpus: np.ndarray, k: int) -> tuple[np.ndarray, np.ndarray]  # top_k_indices (n_queries, k), scores (n_queries, k)",
+    "verify": "Compare scores against a naive double-loop cosine computation to within 1e-9, assert the returned indices match the top-k of a full argsort and come back ordered by descending score, assert a vector retrieved against itself scores 1.0 to 1e-9, and assert a zero-norm row yields finite zeros rather than NaN.",
+    "followups": [
+      "Why is cosine preferred over Euclidean distance for embeddings?",
+      "How does this scale to 100M vectors, and what does an ANN index change about the guarantees?",
+      "What does pre-normalizing the corpus buy you at query time?"
+    ]
+  },
+  {
+    "id": "31-beam-search",
+    "title": "Implement Beam Search Decoding",
+    "slug": "beam-search",
+    "group": "nlp",
+    "description": "Expand the top-b partial hypotheses at each step against a next-token log-probability function, carrying cumulative log-probs. Two things must be handled: a finished hypothesis is set aside rather than re-expanded, or it keeps accumulating negative log-prob and loses unfairly, and length normalization, without which beam search systematically prefers short outputs.",
+    "depth": "advanced",
+    "difficulty": "medium",
+    "io_contract": "beam_search(step_fn: Callable[[list[int]], np.ndarray], beam_width: int, max_len: int, eos_id: int, alpha: float) -> list[tuple[list[int], float]]  # hypotheses ranked by length-normalized score",
+    "verify": "Build a small deterministic next-token log-probability table over a 4-token vocabulary and enumerate every sequence up to length 4 exhaustively: assert beam_width equal to the vocabulary size returns exactly the enumerated argmax under the same length penalty, assert beam_width=1 matches an independently written greedy decode, assert scores are non-increasing down the returned list, and assert widening the beam never lowers the best normalized score on that table.",
+    "followups": [
+      "Why can a larger beam produce worse-sounding text in practice?",
+      "What does the length-normalization alpha actually trade off?",
+      "When would you sample with top-k or nucleus instead of searching?"
+    ]
+  },
+  {
+    "id": "32-bpe",
+    "title": "Implement BPE Tokenizer Training",
+    "slug": "bpe",
+    "group": "nlp",
+    "description": "Count adjacent symbol pairs across a word-frequency table, merge the most frequent pair, and repeat for n merges, producing an ordered merge list plus the resulting vocabulary. The subtleties: pair counts must be weighted by word frequency rather than by word type, ties need a deterministic tiebreak, and encoding new text has to replay merges in learned order instead of greedily matching the longest symbol.",
+    "depth": "advanced",
+    "difficulty": "hard",
+    "io_contract": "train_bpe(corpus: list[str], n_merges: int) -> tuple[list[tuple[str, str]], dict[str, int]] and encode_bpe(word: str, merges: list[tuple[str, str]]) -> list[str]  # merge list, vocab; then symbols",
+    "verify": "Run on the canonical low/lower/newest/widest toy corpus with its published frequencies and assert the first three merges are exactly the hand-derived pairs and that the vocabulary size equals the distinct initial characters plus n_merges; assert encode_bpe on a training word reproduces the symbol sequence obtained by replaying the merge list in order; and assert a word of unseen characters still encodes to a finite symbol list rather than raising.",
+    "followups": [
+      "Why byte-level BPE rather than character-level?",
+      "What happens to a completely out-of-vocabulary word at encode time?",
+      "How do WordPiece and Unigram LM differ from BPE in how they choose merges?"
+    ]
+  }
+]

@@ -71,13 +71,58 @@
 - Previous and next concept links using relative paths.
 - If first concept, prev link is disabled. If last, next link is disabled.
 
+## Depth and code requirements (from `concepts.json`)
+
+Each concept entry carries two fields that the validator enforces:
+
+- **`depth`** — sets the minimum word count for `#theory`:
+  `intro` → 300 words, `core` → 500, `advanced` → 700.
+  An entry with no `depth` falls back to the spec floor of 400.
+  Write to the concept's depth; do not pad a `core` topic to `advanced` length.
+- **`has_code`** — when `true`, the page **must** contain at least one `<pre>`
+  block holding real, multi-line, code-shaped content: the algorithm's inner
+  loop, the update rule, a config snippet, the key API call with its decisive
+  hyperparameter. A `<pre>` holding a single line, or prose, does not count.
+  When `false`, do not add a code block just to satisfy a checker.
+
+## Fact-check gate (runs after you finish — you cannot bypass it)
+
+Once you finish, a **separate agent** is given your finished file and nothing
+else. It is told it did not write the file, and asked to find any incorrect
+formula, wrong mechanism description, or false factual claim. Its verdict is
+required before this item is accepted, and it does not see your reasoning — so a
+claim that only looks right in context will be caught.
+
+Write for that reviewer:
+
+- Every formula must be correct as written, including scaling factors,
+  normalisation terms and exponents. If you write softmax(QKᵀ/√d_k)V, the √d_k
+  must be there and must be in the denominator.
+- Every number must be real. Do not invent benchmark figures, parameter counts,
+  latencies or costs to make a sentence land. If you are not sure of a number,
+  describe the magnitude qualitatively instead.
+- Attribute papers, tools and techniques correctly, or not at all.
+- Do not pad to hit a word count with claims you cannot stand behind. A shorter
+  section that is true beats a longer one that is not — the word floor is a
+  minimum for *real* content, not a licence to speculate.
+- Keep the visualization's numbers consistent with the prose. If the text says
+  the ring has 128 virtual nodes, the JS must not use 64.
+
+If this item comes back rejected, you will be shown the exact FAIL lines. Fix the
+underlying fact — do not reword around it.
+
 ## Validation Checklist (run before marking done)
 
 - [ ] File exists at correct path
 - [ ] All 5 structural elements present
 - [ ] Visualization has at least one event listener or animation loop
 - [ ] No placeholder text (grep for "TODO", "PLACEHOLDER", "Lorem ipsum", "coming soon", "<!-- ")
-- [ ] File is self-contained (no local `src=` or `href=` references except Google Fonts)
+- [ ] File is self-contained — no local asset files. Sibling concept `.html`
+      links in the `.concept-nav` are required and allowed.
+- [ ] `#theory` meets the word floor for this concept's `depth` (intro 300 / core 500 / advanced 700)
+- [ ] If `has_code` is true: at least one `<pre>` with real multi-line code
+- [ ] Every topic named in a compound title is actually implemented in the JS
+      (a page titled "X & Y" whose script never mentions Y will be rejected)
 - [ ] Playwright: file opens and renders content (not blank white page)
 - [ ] Playwright: no uncaught JS errors in console
 - [ ] Playwright: screenshot shows the visualization is visible

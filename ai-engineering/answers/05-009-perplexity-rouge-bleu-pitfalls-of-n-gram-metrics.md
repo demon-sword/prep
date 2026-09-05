@@ -34,7 +34,7 @@ Whether the candidate can critically evaluate the limits of classic NLP metrics 
 **Perplexity:**
 - Defined as `exp(-1/N · Σ log p_model(token_i))` over N tokens.
 - Measures how "surprised" a model is by a test corpus — lower PPL means the model assigns higher probability to real text.
-- **Pitfall 1:** Not comparable across models with different tokenizers or vocabularies. GPT-4's PPL on a dataset cannot be compared to Llama 3's PPL on the same dataset because token boundaries differ.
+- **Pitfall 1:** Not comparable across models with different tokenizers or vocabularies. A frontier model's PPL on a dataset cannot be compared to Llama 3's PPL on the same dataset because token boundaries differ.
 - **Pitfall 2:** Low perplexity doesn't mean high-quality output. A model trained to be verbose and hedge everything can achieve low PPL while producing unhelpful answers.
 - **Pitfall 3:** Perplexity has no concept of factual accuracy — a model that confidently hallucinates plausible-sounding text can still have low PPL.
 
@@ -73,7 +73,7 @@ BLEU and ROUGE signalled a "bad" model; RAGAS and the business metric revealed a
 
 **What to use instead for LLM eval:**
 - **RAGAS** (Faithfulness, Answer Relevancy, Context Recall, Context Precision) for RAG pipelines.
-- **LLM-as-Judge** (GPT-4o or Claude sampling 5–10% of outputs, scoring on rubric dimensions: correctness, helpfulness, groundedness).
+- **LLM-as-Judge** (a frontier model or Claude sampling 5–10% of outputs, scoring on rubric dimensions: correctness, helpfulness, groundedness).
 - **Golden dataset with human labels** for regression gating (≥N% on held-out set before deploy).
 - **Production business metrics:** deflection rate, CSAT, p95 latency, thumbs-down rate.
 
@@ -85,7 +85,7 @@ BLEU and ROUGE signalled a "bad" model; RAGAS and the business metric revealed a
 "I'd start by saying that perplexity, BLEU, and ROUGE were designed for a pre-LLM era — they're surface-form metrics that measure token or n-gram overlap against a reference string. They can still be useful in narrow contexts, but for modern generative AI evaluation they mislead more than they reveal. Let me walk through each and its specific failure mode, then explain what I use instead."
 
 **Core explanation (2–3 min):**
-"Perplexity measures how surprised a model is by held-out text — lower is better. The key pitfall is that it's not comparable across models with different tokenizers, so you can't use it to compare GPT-4 to Llama. And low perplexity doesn't mean high quality — a model that outputs fluent, plausible-sounding hallucinations can have low PPL.
+"Perplexity measures how surprised a model is by held-out text — lower is better. The key pitfall is that it's not comparable across models with different tokenizers, so you can't use it to compare a frontier model to Llama. And low perplexity doesn't mean high quality — a model that outputs fluent, plausible-sounding hallucinations can have low PPL.
 
 BLEU counts n-gram precision between your output and a reference, with a brevity penalty. It was designed for machine translation where multiple references exist. The fatal flaw for generative tasks: if the model produces a semantically correct answer in different words, BLEU scores it near zero. I've seen BLEU scores under 0.25 for answers that human raters scored 4.2 out of 5.
 
@@ -104,7 +104,7 @@ The deeper issue is none of these metrics measure what actually matters: factual
 ## Pitfalls
 
 - **Mistake:** Using BLEU score as the primary quality metric for a chatbot or QA system and reporting numbers without mentioning that many valid phrasings score near zero — **Better:** Acknowledge that BLEU was designed for MT with multiple references; explain that for generative tasks you need semantic metrics (RAGAS, LLM-judge) and only use BLEU for regression testing catastrophic degradation.
-- **Mistake:** Saying "perplexity is how good the model is" without noting it's not comparable across different tokenizers/models, and that it doesn't measure factual accuracy — **Better:** Clarify PPL is useful for within-family checkpoint selection or data quality comparison; explain it cannot be compared across GPT-4 vs Llama 3 because tokenization differs and a model can hallucinate with low PPL.
+- **Mistake:** Saying "perplexity is how good the model is" without noting it's not comparable across different tokenizers/models, and that it doesn't measure factual accuracy — **Better:** Clarify PPL is useful for within-family checkpoint selection or data quality comparison; explain it cannot be compared across a frontier model vs Llama 3 because tokenization differs and a model can hallucinate with low PPL.
 - **Mistake:** Treating ROUGE-L as sufficient for summarization quality evaluation and not mentioning that a factually correct paraphrase can score poorly — **Better:** Use ROUGE for regression catch on stable reference summaries, pair with RAGAS Faithfulness or an NLI entailment check for factual correctness.
 
 ---

@@ -15,7 +15,7 @@ Interviewers ask this to check that you can critically evaluate benchmark claims
 
 ### Trigger phrases
 - "How do you evaluate LLM performance? What benchmarks matter?"
-- "GPT-4 scores 90% on MMLU — is that model good enough for our use case?"
+- "a frontier model scores 90% on MMLU — is that model good enough for our use case?"
 - "What are the limitations of standard LLM benchmarks?"
 - "Compare MMLU, BigBench, and HumanEval."
 
@@ -36,9 +36,9 @@ MMLU, BigBench, and HumanEval are the three most commonly cited LLM benchmarks, 
 - **How scored:** 0-shot or 5-shot accuracy across all subjects; reported as macro-average.
 - **What it actually measures:** Factual recall and subject-matter breadth from a Western, English-centric exam corpus.
 - **Limitations:**
-  - **Data contamination** — many training sets include MMLU questions verbatim. GPT-4's 86% may partly reflect memorization, not reasoning.
+  - **Data contamination** — many training sets include MMLU questions verbatim. A frontier model's 86% may partly reflect memorization, not reasoning.
   - **Multiple-choice bias** — models can score well by exploiting option distribution or letter-position artifacts without understanding.
-  - **Saturation** — frontier models (GPT-4, Claude 3, Gemini Ultra) all score 85–90%+, making it useless for differentiating top-tier models.
+  - **Saturation** — frontier models (frontier models, Gemini Ultra) all score 85–90%+, making it useless for differentiating top-tier models.
   - **No open-ended reasoning** — multiple-choice can't probe multi-step problem-solving or explanation quality.
 
 **BIG-Bench (Beyond the Imitation Game Benchmark)**
@@ -95,7 +95,7 @@ HumanEval is OpenAI's 164-problem Python coding benchmark. Pass at 1 — probabi
 
 ## Pitfalls
 
-- **Mistake:** Treating benchmark scores as ground truth for model selection ("GPT-4 scored 90% on MMLU so it's the best for our use case") without asking what the task actually requires — **Better:** Acknowledge that MMLU measures knowledge breadth on multiple-choice academic questions, which may have little overlap with your production task; propose a domain-specific golden set with metrics tied to business outcomes (deflection rate, CSAT, faithfulness).
+- **Mistake:** Treating benchmark scores as ground truth for model selection ("a frontier model scored 90% on MMLU so it's the best for our use case") without asking what the task actually requires — **Better:** Acknowledge that MMLU measures knowledge breadth on multiple-choice academic questions, which may have little overlap with your production task; propose a domain-specific golden set with metrics tied to business outcomes (deflection rate, CSAT, faithfulness).
 - **Mistake:** Not mentioning data contamination — frontier models have almost certainly seen MMLU and HumanEval questions during pre-training, inflating scores — **Better:** Explicitly flag contamination as a reason benchmark scores overstate real generalization; prefer newer, less-contaminated benchmarks (LiveCodeBench, MMLU-Pro) or private evals for high-stakes decisions.
 - **Mistake:** Conflating `pass@1` with `pass@k` on HumanEval — `pass@100` can be 99% while `pass@1` is 60%, making the benchmark headline metric choice matter hugely — **Better:** Clarify which k is being reported; for production coding assistants, `pass@1` is the relevant metric since users typically see one completion.
 

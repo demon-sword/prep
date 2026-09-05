@@ -54,7 +54,7 @@ Set `temperature=0` for maximum determinism. The explicit refusal instruction sh
 Run a faithfulness check (NLI-based or LLM-as-judge) on the generated answer vs. the retrieved context:
 - **RAGAS `faithfulness` score:** decompose the answer into atomic claims, verify each claim is entailed by the context. If score < 0.8, replace the response with the abstention message.
 - **NLI model (DeBERTa-NLI):** classify each claim as `entailed` / `neutral` / `contradiction`; flag any non-entailed claims.
-- Cost: ~0.5–2ms for NLI, ~$0.001/check for LLM-as-judge on GPT-4o-mini.
+- Cost: ~0.5–2ms for NLI, ~$0.001/check for LLM-as-judge on a small fast model.
 
 **Layer 4 — Production monitoring**
 Track the abstention rate and false-abstention rate in your observability stack (LangSmith, Arize, or custom):
@@ -63,7 +63,7 @@ Track the abstention rate and false-abstention rate in your observability stack 
 - **Hallucination rate in golden set:** run the full pipeline on a 200-question golden dataset weekly; any answer not supported by cited chunks counts as a hallucination.
 
 ### Example / Tradeoff
-A customer support RAG bot for a SaaS product gets queries about competitor features — completely outside its knowledge base. Without gating, GPT-4 would invent plausible-sounding competitor comparisons. Stack deployed:
+A customer support RAG bot for a SaaS product gets queries about competitor features — completely outside its knowledge base. Without gating, the generator would invent plausible-sounding competitor comparisons. Stack deployed:
 1. Cosine threshold (θ = 0.72) catches 85% of out-of-scope queries before the LLM call → saves ~$0.03/query.
 2. Grounding prompt + `temperature=0` handles the remaining 15% where partial context exists.
 3. RAGAS faithfulness gate catches residual hallucinations; on 500 golden evals, hallucination rate dropped from 12% to 1.4%.

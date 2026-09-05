@@ -54,7 +54,7 @@ The full transformer block: `LayerNorm → MHA → Residual → LayerNorm → FF
 ### Example / Tradeoff
 **BERT vs GPT example**: Both are transformers — BERT (encoder-only, bidirectional attention, MLM pre-training) dominates classification and NER; GPT (decoder-only, causal masking, CLM pre-training) dominates generation. The same architecture, different attention mask and pre-training objective, yields two paradigms.
 
-**Production tradeoff**: Self-attention is O(n²) in sequence length — at 128K tokens that's 16 billion attention weights per layer. FlashAttention (Dao et al. 2022) solves this with IO-aware tiling (SRAM vs HBM), giving exact attention at 3–4× lower memory and 2–4× speedup. Without it, long-context LLMs (Claude 3, GPT-4-Turbo) couldn't exist in production.
+**Production tradeoff**: Self-attention is O(n²) in sequence length — at 128K tokens that's 16 billion attention weights per layer. FlashAttention (Dao et al. 2022) solves this with IO-aware tiling (SRAM vs HBM), giving exact attention at 3–4× lower memory and 2–4× speedup. Without it, long-context LLMs (frontier models-Turbo) couldn't exist in production.
 
 **Where transformers struggle**: Tabular data (no local structure to exploit, GBMs still win), truly streaming edge inference (attention KV cache grows with context), and tasks with fewer than ~1K examples (few-shot vs fine-tuned traditional model).
 
@@ -70,12 +70,12 @@ The full transformer block: `LayerNorm → MHA → Residual → LayerNorm → FF
 
 More importantly, because there's no sequential dependency — unlike RNNs which must process token 1 before token 2 — transformers train entirely in parallel. That's why you can throw 10,000 TPU cores at them and they scale almost linearly. RNNs are fundamentally sequential, so they hit a wall.
 
-The third pillar is scaling laws. Kaplan et al. in 2020 showed that transformer loss follows a power law with model size, data, and compute — across 7 orders of magnitude. No one had seen that with CNNs or LSTMs. Chinchilla refined this to about 20 training tokens per parameter for optimal compute allocation. That predictable scaling is what made it rational to invest in GPT-4 and beyond.
+The third pillar is scaling laws. Kaplan et al. in 2020 showed that transformer loss follows a power law with model size, data, and compute — across 7 orders of magnitude. No one had seen that with CNNs or LSTMs. Chinchilla refined this to about 20 training tokens per parameter for optimal compute allocation. That predictable scaling is what made it rational to invest in a frontier model and beyond.
 
 The same mechanism generalises across modalities: ViT treats image patches as tokens, Whisper treats audio spectrograms as tokens, AlphaFold treats amino acid positions as tokens. The inductive bias is 'a sequence of things with pairwise relationships' — which describes almost everything."
 
 **Tradeoff / production angle (1 min):**
-"The main weakness is the O(n²) attention cost with sequence length. At 128K tokens, that's enormous. FlashAttention solves it with IO-aware tiling — it keeps intermediate attention matrices in fast SRAM rather than writing to HBM, giving exact attention at 3–4× lower memory. That's what makes Claude 3's 200K context window practical.
+"The main weakness is the O(n²) attention cost with sequence length. At 128K tokens, that's enormous. FlashAttention solves it with IO-aware tiling — it keeps intermediate attention matrices in fast SRAM rather than writing to HBM, giving exact attention at 3–4× lower memory. That's what makes a frontier model's 200K context window practical.
 
 Transformers also underperform on small tabular datasets — GBMs still win there because they have the right inductive biases (feature interactions, no positional structure needed). And KV cache size grows linearly with sequence length, which is the main memory bottleneck in serving."
 

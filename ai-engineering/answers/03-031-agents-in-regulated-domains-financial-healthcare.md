@@ -62,7 +62,7 @@ Healthcare agent: read EHR via FHIR R4 API (SMART on FHIR OAuth); write tools (o
 **5. Model governance**
 
 Regulated industries typically ban closed-source models where weights are unknown or data residency cannot be guaranteed. Options:
-- Self-hosted open-source (Llama 3, Mistral) on private cloud with no data egress.
+- Self-hosted open-source (a modern open-weight model, Mistral) on private cloud with no data egress.
 - Azure OpenAI with HIPAA BAA / FCA data processing agreement.
 - Prompt logs must not be used for model training (disable OpenAI opt-out flag or use Azure private deployments).
 
@@ -73,7 +73,7 @@ For credit/insurance decisions under ECOA/FCRA (US) or GDPR Article 22 (EU), the
 ### Example / Tradeoff
 
 **Healthcare diagnostic support agent (e.g., UpToDate-style clinical decision support):**
-- Stack: Llama 3 70B self-hosted on Azure Government (HIPAA BAA), FHIR R4 EHR read tool, Pinecone for clinical guideline retrieval (RAGAS faithfulness gate ≥ 0.90), Presidio PHI redaction.
+- Stack: a 70B-class open-weight model self-hosted on Azure Government (HIPAA BAA), FHIR R4 EHR read tool, Pinecone for clinical guideline retrieval (RAGAS faithfulness gate ≥ 0.90), Presidio PHI redaction.
 - Autonomy model: fully autonomous for differential suggestion (read + generate); HITL interrupt_before for any order-initiation tool — physician must click "approve" in the EHR UI.
 - Audit: every interaction stored in immutable S3 with 6-year retention; clinical workflow logged under the ordering physician's NPI.
 
@@ -93,7 +93,7 @@ Second, every agent step needs a complete, immutable audit trail — timestamp, 
 
 Third, PII and PHI never touch the LLM in raw form. I'd run Microsoft Presidio or AWS Comprehend Medical as a pre-processing layer, replace real identifiers with pseudonymous UUIDs, and resolve back to real identifiers only in the controlled output layer — never in the LLM context or in logs.
 
-On the model side, regulated environments often rule out third-party APIs where data residency is unclear. I'd either use Azure OpenAI with a HIPAA BAA, or self-host Llama 3 70B on private cloud with no data egress. Either way, I'd confirm that prompt logs are excluded from model training."
+On the model side, regulated environments often rule out third-party APIs where data residency is unclear. I'd either use Azure OpenAI with a HIPAA BAA, or self-host a 70B-class open-weight model on private cloud with no data egress. Either way, I'd confirm that prompt logs are excluded from model training."
 
 **Tradeoff / production angle (1 min):**
 "The main tension is that every HITL gate adds latency and friction. If you gate too aggressively, clinicians or analysts start rubber-stamping approvals without really reading them — which is alert fatigue, and it's arguably more dangerous than no HITL. So I'd reserve synchronous blocking HITL for genuinely irreversible actions, and use async notification-with-SLA for medium-stakes writes, so humans review within 4 hours but the workflow isn't blocked. That balances safety with usability."
@@ -106,7 +106,7 @@ On the model side, regulated environments often rule out third-party APIs where 
 ## Pitfalls
 
 - **Mistake:** Treating regulated domains as "just add more guardrails to a standard agent" without specifying which actions require HITL, what the audit format looks like, or how PII is handled — **Better:** Lead with the tiered autonomy model (read-only vs draft vs irreversible), call out specific regulations (HIPAA 6-year retention, GDPR Art. 22 right to explanation), and describe the PHI pseudonymization pipeline concretely.
-- **Mistake:** Saying "we'd use GPT-4 with a system prompt warning" as the compliance solution — **Better:** Explain data residency constraints (HIPAA BAA, FCA data processing agreement, or self-hosting), note that prompt logs must not be used for model training, and distinguish between Azure OpenAI (BAA available) vs consumer OpenAI API (not covered).
+- **Mistake:** Saying "we'd use a frontier model with a system prompt warning" as the compliance solution — **Better:** Explain data residency constraints (HIPAA BAA, FCA data processing agreement, or self-hosting), note that prompt logs must not be used for model training, and distinguish between Azure OpenAI (BAA available) vs consumer OpenAI API (not covered).
 - **Mistake:** Implementing HITL on every single agent step — **Better:** Explain that over-gating causes alert fatigue and rubber-stamping, which is more dangerous than no HITL; reserve synchronous blocking gates for irreversible high-stakes tools only.
 
 ---

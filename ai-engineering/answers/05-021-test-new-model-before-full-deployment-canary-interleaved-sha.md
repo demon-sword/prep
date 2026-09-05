@@ -59,7 +59,7 @@ Deploying a new LLM into production requires three sequential validation phases:
 ### Example / Tradeoff
 
 At a customer-support RAG system (1M queries/day):
-- **Shadow mode** caught a 35% p95 latency regression when moving from GPT-4o-mini to a self-hosted Llama 3 70B — avoided a production incident.
+- **Shadow mode** caught a 35% p95 latency regression when moving from a small fast model to a self-hosted a 70B-class open-weight model — avoided a production incident.
 - **Interleaved at 5%** (50K req/day) is statistically sufficient to detect a 2pp deflection-rate drop at 95% power within 48 hours (using an online MDE calculator).
 - **Tradeoff**: shadow mode doubles inference cost during the shadow period (two models run per request). Mitigate by sampling shadow on 10–20% of traffic rather than 100% if cost is a hard constraint.
 

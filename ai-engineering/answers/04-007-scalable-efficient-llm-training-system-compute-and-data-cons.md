@@ -63,7 +63,7 @@ Production default for SFT fine-tuning at 7B–70B scale: **DDP + ZeRO Stage 2**
 
 ### Example / Tradeoff
 
-**Llama 3 70B SFT on 32× H100s:**
+**A 70B-class open-weight model, SFT on 32× H100s:**
 - Parallelism: DDP + ZeRO Stage 2 (DeepSpeed) per node; 4-node cluster; NVLink within node.
 - Precision: BF16 forward/backward, FP32 optimizer (AdamW), gradient clipping at 1.0.
 - Gradient checkpointing: enabled; ~33% compute overhead recovered by 2× batch size increase.

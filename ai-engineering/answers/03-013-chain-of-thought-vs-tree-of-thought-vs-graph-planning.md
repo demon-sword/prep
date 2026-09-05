@@ -44,7 +44,7 @@ Ability to map reasoning strategy to task complexity and production constraints 
 - Self-consistency becomes a special case (flat, no pruning)
 - Tools: guidance from Princeton/Google; implementations in LangGraph via conditional edges sampling multiple next-steps
 - Benchmarks: Creative Writing (+74% coherence), Game of 24 (+17% success rate over standard CoT in the original paper
-- Limitations: O(k^d) LLM calls (k candidates × d depth); at GPT-4o rates, a depth-4 tree with k=3 costs ~12 calls per query; latency 10–30s; not suitable for real-time agent tasks
+- Limitations: O(k^d) LLM calls (k candidates × d depth); at a frontier model rates, a depth-4 tree with k=3 costs ~12 calls per query; latency 10–30s; not suitable for real-time agent tasks
 
 **Graph Planning (Explicit DAG)**
 - Approach: produce a directed acyclic graph of tasks — nodes are atomic sub-goals, edges are dependencies
@@ -92,7 +92,7 @@ Graph planning is what I use for complex agents with parallelism. The planner pr
 ## Pitfalls
 
 - **Mistake:** Defining all three strategies without ever discussing when to use each or their cost — **Better:** Always anchor to a decision: "CoT is my default; I'd move to graph planning when there's parallelism to exploit, and ToT only offline when accuracy >>> latency"
-- **Mistake:** Saying "ToT is always better than CoT because it explores more paths" — **Better:** Quantify the cost: a depth-3, k=3 ToT tree = 27 LLM calls vs 1 for CoT; at GPT-4o pricing that's a 27× cost multiplier per query, which is only justified for high-stakes offline tasks
+- **Mistake:** Saying "ToT is always better than CoT because it explores more paths" — **Better:** Quantify the cost: a depth-3, k=3 ToT tree = 27 LLM calls vs 1 for CoT; at a frontier model pricing that's a 27× cost multiplier per query, which is only justified for high-stakes offline tasks
 - **Mistake:** Treating graph planning and ToT as interchangeable — **Better:** They are orthogonal: ToT is a search strategy over LLM reasoning steps (no explicit tool calls); graph planning is a DAG of tool-calling sub-tasks executed by an orchestrator — very different runtime models
 
 ---

@@ -86,7 +86,7 @@ A stateful agent externalizes that memory. After every step, the orchestrator ch
 In LangGraph this is built-in with the PostgresSaver checkpointer — you compile the graph with it and pass the same thread_id on resume. The graph replays confirmed steps from the journal and only re-executes from the failure point."
 
 **Tradeoff / production angle (1 min):**
-"The cost side is significant. If I have 1,000 concurrent agent sessions at 10 turns each and every turn resends 8K tokens of history, that's 80M context tokens per day — at $0.15/1M that's $12/day just for context overhead. Stateful with selective loading drops that to roughly 20M tokens, a 75% reduction.
+"The cost side is significant. If I have 1,000 concurrent agent sessions at 10 turns each and every turn resends 8K tokens of history, that's 80M context tokens per day — at $1/1M that's $12/day just for context overhead. Stateful with selective loading drops that to roughly 20M tokens, a 75% reduction.
 
 The complexity cost is real too — now I need Redis TTLs, cache invalidation, Postgres schema migrations, and consistent reads across replicas. So my heuristic is: stateless for tasks under 5 turns or under 30 seconds, stateful for anything longer or in regulated domains where you need the audit trail."
 

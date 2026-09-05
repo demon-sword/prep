@@ -65,7 +65,7 @@ Speculative decoding speeds up autoregressive LLM inference by using a small, ch
 ### Example / Tradeoff
 
 **Production usage:**
-- **vLLM** supports speculative decoding natively (`--speculative-model`, `--num-speculative-tokens`): using Llama 3 8B as draft for Llama 3 70B yields ~2.8× throughput improvement on HumanEval code tasks.
+- **vLLM** supports speculative decoding natively (`--speculative-model`, `--num-speculative-tokens`): using a small open-weight model (7–8B class) as draft for a 70B-class open-weight model yields ~2.8× throughput improvement on HumanEval code tasks.
 - **Google's 2023 paper** (Leviathan et al.) demonstrated 2–3× wall-clock speedup on Chinchilla, lossless.
 - **Medusa** (Cai et al. 2024) adds 4–5 parallel heads to the target model itself, eliminating the need for a draft model; effective for serving a single model family.
 
@@ -87,7 +87,7 @@ Speculative decoding speeds up autoregressive LLM inference by using a small, ch
 "I'd frame speculative decoding around why autoregressive decode is slow in the first place. Each token generation requires a full weight load from GPU HBM — it's memory-bandwidth-bound, not compute-bound. So the GPU is mostly idle waiting for data, and we generate one token per pass. Speculative decoding exploits that the *verify* pass is almost free relative to the memory transfer cost."
 
 **Core explanation (2–3 min):**
-"The algorithm has two phases. First, a small draft model — say Llama 3 8B — generates K candidate tokens autoregressively; that's fast because the model is tiny. Then the large target model — say Llama 3 70B — runs a single forward pass over all K tokens in parallel. Because a forward pass that processes K tokens costs roughly the same memory bandwidth as processing 1 token at peak decode batch size 1, we get K evaluations almost for free.
+"The algorithm has two phases. First, a small draft model — say a small open-weight model (7–8B class) — generates K candidate tokens autoregressively; that's fast because the model is tiny. Then the large target model — say a 70B-class open-weight model — runs a single forward pass over all K tokens in parallel. Because a forward pass that processes K tokens costs roughly the same memory bandwidth as processing 1 token at peak decode batch size 1, we get K evaluations almost for free.
 
 We accept draft token i with probability min(1, p_target / p_draft). If the draft was right, we keep it; if it was wrong, we sample a corrected token from the residual distribution and throw away everything after. The result is mathematically identical to sampling directly from the target model — it's lossless.
 

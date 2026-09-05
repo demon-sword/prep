@@ -52,3 +52,16 @@ Env vars:
 - No human gate — design doc flows straight into answer generation
 - HTML is presentation only (tabs/flashcards via `interactive.js`, no demo widgets)
 - Section count derived from design doc, not fixed
+
+## Shared environment
+
+| Var | Default | Effect |
+|---|---|---|
+| `RALPH_MAX_ATTEMPTS` | 3 | Rejections before the run gives up |
+| `RALPH_SKIP_FACTCHECK` | 0 | `1` skips the adversarial fact-check pass |
+| `RALPH_FACTCHECK_TIMEOUT` | 900 | Seconds for the fact-check pass |
+| `RALPH_LOOP_SLEEP` | 5 | Seconds `loop.sh` pauses between iterations |
+| `RALPH_MAX_STALLS` | 3 | Consecutive no-output iterations before the loop stops |
+| `RALPH_CORPUS_FINAL` | — | `1` makes `validate-corpus.sh` apply its completeness gate |
+| `RALPH_AGENT_TIMEOUT_SEC` | 2700 | Seconds per agent invocation (both backends; `CURSOR_AGENT_TIMEOUT_SEC` is the older spelling) |
+| `RALPH_RUN_ID` | set by `loop.sh` | Keys the on-disk rejection budget to one run |

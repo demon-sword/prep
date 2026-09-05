@@ -50,7 +50,7 @@ Scaling laws are empirical power-law relationships that predict how a language m
 ### Example / Tradeoff
 - **LLaMA 2 (Meta, 2023):** 70B params trained on 2T tokens — Chinchilla-optimal ratio, demonstrating that a smaller, well-trained model beats a larger undertrained one
 - **Practical implication for engineers:** When choosing a model for a task, don't default to "biggest." A 7B model trained on 140B tokens may outperform a 70B model trained on 100B tokens on the same task if the smaller model is better trained
-- **Data wall:** Scaling laws break when high-quality data runs out. After ~3–5T tokens of filtered internet text, returns on more data flatten. This is why synthetic data (GPT-4-generated) and data curation matter increasingly at frontier scale
+- **Data wall:** Scaling laws break when high-quality data runs out. After ~3–5T tokens of filtered internet text, returns on more data flatten. This is why synthetic data (frontier-model-generated) and data curation matter increasingly at frontier scale
 - **The irreducible loss:** Every scaling law has an asymptote — the Bayes-optimal loss for the task. No amount of scale eliminates this floor; it reflects the inherent unpredictability of language
 
 ---

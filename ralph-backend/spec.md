@@ -36,7 +36,7 @@ The remaining concepts (`09`–`22`) have **no source file** — write the theor
 ## Required HTML sections (in order)
 
 1. **`<header>`** — concept title, group badge, one-sentence description
-2. **`<section id="theory">`** — deep theory, sub-sectioned with `<h3>`: mechanism, variants/options, the trade-off that matters, named failure modes where relevant. Minimum 400 words of real content, adapted from the source file when one exists. No placeholders.
+2. **`<section id="theory">`** — deep theory, sub-sectioned with `<h3>`: mechanism, variants/options, the trade-off that matters, named failure modes where relevant. Word floor set by the entry's `depth` field — `intro` 300, `core` 500, `advanced` 700 (400 if `depth` is absent) — of real content, adapted from the source file when one exists. No placeholders.
 3. **`<section id="visualization">`** — the interactive viz. Must be functional JS, not a placeholder. Controls (sliders, buttons, toggles) must do something real. Follow the `viz` field from `concepts.json`.
 4. **`<section id="interview-line">`** — a visually distinct callout (quote-styled) containing the exact sentence(s) to say in an interview when this topic comes up. For sourced concepts, use the source's "In the room" quote. For unsourced concepts, write an equivalent one: specific, references a real trade-off, sounds like something a senior engineer actually says out loud (not a definition).
 5. **`<section id="takeaways">`** — 4–6 bullet points. Senior-level insights, not beginner summaries. Include real numbers, real tool/system names (Redis, Kafka, Debezium, Raft, PgBouncer, etc.), and production gotchas.
@@ -89,6 +89,76 @@ The viz must be **genuinely interactive** and, wherever the concept allows, **me
 6. Playwright screenshot shows rendered content (not blank)
 7. Browser console has no uncaught JS errors
 8. For sourced concepts (`01`–`08`): the theory section doesn't contradict or omit any named failure mode / pattern from the source file
+
+## Per-concept depth and code
+
+Each `concepts.json` entry carries:
+
+- **`depth`** — `intro` | `core` | `advanced`. Sets the `#theory` word floor:
+  300 / 500 / 700 words. Missing `depth` falls back to 400.
+- **`has_code`** — when `true`, the page must contain at least one `<pre>` block
+  of real multi-line code (the algorithm's inner loop, the update rule, a config
+  snippet). When `false`, do not add a code block for its own sake.
+
+- **`gaps`** — optional array of specific depth omissions found by an audit of
+  the **existing** page. Present only on concepts that already have a file. A run
+  that picks up a gaps-bearing entry extends that page rather than regenerating
+  it, must cover every item, and removes the array from that entry once all of
+  them are covered. An entry with no `gaps` is either new or already at depth.
+
+Compound titles are also checked: a page titled `X & Y` whose `<script>` never
+mentions `Y` is rejected — half the title unimplemented is a real defect, not a
+naming quibble.
+9. For sourced concepts (`01`–`08`): every **bolded named term** in the source
+   note (failure modes, pattern names, eviction policies) must appear on the
+   page. This is the check spec previously only promised; `validate.sh` now
+   implements it.
+
+## Enforcement — these gates are binding
+
+`validate.sh` exit codes are honoured by `once.sh` and `loop.sh`. A failing
+validation is never accepted, a `COMPLETE` promise is not believed unless
+validation passes, and a rejected item is regenerated with the exact `FAIL:`
+lines fed back into the next attempt. After 3 failed attempts the run stops
+with an error rather than accepting unverified content.
+
+A `COMPLETE` promise is checked against the corpus itself, not just against the
+files in it. A per-file validator iterates over what exists, so on an empty or
+half-finished corpus it checks nothing and reports a clean pass — right for a
+mid-run sweep, and a lie for the final gate. `ralph_require_complete` closes it:
+every item in `plan.md`, and every item in the queue JSON in case the plan was
+never re-scaffolded, must have produced a file. The same reasoning applies
+per-item: an item the agent never wrote is SKIPped and passes, so `once.sh`
+confirms the file exists before believing the validator.
+
+A second, independent fact-check agent then reads the finished file — and only
+that file — looking for incorrect formulas, wrong mechanisms and false claims.
+Its PASS is required too.
+
+`../validate-corpus.sh` runs across a finished corpus and flags near-duplicate
+explanations between files (copied 5-grams, and same-topic redundancy).
+`--final` (or `RALPH_CORPUS_FINAL=1`) additionally fails a track whose corpus is empty or short of its queue — the end-of-run form of the same question `ralph_require_complete` asks inside the loop.
+
+### Loop safety
+
+`loop.sh` used to dispatch on a handful of exit codes and let everything else
+fall through to the next iteration, with nothing sleeping in between. Against an
+agent binary that exits immediately that is 80 real invocations in nine seconds.
+Three guards now bound the damage:
+
+- **Any exit code that is not "one item done, more remain" stops the loop.**
+  Previously `1` matched no branch at all.
+- **Three consecutive iterations that write no new file stop the loop** with exit
+  `5`. An agent that produces nothing looks exactly like one doing real work if
+  you only read exit codes. `RALPH_MAX_STALLS` tunes it; the counter resets the
+  moment a file appears.
+- **`RALPH_LOOP_SLEEP`** (default 5s) pauses between iterations.
+
+The rejection budget lives in `<generator>/.state/`, not in a shell variable,
+because `loop.sh` starts a fresh `once.sh` process for every iteration — an
+in-process counter reset each time, and a 3-strike cap silently became a
+`MAX`-strike one. It is keyed by run, so a new run starts with a full budget and
+a `once.sh` invoked by hand is never charged for a previous run's strikes.
 
 ## File naming
 

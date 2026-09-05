@@ -40,7 +40,7 @@ A golden dataset is a curated, human-verified set of (input, expected output) pa
 **2. Metrics computed against the golden set:**
 - **Retrieval layer:** Recall@5, MRR, NDCG on the labeled relevant chunks.
 - **Generation layer:** RAGAS Faithfulness (is the answer grounded in retrieved context?), Answer Relevancy (does it address the query?), BERTScore F1 for paraphrase similarity.
-- **LLM-as-judge:** GPT-4o grades each response on a 1–5 rubric for accuracy, completeness, and tone; cheaper than humans at scale.
+- **LLM-as-judge:** a frontier model grades each response on a 1–5 rubric for accuracy, completeness, and tone; cheaper than humans at scale.
 
 **3. Regression gate in CI:**
 - Run the eval suite on every PR that touches prompts, model version, chunking, or retrieval config.
@@ -53,12 +53,12 @@ A golden dataset is a curated, human-verified set of (input, expected output) pa
 - Version the dataset (e.g., `golden-v1.3.jsonl` in Git LFS or S3) so eval history is reproducible.
 
 ### Example / Tradeoff
-At a customer support RAG system (1M queries/day), we maintained a 250-item golden dataset seeded from production thumbs-downs and weekly annotator sessions. Every prompt change ran the eval in CI (~4 min with GPT-4o-mini as judge). When we switched from `text-embedding-ada-002` to `text-embedding-3-small`, the golden set flagged a 6-point Recall@5 drop before it reached production — we fixed the chunking overlap and the regression cleared. Without the golden dataset, that change would have shipped and degraded deflection rate silently.
+At a customer support RAG system (1M queries/day), we maintained a 250-item golden dataset seeded from production thumbs-downs and weekly annotator sessions. Every prompt change ran the eval in CI (~4 min with a small fast model as judge). When we switched from `text-embedding-ada-002` to `text-embedding-3-small`, the golden set flagged a 6-point Recall@5 drop before it reached production — we fixed the chunking overlap and the regression cleared. Without the golden dataset, that change would have shipped and degraded deflection rate silently.
 
 **Key tradeoffs:**
 - **Size vs coverage:** 100 examples runs in 2 min but may miss tail distributions; 500+ examples is thorough but adds ~20 min to CI. Start at 150–250, grow to 400+ over time.
 - **Static vs dynamic:** Static golden sets are reproducible but go stale; dynamic refresh catches distribution shift but risks label inconsistency — version everything.
-- **LLM-judge cost:** GPT-4o judge on 250 examples costs ~$0.50/run — cheap for a daily CI gate; use GPT-4o-mini for routine eval and escalate to GPT-4o for final pre-release runs.
+- **LLM-judge cost:** a frontier model judge on 250 examples costs ~$0.50/run — cheap for a daily CI gate; use a small fast model for routine eval and escalate to a frontier model for final pre-release runs.
 - **Human vs automated labels:** Human labels are ground truth but expensive (~$1–5/example); LLM-generated labels are cheap but risk circular validation (the same model grades itself). Use humans for seed labels, LLM-judge for scale.
 
 ---
@@ -76,7 +76,7 @@ Against that golden set, I'd compute three layers of metrics: retrieval quality 
 For maintenance, I'd refresh monthly — pulling new production queries, especially from the thumbs-down stream and human escalations — and version the dataset in Git LFS or S3 so eval history is fully reproducible."
 
 **Tradeoff / production angle (1 min):**
-"The key tensions are size vs CI speed — I start at 150–250 examples to keep it under 5 minutes, then grow to 400+ as the system matures. Static golden sets are reproducible but go stale as distribution shifts; I address that with JS divergence monitoring on query topics and trigger a refresh when it exceeds 10%. For the judge model, I use GPT-4o-mini for routine CI runs and reserve GPT-4o for final pre-release validation to control cost — roughly $0.50/run vs $2/run at 250 examples."
+"The key tensions are size vs CI speed — I start at 150–250 examples to keep it under 5 minutes, then grow to 400+ as the system matures. Static golden sets are reproducible but go stale as distribution shifts; I address that with JS divergence monitoring on query topics and trigger a refresh when it exceeds 10%. For the judge model, I use a small fast model for routine CI runs and reserve a frontier model for final pre-release validation to control cost — roughly $0.50/run vs $2/run at 250 examples."
 
 **Wrap-up (30s):**
 "The bottom line: a golden dataset turns subjective 'does it feel better?' into a hard, automatable regression gate. It's the single most impactful thing I've added to an LLM evaluation pipeline. Happy to go deeper on construction methodology or the CI integration."

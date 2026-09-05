@@ -38,7 +38,7 @@ Chatbot evaluation requires three distinct layers: *offline accuracy* (does it g
 - Gate every model/prompt change: Faithfulness ≥ 0.85, Answer Relevancy ≥ 0.80, TSR ≥ target.
 
 **Layer 2 — Automated LLM-judge eval**
-- Use GPT-4o as a judge on 3–5% of live traffic (or a larger offline sample): score helpfulness, groundedness, tone, and refusal appropriateness on a 1–5 scale.
+- Use a frontier model as a judge on 3–5% of live traffic (or a larger offline sample): score helpfulness, groundedness, tone, and refusal appropriateness on a 1–5 scale.
 - Track **conversation coherence**: does each turn logically follow from prior context? (judge scoring or turn-level perplexity on the multi-turn history)
 - For multi-turn flows: measure **conversation depth** (turns to resolution) and **clarification rate** (how often the bot asks a clarifying question vs. guesses).
 
@@ -61,7 +61,7 @@ Offline eval passes (Faithfulness ≥ 0.85, TSR ≥ 0.90)
 ### Example / Tradeoff
 For a customer support chatbot at a SaaS company (100K queries/day):
 - **Offline**: 400-query golden set, RAGAS Faithfulness target 0.87, Context Recall 0.82.
-- **LLM judge**: GPT-4o-mini judging 5% live traffic at ~$0.05/100 queries — affordable and scalable.
+- **LLM judge**: a small fast model judging 5% live traffic at ~$0.05/100 queries — affordable and scalable.
 - **Production**: Deflection rate 68% → 75% after retrieval fix found via Recall drop on golden set.
 - **Pitfall avoided**: CSAT alone missed the drop because users who escalated didn't rate the bot — silent failure. Golden-set regression caught it first.
 
@@ -77,7 +77,7 @@ The key tradeoff: LLM-judge eval is expensive at scale but catches nuanced conve
 **Core explanation (2–3 min):**
 "I'd start with the offline layer. I maintain a golden dataset — maybe 300–500 representative queries with known expected answers. For a RAG-backed chatbot I run RAGAS: Faithfulness to make sure the answer is entailed by retrieved context, Answer Relevancy to check it actually addresses the question, and Context Recall to confirm retrieval is surfacing the right chunks. For task-completion bots — like a booking or support-ticket flow — I also track Task Success Rate: did the bot actually complete the intended action?
 
-"The second layer is automated LLM judging. I'll run GPT-4o or GPT-4o-mini as a judge on 3–5% of live traffic, scoring helpfulness, groundedness, and tone on a 1–5 scale. For multi-turn conversations I also look at clarification rate — how often does the bot ask for more info vs. confidently guess wrong — and conversation depth, meaning turns-to-resolution.
+"The second layer is automated LLM judging. I'll run a frontier model or a small fast model as a judge on 3–5% of live traffic, scoring helpfulness, groundedness, and tone on a 1–5 scale. For multi-turn conversations I also look at clarification rate — how often does the bot ask for more info vs. confidently guess wrong — and conversation depth, meaning turns-to-resolution.
 
 "The third layer is production business metrics: deflection rate is the headline for support bots — what fraction of queries are fully resolved without escalating to a human? CSAT thumbs signal, p95 latency for UX, and cost per query round it out.
 

@@ -62,8 +62,8 @@ In a RAG pipeline, a bi-encoder (two separate BERT encoders) retrieves top-100 c
 
 **Concrete benchmark:** On MS MARCO passage ranking, BERT-large cross-encoder achieves MRR@10 ~36 vs bi-encoder ~33 out of the box; with fine-tuning on domain data it reaches ~39.
 
-**Why not just use GPT-4 for re-ranking?**
-Cross-encoder BERT is ~170ms latency for 100 candidate pairs on CPU, costs fractions of a cent per query. GPT-4o for the same task: ~1–2s, ~$0.002–0.01 per query at 100 candidates. For a RAG pipeline at 1M queries/day, BERT re-ranking saves ~$1,500–8,000/day versus LLM-based re-ranking.
+**Why not just use a frontier model for re-ranking?**
+Cross-encoder BERT is ~170ms latency for 100 candidate pairs on CPU, costs fractions of a cent per query. A frontier model for the same task: ~1–2s, ~$0.002–0.01 per query at 100 candidates. For a RAG pipeline at 1M queries/day, BERT re-ranking saves ~$1,500–8,000/day versus LLM-based re-ranking.
 
 ---
 

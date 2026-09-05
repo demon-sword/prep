@@ -34,7 +34,7 @@ Agent memory mirrors the cognitive science taxonomy: **working memory** holds th
 | Memory type | Cognitive analogy | Storage backend | Lifetime | Retrieval |
 |-------------|------------------|-----------------|----------|-----------|
 | **Working** | RAM / scratchpad | In-context window (prompt tokens) | Single agent turn/run | Implicit — already in prompt |
-| **Episodic** | Personal diary | Redis / Postgres (serialised JSON) keyed by session_id | Session or user-lifetime | Fetch last N turns or summarise with GPT-4o-mini |
+| **Episodic** | Personal diary | Redis / Postgres (serialised JSON) keyed by session_id | Session or user-lifetime | Fetch last N turns or summarise with a small fast model |
 | **Semantic** | Encyclopedia | Vector store (Pinecone / Qdrant) + optional KG (Neo4j) | Long-lived, updated async | ANN cosine search; refreshed by CDC on knowledge updates |
 | **Procedural** | Muscle memory | System prompt snippets, few-shot examples, or fine-tuned weights (LoRA) | Encoded at deploy time | Always-on (system prompt) or retrieved by task classifier |
 
@@ -54,7 +54,7 @@ Episodic (injected):     ~500–1,500 tokens    (summary or last 3–5 turns)
 Semantic (injected):     ~1,000–3,000 tokens  (RAG top-k chunks)
 Procedural (system):     ~500–2,000 tokens    (stable system prompt instructions)
 ─────────────────────────────────────────────────────────────
-Total context budget:    ~5,000–14,500 tokens of a 128K window
+Total context budget:    ~5,000–14,500 tokens of a ~1M-token window
 ```
 
 ### Example / Tradeoff
@@ -84,7 +84,7 @@ Semantic memory is the agent's general domain knowledge — product docs, KB art
 Procedural memory is *how* to do things — task-specific workflows, tool-call sequences, domain rules. This lives in the system prompt for stable policies, in LangGraph DAG nodes for multi-step workflows, or in LoRA-fine-tuned weights for behaviour you can't capture in prompt text. It's always-on or task-routed, not retrieved dynamically."
 
 **Tradeoff / production angle (1 min):**
-"The subtlest tradeoff is the episodic-vs-semantic boundary: user-specific session state must never go into the shared semantic vector store — that causes cross-user leakage and relevance noise. Another common pitfall is over-injecting from all four tiers simultaneously, exhausting your 128K window on boilerplate. I address this with a priority hierarchy: procedural first (stable, small), then semantic retrieval, then episodic summary, leaving the bulk of the window for working memory and LLM reasoning. At scale, the Redis session store becomes a hotspot — I shard by user_id modulo and set aggressive TTLs, and I use LangGraph's PostgresSaver for agents that need durable checkpointing across failures."
+"The subtlest tradeoff is the episodic-vs-semantic boundary: user-specific session state must never go into the shared semantic vector store — that causes cross-user leakage and relevance noise. Another common pitfall is over-injecting from all four tiers simultaneously, exhausting your context window on boilerplate. I address this with a priority hierarchy: procedural first (stable, small), then semantic retrieval, then episodic summary, leaving the bulk of the window for working memory and LLM reasoning. At scale, the Redis session store becomes a hotspot — I shard by user_id modulo and set aggressive TTLs, and I use LangGraph's PostgresSaver for agents that need durable checkpointing across failures."
 
 **Wrap-up (30s):**
 "So the design principle is: four tiers, four backends, explicit budget allocation, and a strict boundary between user-scoped episodic state and shared semantic knowledge. Happy to go deeper on any tier — the procedural memory vs fine-tuning tradeoff is especially interesting."

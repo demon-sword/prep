@@ -37,7 +37,7 @@ Before chunking, run a structured extraction step over the first 1–2 pages (or
 - Entity name: `entity: "Acme Corp"`
 - Currency: `currency: "USD"`
 
-Tools: PyMuPDF for native PDFs, AWS Textract for scanned documents. A lightweight LLM call (GPT-4o-mini) can reliably extract structured JSON from the cover/first page.
+Tools: PyMuPDF for native PDFs, AWS Textract for scanned documents. A lightweight LLM call (a small fast model) can reliably extract structured JSON from the cover/first page.
 
 **Step 2 — Parent-child chunking with metadata inheritance**
 Structure the document as parent nodes (sections/pages, ~1024 tokens) and child nodes (paragraphs, ~256 tokens). Every child chunk inherits the doc-global metadata fields extracted in Step 1.
@@ -77,7 +77,7 @@ Use a 10–15% token overlap between adjacent chunks so that a unit declaration 
 
 **After:** Metadata extraction pass added `amounts_unit: "billions USD"` to every chunk. Generation preamble injected the unit. LLM answered correctly across all financial queries.
 
-**Tradeoff:** The metadata extraction LLM call adds ~200ms and ~$0.001/document at GPT-4o-mini pricing. For a corpus of 300K legal/financial documents, that's ~$300 total — negligible compared to re-embedding costs from a botched chunking strategy. The right call is always to pay the extraction cost upfront.
+**Tradeoff:** The metadata extraction LLM call adds ~200ms and ~$0.001/document at a small fast model pricing. For a corpus of 300K legal/financial documents, that's ~$300 total — negligible compared to re-embedding costs from a botched chunking strategy. The right call is always to pay the extraction cost upfront.
 
 **Edge case — conflicting unit declarations:** Some reports switch units by section (e.g., "segment revenues in millions, per-share amounts in dollars"). The metadata extraction prompt must capture these per-section overrides, or the parent chunk must carry its own `amounts_unit` override distinct from the doc-level default.
 
@@ -89,7 +89,7 @@ Use a 10–15% token overlap between adjacent chunks so that a unit declaration 
 "This is a great question because it's about a failure mode that's easy to miss: fixed-size chunking assumes each chunk is self-contained, but financial documents aren't — they have document-scope context that's declared once and applies everywhere. The unit declaration on page 1 is the classic example. I'd solve this with a two-part approach: metadata extraction before chunking, and preamble injection at generation time."
 
 **Core explanation (2–3 min):**
-"I'd start with a document-level extraction pass over the cover page and first section. Using PyMuPDF for native PDFs or Textract for scanned documents, I'd run a structured extraction — either a regex pattern for common financial headers, or a cheap GPT-4o-mini call — to pull out global metadata: `amounts_unit`, `period`, `entity`, `currency`. This takes maybe 200ms per document and costs fractions of a cent.
+"I'd start with a document-level extraction pass over the cover page and first section. Using PyMuPDF for native PDFs or Textract for scanned documents, I'd run a structured extraction — either a regex pattern for common financial headers, or a cheap a small fast model call — to pull out global metadata: `amounts_unit`, `period`, `entity`, `currency`. This takes maybe 200ms per document and costs fractions of a cent.
 
 Then I'd use parent-child chunking — parent nodes at the section or page level (~1024 tokens), child nodes at the paragraph level (~256 tokens). Every child chunk gets the doc-global metadata fields injected into its index record. So when a chunk says 'Revenue: 42,500,' the vector DB record also stores `amounts_unit: thousands USD`.
 

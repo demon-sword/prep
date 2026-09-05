@@ -63,7 +63,7 @@ There are five primary levers to prevent overfitting, each targeting a different
 
 **Deep learning:** ResNet fine-tuned on a 500-image medical imaging dataset overfits in 10 epochs. Fix: add dropout (p=0.3) in the classifier head, weight decay=1e-4 in AdamW, freeze early layers (transfer learning), and augment with random flips + brightness jitter.
 
-**LLM fine-tuning (QLoRA):** Fine-tuning Llama 3 8B on 800 customer support Q&A pairs with `rank=64` may overfit to phrasing patterns. Remedies: drop rank to 16–32, add weight decay=0.01, use early stopping with a 10% held-out validation split evaluated on ROUGE + faithfulness score.
+**LLM fine-tuning (QLoRA):** Fine-tuning a small open-weight model (7–8B class) on 800 customer support Q&A pairs with `rank=64` may overfit to phrasing patterns. Remedies: drop rank to 16–32, add weight decay=0.01, use early stopping with a 10% held-out validation split evaluated on ROUGE + faithfulness score.
 
 **Double-descent caveat:** In very large neural networks and LLMs, the classical U-shaped test-error curve doesn't always hold — models with far more parameters than training examples can still generalize well (benign overfitting). This doesn't mean regularization is irrelevant; it means you should always validate empirically rather than assuming "bigger = worse."
 
@@ -79,7 +79,7 @@ There are five primary levers to prevent overfitting, each targeting a different
 
 For LLM fine-tuning specifically, LoRA's low-rank constraint is itself a form of regularization — you're limiting the update to a low-dimensional subspace. I'd also always use early stopping: monitor the validation loss after every epoch and checkpoint the best model. One extra epoch past the validation minimum can wipe out generalization gains.
 
-A concrete example: when fine-tuning Llama 3 8B on 800 customer support examples, I'd set LoRA rank to 16 (not 64), add `weight_decay=0.01` in AdamW, hold out 10% as a validation split, and stop training when the held-out faithfulness score stops improving."
+A concrete example: when fine-tuning a small open-weight model (7–8B class) on 800 customer support examples, I'd set LoRA rank to 16 (not 64), add `weight_decay=0.01` in AdamW, hold out 10% as a validation split, and stop training when the held-out faithfulness score stops improving."
 
 **Tradeoff / production angle (1 min):**
 "The key tradeoff is regularization strength vs underfitting: too much weight decay and you constrain the model so much it can't learn the task. The right approach is to tune on the validation set — start with `λ=1e-4`, watch the gap, and increase if overfitting persists. Also worth noting: in very large neural networks, the classical wisdom breaks down — double-descent means very overparameterized models can still generalize. This means you can't always predict overfitting from parameter count alone; always validate empirically."

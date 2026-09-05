@@ -36,18 +36,18 @@ A **token** is the atomic unit an LLM reads and prices: roughly 3–4 characters
 - `tiktoken` (Python) counts tokens exactly before sending a request — always use it or `cl100k_base` encoder to pre-validate.
 
 **Cost impact:**
-| Component | Typical token count | GPT-4o cost (Jun 2026) |
+| Component | Typical token count | a frontier model cost (Jun 2026) |
 |-----------|--------------------|-----------------------|
 | System prompt | 300–800 | $0.0015–$0.004 |
 | Retrieved context (top-5 chunks @ 400 tok each) | 2 000 | $0.010 |
 | User query | 50–200 | ~$0.001 |
-| LLM answer | 200–800 | $0.010–$0.040 (output 5× more expensive) |
+| LLM answer | 200–800 | $0.005–$0.020 (output 5× more expensive per token) |
 | **Total per query** | **~3 000** | **~$0.025** |
 
 At 1 M queries/day that's **$25 000/day** from token cost alone — making prompt compression, caching, and model tiering critical levers.
 
 **Context window impact:**
-- GPT-4o: 128 K tokens max. Sounds large; a 300-page PDF ≈ 75 000 tokens, leaving little room for retrieved chunks + answer headroom.
+- A frontier model: 128 K tokens max. Sounds large; a 300-page PDF ≈ 75 000 tokens, leaving little room for retrieved chunks + answer headroom.
 - "Lost in the middle" degrades when context > ~32 K tokens — relevant content placed in the middle of a huge context is frequently ignored.
 - Practical budget allocation for RAG: system prompt ≤ 10%, retrieved context ≤ 60%, query + answer headroom ≥ 30%.
 
@@ -56,7 +56,7 @@ At 1 M queries/day that's **$25 000/day** from token cost alone — making promp
 2. **Compress prompts** — LLMLingua / Selective Context can cut 2–3× with minimal quality loss.
 3. **Right-size chunks** — 400-token chunks balance context richness vs. context pollution.
 4. **Cache repeated context** — semantic cache (GPTCache, Redis) serves repeated queries without re-billing input tokens.
-5. **Model tier** — route short/simple queries to Claude Haiku or GPT-4o-mini (10–20× cheaper per token).
+5. **Model tier** — route short/simple queries to Claude Haiku or a small fast model (10–20× cheaper per token).
 
 ### Example / Tradeoff
 A legal-document RAG system chunking 300 K contracts at 2 000 tokens each: embedding every chunk costs **600 M tokens** at ~$0.13/1 M = **$78** one-time indexing; querying with top-5 retrieval adds 10 000 tokens/query — at $0.010/query × 100 K queries/day = **$1 000/day** in input tokens before generation. Switching to `text-embedding-3-small` (5× cheaper) for indexing and caching the top-20% of repeated queries with Redis reduces that to **~$300/day** with the same answer quality — a 70% cost reduction purely from token economics.
@@ -69,9 +69,9 @@ A legal-document RAG system chunking 300 K contracts at 2 000 tokens each: embed
 "Great question — tokenization is the billing and capacity unit of every LLM call. I'd frame my answer in two parts: how tokens relate to cost, and how they constrain context window budgeting, because both have direct architectural consequences."
 
 **Core explanation (2–3 min):**
-"A token is roughly 3–4 characters of English text — so 1 000 words is about 750 tokens. Modern LLM APIs charge separately for input and output tokens, and output is typically 3–5× more expensive per token than input. For GPT-4o, input is about $5/1 M tokens and output is $15/1 M. That sounds cheap, but at a million queries a day with a 3 000-token average request, you're looking at $15–25 K per day just in token costs.
+"A token is roughly 3–4 characters of English text — so 1 000 words is about 750 tokens. Modern LLM APIs charge separately for input and output tokens, and output is typically 3–5× more expensive per token than input. For a frontier model, input is about $5/1 M tokens and output is $15/1 M. That sounds cheap, but at a million queries a day with a 3 000-token average request, you're looking at $15–25 K per day just in token costs.
 
-The context window constraint is the other side. GPT-4o gives you 128 K tokens, which sounds huge, but a system prompt plus top-5 retrieved chunks plus the user query can easily consume 3–4 K tokens before the model writes a single word. If you're doing summarization over a 300-page PDF, you've burned 75 K tokens just on the document.
+The context window constraint is the other side. A frontier model gives you 128 K tokens, which sounds huge, but a system prompt plus top-5 retrieved chunks plus the user query can easily consume 3–4 K tokens before the model writes a single word. If you're doing summarization over a 300-page PDF, you've burned 75 K tokens just on the document.
 
 The key tool I use is `tiktoken` — I count tokens in unit tests and set hard budget limits per component: system prompt gets 10%, retrieved context gets 60%, and the rest is answer headroom. This prevents silent over-runs at runtime."
 
@@ -105,4 +105,4 @@ For cost optimization, I layer three levers: semantic caching to skip re-computa
 
 ## One-liner recall
 
-> Tokens are both the billing unit (input ~$5/1 M, output ~$15/1 M for GPT-4o) and the context budget — always count tokens with `tiktoken` before building, budget your context window (10% system / 60% retrieved / 30% answer headroom), and optimize via caching, compression, and model tiering.
+> Tokens are both the billing unit (input ~$5/1 M, output ~$25/1 M for a frontier model) and the context budget — always count tokens with `tiktoken` before building, budget your context window (10% system / 60% retrieved / 30% answer headroom), and optimize via caching, compression, and model tiering.

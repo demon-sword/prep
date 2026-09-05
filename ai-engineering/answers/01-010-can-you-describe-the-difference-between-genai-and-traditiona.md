@@ -36,7 +36,7 @@ Traditional programming is **explicit logic**: a human writes rules, conditional
 | Handles novel input | Fails or returns error | Generalizes (sometimes hallucinates) |
 | Debugging | Stack trace, unit tests | Eval datasets, prompt ablation, tracing |
 | Latency | Sub-millisecond | 200ms–5s (TTFT + generation) |
-| Cost per call | Near zero | $0.001–$0.15+ per 1K tokens |
+| Cost per call | Near zero | ~$0.001–$0.025+ per 1K tokens |
 | Best for | Structured logic, exact rules, high-throughput | Understanding intent, generating text, handling ambiguity |
 
 **When traditional programming wins:** deterministic lookups (tax calculation, routing rules), high-throughput structured data (SQL aggregations), safety-critical systems where auditability is required.
@@ -58,7 +58,7 @@ A concrete stack: LangChain or LlamaIndex for LLM orchestration, a deterministic
 **Core explanation (2–3 min):**
 "Take a concrete example: a customer support ticket classifier. The traditional approach is a rule engine — keyword lists, maybe a decision tree. It's fast, cheap, fully auditable. But it fails the moment someone writes the same thing in a way the rules didn't anticipate. You end up with a maintenance nightmare as you add more and more edge-case rules.
 
-The GenAI approach: you prompt an LLM like Claude or GPT-4 with 'classify the intent of this message' and a rubric. It handles novel phrasings, typos, multiple languages. But now I'm spending $0.002 per call, latency jumps from microseconds to 500ms, and outputs are stochastic — the model might occasionally misclassify, and I can't just read a stack trace to understand why.
+The GenAI approach: you prompt an LLM like Claude or a frontier model with 'classify the intent of this message' and a rubric. It handles novel phrasings, typos, multiple languages. But now I'm spending $0.002 per call, latency jumps from microseconds to 500ms, and outputs are stochastic — the model might occasionally misclassify, and I can't just read a stack trace to understand why.
 
 The key insight is that these aren't competitors — they're complements. In production I'd use the LLM for the hard part (understanding intent) and traditional code for the downstream logic (routing rules, SLA timers, database writes). That's what teams at Intercom, Zendesk, and Notion actually do."
 

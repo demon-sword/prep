@@ -32,11 +32,11 @@ Hallucination rate in production is the fraction of LLM responses that assert fa
 **1. Define hallucination operationally** — choose a measurable proxy:
 - *Faithfulness* (RAGAS): score ∈ [0, 1]; response claims are verified against retrieved chunks. Threshold < 0.80 → hallucination.
 - *NLI entailment* (DeBERTa-large-mnli or `cross-encoder/nli-deberta-v3-base`): each sentence in the response is classified as ENTAILED / NEUTRAL / CONTRADICTION against the context. Rate = fraction labeled NEUTRAL or CONTRADICTION.
-- *LLM-judge* (GPT-4o-mini with a grading rubric): samples 5–10% of traffic; cheaper than NLI on long responses, but biased by the judge model.
+- *LLM-judge* (a small fast model with a grading rubric): samples 5–10% of traffic; cheaper than NLI on long responses, but biased by the judge model.
 
 **2. Async scoring pipeline** — at generation time, log `{run_id, query, context_chunks, response}` to a Kafka topic. An offline consumer runs NLI or RAGAS faithfulness scoring and emits scores to a metrics store (Datadog / Prometheus). p99 scoring lag < 5 min.
 
-**3. Sample for LLM-judge** — NLI is cheap enough to run on 100% of traffic; LLM-judge is too expensive ($0.002–$0.01/call). Route 5–10% of samples to GPT-4o-mini judge for a richer "hallucinated claim" explanation useful for root-cause analysis.
+**3. Sample for LLM-judge** — NLI is cheap enough to run on 100% of traffic; LLM-judge is too expensive ($0.002–$0.01/call). Route 5–10% of samples to a small fast model judge for a richer "hallucinated claim" explanation useful for root-cause analysis.
 
 **4. Define SLO and alert** — e.g., `faithfulness_score_p50 ≥ 0.92` and `hallucination_rate_7d_rolling ≤ 3%`. Alert PagerDuty if rate exceeds threshold for > 15 min.
 
@@ -45,7 +45,7 @@ Hallucination rate in production is the fraction of LLM responses that assert fa
 ### Example / Tradeoff
 At a customer-support RAG system with 200K queries/day:
 - **NLI pipeline (100% coverage):** DeBERTa `cross-encoder/nli-deberta-v3-base` scoring ~30 ms/response on a 2× A10 sidecar → ~$120/day compute, < 2 min lag. Hallucination rate baseline: 2.1%.
-- **LLM-judge (10% sample):** GPT-4o-mini at $0.003/call → $60/day for 20K samples. Provides root-cause explanations for failed cases.
+- **LLM-judge (10% sample):** a small fast model at $0.003/call → $60/day for 20K samples. Provides root-cause explanations for failed cases.
 - **RAGAS faithfulness (nightly golden set of 500 Q&A pairs):** catches model-version regressions; gates deployment pipeline.
 
 Tradeoff: NLI gives breadth (100% coverage, low cost) but misses multi-sentence compositional hallucinations. LLM-judge catches richer failure modes but at 10× cost and with judge bias. Combining both is the production sweet spot.
@@ -62,7 +62,7 @@ Tradeoff: NLI gives breadth (100% coverage, low cost) but misses multi-sentence 
 
 To make this work in production, I log every request — query, retrieved chunks, response — to a Kafka topic at generation time. An async consumer picks these up and runs the scoring pipeline, emitting metrics to Datadog with a lag of under 5 minutes. For 200K queries per day, NLI on a small GPU sidecar costs around $120 per day and covers 100% of traffic.
 
-On top of that, I route 5–10% of traffic to a GPT-4o-mini LLM-judge which gives richer explanations for failed cases — useful for root-cause analysis — but I don't run it on everything because it's 10× the cost.
+On top of that, I route 5–10% of traffic to a small fast model LLM-judge which gives richer explanations for failed cases — useful for root-cause analysis — but I don't run it on everything because it's 10× the cost.
 
 Finally, I define an SLO: faithfulness p50 ≥ 0.92, rolling 7-day hallucination rate ≤ 3%. I alert PagerDuty if either threshold is breached for more than 15 minutes."
 
@@ -94,4 +94,4 @@ Finally, I define an SLO: faithfulness p50 ≥ 0.92, rolling 7-day hallucination
 
 ## One-liner recall
 
-> Measure hallucination in production by logging every {query, context, response} tuple to a Kafka stream, running async NLI entailment (DeBERTa) or RAGAS faithfulness on 100% of traffic, routing 5–10% to a GPT-4o-mini LLM-judge for root-cause explanations, and alerting on a rolling SLO breach — never block the user path with synchronous scoring.
+> Measure hallucination in production by logging every {query, context, response} tuple to a Kafka stream, running async NLI entailment (DeBERTa) or RAGAS faithfulness on 100% of traffic, routing 5–10% to a small fast model LLM-judge for root-cause explanations, and alerting on a rolling SLO breach — never block the user path with synchronous scoring.

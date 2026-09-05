@@ -33,7 +33,7 @@ An AI agent is a software system that uses an LLM as its reasoning core to **per
 The core perceive → reason → act loop:
 
 1. **Perceive** — the agent receives a task description, current state, and available tool schemas (JSON schemas describing each tool's name, parameters, and return type).
-2. **Reason / Plan** — the LLM (e.g., GPT-4o, Claude 3.5 Sonnet) generates a structured action: which tool to call and with what arguments. Frameworks like ReAct interleave reasoning traces ("Thought:") with action calls.
+2. **Reason / Plan** — the LLM (e.g., frontier models) generates a structured action: which tool to call and with what arguments. Frameworks like ReAct interleave reasoning traces ("Thought:") with action calls.
 3. **Act** — the orchestrator executes the selected tool (web search, code interpreter, SQL query, API call) in a sandboxed environment.
 4. **Observe** — the tool's output is appended to the context window.
 5. **Iterate** — steps 2–4 repeat until the LLM produces a final answer or a budget/turn-count limit is hit.
@@ -59,7 +59,7 @@ Orchestrator (LangChain / LlamaIndex / custom)
 The agent sits **between** the user interface and downstream services; the orchestrator handles routing, budget enforcement, human-in-the-loop triggers, and logging.
 
 ### Example / Tradeoff
-**Concrete example:** A customer-support agent built on GPT-4o + LangGraph:
+**Concrete example:** A customer-support agent built on a frontier model + LangGraph:
 - Tools: `search_knowledge_base(query)`, `lookup_order(order_id)`, `create_ticket(details)`, `escalate(reason)`
 - On each turn the LLM decides which tool to call; the orchestrator executes it and appends the result.
 - A turn budget (max 8 iterations) and a confidence threshold (<0.7 → escalate) prevent runaway loops.

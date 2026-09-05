@@ -78,7 +78,7 @@ tools = [
 ```
 
 **Selection accuracy in production:**
-- 5 well-described tools → ~95%+ correct selection at T=0 with GPT-4o-mini
+- 5 well-described tools → ~95%+ correct selection at T=0 with a small fast model
 - Same 5 tools with generic descriptions ("Use this to search") → drops to ~70–75%
 - Adding 20 poorly-described tools → drops to ~60%, hallucinated tool names appear
 

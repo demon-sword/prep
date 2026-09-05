@@ -61,7 +61,7 @@ Long-term memory lets an agent recall facts, preferences, and outcomes across se
 
 ### Example / Tradeoff
 
-**ChatGPT Memory (2024) pattern:** OpenAI's memory system follows this architecture — it runs an extraction LLM pass after sessions, stores structured facts per user, surfaces them at session start with a dedicated memory block, and lets users explicitly delete or correct memories. The key production insight: the extraction model (GPT-4o-mini) costs ~$0.002/session but prevents quality degradation that would require expensive model retraining or user churn from wrong personalization.
+**ChatGPT Memory (2024) pattern:** OpenAI's memory system follows this architecture — it runs an extraction LLM pass after sessions, stores structured facts per user, surfaces them at session start with a dedicated memory block, and lets users explicitly delete or correct memories. The key production insight: the extraction model (a small fast model) costs ~$0.002/session but prevents quality degradation that would require expensive model retraining or user churn from wrong personalization.
 
 **Tradeoff: recall vs precision**
 - High recall (write everything): memory grows unbounded, contradictions accumulate, retrieval noise grows, context pollution increases.

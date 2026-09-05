@@ -37,7 +37,7 @@ Understanding of the full LLM training lifecycle — how base models acquire gen
 - Dataset: 1–15 trillion tokens (web crawls via Common Crawl, books, code, Wikipedia)
 - Objective: next-token prediction (causal language modeling), cross-entropy loss
 - Scale: hundreds to thousands of GPUs, weeks to months of training
-- Cost: $2M–$100M+ (GPT-4 class) in compute
+- Cost: $2M–$100M+ (frontier class) in compute
 - Output: a base model that can complete any text continuation but doesn't reliably follow instructions
 
 **Supervised Fine-Tuning (SFT):**
@@ -55,7 +55,7 @@ Understanding of the full LLM training lifecycle — how base models acquire gen
 **DPO (Direct Preference Optimization):**
 - Skips the separate reward model entirely
 - Directly optimizes the LLM on preference pairs (preferred vs. rejected response) using a contrastive loss
-- More stable and cheaper than RLHF; now the dominant approach (used in Llama-3, Mistral-Instruct, Qwen)
+- More stable and cheaper than RLHF; now the dominant approach (used across the leading open-weight instruct families)
 
 **LoRA / QLoRA (Parameter-Efficient Fine-Tuning):**
 - Instead of updating all model weights, adds low-rank adapter matrices (rank 8–64) to attention weight matrices
@@ -64,12 +64,12 @@ Understanding of the full LLM training lifecycle — how base models acquire gen
 
 ### Example / Tradeoff
 A concrete example of the full stack:
-1. **Pre-training:** Meta trains Llama-3-70B on ~15T tokens of diverse web text using 16K H100 GPUs over ~6 weeks. Cost: ~$30–50M.
-2. **SFT:** Meta fine-tunes on 10M curated instruction examples for ~24 hours on 512 H100s. Cost: ~$50K.
+1. **Pre-training:** Meta trains a 70B-class open-weight model on ~15T tokens of diverse web text using 16K H100 GPUs over ~6 weeks. Cost: ~$30–50M.
+2. **SFT:** Meta fine-tunes on 10M curated instruction examples for ~24 hours on 512 H100s — three orders of magnitude less compute than the pre-training run.
 3. **DPO alignment:** 24 more hours with human preference data. Cost: ~$30K.
-4. Result: Llama-3-70B-Instruct — which follows instructions, refuses harmful requests, and answers helpfully.
+4. Result: the instruction-tuned 70B model — which follows instructions, refuses harmful requests, and answers helpfully.
 
-**For an applied AI engineer**, fine-tuning with LoRA on Llama-3-8B requires:
+**For an applied AI engineer**, fine-tuning with LoRA on a small open-weight model (7–8B class) requires:
 - ~20GB GPU VRAM (single A100/H100)
 - Dataset: 10K–100K domain-specific examples
 - Training time: 4–12 hours
@@ -85,7 +85,7 @@ A concrete example of the full stack:
 "These are two fundamentally different phases of the LLM training lifecycle. Pre-training is what builds the model's foundational language ability and world knowledge — it's expensive, done once, and produces a base model. Fine-tuning starts from that base and adapts the model's behavior, and it's where most applied AI engineering happens. Let me walk through each."
 
 **Core explanation (2–3 min):**
-"Pre-training trains a model from random initialization on a massive corpus — typically 1 to 15 trillion tokens of web text, books, code, and Wikipedia. The objective is simple: predict the next token, minimize cross-entropy loss. But doing this at scale with 70 billion parameters over weeks on thousands of GPUs is what gives the model its knowledge about the world, its ability to reason in language, and its understanding of code. A pre-trained base model like Llama-3-70B-Base can complete any text — but it doesn't follow instructions, it's not safe, and it might complete a question with another question rather than an answer.
+"Pre-training trains a model from random initialization on a massive corpus — typically 1 to 15 trillion tokens of web text, books, code, and Wikipedia. The objective is simple: predict the next token, minimize cross-entropy loss. But doing this at scale with 70 billion parameters over weeks on thousands of GPUs is what gives the model its knowledge about the world, its ability to reason in language, and its understanding of code. A pre-trained base model at 70B-class scale can complete any text — but it doesn't follow instructions, it's not safe, and it might complete a question with another question rather than an answer.
 
 That's where fine-tuning comes in. Supervised fine-tuning, or SFT, continues training on 10K to a million curated instruction-response pairs. You're using the same next-token prediction objective, but on data that shows the model how to behave: user asks a question, assistant answers it helpfully and completely. SFT teaches format and instruction adherence, not new factual knowledge.
 

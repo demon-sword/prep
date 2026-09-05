@@ -52,17 +52,17 @@ Token cost = (input_tokens × price_in) + (output_tokens × price_out). Every do
 **Step 4 — Compress dynamic tokens (retrieved context)**
 - **Cross-encoder reranking from top-K to top-3**: retrieve top-20 chunks, rerank with a cross-encoder (Cohere Rerank, BGE-Reranker), pass only top-3 to generation. Reduces context from ~4K to ~800 tokens — a 5× reduction in the most expensive dynamic token bucket.
 - **Parent-child chunking**: retrieve from small child chunks (256 tokens), expand only matched child's parent for generation (1024 tokens) rather than passing all large chunks. Avoids padding irrelevant text.
-- **Selective context**: if multi-turn conversation, summarize the conversation history (GPT-4o-mini for the summarization) rather than appending raw turn history. Rolling summary keeps conversation context at 200-400 tokens instead of 3K-5K.
+- **Selective context**: if multi-turn conversation, summarize the conversation history (a small fast model for the summarization) rather than appending raw turn history. Rolling summary keeps conversation context at 200-400 tokens instead of 3K-5K.
 
 **Step 5 — Shrink output tokens**
-- Output tokens cost 3-10× more than input on most providers (GPT-4o: $2.50/M input vs $10/M output; Claude 3.5 Sonnet: $3/M input vs $15/M output).
+- Output tokens cost 5× more than input on most providers (a frontier model: $5/M input vs $25/M output; a frontier model: $5/M input vs $25/M output).
 - Set `max_tokens` explicitly — uncapped outputs balloon on verbose edge cases.
 - Add a conciseness instruction: "Respond in ≤3 sentences" or "Be direct and concise; avoid preamble." Typically cuts output 30-50%.
 - Use **structured output** (JSON schema / Instructor + Pydantic): deterministic output length, no verbose natural-language preamble. Often cuts output 40-60% for extraction or classification tasks.
-- For summarization: Map-Reduce over smaller chunks with GPT-4o-mini, then final Reduce step with GPT-4o — only the expensive model sees the condensed summary, not the full document.
+- For summarization: Map-Reduce over smaller chunks with a small fast model, then final Reduce step with a frontier model — only the expensive model sees the condensed summary, not the full document.
 
 **Step 6 — Model tiering (not strictly token reduction, but reduces token spend)**
-- Route easy/short queries to cheaper models: GPT-4o-mini is 16× cheaper on input than GPT-4o. Tokens still sent, but at a fraction of the cost.
+- Route easy/short queries to cheaper models: a small fast model is 5× cheaper on input than a frontier model. Tokens still sent, but at a fraction of the cost.
 - Combine with Steps 3-5: compress tokens *and* route to cheap model for the largest traffic class.
 
 ### Example / Tradeoff
@@ -70,14 +70,14 @@ Token cost = (input_tokens × price_in) + (output_tokens × price_out). Every do
 
 | Lever | Avg Input Tokens/Query | Daily Input Token Spend | Output Tokens/Query | Daily Output Spend |
 |-------|------------------------|--------------------------|----------------------|--------------------|
-| Baseline (GPT-4o, no opt.) | 3,800 | ~$4,750 | 450 | ~$2,025 |
-| + Semantic cache (25% hit) | — (25% skipped) | ~$3,560 | — | ~$1,520 |
-| + Prompt caching on system prompt | 3,800 → ~1,000 cached prefix saved | ~$2,100 | unchanged | ~$1,520 |
-| + LLMLingua on few-shots | 2,900 effective tokens | ~$1,800 | unchanged | ~$1,520 |
-| + Rerank to top-3 chunks | 2,900 → 1,200 tokens | ~$750 | unchanged | ~$1,520 |
-| + max_tokens + conciseness | 1,200 (input) | ~$750 | 450 → 180 | ~$610 |
-| **Combined** | **1,200** | **~$750** | **180** | **~$610** |
-| **Total: ~$1,360/day vs $6,775/day baseline (~80% reduction)** | | | | |
+| Baseline (a frontier model, no opt.) | 3,800 | ~$9,500 | 450 | ~$5,625 |
+| + Semantic cache (25% hit) | — (25% skipped) | ~$7,125 | — | ~$4,220 |
+| + Prompt caching on system prompt (1,000-token prefix at 0.1x) | 2,800 full + 1,000 cached | ~$5,440 | unchanged | ~$4,220 |
+| + LLMLingua on few-shots | 1,900 full + 1,000 cached | ~$3,750 | unchanged | ~$4,220 |
+| + Rerank to top-3 chunks | 200 full + 1,000 cached | ~$560 | unchanged | ~$4,220 |
+| + max_tokens + conciseness | 1,200 (input) | ~$560 | 450 → 180 | ~$1,690 |
+| **Combined** | **1,200** | **~$560** | **180** | **~$1,690** |
+| **Total: ~$2,250/day vs ~$15,125/day baseline (~85% reduction), at 500K queries/day** | | | | |
 
 Key quality gate: validate each compression step on a golden dataset (150-200 labeled queries). Semantic similarity ≥ 0.85 and RAGAS Faithfulness ≥ 0.85 are the typical bar before shipping each reduction.
 
@@ -93,7 +93,7 @@ Key quality gate: validate each compression step on a golden dataset (150-200 la
 
 For static tokens — system prompt and few-shot examples — I'd apply Anthropic's prompt caching or OpenAI's cached_tokens prefix caching, which gives a 90% discount on that prefix. On top of that, I'd run LLMLingua for perplexity-guided token compression on the few-shot examples; it typically achieves 2-5× reduction with under 2% quality loss. A manual prompt audit is also worth doing — removing hedging language and flattening redundant bullet structures often gets you 20-30% reduction with no tooling.
 
-For dynamic tokens — the retrieved context — cross-encoder reranking from top-20 to top-3 chunks is the single biggest lever: it cuts context from around 4K tokens to under 1K before the generation call. I'd also add an explicit max_tokens cap and a conciseness instruction in the prompt, because output tokens cost 3-10× more than input on most providers — cutting average output from 450 to 180 tokens is a massive lever that people often skip."
+For dynamic tokens — the retrieved context — cross-encoder reranking from top-20 to top-3 chunks is the single biggest lever: it cuts context from around 4K tokens to under 1K before the generation call. I'd also add an explicit max_tokens cap and a conciseness instruction in the prompt, because output tokens cost 5× more than input on most providers — cutting average output from 450 to 180 tokens is a massive lever that people often skip."
 
 **Tradeoff / production angle (1 min):**
 "The main tradeoff with semantic caching is threshold calibration. Too high (0.98) and the hit rate collapses; too low (0.88) and you serve stale or wrong answers to semantically adjacent but distinct queries. I'd tune the threshold per query cluster type and monitor the false-hit rate. For compression with LLMLingua, the quality loss is task-dependent — it's benign for summarization and RAG but riskier for precise math or code tasks, so I'd always gate on a golden dataset before shipping."
@@ -106,7 +106,7 @@ For dynamic tokens — the retrieved context — cross-encoder reranking from to
 ## Pitfalls
 
 - **Mistake:** Saying "I'd add prompt caching" without explaining the static prefix constraint — **Better:** Specify that prompt caching only applies to a stable, identical prefix (e.g., system prompt + few-shot block) that appears at the start of the call; if the system prompt varies per user or session, caching doesn't engage. You need to architect the prompt so static content is front-loaded and invariant.
-- **Mistake:** Focusing only on input token reduction and ignoring output tokens — **Better:** Name the output-to-input price ratio explicitly (e.g., 4× on GPT-4o) and explain that for extraction, classification, and summarization tasks, structured output (JSON schema via Instructor) can cut output tokens 40-60% while also improving parse reliability — this is often the single largest remaining lever after caching.
+- **Mistake:** Focusing only on input token reduction and ignoring output tokens — **Better:** Name the output-to-input price ratio explicitly (e.g., 4× on a frontier model) and explain that for extraction, classification, and summarization tasks, structured output (JSON schema via Instructor) can cut output tokens 40-60% while also improving parse reliability — this is often the single largest remaining lever after caching.
 - **Mistake:** Jumping straight to LLMLingua compression without first auditing the prompt manually — **Better:** A manual prompt audit (removing hedging phrases, collapsing redundant instructions) achieves 20-30% reduction in 30 minutes with zero risk of quality degradation; LLMLingua adds complexity and should come after the easy wins are captured.
 - **Mistake:** Treating all 16 retrieved context chunks as equal in cost — **Better:** Explain that cross-encoder reranking to top-3 chunks before the LLM call is both a cost reduction (5× context token reduction) *and* a quality improvement (lost-in-middle mitigation); it's one of the few optimizations that reduces cost and increases quality simultaneously.
 

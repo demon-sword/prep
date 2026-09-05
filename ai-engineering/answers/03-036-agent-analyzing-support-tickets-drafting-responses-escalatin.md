@@ -34,9 +34,9 @@ A support-ticket agent sits in a ReAct or Plan-and-Execute loop: it reads an inc
 
 ```
 Ticket arrives (webhook / queue)
-  → [classify_ticket] — intent, urgency, customer tier (GPT-4o-mini, T=0)
+  → [classify_ticket] — intent, urgency, customer tier (a small fast model, T=0)
   → [retrieve_context] — RAG: KB docs + similar resolved tickets (Pinecone + BM25 hybrid)
-  → [draft_response]  — GPT-4o-mini with grounding prompt, citation requirement
+  → [draft_response]  — a small fast model with grounding prompt, citation requirement
   → [score_confidence] — RAGAS faithfulness + self-assessed confidence field
   → decision gate ──┬── confidence ≥ 0.85 AND urgency ≠ "critical" → [send_response]
                     └── else → [escalate_to_human] with draft pre-filled
@@ -70,10 +70,10 @@ update_ticket_state(ticket_id, action, metadata) → {ok}
 
 ### Example / Tradeoff
 
-**Concrete stack:** LangGraph for the agent loop, GPT-4o-mini for classification + drafting, Pinecone (hybrid BM25+dense) for KB retrieval, Cohere Rerank for top-5 context selection, Zendesk API for ticket read/write, Redis for episodic session state, LangSmith for tracing.
+**Concrete stack:** LangGraph for the agent loop, a small fast model for classification + drafting, Pinecone (hybrid BM25+dense) for KB retrieval, Cohere Rerank for top-5 context selection, Zendesk API for ticket read/write, Redis for episodic session state, LangSmith for tracing.
 
 **Cost math (1M tickets/day):**
-- Classification + draft: ~800 tokens avg → GPT-4o-mini: ~$0.12/1K → ~$100/day
+- Classification + draft: ~800 tokens avg → a small fast model: ~$0.12/1K → ~$100/day
 - RAG retrieval (Pinecone): ~$40/day at that volume
 - ~20% escalations skip generation cost savings
 - vs. human agents at $0.50–2.00/ticket: automation saves ~$400K–1.9M/day at 1M volume
@@ -92,7 +92,7 @@ update_ticket_state(ticket_id, action, metadata) → {ok}
 
 For retrieval, I'd use a hybrid RAG setup: Pinecone for dense semantic search over KB articles, BM25 for exact product-name matching, and RRF fusion to merge results, then Cohere Rerank to pick the top 5 chunks. This is important because support tickets often have exact model numbers or error codes that dense-only retrieval misses.
 
-The response is drafted with GPT-4o-mini at temperature zero, with a grounding prompt that says 'only use the provided context, cite sources, abstain if unsure.' Then I run a confidence check — either a self-assessed confidence field in the structured output or an async RAGAS faithfulness pass.
+The response is drafted with a small fast model at temperature zero, with a grounding prompt that says 'only use the provided context, cite sources, abstain if unsure.' Then I run a confidence check — either a self-assessed confidence field in the structured output or an async RAGAS faithfulness pass.
 
 The escalation gate lives in the orchestrator code, not in the prompt. If urgency is critical, confidence below 0.85, or it's an enterprise billing dispute, we route to a human queue via the escalate_to_human tool, passing the pre-drafted response so the agent's work still has value even when escalated."
 

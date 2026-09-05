@@ -11,7 +11,7 @@
 ## Framing
 
 ### Why this question is asked
-This is a senior serving-infrastructure question probing whether you understand *why* GPU throughput in LLM serving is limited — not vaguely ("the GPU is busy") but mechanically. Interviewers at companies running self-hosted models (Anthropic, Mistral, any team with >$50K/month GPU spend) want to know you can distinguish compute-bound from memory-bound bottlenecks, explain KV cache fragmentation as the concrete throughput killer, and articulate exactly what PagedAttention does to fix it.
+This is a senior serving-infrastructure question probing whether you understand *why* GPU throughput in LLM serving is limited — not vaguely ("the GPU is busy") but mechanically. Interviewers at companies running self-hosted models (Anthropic, Mistral, any team running a meaningful self-hosted GPU fleet) want to know you can distinguish compute-bound from memory-bound bottlenecks, explain KV cache fragmentation as the concrete throughput killer, and articulate exactly what PagedAttention does to fix it.
 
 ### Trigger phrases
 - "What's the real bottleneck in LLM serving throughput?"
@@ -41,10 +41,10 @@ During prefill (processing the prompt), attention keys and values for each layer
 Memory footprint of KV cache per request:
 ```
 KV bytes = 2 × num_layers × num_heads × head_dim × seq_len × dtype_bytes
-         = 2 × 32 × 32 × 128 × 2048 × 2   ← Llama 3 8B, BF16, 2048-token seq
+         = 2 × 32 × 32 × 128 × 2048 × 2   ← a small open-weight model (7–8B class), BF16, 2048-token seq
          ≈ 1.07 GB per request
 ```
-An A100 80GB with a Llama 3 8B model loaded (~16 GB weights) has ~64 GB free for KV cache — supporting only ~60 concurrent requests at max seq_len. More realistic usage: 15–20 requests when accounting for fragmentation with naive allocation.
+An A100 80GB with a small open-weight model (7–8B class) model loaded (~16 GB weights) has ~64 GB free for KV cache — supporting only ~60 concurrent requests at max seq_len. More realistic usage: 15–20 requests when accounting for fragmentation with naive allocation.
 
 **The fragmentation problem (before PagedAttention)**
 
@@ -103,9 +103,9 @@ PagedAttention solves memory management; continuous batching (iteration-level sc
 
 The 24× figure occurs at high request concurrency where fragmentation is worst. At low concurrency, the gain is smaller (2–4×) because fragmentation matters less.
 
-**Practical config for maximizing throughput on a single A100 80GB with Llama 3 8B:**
+**Practical config for maximizing throughput on a single A100 80GB with a small open-weight model (7–8B class):**
 ```bash
-vllm serve meta-llama/Meta-Llama-3-8B-Instruct \
+vllm serve meta-llama/Meta-a small open-weight model (7–8B class)-Instruct \
   --max-num-seqs 256 \           # high concurrency — PagedAttention handles KV memory
   --max-num-batched-tokens 32768 \  # large batch token budget
   --enable-prefix-caching \      # share system-prompt KV blocks
@@ -124,7 +124,7 @@ Result: ~1,800 tokens/second sustained throughput vs ~150 tokens/second with nai
 "The real throughput bottleneck in LLM serving isn't compute — it's GPU HBM memory, specifically the KV cache. And within KV cache memory, the problem is fragmentation. PagedAttention is vLLM's solution to that fragmentation problem, borrowed directly from how operating systems manage virtual memory. Let me walk through why fragmentation is so damaging and exactly what PagedAttention does to fix it."
 
 **Core explanation (2–3 min):**
-"During autoregressive decode, every in-flight request holds a KV tensor in GPU memory — one key and value per attention head per layer per token generated so far. For a Llama 3 8B model in BF16, that's about 1 GB of KV memory per request at 2048 tokens. An A100 80GB with the model loaded has roughly 64 GB left for KV cache — theoretically 60 concurrent requests. But with naive memory allocation, you almost never get that.
+"During autoregressive decode, every in-flight request holds a KV tensor in GPU memory — one key and value per attention head per layer per token generated so far. For a small open-weight model (7–8B class) model in BF16, that's about 1 GB of KV memory per request at 2048 tokens. An A100 80GB with the model loaded has roughly 64 GB left for KV cache — theoretically 60 concurrent requests. But with naive memory allocation, you almost never get that.
 
 The problem is fragmentation. Traditional systems allocate a contiguous HBM block per request sized to the maximum possible output length — say 2048 tokens — at request arrival. A request that finishes in 300 tokens wastes 85% of its allocation until it's done and freed. Those freed blocks are often the wrong size for new incoming requests. In practice, you get 20–40% effective KV memory utilization, which means you're serving maybe 15–20 concurrent requests on hardware capable of 60.
 
@@ -137,7 +137,7 @@ The vLLM paper showed 2–24× throughput improvement over Hugging Face TGI on L
 **Tradeoff / production angle (1 min):**
 "There are a couple of things to layer on top. First, prefix caching: because KV blocks are addressable units, blocks for a shared system prompt can be shared across all requests simultaneously — the same physical blocks appear in multiple requests' block tables. On a RAG chatbot where every request starts with a long grounding prompt, this eliminates 30–50% of KV memory usage and lets you push concurrency even higher.
 
-Second, KV quantization: by storing keys and values in FP8 instead of BF16, you halve KV memory consumption with about 1% quality loss, which again directly multiplies the concurrent-request capacity. And GQA — grouped query attention in Llama 3 and Mistral — reduces the number of KV heads by a factor of 4–8, shrinking KV size proportionally.
+Second, KV quantization: by storing keys and values in FP8 instead of BF16, you halve KV memory consumption with about 1% quality loss, which again directly multiplies the concurrent-request capacity. And GQA — grouped query attention in a modern open-weight model and Mistral — reduces the number of KV heads by a factor of 4–8, shrinking KV size proportionally.
 
 The throughput ceiling after PagedAttention shifts from memory fragmentation to actual memory bandwidth. That's the fundamental limit that compute-bound work doesn't hit."
 

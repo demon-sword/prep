@@ -26,7 +26,7 @@ Whether the candidate can connect low-level tokenizer behavior to real productio
 ## Answer
 
 ### Concept
-General-purpose tokenizers (GPT-4's `cl100k_base`, Llama's SentencePiece vocabulary) are trained on web-scale corpora that massively under-represent legal and medical text. As a result, specialized terminology is fragmented into unexpected subword pieces, inflating token counts, degrading model comprehension, and introducing subtle accuracy failures that are hard to debug.
+General-purpose tokenizers (a frontier model's `cl100k_base`, Llama's SentencePiece vocabulary) are trained on web-scale corpora that massively under-represent legal and medical text. As a result, specialized terminology is fragmented into unexpected subword pieces, inflating token counts, degrading model comprehension, and introducing subtle accuracy failures that are hard to debug.
 
 ### Mechanism
 
@@ -49,7 +49,7 @@ BPE merges are learned from frequency on training data. Terms that appear rarely
 | **Negation mishandling** | `"not contraindicated"` — negation and term may not co-occur in same attention window after chunking | Hallucinated safety claims |
 
 **3. Cost example**
-A clinical note with 500 words of dense medical terminology may tokenize to 800–1,200 tokens with `cl100k_base` vs ~600 with a domain-adapted tokenizer. At $15/M tokens (GPT-4o input), 1M queries/day → $3,600/day extra cost from tokenization alone.
+A clinical note with 500 words of dense medical terminology may tokenize to 800–1,200 tokens with `cl100k_base` vs ~600 with a domain-adapted tokenizer. At $25/M tokens (a frontier model input), 1M queries/day → $3,600/day extra cost from tokenization alone.
 
 **4. Mitigation strategies**
 
@@ -61,7 +61,7 @@ A clinical note with 500 words of dense medical terminology may tokenize to 800�
 - **Retrieval-level fix**: For retrieval failures due to fragmentation, add BM25 hybrid search so keyword-exact matches (ICD codes, drug names) are not lost to dense embedding approximation.
 
 ### Example / Tradeoff
-A 2023 Stanford study on clinical NLP found that GPT-3.5 with default tokenization made 18% more drug-name errors on discharge summaries than PubMedBERT fine-tuned on the same task — a gap attributable in part to tokenizer mismatch, not just pretraining. In production, a company building a medical coding assistant (ICD-10 extraction) switched from GPT-4 with default tokenizer to a Claude + RxNorm normalization + BM25 hybrid retrieval pipeline, cutting token costs 40% and raising F1 on rare codes from 0.61 → 0.78.
+A 2023 Stanford study on clinical NLP found that a small fast model with default tokenization made 18% more drug-name errors on discharge summaries than PubMedBERT fine-tuned on the same task — a gap attributable in part to tokenizer mismatch, not just pretraining. In production, a company building a medical coding assistant (ICD-10 extraction) switched from a frontier model with default tokenizer to a Claude + RxNorm normalization + BM25 hybrid retrieval pipeline, cutting token costs 40% and raising F1 on rare codes from 0.61 → 0.78.
 
 **Key tradeoff:** Domain-adapted tokenizers require retraining the base model (or at minimum fine-tuning). Using an off-the-shelf model with normalization + hybrid retrieval is faster to ship but leaves some fragmentation intact. For regulated domains, the correctness risk of fragmentation often outweighs the engineering cost of normalization.
 
@@ -90,7 +90,7 @@ For legal text, the problem is slightly different: terms like 'hereinafter,' 'in
 ## Pitfalls
 
 - **Mistake:** Saying "tokenization is just preprocessing, it doesn't affect model quality" — **Better:** Explain that fragmented tokens directly affect attention patterns, semantic understanding, and extraction accuracy; give a concrete example like drug name splitting.
-- **Mistake:** Treating this as a purely theoretical problem without connecting to cost — **Better:** Quantify the token inflation (2–4× for clinical text) and translate to dollar impact at scale (e.g., $3,600/day extra at 1M queries/day with GPT-4o pricing).
+- **Mistake:** Treating this as a purely theoretical problem without connecting to cost — **Better:** Quantify the token inflation (2–4× for clinical text) and translate to dollar impact at scale (e.g., $3,600/day extra at 1M queries/day with a frontier model pricing).
 - **Mistake:** Proposing "just fine-tune the model" as the first solution without mentioning cheaper normalization fixes — **Better:** Start with upstream normalization (RxNorm, legal glossary), hybrid search, and domain-specific embedders; reserve retraining for when those aren't enough.
 
 ---

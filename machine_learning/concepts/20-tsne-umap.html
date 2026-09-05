@@ -286,6 +286,12 @@
       gap: 1rem;
     }
 
+    .three-up {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 1rem;
+    }
+
     .panel-label {
       font-family: var(--mono);
       font-size: 0.75rem;
@@ -356,6 +362,7 @@
     @media (max-width: 900px) {
       .main-layout { grid-template-columns: 1fr; }
       .side-by-side { grid-template-columns: 1fr; }
+      .three-up { grid-template-columns: 1fr; }
     }
 
     @media (max-width: 640px) {
@@ -392,8 +399,28 @@
 
     <h3>UMAP — Same Spirit, Different Math</h3>
     <p>
-      UMAP is grounded in topological data analysis rather than information theory. It builds a weighted k-nearest-neighbor graph in high-dimensional space (a "fuzzy simplicial set"), then optimizes a low-dimensional layout via force-directed graph layout (attractive forces between true neighbors, repulsive forces between random negative samples) using stochastic gradient descent — closer in spirit to <code>node2vec</code>-style embedding than to t-SNE's probability matching. Practically, UMAP tends to run <strong>5–10× faster</strong> than t-SNE at scale, supports true out-of-sample transform (<code>umap.transform()</code> on new points — t-SNE has no principled way to embed new points without recomputing), and preserves more of the global structure (relative cluster distances are somewhat more meaningful, though still not to be over-trusted). The key analogous hyperparameter is <code>n_neighbors</code> (UMAP's perplexity equivalent, default 15): small values (5–10) emphasize very local structure and produce more, tighter fragments; large values (50–200) pull toward a more globally coherent but less locally precise picture — exactly the same bias-variance-style tradeoff perplexity governs in t-SNE.
+      UMAP is grounded in topological data analysis rather than information theory. It builds a weighted k-nearest-neighbor graph in high-dimensional space (a &ldquo;<strong>fuzzy simplicial set</strong>&rdquo;), then optimizes a low-dimensional layout via force-directed graph layout (attractive forces between true neighbors, repulsive forces between random negative samples) using stochastic gradient descent — closer in spirit to <code>node2vec</code>-style embedding than to t-SNE's probability matching. Concretely, for each point <code>i</code> it computes <code>ρᵢ</code> = the distance to its nearest non-identical neighbor, then binary-searches a bandwidth <code>σᵢ</code> so that <code>Σⱼ exp(−max(0, d(i,j) − ρᵢ) / σᵢ) = log₂(k)</code>. The <code>ρᵢ</code> subtraction is what makes the construction &ldquo;locally connected&rdquo; — every point is guaranteed at least one edge of full membership 1.0, so no point is ever left stranded regardless of how sparse its region is. The resulting directed memberships <code>w(i,j)</code> are symmetrized with the <strong>probabilistic t-conorm</strong> <code>W = w + wᵀ − w∘wᵀ</code> (&ldquo;i thinks j is a neighbor <em>or</em> j thinks i is&rdquo;), which is the fuzzy-set union — not t-SNE's arithmetic average. Practically, UMAP tends to run <strong>5–10× faster</strong> than t-SNE at scale, supports true out-of-sample transform (<code>umap.transform()</code> on new points — t-SNE has no principled way to embed new points without recomputing), and preserves more of the global structure (relative cluster distances are somewhat more meaningful, though still not to be over-trusted).
     </p>
+
+    <h3>UMAP's Two Headline Hyperparameters: <code>n_neighbors</code> and <code>min_dist</code></h3>
+    <p>
+      <strong><code>n_neighbors</code></strong> (default 15) is the <em>high-dimensional</em> knob and UMAP's rough analogue of t-SNE's perplexity — it sets <code>k</code> in the kNN graph, i.e. how much of the manifold each point is allowed to &ldquo;see.&rdquo; Small values (5–10) emphasize very local structure and produce more, tighter fragments; large values (50–200) pull toward a more globally coherent but less locally precise picture. It is <em>analogous to but not the same as</em> perplexity: perplexity targets a Shannon entropy of a normalized probability distribution over <em>all</em> points, while <code>n_neighbors</code> is a hard truncation of the graph plus a <code>log₂(k)</code> membership-mass target over exactly those <code>k</code> edges.
+    </p>
+    <p>
+      <strong><code>min_dist</code></strong> (default 0.1, range 0.0–0.99) is the <em>low-dimensional</em> knob and has no t-SNE equivalent at all. It is the minimum separation UMAP is willing to enforce between points in the embedding — effectively how tightly it is allowed to pack them on the page. Small values (<code>0.0–0.1</code>) let points clump on top of each other, producing dense, sharply-delineated blobs that emphasize <strong>fine local and cluster structure</strong> — this is what you want when the question is &ldquo;how many clusters are there and where are their boundaries?&rdquo; Large values (<code>0.5–0.99</code>) force points apart, producing an even, spread-out layout that preserves <strong>broader topological relationships</strong> and relative arrangement at the cost of tight, visually obvious cluster definition — better when the question is &ldquo;what is the overall shape of this manifold?&rdquo; It is purely cosmetic-sounding but genuinely changes the objective; it does <em>not</em> touch the kNN graph at all.
+    </p>
+    <p>
+      The mechanism is indirect and worth knowing for interviews: <code>min_dist</code> enters the algorithm <strong>only through the fitted parameters <code>a</code> and <code>b</code> of the low-dimensional kernel</strong>
+    </p>
+    <div class="formula-block">
+      q(yᵢ, yⱼ) = 1 / (1 + a · ‖yᵢ − yⱼ‖<sup>2b</sup>)
+    </div>
+    <p>
+      Before optimization even starts, UMAP does a least-squares curve fit of that kernel against a target &ldquo;desired&rdquo; curve <code>ψ(d) = 1</code> for <code>d ≤ min_dist</code> and <code>exp(−(d − min_dist) / spread)</code> otherwise. So <code>min_dist</code> reshapes the plateau of the similarity curve: a small <code>min_dist</code> yields a peakier kernel (large <code>a</code>) that keeps rewarding attraction all the way down to zero distance, while a large <code>min_dist</code> yields a flat-topped kernel that gives no further reward for closing the last bit of gap — so the repulsive term wins there and points settle apart. Note <code>(a, b) = (1, 1)</code> recovers exactly the Student-t/Cauchy kernel t-SNE uses; UMAP's default <code>min_dist=0.1, spread=1.0</code> fits to roughly <code>a ≈ 1.577, b ≈ 0.895</code>.
+    </p>
+    <div class="callout">
+      <strong>Interview trap:</strong> &ldquo;My UMAP clusters are too smeared together, should I lower <code>n_neighbors</code>?&rdquo; — Not necessarily. If you want <em>visually tighter blobs</em>, lower <code>min_dist</code>; that is a pure layout change and leaves the underlying topology estimate untouched. Lowering <code>n_neighbors</code> changes which points UMAP believes are neighbors at all, and can genuinely fragment one true cluster into several fake ones. Knowing which of the two knobs changes the model versus the rendering is the point of the question.
+    </div>
 
     <h3>The Cardinal Interpretation Rule</h3>
     <p>
@@ -411,30 +438,51 @@
     <h2>Interactive Visualization</h2>
 
     <div class="viz-card">
-      <div class="viz-title">Live t-SNE Gradient Descent on 4 Clusters in 8D, vs Linear PCA</div>
+      <div class="viz-title">PCA vs live t-SNE vs live UMAP — same 60 points, same seed, three algorithms</div>
       <div class="viz-desc">
-        60 points sampled as 4 clusters in an 8-dimensional space (only 2 "true" dims separate the clusters; the other 6 are correlated noise). The right-hand panel computes a real Barnes-Hut-free t-SNE: pairwise high-dim affinities <code>P</code> are calibrated per-point via binary search on <strong>perplexity</strong>, a random 2D embedding is initialized, and every frame runs real gradient-descent steps minimizing <code>KL(P‖Q)</code> with a Student-t low-dim kernel and momentum — watch clusters pull apart from a random scatter into tight neighbor-preserving groups. The left panel shows the same data's real linear PCA projection (top-2 eigenvectors via power iteration on the covariance matrix) for comparison — notice PCA can smear clusters that overlap along its top linear axes while t-SNE separates them by local neighbor structure.
+        60 points sampled as 4 clusters in an 8-dimensional space (only 2 &ldquo;true&rdquo; dims separate the clusters; the other 6 are correlated noise). All three panels see the <strong>identical dataset from the identical seed</strong>, so every visual difference is attributable to the algorithm and nothing else.
+        <strong>Left</strong> is real linear PCA (top-2 eigenvectors via power iteration on the covariance matrix), static.
+        <strong>Middle</strong> is a real t-SNE: pairwise high-dim affinities <code>P</code> are calibrated per-point by binary search on <strong>perplexity</strong>, and every frame runs true gradient-descent steps minimizing <code>KL(P‖Q)</code> with a Student-t low-dim kernel and momentum.
+        <strong>Right</strong> is a real UMAP: it builds the <code>n_neighbors</code> kNN graph, binary-searches <code>σᵢ</code> per point so the memberships sum to <code>log₂(k)</code> after subtracting <code>ρᵢ</code>, symmetrizes with the probabilistic t-conorm <code>w + wᵀ − w∘wᵀ</code>, fits <code>a</code> and <code>b</code> from <code>min_dist</code> by least-squares curve fit, then runs genuine edge-sampled SGD with negative sampling and a linearly-decayed learning rate. Nothing here is precomputed or canned — both right-hand panels are optimizing live, in vanilla JS, and you can watch UMAP finish several times sooner than t-SNE (its 500 epochs of sparse edge sampling are far cheaper than t-SNE's 600 dense O(n²) gradient steps — the same reason UMAP is 5–10× faster in production).
       </div>
 
       <div class="controls">
         <div class="slider-row">
-          <label>Perplexity</label>
+          <label>Perplexity (t-SNE)</label>
           <input type="range" id="perp-slider" min="2" max="45" step="1" value="12"/>
           <span class="slider-val" id="perp-val">12</span>
         </div>
-        <button class="ctrl-btn" id="run-btn">▸ Run / Resume</button>
-        <button class="ctrl-btn ghost" id="reset-btn">↻ Reset embedding</button>
-        <button class="ctrl-btn ghost" id="regen-btn">⟳ New data sample</button>
+        <div class="slider-row">
+          <label>n_neighbors (UMAP)</label>
+          <input type="range" id="nn-slider" min="3" max="40" step="1" value="15"/>
+          <span class="slider-val" id="nn-val">15</span>
+        </div>
+        <div class="slider-row">
+          <label>min_dist (UMAP)</label>
+          <input type="range" id="mindist-slider" min="0" max="0.99" step="0.01" value="0.10"/>
+          <span class="slider-val" id="mindist-val">0.10</span>
+        </div>
       </div>
 
-      <div class="side-by-side">
+      <div class="controls">
+        <button class="ctrl-btn" id="run-btn">▸ Run / Resume</button>
+        <button class="ctrl-btn ghost" id="reset-btn">↻ Reset both embeddings</button>
+        <button class="ctrl-btn ghost" id="regen-btn">⟳ New data sample</button>
+        <button class="ctrl-btn ghost" id="init-btn">UMAP init: random</button>
+      </div>
+
+      <div class="three-up">
         <div>
-          <div class="panel-label">Linear PCA (top-2 eigenvectors, static)</div>
+          <div class="panel-label">PCA — top-2 eigenvectors, static</div>
           <canvas id="pca-canvas" width="300" height="300"></canvas>
         </div>
         <div>
-          <div class="panel-label">t-SNE embedding (live gradient descent)</div>
+          <div class="panel-label">t-SNE — live KL gradient descent</div>
           <canvas id="tsne-canvas" width="300" height="300"></canvas>
+        </div>
+        <div>
+          <div class="panel-label">UMAP — live negative-sampling SGD</div>
+          <canvas id="umap-canvas" width="300" height="300"></canvas>
         </div>
       </div>
 
@@ -442,16 +490,40 @@
         <div class="side-panel">
           <h4>Optimization State</h4>
           <div class="readout-row">
-            <div class="readout mid" id="readout-iter">Iteration<strong id="iter-val">0</strong></div>
+            <div class="readout mid" id="readout-iter">t-SNE iter<strong id="iter-val">0</strong></div>
             <div class="readout hi" id="readout-kl">KL(P‖Q)<strong id="kl-val">—</strong></div>
+            <div class="readout mid" id="readout-epoch">UMAP epoch<strong id="epoch-val">0</strong></div>
             <div class="readout lo" id="readout-status">Status<strong id="status-val">Idle</strong></div>
           </div>
-          <p class="hint">Early exaggeration (×4 on P) is active for the first 60 iterations, forcing clusters to separate quickly before fine positions settle — this is the same trick real t-SNE implementations use to avoid getting stuck with clusters overlapping.</p>
+          <div class="readout-row">
+            <div class="readout" id="readout-rec-pca">kNN recall · PCA<strong id="rec-pca-val">—</strong></div>
+            <div class="readout" id="readout-rec-tsne">kNN recall · t-SNE<strong id="rec-tsne-val">—</strong></div>
+            <div class="readout" id="readout-rec-umap">kNN recall · UMAP<strong id="rec-umap-val">—</strong></div>
+          </div>
+          <p class="hint">kNN recall = the fraction of each point's 10 true high-dimensional neighbors that are still among its 10 nearest neighbors in the 2D panel — a direct, honest measure of the local structure each method actually preserved. Watch both nonlinear panels overtake PCA as they converge.</p>
+          <p class="hint">Early exaggeration (×4 on P) is active for t-SNE's first 60 iterations. UMAP needs no such trick: its negative-sampling repulsion already separates clusters from epoch one.</p>
         </div>
         <div class="side-panel">
-          <h4>Legend</h4>
+          <h4>UMAP Fuzzy Simplicial Set &amp; Kernel</h4>
+          <div class="readout-row">
+            <div class="readout mid" id="readout-a">kernel a<strong id="a-val">—</strong></div>
+            <div class="readout mid" id="readout-b">kernel b<strong id="b-val">—</strong></div>
+            <div class="readout" id="readout-edges">graph edges<strong id="edges-val">—</strong></div>
+          </div>
+          <div class="readout-row">
+            <div class="readout" id="readout-sigma">mean σᵢ<strong id="sigma-val">—</strong></div>
+            <div class="readout" id="readout-rho">mean ρᵢ<strong id="rho-val">—</strong></div>
+            <div class="readout" id="readout-target">Σw vs log₂k<strong id="target-val">—</strong></div>
+          </div>
+          <p class="hint">
+            <code>a</code> and <code>b</code> are re-fitted from <code>min_dist</code> every time you move that slider, by a coarse-to-fine least-squares grid search in log-space against UMAP's target curve <code>ψ(d)</code> (this page uses that grid search rather than SciPy's Levenberg–Marquardt <code>curve_fit</code>; at <code>min_dist=0.1, spread=1.0</code> it lands on <code>a≈1.58, b≈0.90</code>, matching umap-learn). Slide <code>min_dist</code> from 0.00 to 0.99 and watch <code>a</code> collapse and the embedding breathe outward.
+          </p>
+          <p class="hint">
+            <strong>Honest disclosure:</strong> real umap-learn initializes the embedding with a <em>spectral</em> layout (eigenvectors of the graph Laplacian). This page defaults to a <strong>seeded random uniform init</strong> in [−10, 10] — so you can actually watch the structure form, exactly like the t-SNE panel — with a <strong>seeded PCA init</strong> available on the toggle button above. Everything else (kNN graph, ρ/σ calibration, t-conorm, a/b fit, edge sampling, negative sampling, linear α decay) follows the real algorithm.
+          </p>
+          <h4 style="margin-top:1rem;">Legend</h4>
           <div class="legend" id="legend"></div>
-          <p class="hint">Try perplexity=2 (tiny, fragmented local neighborhoods) vs perplexity=45 (nearly the whole dataset — clusters blur together) to feel the neighbor-count tradeoff perplexity controls.</p>
+          <p class="hint">Try perplexity=2 vs 45, then n_neighbors=3 vs 40, to feel how the two &ldquo;neighborhood size&rdquo; knobs differ — and note that <code>min_dist</code> changes only how tightly the same topology is drawn.</p>
         </div>
       </div>
     </div>
@@ -469,6 +541,9 @@
       </li>
       <li>
         <strong>Perplexity (t-SNE) / n_neighbors (UMAP) is the single most consequential hyperparameter, and there's no universal default.</strong> scikit-learn's <code>TSNE</code> defaults to <code>perplexity=30</code>, umap-learn defaults to <code>n_neighbors=15</code> — always sweep 3–4 values (e.g. 5, 15, 30, 50) before trusting a single layout, since low values fragment structure and high values blur it.
+      </li>
+      <li>
+        <strong>UMAP has a second headline knob t-SNE has no equivalent for: <code>min_dist</code> (default 0.1), the minimum separation it enforces between embedded points.</strong> Low values (0.0–0.1) pack points tightly and sharpen fine local/cluster structure; high values (0.5–0.99) spread them out and preserve broader topological relationships at the cost of crisp cluster boundaries. Crucially it enters the algorithm <em>only</em> through the least-squares-fitted <code>a</code>, <code>b</code> of the low-dim kernel <code>1/(1 + a·d^{2b})</code> — it never touches the kNN graph, so it changes the <em>rendering</em>, not the topology estimate. <code>n_neighbors</code> changes the model; <code>min_dist</code> changes the picture.
       </li>
       <li>
         <strong>Always PCA down to ~50 dims before t-SNE/UMAP on high-dimensional data (images, embeddings).</strong> It denoises, speeds up neighbor search by an order of magnitude, and — since scikit-learn 1.2 — is the default <code>init='pca'</code> initialization, which also makes runs far more reproducible than the old random init.
@@ -496,8 +571,8 @@
   </a>
 </nav>
 
-<script>
-// ─── Seeded RNG (mulberry32) ────────────────────────────────────────────────
+<script id="umap-core">
+// ─── Seeded RNG (mulberry32) — shared by the t-SNE and UMAP widgets ─────────
 function mulberry32(seed) {
   return function() {
     seed |= 0; seed = (seed + 0x6D2B79F5) | 0;
@@ -512,11 +587,287 @@ function gaussian(rng) {
   return Math.sqrt(-2 * Math.log(u1)) * Math.cos(2 * Math.PI * u2);
 }
 
+// ════════════════════════════════════════════════════════════════════════════
+//  UMAP core — pure functions, no DOM. Mirrors the real umap-learn algorithm:
+//  (1) kNN graph  (2) fuzzy simplicial set via rho/sigma calibration
+//  (3) probabilistic t-conorm symmetrization  (4) a,b fitted from min_dist
+//  (5) edge-sampled SGD with negative sampling and linearly decayed alpha.
+// ════════════════════════════════════════════════════════════════════════════
+
+const UMAP_SMOOTH_TOL       = 1e-6;   // binary-search convergence tolerance
+const UMAP_SMOOTH_ITERS     = 100;    // max binary-search steps for sigma_i
+const UMAP_MIN_K_DIST_SCALE = 1e-3;   // floor on sigma_i, as in umap-learn
+const UMAP_GRAD_CLIP        = 4.0;    // umap-learn clips gradients to +/-4
+
+// Full Euclidean (NOT squared) distance matrix — UMAP calibrates on distances.
+function umapPairwiseDist(rows) {
+  const n = rows.length;
+  const D = Array.from({ length: n }, () => new Array(n).fill(0));
+  for (let i = 0; i < n; i++) {
+    for (let j = i + 1; j < n; j++) {
+      let s = 0;
+      for (let d = 0; d < rows[i].length; d++) { const df = rows[i][d] - rows[j][d]; s += df * df; }
+      const dist = Math.sqrt(s);
+      D[i][j] = dist; D[j][i] = dist;
+    }
+  }
+  return D;
+}
+
+// (a) kNN graph — brute force is fine at this dataset size.
+function umapKnn(D, k) {
+  const n = D.length;
+  const out = [];
+  for (let i = 0; i < n; i++) {
+    const idx = [];
+    for (let j = 0; j < n; j++) if (j !== i) idx.push(j);
+    idx.sort((p, q) => (D[i][p] - D[i][q]) || (p - q));
+    out.push(idx.slice(0, Math.min(k, idx.length)));
+  }
+  return out;
+}
+
+// (b) rho_i = distance to nearest non-zero neighbour; binary-search sigma_i so
+//     sum_j exp( -max(0, d(i,j) - rho_i) / sigma_i ) == log2(k).
+//     `dists` must be the k neighbour distances in ascending order.
+function umapSmoothKnnDist(dists, k) {
+  const target = Math.log2(k);
+  let rho = 0;
+  for (let t = 0; t < dists.length; t++) { if (dists[t] > 1e-12) { rho = dists[t]; break; } }
+  let lo = 0, hi = Infinity, sigma = 1.0, psum = 0;
+  for (let iter = 0; iter < UMAP_SMOOTH_ITERS; iter++) {
+    psum = 0;
+    for (let t = 0; t < dists.length; t++) {
+      const d = dists[t] - rho;
+      psum += d > 0 ? Math.exp(-d / sigma) : 1.0;
+    }
+    if (Math.abs(psum - target) < UMAP_SMOOTH_TOL) break;
+    if (psum > target) { hi = sigma; sigma = (lo + hi) / 2; }
+    else { lo = sigma; sigma = (hi === Infinity) ? sigma * 2 : (lo + hi) / 2; }
+  }
+  // umap-learn floors sigma relative to the local scale so it can't collapse
+  let meanD = 0;
+  for (let t = 0; t < dists.length; t++) meanD += dists[t];
+  meanD /= Math.max(dists.length, 1);
+  sigma = Math.max(sigma, UMAP_MIN_K_DIST_SCALE * Math.max(meanD, 1e-12));
+  return { rho: rho, sigma: sigma, psum: psum, target: target };
+}
+
+// (b + c) Build the fuzzy simplicial set and symmetrize with the
+//         probabilistic t-conorm  W = w + w^T - w .* w^T.
+function umapFuzzySimplicialSet(rows, nNeighbors) {
+  const n = rows.length;
+  const k = Math.max(2, Math.min(nNeighbors, n - 1));
+  const D = umapPairwiseDist(rows);
+  const knn = umapKnn(D, k);
+  const rhos = new Array(n), sigmas = new Array(n), psums = new Array(n);
+  const w = Array.from({ length: n }, () => new Array(n).fill(0));
+
+  for (let i = 0; i < n; i++) {
+    const dists = knn[i].map(j => D[i][j]);
+    const cal = umapSmoothKnnDist(dists, k);
+    rhos[i] = cal.rho; sigmas[i] = cal.sigma; psums[i] = cal.psum;
+    for (let t = 0; t < knn[i].length; t++) {
+      const j = knn[i][t];
+      const d = Math.max(0, dists[t] - cal.rho);
+      w[i][j] = Math.exp(-d / cal.sigma);
+    }
+  }
+
+  const edges = [];
+  for (let i = 0; i < n; i++) {
+    for (let j = i + 1; j < n; j++) {
+      const a = w[i][j], b = w[j][i];
+      const v = a + b - a * b;               // probabilistic t-conorm
+      if (v > 1e-10) edges.push({ i: i, j: j, w: v });
+    }
+  }
+  return { D: D, knn: knn, rhos: rhos, sigmas: sigmas, psums: psums,
+           w: w, edges: edges, k: k, target: Math.log2(k) };
+}
+
+// (e-i) Derive a, b from min_dist / spread by an actual least-squares curve fit
+//       of  f(d) = 1/(1 + a*d^(2b))  against UMAP's target curve
+//       psi(d) = 1 for d <= min_dist, exp(-(d-min_dist)/spread) otherwise.
+//       umap-learn uses SciPy's Levenberg-Marquardt curve_fit; with no SciPy in
+//       the browser we use a coarse-to-fine grid search in log(a), log(b) space,
+//       which reproduces umap-learn's values to ~3 significant figures.
+function umapFitAB(minDist, spread) {
+  const NP = 200;
+  const xs = new Array(NP), ys = new Array(NP);
+  for (let t = 0; t < NP; t++) {
+    const x = ((t + 1) / NP) * 3 * spread;
+    xs[t] = x;
+    ys[t] = (x <= minDist) ? 1.0 : Math.exp(-(x - minDist) / spread);
+  }
+  function sse(a, b) {
+    let s = 0;
+    for (let t = 0; t < NP; t++) {
+      const f = 1 / (1 + a * Math.pow(xs[t], 2 * b));
+      const r = f - ys[t];
+      s += r * r;
+    }
+    return s;
+  }
+  let aLo = Math.log(1e-3), aHi = Math.log(50);
+  let bLo = Math.log(0.05), bHi = Math.log(6);
+  let bestA = 1, bestB = 1, best = Infinity;
+  const STEPS = 16;
+  for (let pass = 0; pass < 8; pass++) {
+    for (let ia = 0; ia <= STEPS; ia++) {
+      const a = Math.exp(aLo + (aHi - aLo) * ia / STEPS);
+      for (let ib = 0; ib <= STEPS; ib++) {
+        const b = Math.exp(bLo + (bHi - bLo) * ib / STEPS);
+        const e = sse(a, b);
+        if (e < best) { best = e; bestA = a; bestB = b; }
+      }
+    }
+    const aw = (aHi - aLo) / STEPS, bw = (bHi - bLo) / STEPS;
+    aLo = Math.log(bestA) - aw; aHi = Math.log(bestA) + aw;
+    bLo = Math.log(bestB) - bw; bHi = Math.log(bestB) + bw;
+  }
+  return { a: bestA, b: bestB, sse: best };
+}
+
+function umapClip(v) {
+  return v > UMAP_GRAD_CLIP ? UMAP_GRAD_CLIP : (v < -UMAP_GRAD_CLIP ? -UMAP_GRAD_CLIP : v);
+}
+
+// (d) Build the optimizer state. `opts.initY` (e.g. a PCA projection) is used
+//     verbatim when supplied; otherwise a seeded uniform random init in
+//     [-10, 10] — real umap-learn uses a spectral (graph-Laplacian) init.
+function umapCreateState(rows, opts) {
+  opts = opts || {};
+  const nNeighbors  = opts.nNeighbors  != null ? opts.nNeighbors  : 15;
+  const minDist     = opts.minDist     != null ? opts.minDist     : 0.1;
+  const spread      = opts.spread      != null ? opts.spread      : 1.0;
+  const nEpochs     = opts.nEpochs     != null ? opts.nEpochs     : 500;
+  const negSamples  = opts.negSamples  != null ? opts.negSamples  : 5;
+  const gamma       = opts.gamma       != null ? opts.gamma       : 1.0;
+  const initialAlpha= opts.initialAlpha!= null ? opts.initialAlpha: 1.0;
+  const seed        = opts.seed        != null ? opts.seed        : 42;
+
+  const fss = umapFuzzySimplicialSet(rows, nNeighbors);
+  const ab  = umapFitAB(minDist, spread);
+  const rng = mulberry32(seed);
+
+  const n = rows.length;
+  let Y;
+  if (opts.initY) {
+    Y = opts.initY.map(p => [p[0], p[1]]);
+  } else {
+    Y = [];
+    for (let i = 0; i < n; i++) Y.push([(rng() - 0.5) * 20, (rng() - 0.5) * 20]);
+  }
+
+  // umap-learn's make_epochs_per_sample: the strongest edge is sampled every
+  // epoch, weaker edges proportionally less often  ->  eps_e = w_max / w_e.
+  let maxW = 0;
+  for (let e = 0; e < fss.edges.length; e++) if (fss.edges[e].w > maxW) maxW = fss.edges[e].w;
+  maxW = Math.max(maxW, 1e-12);
+  const epochsPerSample = fss.edges.map(e => maxW / e.w);
+  const epochsPerNeg    = epochsPerSample.map(v => v / Math.max(negSamples, 1));
+
+  return {
+    rows: rows, Y: Y, edges: fss.edges, fss: fss,
+    a: ab.a, b: ab.b, abSse: ab.sse,
+    nNeighbors: fss.k, minDist: minDist, spread: spread,
+    nEpochs: nEpochs, negSamples: negSamples, gamma: gamma,
+    initialAlpha: initialAlpha, alpha: initialAlpha,
+    epoch: 0, rng: rng,
+    epochsPerSample: epochsPerSample,
+    epochsPerNeg: epochsPerNeg,
+    nextSample: epochsPerSample.slice(),
+    nextNeg: epochsPerNeg.slice()
+  };
+}
+
+// (e + f) Run `chunk` epochs of edge-sampled SGD in place. Called repeatedly,
+//         a few epochs per animation frame, so convergence is watchable.
+function umapRunEpochs(st, chunk) {
+  const n = st.Y.length;
+  const a = st.a, b = st.b, gamma = st.gamma;
+  for (let c = 0; c < chunk && st.epoch < st.nEpochs; c++) {
+    const alpha = st.initialAlpha * (1 - st.epoch / st.nEpochs); // linear decay -> 0
+    st.alpha = alpha;
+    for (let e = 0; e < st.edges.length; e++) {
+      if (st.nextSample[e] > st.epoch) continue;   // sample edge ~ membership weight
+      const i = st.edges[e].i, j = st.edges[e].j;
+      const yi = st.Y[i], yj = st.Y[j];
+
+      // ── attractive gradient on the sampled edge ──
+      let dx = yi[0] - yj[0], dy = yi[1] - yj[1];
+      let d2 = dx * dx + dy * dy;
+      let gc = 0;
+      if (d2 > 0) gc = (-2.0 * a * b * Math.pow(d2, b - 1.0)) / (a * Math.pow(d2, b) + 1.0);
+      const gx = umapClip(gc * dx) * alpha, gy = umapClip(gc * dy) * alpha;
+      yi[0] += gx; yi[1] += gy;
+      yj[0] -= gx; yj[1] -= gy;
+
+      st.nextSample[e] += st.epochsPerSample[e];
+
+      // ── repulsive gradient vs uniformly sampled non-neighbours ──
+      const nNeg = Math.floor((st.epoch - st.nextNeg[e]) / st.epochsPerNeg[e]);
+      for (let p = 0; p < nNeg; p++) {
+        const kIdx = Math.floor(st.rng() * n);
+        if (kIdx === i || kIdx >= n) continue;
+        const yk = st.Y[kIdx];
+        dx = yi[0] - yk[0]; dy = yi[1] - yk[1];
+        d2 = dx * dx + dy * dy;
+        if (d2 > 0) {
+          const gcn = (2.0 * gamma * b) / ((0.001 + d2) * (a * Math.pow(d2, b) + 1.0));
+          yi[0] += umapClip(gcn * dx) * alpha;
+          yi[1] += umapClip(gcn * dy) * alpha;
+        } else if (kIdx !== i) {
+          yi[0] += 4.0 * alpha; yi[1] += 4.0 * alpha;
+        }
+      }
+      if (nNeg > 0) st.nextNeg[e] += nNeg * st.epochsPerNeg[e];
+    }
+    st.epoch++;
+  }
+  return st.epoch;
+}
+
+// Convenience: fit-and-run to completion (used by the Node test harness).
+function umapEmbed(rows, opts) {
+  const st = umapCreateState(rows, opts);
+  umapRunEpochs(st, st.nEpochs);
+  return st;
+}
+
+// ─── Shared quality metric: k-nearest-neighbour recall ──────────────────────
+function knnSetsFromD(D, k) {
+  const n = D.length;
+  const out = [];
+  for (let i = 0; i < n; i++) {
+    const idx = [];
+    for (let j = 0; j < n; j++) if (j !== i) idx.push(j);
+    idx.sort((p, q) => (D[i][p] - D[i][q]) || (p - q));
+    out.push(new Set(idx.slice(0, Math.min(k, idx.length))));
+  }
+  return out;
+}
+
+function knnRecall(highSets, lowRows, k) {
+  const lowSets = knnSetsFromD(umapPairwiseDist(lowRows), k);
+  let total = 0;
+  for (let i = 0; i < highSets.length; i++) {
+    let hit = 0;
+    highSets[i].forEach(j => { if (lowSets[i].has(j)) hit++; });
+    total += hit / Math.max(highSets[i].size, 1);
+  }
+  return total / Math.max(highSets.length, 1);
+}
+</script>
+
+<script id="viz-main">
 // ─── Data: 4 clusters in 8D (2 signal dims + 6 correlated-noise dims) ──────
 const N = 60;
 const DIM = 8;
 const K = 4;
 const CLUSTER_COLORS = ['#00d4ff', '#ff9500', '#00ff88', '#ff4757'];
+const RECALL_K = 10;
 let DATA_SEED = 7;
 let X = [];        // N x DIM
 let LABELS = [];   // N
@@ -672,17 +1023,31 @@ function computeP(D, perplexity) {
 
 // ─── Live t-SNE state ────────────────────────────────────────────────────────
 let Pmat = null;
-let Y = [];             // n x 2 embedding
+let Y = [];              // n x 2 t-SNE embedding
 let velY = [];           // momentum
 let iterCount = 0;
-let running = false;
 let perplexity = 12;
-let lastFrameTime = 0;
+const TSNE_MAX_ITERS = 600;
 const LR = 60;
 const MOMENTUM = 0.7;
 
+// ─── Live UMAP state ─────────────────────────────────────────────────────────
+let umapState = null;
+let nNeighbors = 15;
+let minDist = 0.10;
+let umapInitMode = 'random';   // 'random' | 'pca'
+const UMAP_EPOCHS = 500;
+const UMAP_EPOCHS_PER_FRAME = 5;
+const UMAP_SEED = 2024;
+
+// ─── Shared animation state ─────────────────────────────────────────────────
+let running = false;
+let rafHandle = null;
+let highKnnSets = null;      // cached high-dim kNN sets for the recall readout
+let pcaProj = null;
+
 function initEmbedding() {
-  const rng = mulberry32(1234 + iterCount);
+  const rng = mulberry32(1234);
   Y = X.map(() => [ (rng() - 0.5) * 2, (rng() - 0.5) * 2 ]);
   velY = X.map(() => [0, 0]);
   iterCount = 0;
@@ -731,6 +1096,26 @@ function tsneStep() {
   return kl;
 }
 
+// ─── UMAP wiring ─────────────────────────────────────────────────────────────
+function initUmap() {
+  let initY = null;
+  if (umapInitMode === 'pca') {
+    // scale the PCA projection into roughly the same box the random init uses
+    let maxAbs = 1e-9;
+    pcaProj.forEach(p => { maxAbs = Math.max(maxAbs, Math.abs(p[0]), Math.abs(p[1])); });
+    initY = pcaProj.map(p => [p[0] / maxAbs * 10, p[1] / maxAbs * 10]);
+  }
+  umapState = umapCreateState(X, {
+    nNeighbors: nNeighbors,
+    minDist: minDist,
+    spread: 1.0,
+    nEpochs: UMAP_EPOCHS,
+    negSamples: 5,
+    seed: UMAP_SEED,
+    initY: initY
+  });
+}
+
 // ─── Canvas rendering ────────────────────────────────────────────────────────
 function setupCanvas(canvas, displaySize) {
   const dpr = window.devicePixelRatio || 1;
@@ -769,6 +1154,12 @@ function drawScatter(canvas, points, labels) {
   });
 }
 
+function drawAll() {
+  drawScatter(document.getElementById('pca-canvas'), pcaProj, LABELS);
+  drawScatter(document.getElementById('tsne-canvas'), Y, LABELS);
+  if (umapState) drawScatter(document.getElementById('umap-canvas'), umapState.Y, LABELS);
+}
+
 function renderLegend() {
   const el = document.getElementById('legend');
   el.innerHTML = CLUSTER_COLORS.map((c, i) =>
@@ -776,66 +1167,131 @@ function renderLegend() {
   ).join('');
 }
 
+// ─── Readouts ────────────────────────────────────────────────────────────────
+function mean(arr) { return arr.reduce((s, v) => s + v, 0) / Math.max(arr.length, 1); }
+
 function updateReadouts(kl) {
   document.getElementById('perp-val').textContent = perplexity;
+  document.getElementById('nn-val').textContent = nNeighbors;
+  document.getElementById('mindist-val').textContent = minDist.toFixed(2);
   document.getElementById('iter-val').textContent = iterCount;
   document.getElementById('kl-val').textContent = kl != null ? kl.toFixed(3) : '—';
-  document.getElementById('status-val').textContent = running ? 'Descending…' : (iterCount > 0 ? 'Paused' : 'Idle');
+  document.getElementById('epoch-val').textContent = umapState ? umapState.epoch : 0;
+
+  const tsneDone = iterCount >= TSNE_MAX_ITERS;
+  const umapDone = umapState && umapState.epoch >= umapState.nEpochs;
+  let status = 'Idle';
+  if (running) status = 'Optimizing…';
+  else if (tsneDone && umapDone) status = 'Converged';
+  else if (iterCount > 0 || (umapState && umapState.epoch > 0)) status = 'Paused';
+  document.getElementById('status-val').textContent = status;
+
+  if (umapState) {
+    document.getElementById('a-val').textContent = umapState.a.toFixed(3);
+    document.getElementById('b-val').textContent = umapState.b.toFixed(3);
+    document.getElementById('edges-val').textContent = umapState.edges.length;
+    document.getElementById('sigma-val').textContent = mean(umapState.fss.sigmas).toFixed(3);
+    document.getElementById('rho-val').textContent = mean(umapState.fss.rhos).toFixed(3);
+    document.getElementById('target-val').textContent =
+      mean(umapState.fss.psums).toFixed(3) + ' / ' + umapState.fss.target.toFixed(3);
+  }
+
+  if (highKnnSets) {
+    document.getElementById('rec-pca-val').textContent = (knnRecall(highKnnSets, pcaProj, RECALL_K) * 100).toFixed(0) + '%';
+    document.getElementById('rec-tsne-val').textContent = (knnRecall(highKnnSets, Y, RECALL_K) * 100).toFixed(0) + '%';
+    document.getElementById('rec-umap-val').textContent = umapState
+      ? (knnRecall(highKnnSets, umapState.Y, RECALL_K) * 100).toFixed(0) + '%' : '—';
+  }
 }
 
-// ─── Animation loop ─────────────────────────────────────────────────────────
-function animate(ts) {
+// ─── Animation loop (single rAF handle, always cancelled on stop) ────────────
+function stopAnimation() {
+  running = false;
+  if (rafHandle !== null) { cancelAnimationFrame(rafHandle); rafHandle = null; }
+}
+
+function startAnimation() {
+  if (running) return;
+  const tsneDone = iterCount >= TSNE_MAX_ITERS;
+  const umapDone = umapState && umapState.epoch >= umapState.nEpochs;
+  if (tsneDone && umapDone) return;
+  running = true;
+  rafHandle = requestAnimationFrame(animate);
+}
+
+function animate() {
+  rafHandle = null;
   if (!running) return;
-  const kl = tsneStep();
+
+  let kl = null;
+  if (iterCount < TSNE_MAX_ITERS) kl = tsneStep();
+  if (umapState && umapState.epoch < umapState.nEpochs) umapRunEpochs(umapState, UMAP_EPOCHS_PER_FRAME);
+
   drawScatter(document.getElementById('tsne-canvas'), Y, LABELS);
+  if (umapState) drawScatter(document.getElementById('umap-canvas'), umapState.Y, LABELS);
+
+  const done = iterCount >= TSNE_MAX_ITERS && umapState && umapState.epoch >= umapState.nEpochs;
+  if (done) { running = false; updateReadouts(kl); return; }
   updateReadouts(kl);
-  if (iterCount >= 600) {
-    running = false;
-    updateReadouts(kl);
-    return;
-  }
-  requestAnimationFrame(animate);
+  rafHandle = requestAnimationFrame(animate);
 }
 
 // ─── Setup / controls ────────────────────────────────────────────────────────
+function rebuildTsne() {
+  const D = pairwiseSqDist(X);
+  Pmat = computeP(D, perplexity);
+  initEmbedding();
+}
+
 function fullReset(regenData) {
-  running = false;
+  stopAnimation();
   if (regenData) {
     DATA_SEED += 101;
     const g = generateData(DATA_SEED);
     X = g.pts; LABELS = g.labs;
+    highKnnSets = knnSetsFromD(umapPairwiseDist(X), RECALL_K);
   }
-  const pcaProj = computePCA2D(X);
-  drawScatter(document.getElementById('pca-canvas'), pcaProj, LABELS);
-
-  const D = pairwiseSqDist(X);
-  Pmat = computeP(D, perplexity);
-  initEmbedding();
-  drawScatter(document.getElementById('tsne-canvas'), Y, LABELS);
+  pcaProj = computePCA2D(X);
+  rebuildTsne();
+  initUmap();
+  drawAll();
   updateReadouts(null);
 }
 
 document.getElementById('perp-slider').addEventListener('input', (e) => {
-  perplexity = parseInt(e.target.value);
-  running = false;
-  const D = pairwiseSqDist(X);
-  Pmat = computeP(D, perplexity);
-  initEmbedding();
-  drawScatter(document.getElementById('tsne-canvas'), Y, LABELS);
+  perplexity = parseInt(e.target.value, 10);
+  stopAnimation();
+  rebuildTsne();
+  drawAll();
+  updateReadouts(null);
+});
+
+document.getElementById('nn-slider').addEventListener('input', (e) => {
+  nNeighbors = parseInt(e.target.value, 10);
+  stopAnimation();
+  initUmap();           // re-derives the kNN graph, rho/sigma and the t-conorm
+  drawAll();
+  updateReadouts(null);
+});
+
+document.getElementById('mindist-slider').addEventListener('input', (e) => {
+  minDist = parseFloat(e.target.value);
+  stopAnimation();
+  initUmap();           // re-fits a, b from the new min_dist and restarts SGD
+  drawAll();
   updateReadouts(null);
 });
 
 document.getElementById('run-btn').addEventListener('click', () => {
-  if (running) return;
-  running = true;
+  startAnimation();
   updateReadouts(null);
-  requestAnimationFrame(animate);
 });
 
 document.getElementById('reset-btn').addEventListener('click', () => {
-  running = false;
+  stopAnimation();
   initEmbedding();
-  drawScatter(document.getElementById('tsne-canvas'), Y, LABELS);
+  initUmap();
+  drawAll();
   updateReadouts(null);
 });
 
@@ -843,18 +1299,22 @@ document.getElementById('regen-btn').addEventListener('click', () => {
   fullReset(true);
 });
 
-window.addEventListener('resize', () => {
-  drawScatter(document.getElementById('pca-canvas'), computePCA2D(X), LABELS);
-  drawScatter(document.getElementById('tsne-canvas'), Y, LABELS);
+document.getElementById('init-btn').addEventListener('click', (e) => {
+  umapInitMode = (umapInitMode === 'random') ? 'pca' : 'random';
+  e.target.textContent = 'UMAP init: ' + umapInitMode;
+  e.target.classList.toggle('toggle-on', umapInitMode === 'pca');
+  stopAnimation();
+  initUmap();
+  drawAll();
+  updateReadouts(null);
 });
+
+window.addEventListener('resize', drawAll);
 
 // ─── Init ───────────────────────────────────────────────────────────────────
 renderLegend();
 fullReset(true);
-document.fonts.ready.then(() => {
-  drawScatter(document.getElementById('pca-canvas'), computePCA2D(X), LABELS);
-  drawScatter(document.getElementById('tsne-canvas'), Y, LABELS);
-});
+document.fonts.ready.then(drawAll);
 </script>
 </body>
 </html>

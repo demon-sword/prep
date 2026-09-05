@@ -58,7 +58,7 @@ Hallucination is a gap between what the model asserts and what the available evi
 - Track cosine score distribution over time (anomaly = retrieval quality degradation)
 - Set separate production SLOs: hallucination rate SLO (< 2% of answers fail faithfulness gate), distinct from task-accuracy SLO
 - Route low-confidence answers (faithfulness 0.75–0.85) into a human audit queue; label them for future golden-dataset expansion
-- Weekly batch: compute faithfulness on 1% random production sample using GPT-4o-mini as judge ($0.002/sample at 1M queries/week = $20/week)
+- Weekly batch: compute faithfulness on 1% random production sample using a small fast model as judge ($0.002/sample at 1M queries/week = $20/week)
 - Tool: LangSmith / OpenTelemetry for traces; Prometheus + Grafana for dashboards; Arize for drift detection
 
 ### Example / Tradeoff
@@ -99,7 +99,7 @@ The fourth layer is production monitoring. I track thumbs-down rate, correction 
 ## Pitfalls
 
 - **Mistake:** "I'd lower the temperature and use RAG — that prevents hallucinations" — **Better:** Temperature=0 and RAG reduce hallucination frequency but don't eliminate it; you also need a retrieval cosine gate (empty context = hallucination before generation), a post-gen faithfulness check, and production monitoring with a separate SLO — neither lever alone is sufficient.
-- **Mistake:** "I'd have GPT-4 check its own answer for hallucinations" — **Better:** Self-checking is biased toward the model's own style and training distribution; use an independent judge: RAGAS faithfulness (separate judge model) or DeBERTa NLI (non-LLM entailment model) to avoid the judge being anchored by the same errors as the generator.
+- **Mistake:** "I'd have a frontier model check its own answer for hallucinations" — **Better:** Self-checking is biased toward the model's own style and training distribution; use an independent judge: RAGAS faithfulness (separate judge model) or DeBERTa NLI (non-LLM entailment model) to avoid the judge being anchored by the same errors as the generator.
 - **Mistake:** "I'd track accuracy and if it's high, hallucination must be under control" — **Better:** Task accuracy and hallucination rate are separate SLOs — a model can score 90% on accuracy while hallucinating on 5% of queries in specific retrieval edge cases; always measure faithfulness independently with a dedicated metric.
 
 ---

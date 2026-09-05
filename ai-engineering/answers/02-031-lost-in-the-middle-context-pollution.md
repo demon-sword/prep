@@ -81,7 +81,7 @@ The diagnostic split is key: if RAGAS `context_recall` is high — retrieval is 
 ## Pitfalls
 
 - **Mistake:** Treating "lost in the middle" as a retrieval problem and responding by increasing top-k or fetching more documents — **Better:** Recognize it as a generation-side positional bias; the fix is to *reduce* noisy context (cross-encoder rerank to k=3–5) and place the highest-relevance chunk first or last, not retrieve more.
-- **Mistake:** Saying "use a bigger context window model" (e.g., GPT-4o 128K) as the solution — **Better:** Longer context windows don't eliminate the U-shaped attention bias; Liu et al. showed the effect persists at longer lengths. A bigger window makes context pollution *worse* unless you also increase retrieval precision. The right lever is reranking and chunk selection, not window size.
+- **Mistake:** Saying "use a bigger context window model" (e.g., moving to a ~1M-token window) as the solution — **Better:** Longer context windows don't eliminate the U-shaped attention bias; Liu et al. showed the effect persists at longer lengths, and the jump from 128K to 1M windows did not remove it — it just moved the middle further out. A bigger window makes context pollution *worse* unless you also increase retrieval precision. The right lever is reranking and chunk selection, not window size.
 - **Mistake:** Not distinguishing context pollution from lost-in-the-middle — **Better:** Explain that context pollution (too many noisy chunks) amplifies the lost-in-the-middle effect but is a separate failure: even with a small context, placing the wrong chunk first can mislead the model. The diagnostic is RAGAS `faithfulness` vs `context_recall` divergence.
 
 ---

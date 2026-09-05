@@ -35,7 +35,7 @@ There are four memory tiers, each with a different latency, cost, and fidelity p
 
 **1. In-context (working memory) — the window itself**
 - Holds the system prompt, recent turns, retrieved chunks, tool outputs
-- Token budget: e.g. 128K for Claude 3.5 Sonnet, 200K for Claude 3 Opus
+- Token budget: e.g. ~1M tokens on a current frontier model (Claude Opus 5 / Sonnet 5), 200K on a small fast tier like Claude Haiku 4.5
 - Problem: cost grows O(n) per turn; quality degrades for content placed in the middle of a very long context (lost-in-the-middle); TTFT (time-to-first-token) rises with length
 - Strategy: keep only the last N turns (sliding window) or compress older turns on the fly
 
@@ -65,7 +65,7 @@ There are four memory tiers, each with a different latency, cost, and fidelity p
 **Production chatbot (1M conversations/day):**
 - In-context: last 6 turns only (≈2K tokens per call)
 - External memory: user profile + past session summaries in pgvector, retrieved top-3 per query
-- Summarization: triggered when in-context turn count hits 10; async call using a cheap model (Haiku / GPT-3.5)
+- Summarization: triggered when in-context turn count hits 10; async call using a cheap model (Haiku / a small fast model)
 - Result: 40% reduction in average tokens/call; p95 latency down from 4.2s → 2.1s; user satisfaction unchanged (summaries preserved enough context)
 
 **Tradeoff — summarization fidelity vs cost:**
@@ -79,7 +79,7 @@ Summarization loses exact quotes and specific numbers. For customer support bots
 "LLMs have no built-in memory — every API call is stateless. So memory management is really about designing a layered system: what goes in the context window right now, what gets compressed or summarized, and what gets offloaded to external storage and retrieved on demand. I think about four tiers."
 
 **Core explanation (2–3 min):**
-"The first tier is the in-context window itself — that's your working memory. For GPT-4o you get 128K tokens, but you don't want to fill it blindly. Cost scales linearly with context length, TTFT rises, and there's a real 'lost in the middle' problem where the model underattends to content placed far from the edges. So I apply a sliding window — maybe the last 6–8 turns — and evict older content.
+"The first tier is the in-context window itself — that's your working memory. On a current frontier model that's on the order of a million tokens, but the size of the window is no longer the binding constraint — what you actually send is. You don't want to fill it blindly. Cost scales linearly with context length, TTFT rises, and there's a real 'lost in the middle' problem where the model underattends to content placed far from the edges. So I apply a sliding window — maybe the last 6–8 turns — and evict older content.
 
 The second tier is external semantic memory in a vector store. I serialize old conversation turns or session summaries into embeddings and store them in Pinecone or pgvector. At each new turn, I retrieve the top-3 most relevant past memories and inject them into the prompt. This gives the model effective long-term memory without ballooning the context.
 

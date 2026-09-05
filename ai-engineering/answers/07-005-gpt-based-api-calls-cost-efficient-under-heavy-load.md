@@ -15,7 +15,7 @@ Interviewers ask this at the system design or technical deep-dive stage to probe
 
 ### Trigger phrases
 - "How do you keep API costs manageable under heavy load?"
-- "You're hitting GPT-4o at 500 req/s — what breaks and how do you fix it?"
+- "You're hitting a frontier model at 500 req/s — what breaks and how do you fix it?"
 - "Walk me through how you'd make OpenAI calls cost-efficient at scale."
 - "How do you handle rate limits and cost at 1M queries/day?"
 
@@ -27,7 +27,7 @@ Ability to enumerate and reason about concrete API cost and throughput levers �
 ## Answer
 
 ### Concept
-Making GPT-based API calls cost-efficient under heavy load requires stacking multiple independent techniques, each cutting a different cost or throughput dimension: **avoid the call entirely** (semantic cache, exact cache), **shrink the call** (prompt compression, top-k reduction, max_tokens), **downgrade the model** (model tiering to GPT-4o-mini for routine tasks), **amortize tokens** (prefix caching, request batching), and **manage quota** (rate-limit retry with jitter, quota provisioning). No single lever is sufficient; production savings of 80-90% require applying all five layers.
+Making GPT-based API calls cost-efficient under heavy load requires stacking multiple independent techniques, each cutting a different cost or throughput dimension: **avoid the call entirely** (semantic cache, exact cache), **shrink the call** (prompt compression, top-k reduction, max_tokens), **downgrade the model** (model tiering to a small fast model for routine tasks), **amortize tokens** (prefix caching, request batching), and **manage quota** (rate-limit retry with jitter, quota provisioning). No single lever is sufficient; production savings of 80-90% require applying all five layers.
 
 ### Mechanism
 
@@ -48,21 +48,21 @@ Making GPT-based API calls cost-efficient under heavy load requires stacking mul
 
 - **LLMLingua / LLMLingua-2** (Microsoft): compress context tokens by 2-5× with <5% quality loss by dropping low-saliency tokens; saves proportionally on input token cost
 - **Reduce top-k in RAG**: cross-encoder reranking narrows retrieved chunks from 10 to 3-5; at 512 tokens/chunk, going from 10→3 saves 3,584 input tokens per query
-- **max_tokens discipline**: set `max_tokens` to the 95th-percentile response length for each endpoint; on a summarization pipeline, capping at 300 tokens instead of unlimited saves 200-400 output tokens/call (output tokens cost 4-10× input on most models)
+- **max_tokens discipline**: set `max_tokens` to the 95th-percentile response length for each endpoint; on a summarization pipeline, capping at 300 tokens instead of unlimited saves 200-400 output tokens/call (output tokens cost 5× input at current frontier pricing)
 
 **Layer 4 — Model tiering (cheapest sufficient model)**
 
 - Route by task type:
-  - Classification, intent detection, yes/no gates: GPT-4o-mini ($0.15/M input, $0.60/M output) or even a fine-tuned local model
-  - RAG answer synthesis for factual questions: GPT-4o-mini
-  - Complex reasoning, multi-document synthesis, code generation: GPT-4o ($2.50/M input, $10/M output)
-- A tiering split of 80% GPT-4o-mini / 20% GPT-4o reduces cost by ~84% vs all-GPT-4o at the same traffic
+  - Classification, intent detection, yes/no gates: a small fast model ($1/M input, $5/M output) or even a fine-tuned local model
+  - RAG answer synthesis for factual questions: a small fast model
+  - Complex reasoning, multi-document synthesis, code generation: a frontier model ($5/M input, $25/M output)
+- A tiering split of 80% a small fast model / 20% a frontier model reduces cost by ~64% vs all-frontier at the same traffic
 - Implement as a router: classify the query first (cheap call), then dispatch to the appropriate model
 
 **Layer 5 — Prefix caching (amortize static tokens)**
 
 - OpenAI (November 2024) and Anthropic Claude both offer automatic prefix caching: repeated prefixes (system prompt, static RAG context) in requests are cached server-side and billed at a 50-90% discount
-- A 1,000-token system prompt at 1M queries/day = 1B input tokens/day; with 90% prefix cache discount, that's $250/day saved on GPT-4o-mini alone
+- A 1,000-token system prompt at 1M queries/day = 1B input tokens/day; with 90% prefix cache discount, that's ~$900/day saved on the small tier alone
 - Keep static content at the start of the context (system prompt → static examples → dynamic user query) to maximize the cacheable prefix length
 
 **Layer 6 — Batching (throughput vs latency tradeoff)**
@@ -84,13 +84,13 @@ Making GPT-based API calls cost-efficient under heavy load requires stacking mul
 
 | Technique | Impact | Cost before | Cost after |
 |-----------|--------|------------|------------|
-| Baseline (all GPT-4o, 2K input + 500 output tokens) | — | $10,500/day | $10,500/day |
-| + Semantic cache (30% hit rate) | −30% calls | — | $7,350/day |
-| + Model tiering (80% GPT-4o-mini) | −84% on tiered calls | — | $1,470/day |
-| + Prefix caching (1K static system prompt) | −90% on system prompt tokens | — | $1,120/day |
-| + Top-k reduction via reranking (10→3 chunks) | −3,584 input tokens/non-cached query | — | $870/day |
-| + max_tokens cap (500→200 output) | −60% output tokens | — | $680/day |
-| **Total savings** | **~94%** | **$10,500/day** | **~$630/day** |
+| Baseline (all a frontier model, 2K input + 500 output tokens) | — | $22,500/day | $22,500/day |
+| + Semantic cache (30% hit rate) | −30% calls | — | $15,750/day |
+| + Model tiering (80% a small fast model) | −64% blended | — | $5,670/day |
+| + Prefix caching (1K static system prompt, 0.1x reads) | −90% on system prompt tokens | — | $4,540/day |
+| + Top-k reduction via reranking (10→3 chunks) | dynamic input 1,000 → 300 tokens | — | $3,650/day |
+| + max_tokens cap (500→200 output) | −60% output tokens | — | $1,760/day |
+| **Total savings** | **~92%** | **$22,500/day** | **~$1,760/day** |
 
 **Key tradeoff:** semantic cache threshold tuning — a threshold of 0.90 gives 40% hit rate but 5% wrong-answer rate; 0.95 gives 25% hit rate and <0.5% wrong-answer rate. Tune against a golden eval set, not intuition. For support bots, 0.93 is a common production default.
 
@@ -104,9 +104,9 @@ Making GPT-based API calls cost-efficient under heavy load requires stacking mul
 **Core explanation (2–3 min):**
 "Starting with the highest-leverage lever: semantic caching. I store recent query-response pairs in Redis with embedding-based similarity lookup — if the new query is within cosine distance 0.07 of a cached result, return the cache hit in under 10ms at zero API cost. For support chatbots where many users ask similar questions, we typically see 25-35% hit rates.
 
-Next is model tiering. I route by task type: intent classification and yes/no gates go to GPT-4o-mini at $0.15 per million input tokens; complex multi-document synthesis goes to GPT-4o at $2.50 per million. An 80/20 split cuts the blended model cost by about 84%.
+Next is model tiering. I route by task type: intent classification and yes/no gates go to a small fast model at $1 per million input tokens; complex multi-document synthesis goes to a frontier model at $5 per million. An 80/20 split cuts the blended model cost by about 64%.
 
-Then I look at the call itself: I use a cross-encoder reranker to trim retrieved context from 10 chunks down to 3 — that saves roughly 3,500 input tokens per non-cached query. And I always set max_tokens to the 95th-percentile of my actual response length distribution — output tokens cost 4-10× more than input on most providers, so every uncapped token is expensive.
+Then I look at the call itself: I use a cross-encoder reranker to trim retrieved context from 10 chunks down to 3 — that saves roughly 3,500 input tokens per non-cached query. And I always set max_tokens to the 95th-percentile of my actual response length distribution — output tokens cost 5× more than input on most providers, so every uncapped token is expensive.
 
 If the provider supports prefix caching — OpenAI added this in late 2024, Anthropic has it too — I structure prompts so the static system prompt and examples come first. That gets a 50-90% discount on the repeated prefix tokens, which at 1M queries/day on a 1K-token system prompt is hundreds of dollars per day saved.
 
@@ -118,16 +118,16 @@ Finally for async workloads, I use OpenAI's Batch API — 50% discount in exchan
 The other trap is that rate-limit management is often treated as an afterthought. At 500 req/s, a single traffic spike can exhaust your RPM quota. I always instrument 429s, implement exponential backoff with jitter, and request quota headroom weeks before launch — not the night before."
 
 **Wrap-up (30s):**
-"So the full stack is: semantic cache to avoid calls, model tiering to downgrade routine ones, prompt compression and top-k reduction to shrink them, prefix caching to amortize static tokens, Batch API for async workloads, and rate-limit management for reliability. At 1M queries/day, stacking all five layers moved a client from $10,500/day to ~$630/day — about 94% reduction."
+"So the full stack is: semantic cache to avoid calls, model tiering to downgrade routine ones, prompt compression and top-k reduction to shrink them, prefix caching to amortize static tokens, Batch API for async workloads, and rate-limit management for reliability. At 1M queries/day, stacking all five layers moved a client from $22,500/day to ~$1,760/day — about 92% reduction."
 
 ---
 
 ## Pitfalls
 
 - **Mistake:** Saying "add caching" without specifying semantic vs exact, threshold, TTL, or invalidation — **Better:** Explain that semantic caching uses embedding similarity (cosine ≥0.93 threshold in Redis/GPTCache), that cache TTL depends on source freshness requirements (1-24h typical), and that index updates must invalidate affected cache entries; mention that wrong-answer rate vs hit-rate curve needs to be benchmarked against a golden eval set, not set by intuition.
-- **Mistake:** Focusing only on input token cost and ignoring output tokens — **Better:** Point out that output tokens cost 4-10× more than input on GPT-4o ($10/M vs $2.50/M); in summarization or code-gen workloads, output is the dominant cost; max_tokens cap and a conciseness instruction in the system prompt are first-order output-cost levers.
-- **Mistake:** Treating model tiering as "use a cheaper model for everything" and accepting quality loss — **Better:** Route at the task level — classify query intent first (cheap GPT-4o-mini call), dispatch GPT-4o only for complex multi-hop reasoning or regulated-domain synthesis; validate quality per tier with a golden task set before routing production traffic.
-- **Mistake:** Not mentioning prefix caching — **Better:** OpenAI (November 2024) and Anthropic both offer server-side prefix caching at 50-90% discount; structure prompts with static content first; a 1K-token system prompt at 1M queries/day saves hundreds of dollars daily on GPT-4o-mini alone; this is a free optimization that requires only prompt ordering discipline.
+- **Mistake:** Focusing only on input token cost and ignoring output tokens — **Better:** Point out that output tokens cost 5× more than input on a frontier model ($25/M vs $5/M); in summarization or code-gen workloads, output is the dominant cost; max_tokens cap and a conciseness instruction in the system prompt are first-order output-cost levers.
+- **Mistake:** Treating model tiering as "use a cheaper model for everything" and accepting quality loss — **Better:** Route at the task level — classify query intent first (cheap a small fast model call), dispatch a frontier model only for complex multi-hop reasoning or regulated-domain synthesis; validate quality per tier with a golden task set before routing production traffic.
+- **Mistake:** Not mentioning prefix caching — **Better:** OpenAI (November 2024) and Anthropic both offer server-side prefix caching at 50-90% discount; structure prompts with static content first; a 1K-token system prompt at 1M queries/day saves hundreds of dollars daily on a small fast model alone; this is a free optimization that requires only prompt ordering discipline.
 
 ---
 

@@ -43,7 +43,7 @@ Classical unit tests (exact string equality) break immediately for LLM outputs b
    - Paraphrase variation typically lands at 0.93–0.97; genuine regression (wrong fact, wrong entity) drops to 0.60–0.75.
 
 3. **LLM-as-judge (quality layer)**
-   - Prompt a capable judge model (GPT-4o or Claude 3.5 Sonnet) with a rubric: correctness, faithfulness, completeness (1–5 scale or pass/fail).
+   - Prompt a capable judge model (a frontier model) with a rubric: correctness, faithfulness, completeness (1–5 scale or pass/fail).
    - Sample 5–10% of live traffic plus 100% of golden dataset in nightly batch.
    - Gate: mean score ≥ 4.0 on golden set; alert if score drops > 0.3 from baseline.
    - Tools: `deepeval` DeepEval framework, `promptfoo` for CI harness, `RAGAS` for RAG-specific dimensions.
@@ -60,11 +60,11 @@ Classical unit tests (exact string equality) break immediately for LLM outputs b
 
 ### Example / Tradeoff
 
-**Customer support chatbot (GPT-4o-mini, RAG-backed):**
+**Customer support chatbot (a small fast model, RAG-backed):**
 - CI suite: 200 golden (question, context, properties) triples via `promptfoo` — runs in ~4 min, gates PR merge.
 - Properties checked: JSON schema valid, answer length 50–600 chars, ≥1 citation present, no fabricated policy numbers (regex check against allowed SKU list).
 - Semantic cosine gate (0.85) catches word-salad regressions without penalising paraphrase.
-- Nightly: GPT-4o judge on 100% of golden set → Faithfulness and Correctness dashboards in Datadog.
+- Nightly: a frontier model judge on 100% of golden set → Faithfulness and Correctness dashboards in Datadog.
 - Result: 3 prompt regressions caught pre-deploy over 6 months; 0 customer-facing incidents from prompt changes.
 
 **Tradeoff — T=0 vs sampling:**
@@ -83,14 +83,14 @@ Classical unit tests (exact string equality) break immediately for LLM outputs b
 
 The second layer is semantic similarity regression. I embed both the new output and a stored reference answer with `text-embedding-3-small` and compute cosine similarity. Paraphrase variation from the same correct answer typically lands at 0.93–0.97; genuine regression — wrong fact, wrong entity — drops to 0.60–0.75. So a threshold of 0.85 cleanly separates benign variation from real errors.
 
-The third layer is LLM-as-judge. I prompt GPT-4o or Claude 3.5 Sonnet with a structured rubric: correctness, faithfulness to context, completeness — each scored 1–5. I run this on 100% of my golden dataset nightly and on a 5–10% sample of live traffic. A drop of 0.3 in mean score from baseline triggers a Slack alert.
+The third layer is LLM-as-judge. I prompt a frontier model with a structured rubric: correctness, faithfulness to context, completeness — each scored 1–5. I run this on 100% of my golden dataset nightly and on a 5–10% sample of live traffic. A drop of 0.3 in mean score from baseline triggers a Slack alert.
 
 Tying it all together is a golden dataset of 100–500 `(input, expected properties, reference answer)` triples. Every prompt or model change runs the full suite. I track pass-rate, not individual test outcomes, because individual runs can flake. A gate of 95% pass-rate blocks the deploy.
 
 Finally, in production I use shadow or canary routing — 5% of traffic to the new version — with auto-rollback if thumbs-down rate rises more than 2 percentage points."
 
 **Tradeoff / production angle (1 min):**
-"The main tension is T=0 vs sampled testing. T=0 makes CI stable and cheap — each test runs once and the result is deterministic. But it misses variance that users actually see. Sampled testing at T=0.7, run k=5 times per case, gives a more honest picture but is 5× slower and more expensive. My pattern: T=0 in CI for fast gate, sampled monthly for robustness audit. LLM-as-judge is the other cost tension — it adds ~$0.002 per golden case with GPT-4o, so 500 cases is $1/run, which is fine nightly but expensive if you run it on every PR commit."
+"The main tension is T=0 vs sampled testing. T=0 makes CI stable and cheap — each test runs once and the result is deterministic. But it misses variance that users actually see. Sampled testing at T=0.7, run k=5 times per case, gives a more honest picture but is 5× slower and more expensive. My pattern: T=0 in CI for fast gate, sampled monthly for robustness audit. LLM-as-judge is the other cost tension — it adds ~$0.002 per golden case with a frontier model, so 500 cases is $1/run, which is fine nightly but expensive if you run it on every PR commit."
 
 **Wrap-up (30s):**
 "So the key insight is: don't test for exact output equality — test for properties, semantic proximity, and quality scores statistically over a golden dataset. That gives you real regression signal without penalising benign paraphrase variation. Happy to go deeper on golden dataset curation or LLM-judge rubric design."

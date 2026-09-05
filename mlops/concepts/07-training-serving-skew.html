@@ -1,0 +1,1409 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1.0"/>
+  <title>Training-Serving Skew — MLOps Concepts</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com"/>
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet"/>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg:        #0d0f17;
+      --surface:   #141720;
+      --card:      #1a1e2e;
+      --border:    #252a3d;
+      --accent:    #00d4ff;
+      --purple:    #7c3aed;
+      --green:     #00ff88;
+      --yellow:    #ffd700;
+      --red:       #ff4757;
+      --orange:    #ff9500;
+      --text:      #e2e8f0;
+      --text-dim:  #8892a4;
+      --mono:      'JetBrains Mono', monospace;
+      --sans:      'Inter', system-ui, sans-serif;
+    }
+
+    html { scroll-behavior: smooth; }
+
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: var(--sans);
+      font-size: 16px;
+      line-height: 1.7;
+      min-height: 100vh;
+    }
+
+    header {
+      background: var(--surface);
+      border-bottom: 1px solid var(--border);
+      padding: 2rem 2rem 1.5rem;
+      max-width: 1100px;
+      margin: 0 auto;
+    }
+
+    .group-badge {
+      display: inline-block;
+      font-family: var(--mono);
+      font-size: 0.7rem;
+      font-weight: 700;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      color: var(--accent);
+      background: rgba(0, 212, 255, 0.1);
+      border: 1px solid rgba(0, 212, 255, 0.3);
+      padding: 0.2em 0.7em;
+      border-radius: 4px;
+      margin-bottom: 0.75rem;
+    }
+
+    header h1 {
+      font-size: clamp(1.6rem, 4vw, 2.4rem);
+      font-weight: 700;
+      line-height: 1.2;
+      margin-bottom: 0.5rem;
+    }
+
+    header h1 span.id {
+      color: var(--text-dim);
+      font-size: 0.55em;
+      font-family: var(--mono);
+      margin-right: 0.5rem;
+      vertical-align: middle;
+    }
+
+    header p.desc { color: var(--text-dim); font-size: 1.05rem; max-width: 780px; }
+
+    main { max-width: 1100px; margin: 0 auto; padding: 0 2rem 4rem; }
+
+    section { margin-top: 3rem; }
+
+    section > h2 {
+      font-size: 1.4rem;
+      font-weight: 700;
+      color: var(--accent);
+      border-bottom: 1px solid var(--border);
+      padding-bottom: 0.5rem;
+      margin-bottom: 1.5rem;
+    }
+
+    h3 { font-size: 1.1rem; font-weight: 600; color: var(--yellow); margin: 1.6rem 0 0.6rem; }
+
+    p { margin-bottom: 1rem; }
+    ul, ol { padding-left: 1.5rem; margin-bottom: 1rem; }
+    li { margin-bottom: 0.4rem; }
+
+    code {
+      font-family: var(--mono);
+      font-size: 0.85em;
+      background: rgba(0, 212, 255, 0.08);
+      color: var(--accent);
+      padding: 0.1em 0.35em;
+      border-radius: 3px;
+    }
+
+    pre {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-left: 3px solid var(--green);
+      border-radius: 0 8px 8px 0;
+      padding: 1rem 1.2rem;
+      margin: 1.1rem 0;
+      overflow-x: auto;
+      font-family: var(--mono);
+      font-size: 0.78rem;
+      line-height: 1.65;
+      color: var(--text);
+    }
+    pre code { background: none; color: inherit; padding: 0; font-size: 1em; }
+    pre .cm { color: var(--text-dim); }
+    pre .kw { color: var(--purple); }
+    pre .st { color: var(--green); }
+    pre .fn { color: var(--accent); }
+
+    .formula-block {
+      background: var(--card);
+      border-left: 3px solid var(--purple);
+      border-radius: 0 8px 8px 0;
+      padding: 0.8rem 1.2rem;
+      margin: 1rem 0;
+      font-family: var(--mono);
+      font-size: 0.88rem;
+    }
+
+    .callout {
+      background: rgba(255, 149, 0, 0.07);
+      border: 1px solid rgba(255, 149, 0, 0.3);
+      border-radius: 8px;
+      padding: 1rem 1.2rem;
+      margin: 1.2rem 0;
+    }
+    .callout strong { color: var(--orange); }
+
+    /* ── Visualization ── */
+    .viz-card {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 1.5rem;
+    }
+    .viz-title { font-weight: 600; font-size: 1rem; margin-bottom: 0.3rem; }
+    .viz-desc { font-size: 0.88rem; color: var(--text-dim); margin-bottom: 1.2rem; }
+
+    .sub-h {
+      font-family: var(--mono);
+      font-size: 0.68rem;
+      letter-spacing: 0.09em;
+      text-transform: uppercase;
+      color: var(--text-dim);
+      margin: 1.4rem 0 0.5rem;
+      border-bottom: 1px solid var(--border);
+      padding-bottom: 0.3rem;
+    }
+
+    .preset-row { display: flex; flex-wrap: wrap; gap: 0.5rem; margin-bottom: 1rem; align-items: center; }
+
+    .ctrl-btn {
+      font-family: var(--mono);
+      font-size: 0.75rem;
+      padding: 0.45em 0.9em;
+      border-radius: 6px;
+      border: 1px solid var(--border);
+      background: var(--surface);
+      color: var(--text-dim);
+      cursor: pointer;
+      transition: all 0.18s;
+    }
+    .ctrl-btn:hover { border-color: var(--accent); color: var(--accent); }
+    .ctrl-btn.primary { border-color: var(--accent); color: var(--accent); background: rgba(0,212,255,0.08); }
+    .ctrl-btn.on { border-color: var(--red); color: var(--red); background: rgba(255,71,87,0.08); }
+
+    select.ctrl-btn { appearance: none; padding-right: 1.6em; }
+
+    .slider-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(215px, 1fr));
+      gap: 0.9rem 1.5rem;
+      margin-bottom: 1rem;
+    }
+
+    .slider-row label {
+      display: flex;
+      justify-content: space-between;
+      font-size: 0.78rem;
+      color: var(--text-dim);
+      margin-bottom: 0.25rem;
+      gap: 0.5rem;
+    }
+    .slider-row .val { font-family: var(--mono); color: var(--accent); }
+    .slider-row input[type=range] { width: 100%; accent-color: var(--purple); }
+    .slider-row.off { opacity: 0.32; }
+
+    .verdict {
+      border-radius: 8px;
+      padding: 0.85rem 1.1rem;
+      font-family: var(--mono);
+      font-size: 0.82rem;
+      margin: 1rem 0 1.2rem;
+      border: 1px solid var(--border);
+      line-height: 1.6;
+    }
+    .verdict.pass  { border-color: rgba(0,255,136,0.45); background: rgba(0,255,136,0.07); color: var(--green); }
+    .verdict.warn  { border-color: rgba(255,215,0,0.45); background: rgba(255,215,0,0.07); color: var(--yellow); }
+    .verdict.fail  { border-color: rgba(255,71,87,0.45);  background: rgba(255,71,87,0.07);  color: var(--red); }
+    .verdict .sub { display: block; color: var(--text-dim); font-size: 0.76rem; margin-top: 0.35rem; }
+
+    .panes { display: grid; grid-template-columns: 1.2fr 1fr; gap: 1.5rem; }
+    @media (max-width: 900px) { .panes { grid-template-columns: 1fr; } }
+
+    /* ── pipeline diagram ── */
+    .pipes { display: grid; grid-template-columns: 1fr 1fr; gap: 1.1rem; margin-bottom: 0.4rem; }
+    @media (max-width: 720px) { .pipes { grid-template-columns: 1fr; } }
+    .pipe {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 0.9rem;
+    }
+    .pipe-h {
+      font-family: var(--mono); font-size: 0.63rem; letter-spacing: 0.09em;
+      text-transform: uppercase; margin-bottom: 0.7rem; color: var(--text-dim);
+    }
+    .pipe-h.train { color: var(--accent); }
+    .pipe-h.serve { color: var(--orange); }
+    .stage {
+      border: 1px solid var(--border);
+      border-left: 3px solid var(--border);
+      border-radius: 0 6px 6px 0;
+      background: var(--card);
+      padding: 0.45rem 0.7rem;
+      font-family: var(--mono);
+      font-size: 0.74rem;
+      transition: all 0.2s;
+    }
+    .stage .note { display: block; color: var(--text-dim); font-size: 0.66rem; }
+    .stage.diverged { border-color: rgba(255,71,87,0.55); border-left-color: var(--red); background: rgba(255,71,87,0.07); }
+    .stage.diverged .note { color: var(--red); }
+    .stage.shared { border-left-color: var(--green); }
+    .arrow { text-align: center; color: var(--text-dim); font-size: 0.8rem; line-height: 1.2; }
+    .fb-bar {
+      margin-top: 0.6rem; border-radius: 6px; padding: 0.45rem 0.7rem;
+      font-family: var(--mono); font-size: 0.7rem;
+      border: 1px dashed var(--border); color: var(--text-dim);
+      transition: all 0.2s;
+    }
+    .fb-bar.on { border-color: rgba(255,71,87,0.6); color: var(--red); background: rgba(255,71,87,0.06); }
+
+    table.exp {
+      width: 100%;
+      border-collapse: collapse;
+      font-family: var(--mono);
+      font-size: 0.72rem;
+    }
+    table.exp th {
+      text-align: left;
+      color: var(--text-dim);
+      font-weight: 500;
+      border-bottom: 1px solid var(--border);
+      padding: 0.4rem 0.35rem;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      font-size: 0.6rem;
+    }
+    table.exp td { padding: 0.42rem 0.35rem; border-bottom: 1px solid var(--border); vertical-align: middle; }
+    table.exp tr.sel td { background: rgba(0,212,255,0.06); }
+    table.exp td.name { color: var(--text); }
+    table.exp td.num { text-align: right; }
+    .ok    { color: var(--green); }
+    .warnc { color: var(--yellow); }
+    .bad   { color: var(--red); }
+    .obs   { color: var(--text-dim); }
+
+    canvas { display: block; width: 100%; height: auto; border-radius: 6px; background: var(--surface); }
+    .cv-label { font-size: 0.72rem; color: var(--text-dim); font-family: var(--mono); margin: 0.9rem 0 0.35rem; }
+    .legend { display: flex; flex-wrap: wrap; gap: 0.9rem; font-size: 0.68rem; color: var(--text-dim); font-family: var(--mono); margin-top: 0.5rem; }
+    .legend span { display: inline-flex; align-items: center; }
+    .legend span::before {
+      content: ''; display: inline-block; width: 9px; height: 9px;
+      border-radius: 2px; margin-right: 5px; background: currentColor;
+    }
+
+    .stat-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(145px, 1fr)); gap: 0.7rem; margin: 1rem 0 0.6rem; }
+    .stat {
+      background: var(--surface); border: 1px solid var(--border);
+      border-radius: 8px; padding: 0.6rem 0.8rem;
+    }
+    .stat .k { font-size: 0.62rem; text-transform: uppercase; letter-spacing: 0.06em; color: var(--text-dim); }
+    .stat .v { font-family: var(--mono); font-size: 1.05rem; color: var(--accent); }
+    .stat .v.warnv { color: var(--yellow); }
+    .stat .v.badv { color: var(--red); }
+    .stat .v.goodv { color: var(--green); }
+    .stat .n { font-size: 0.64rem; color: var(--text-dim); font-family: var(--mono); }
+
+    .note-line {
+      font-family: var(--mono); font-size: 0.72rem; color: var(--text-dim);
+      border-left: 2px solid var(--border); padding-left: 0.7rem; margin: 0.8rem 0 0.2rem;
+    }
+
+    /* ── Interview line ── */
+    #interview-line .quote {
+      background: linear-gradient(180deg, rgba(124,58,237,0.12), rgba(124,58,237,0.04));
+      border: 1px solid rgba(124,58,237,0.45);
+      border-left: 4px solid var(--purple);
+      border-radius: 0 10px 10px 0;
+      padding: 1.3rem 1.5rem;
+      font-size: 1.02rem;
+      line-height: 1.75;
+    }
+    #interview-line .quote p:last-child { margin-bottom: 0; }
+    #interview-line .quote em { color: var(--yellow); font-style: normal; font-weight: 600; }
+
+    #takeaways li strong { color: var(--accent); }
+
+    .concept-nav {
+      max-width: 1100px;
+      margin: 0 auto;
+      padding: 1.5rem 2rem 3rem;
+      display: flex;
+      justify-content: space-between;
+      gap: 1rem;
+      border-top: 1px solid var(--border);
+    }
+    .nav-link {
+      display: flex; flex-direction: column; gap: 0.2rem;
+      text-decoration: none; padding: 0.6rem 1rem;
+      border-radius: 8px; border: 1px solid var(--border);
+      background: var(--surface); max-width: 240px; transition: all 0.2s;
+    }
+    .nav-link:hover:not(.disabled) { border-color: var(--accent); }
+    .nav-link.disabled { opacity: 0.35; pointer-events: none; }
+    .nav-dir { font-family: var(--mono); font-size: 0.7rem; color: var(--text-dim); }
+    .nav-title { font-size: 0.9rem; color: var(--text); font-weight: 500; }
+
+    @media (max-width: 640px) {
+      header, main { padding-left: 1rem; padding-right: 1rem; }
+      .concept-nav { padding-left: 1rem; padding-right: 1rem; flex-direction: column; }
+      .nav-link { max-width: 100%; }
+    }
+  </style>
+</head>
+<body>
+
+<header>
+  <div class="group-badge">Data</div>
+  <h1><span class="id">07</span>Training-Serving Skew</h1>
+  <p class="desc">The three sources of skew — divergent transformation code, divergent data (training on a filtered sample), and feedback-loop skew from the model's own predictions — and how each shows up as offline metrics that do not survive contact with production.</p>
+</header>
+
+<main>
+
+<section id="theory">
+  <h2>Theory</h2>
+
+  <h3>The definition worth memorising</h3>
+  <p>
+    Training-serving skew is any difference between the world the model was fit in and the world it is asked to
+    score in. It is not one bug, it is a category, and the reason it dominates this interview round is that it has
+    no error signature: no exception, no failed schema check, no 500s on the dashboard. The model returns a
+    well-formed float for every request. It is just a worse float than the offline report promised. The symptom is
+    always the same sentence — "offline it was 0.84 AUC, online it's behaving like 0.71" — and the job is to know
+    which of three mechanisms produced it, because they have three different fixes.
+  </p>
+
+  <h3>Source 1 — divergent transformation code</h3>
+  <p>
+    Training runs in a notebook or a Spark job; serving runs in a Go or Python service under a latency budget.
+    Two implementations of "the same" transformation drift apart: a <code>log1p</code> that only one side applies,
+    a null filled with the training median offline and with <code>0</code> online, an outlier bound that is winsorised
+    only in the training code, a categorical hash seeded differently, a timezone that makes
+    <code>hour_of_day</code> off by five. In all of those the raw request payload is byte-identical to what
+    training saw; only the <em>transformed</em> vector differs, which is precisely why monitoring the raw inputs
+    catches none of them, and why the single most valuable piece of instrumentation is logging the exact
+    post-transform feature vector that was scored.
+  </p>
+  <p>
+    The one common member of this family that raw-input monitoring <em>does</em> catch is a unit mismatch — one
+    upstream client sending an amount in cents when training saw dollars. That bug moves the raw value by 100×, so
+    a PSI on the request payload lights up on its own. Treat it as the exception rather than the reassurance: it is
+    detectable because the bug happens to live upstream of the transform, and the moment the divergence is inside
+    the transform code — the fill, the clip, the missing <code>log1p</code> — the raw histogram goes back to being
+    a perfect match while the model quietly gets worse.
+  </p>
+  <p>
+    The structural fix is to stop having two implementations. One transformation definition, fitted once during
+    training, with the fitted state (medians, means, standard deviations, encoder vocabularies, bucket edges)
+    persisted as an artifact that ships with the model version and is <em>loaded</em>, never recomputed, at serve
+    time. <code>tf.Transform</code> does this by emitting a TensorFlow graph that is attached to the serving
+    signature; a scikit-learn <code>Pipeline</code> logged through MLflow does the weaker version of the same
+    thing; a feature store does it by making one feature definition the source of both the offline and the online
+    value. Any of these beats a well-reviewed second implementation, because the failure mode here is not
+    incompetence, it is two codebases diverging over eighteen months of small changes.
+  </p>
+
+  <h3>Source 2 — divergent data</h3>
+  <p>
+    Here the code agrees and the populations do not. The classic case is that labels only exist for a filtered
+    subset: a credit model is trained on approved applicants because rejected ones never got a repayment outcome,
+    then deployed on all applicants. A fraud model is trained on transactions that cleared an upstream rules
+    engine, then scored on everything. The training distribution is a truncated slice, the fitted coefficients are
+    the best fit for that slice, and the model extrapolates into a region it has never seen. Offline evaluation
+    does not catch it because the holdout is drawn from the same truncated slice — the number is honest about a
+    population that is not the one being served. Related members of the family: training on a stale snapshot while
+    the population moves (<strong>feature staleness</strong>), a downsampled negative class whose base rate is
+    never corrected back, and an upstream column that changed type or semantics between the snapshot and today
+    (<strong>schema drift</strong>).
+  </p>
+
+  <h3>Source 3 — the feedback loop</h3>
+  <p>
+    The third source is the model's own effect on the data. Once deployed, the model declines transactions, filters
+    what the ranker shows, or decides who gets an offer — so tomorrow's traffic is a population the model itself
+    selected. The high-risk region it needs to discriminate is exactly the region it has stopped letting through,
+    so both future training data and the online metric are computed on survivors. This is the hardest of the three
+    because it looks like success: the observed bad rate falls, the model appears calibrated, and the degradation is
+    slow and self-reinforcing. The counter is to keep a small randomised exploration holdout — a percentage of
+    traffic scored but not acted on, or decided at random — so there is always an unbiased sample to retrain and
+    evaluate against. It costs real money and it is the only thing that keeps the estimate honest.
+  </p>
+
+  <h3>What is actually detectable, and when</h3>
+  <p>
+    Be precise about this in an interview, because the common wrong answer is to treat a drift alarm as a
+    performance alarm. Without labels you can measure the <em>gap between two distributions</em> — a PSI or an
+    L∞ distance between the training reference and the served vectors — and nothing else. That tells you the input
+    changed; it does not tell you accuracy fell, and it never will. Benign covariate shift fires the same alarm as
+    a catastrophic unit mismatch. Real quality only becomes measurable when labels arrive, which for fraud
+    chargebacks or loan default is weeks to months later — the <strong>label lag</strong> problem — so the interval
+    between deploy and first honest quality number is a window of <strong>silent degradation</strong> that you
+    cover with proxies: prediction-distribution stability, decision-rate stability, and per-feature skew against
+    the training reference.
+  </p>
+  <p>
+    Two numbers, not one. The <em>gap</em> (offline minus online) tells you whether the offline report predicted
+    production; the distance from online to the <em>no-skew ceiling</em> tells you whether the model itself got
+    worse. They come apart, and the difference matters. A training set truncated to approved applicants often
+    produces a model that ranks live traffic about as well as an unfiltered one would — the damage is that the
+    offline number was 0.87 on a population you do not serve, so every promotion decision was made against a
+    fiction. Conversely, a serving-side transform bug can leave offline and online agreeing with each other while
+    both sit below what the model could have done. Only the first is visible by comparing your two reports;
+    the second needs a known-good reference.
+  </p>
+  <p>
+    And before calling either one a finding, ask whether it is larger than the sampling noise on an AUC. The
+    Hanley-McNeil standard error, SE = √([A(1−A) + (n₊−1)(Q₁ − A²) + (n₋−1)(Q₂ − A²)] / (n₊·n₋)) with
+    Q₁ = A/(2−A) and Q₂ = 2A²/(1+A), is a few points of AUC on a holdout of a couple of thousand rows. Two AUCs
+    measured on independent samples differ by roughly √(SE₁² + SE₂²), so a 0.02 &ldquo;drop&rdquo; on a small
+    holdout is frequently nothing at all. Engineers roll models back over differences inside their own error bars
+    more often than they roll them back for real regressions.
+  </p>
+  <p>
+    The one check that cannot be fooled and needs no labels is a replay: take yesterday's logged serving vectors,
+    push them through the training pipeline, and diff. Any feature whose values disagree is skew, full stop —
+    an exact-match assertion, not a statistical one. TFDV formalises the statistical form with a
+    <code>skew_comparator</code> in the schema (L∞ distance for categorical features, Jensen-Shannon divergence
+    for numeric ones), but the diff is stronger where you can afford it.
+  </p>
+
+  <div class="callout">
+    <strong>The rule to quote.</strong> Google's <em>Rules of Machine Learning</em> (Rule #29): the best way to make
+    sure you serve like you train is to save the set of features used at serving time and pipe those logged features
+    into training. It removes the entire class of Source-1 bugs by construction, because there is only ever one
+    computation of the feature — the one that actually happened in production.
+  </div>
+
+  <h3>The fix, ordered by what it buys</h3>
+  <pre><code><span class="cm"># 1. Fit the transform ONCE, in training. Persist the fitted state as an artifact.</span>
+transform = FeatureTransform(
+    log_cols=[<span class="st">"amount"</span>],
+    winsorise={<span class="st">"txn_count_7d"</span>: (<span class="st">0</span>, <span class="st">8</span>)},
+    fill={<span class="st">"amount"</span>: <span class="st">"median"</span>},      <span class="cm"># the median is FITTED, never hardcoded</span>
+)
+transform.fit(train_df)                  <span class="cm"># learns median, mean, std, bucket edges</span>
+mlflow.log_artifact(dump(transform), <span class="st">"transform.pkl"</span>)
+mlflow.sklearn.log_model(
+    clf, <span class="st">"model"</span>,
+    signature=infer_signature(X_train, preds),   <span class="cm"># names + dtypes are a contract</span>
+)
+
+<span class="cm"># 2. Serving LOADS that artifact. It never re-fits and never re-implements.</span>
+transform = load(<span class="fn">download_artifact</span>(version, <span class="st">"transform.pkl"</span>))
+x = transform.transform(raw)             <span class="cm"># identical code path to training</span>
+score = clf.predict_proba(x)[:, <span class="st">1</span>]
+
+<span class="cm"># 3. Log the EXACT vector that was scored. This is what makes skew measurable.</span>
+feature_log.emit({
+    <span class="st">"request_id"</span>: req.id,
+    <span class="st">"model_version"</span>: version,
+    <span class="st">"served_at"</span>: now_utc(),
+    <span class="st">"raw"</span>: raw.to_dict(),          <span class="cm"># what the client sent</span>
+    <span class="st">"transformed"</span>: x.tolist(),    <span class="cm"># what the model actually saw</span>
+    <span class="st">"score"</span>: float(score),
+})</code></pre>
+
+  <p>
+    With those vectors logged, the detector is a scheduled job, not a research project. Bin the training reference,
+    bin yesterday's served values, and compute PSI per feature — the conventional rule of thumb is that below 0.1
+    is no meaningful change, 0.1 to 0.25 warrants investigation, and above 0.25 is a significant shift worth
+    acting on:
+  </p>
+  <div class="formula-block">
+    PSI = Σᵢ (aᵢ − eᵢ) · ln(aᵢ / eᵢ)&nbsp;&nbsp;&nbsp;over bins i, with eᵢ = reference share, aᵢ = current share
+  </div>
+  <pre><code><span class="cm"># Nightly skew job: served vectors vs the exact training reference.</span>
+served = read_feature_log(day, model_version=PROD_VERSION)   <span class="cm"># post-transform</span>
+ref    = read_training_features(dataset_hash=PROD_DATASET_HASH)
+
+<span class="kw">def</span> <span class="fn">psi</span>(ref_col, cur_col, bins=<span class="st">10</span>, floor=<span class="st">1e-4</span>):
+    <span class="cm"># np.unique sorts AND dedupes: a discrete or sparse column produces repeated</span>
+    <span class="cm"># quantile edges, and zero-width bins make PSI read 0 on a real shift.</span>
+    edges = np.unique(np.quantile(ref_col, np.linspace(<span class="st">0</span>, <span class="st">1</span>, bins + <span class="st">1</span>)))
+    lo, hi = edges[<span class="st">0</span>], edges[-<span class="st">1</span>]
+    <span class="cm"># clip so values outside the reference range land in the outer bins</span>
+    <span class="cm"># instead of being dropped — that tail is exactly the shift you care about.</span>
+    e = np.histogram(np.clip(ref_col, lo, hi), edges)[<span class="st">0</span>] / len(ref_col)
+    a = np.histogram(np.clip(cur_col, lo, hi), edges)[<span class="st">0</span>] / len(cur_col)
+    e, a = np.maximum(e, floor), np.maximum(a, floor)   <span class="cm"># empty bin -&gt; ln(0)</span>
+    <span class="kw">return</span> float(np.sum((a - e) * np.log(a / e)))
+
+<span class="kw">for</span> col <span class="kw">in</span> FEATURES:
+    s = psi(ref[col], served[col])
+    <span class="kw">if</span> s &gt; <span class="st">0.25</span>:
+        page(<span class="st">f"skew: {col} PSI={s:.3f} vs training reference"</span>)</code></pre>
+</section>
+
+<section id="visualization">
+  <h2>Visualization</h2>
+  <div class="viz-card">
+    <div class="viz-title">Three skew sources, injected independently into a live train/serve simulation</div>
+    <div class="viz-desc">
+      A fraud-style population is generated, a logistic model is fit on the training path, and the same weights are
+      scored twice — on a holdout from the <em>training</em> distribution through the training transform (offline
+      AUC), and on fresh production traffic through the <em>serving</em> transform (online AUC). Everything below is
+      computed in the browser: the fit is gradient descent, the AUC is a Mann-Whitney rank sum, the PSI is a real
+      10-bin quantile calculation over the two histograms, and the &ldquo;within noise&rdquo; band is the
+      Hanley-McNeil standard error of the two AUCs rather than a made-up constant. Toggle each skew source, then
+      watch which detector would have caught it. Two properties of the underlying population matter: true risk is
+      <em>non-monotone</em> in amount — it falls as amount rises, then turns back upward in the tail — so a model
+      fitted only on a low-amount slice extrapolates with the wrong sign (rejection inference in miniature); and
+      true risk <em>saturates</em> in transaction count at 8, which is why the training pipeline winsorises there
+      and why a serving path that forgets to is feeding the model values it has never scored.
+    </div>
+
+    <div class="sub-h">Skew sources — click to inject</div>
+    <div class="preset-row">
+      <button class="ctrl-btn" id="tCode">1 · divergent transform code</button>
+      <select class="ctrl-btn" id="selBug" title="which serving-side bug">
+        <option value="nolog">serving skips log1p</option>
+        <option value="fill">null fill: median vs 0</option>
+        <option value="cents">unit mismatch: cents vs dollars</option>
+        <option value="clip">clip applied in training only</option>
+      </select>
+      <button class="ctrl-btn" id="tSample">2 · training sample filtered</button>
+      <button class="ctrl-btn" id="tFb">3 · feedback loop</button>
+      <button class="ctrl-btn primary" id="bClear">reset all</button>
+    </div>
+
+    <div class="slider-grid">
+      <div class="slider-row" id="rShare">
+        <label>share of serving traffic on the bad code path <span class="val" id="vShare">100%</span></label>
+        <input type="range" id="sShare" min="5" max="100" step="5" value="100"/>
+      </div>
+      <div class="slider-row" id="rQ">
+        <label>upstream rule keeps lowest <span class="val" id="vQ">50%</span> by amount</label>
+        <input type="range" id="sQ" min="30" max="100" step="5" value="50"/>
+      </div>
+      <div class="slider-row" id="rLam">
+        <label>P(suppress | model scores it risky) <span class="val" id="vLam">0.70</span></label>
+        <input type="range" id="sLam" min="0" max="100" step="5" value="70"/>
+      </div>
+      <div class="slider-row">
+        <label>rows per side n <span class="val" id="vN">6,000</span></label>
+        <input type="range" id="sN" min="1500" max="12000" step="500" value="6000"/>
+      </div>
+      <div class="slider-row">
+        <label>population seed <span class="val" id="vSeed">11</span></label>
+        <input type="range" id="sSeed" min="1" max="40" step="1" value="11"/>
+      </div>
+    </div>
+
+    <div class="pipes">
+      <div class="pipe">
+        <div class="pipe-h train">Training path — offline</div>
+        <div class="stage shared" id="pgLog">raw event log<span class="note" id="pgLogN">full population</span></div>
+        <div class="arrow">↓</div>
+        <div class="stage" id="pgFilt">upstream sampling<span class="note" id="pgFiltN">no filter — all rows labelled</span></div>
+        <div class="arrow">↓</div>
+        <div class="stage shared" id="pgTxT">transform.fit() → artifact<span class="note">log1p · fill=median · winsorise(0,8) · standardise</span></div>
+        <div class="arrow">↓</div>
+        <div class="stage shared">fit logistic · 50/50 holdout<span class="note" id="pgFitN">—</span></div>
+      </div>
+      <div class="pipe">
+        <div class="pipe-h serve">Serving path — online</div>
+        <div class="stage shared" id="pgReq">live request<span class="note" id="pgReqN">full production traffic</span></div>
+        <div class="arrow">↓</div>
+        <div class="stage" id="pgTxS">transform.transform()<span class="note" id="pgTxSN">loads the same fitted artifact</span></div>
+        <div class="arrow">↓</div>
+        <div class="stage shared">score with identical weights<span class="note">the weights are never the problem</span></div>
+        <div class="arrow">↓</div>
+        <div class="stage" id="pgAct">act on the score<span class="note" id="pgActN">decision does not change the population</span></div>
+      </div>
+    </div>
+    <div class="fb-bar" id="fbBar">↺ feedback path: today's decisions reshape tomorrow's serving population — off</div>
+
+    <div class="verdict pass" id="verdict">simulating…</div>
+
+    <div class="stat-grid">
+      <div class="stat"><div class="k">offline AUC</div><div class="v" id="stOff">—</div><div class="n">holdout, training transform</div></div>
+      <div class="stat"><div class="k">online AUC</div><div class="v" id="stOn">—</div><div class="n">production, serving transform</div></div>
+      <div class="stat"><div class="k">skew gap</div><div class="v" id="stGap">—</div><div class="n" id="stGapN">offline − online</div></div>
+      <div class="stat"><div class="k">vs no-skew ceiling</div><div class="v" id="stCeil">—</div><div class="n">online − clean online: what the skew actually cost the ranking</div></div>
+      <div class="stat"><div class="k">±2σ noise band</div><div class="v" id="stBand">—</div><div class="n">Hanley-McNeil SE on both AUCs — anything inside this is not a finding</div></div>
+      <div class="stat"><div class="k">PSI · raw payload</div><div class="v" id="stPsiRaw">—</div><div class="n">what input monitoring sees</div></div>
+      <div class="stat"><div class="k">PSI · transformed amount</div><div class="v" id="stPsiA">—</div><div class="n">what the model saw</div></div>
+      <div class="stat"><div class="k">PSI · transformed count</div><div class="v" id="stPsiC">—</div><div class="n" id="stPsiCN">what the model saw</div></div>
+      <div class="stat"><div class="k">flag rate @0.5</div><div class="v" id="stFlag">—</div><div class="n" id="stFlagN">offline → online operating point</div></div>
+    </div>
+    <div class="note-line" id="noteLabels">
+      Online AUC needs labels. Before they land, everything you actually have is the PSI row above — a distribution
+      alarm, not a performance alarm.
+    </div>
+
+    <div class="panes">
+      <div>
+        <div class="cv-label">
+          reference (training) vs current (served) histogram — 10 quantile bins, per-bin PSI contribution below
+        </div>
+        <div class="preset-row" style="margin-bottom:0.5rem">
+          <button class="ctrl-btn primary" id="fA">transformed amount</button>
+          <button class="ctrl-btn" id="fC">transformed count</button>
+          <button class="ctrl-btn" id="fR">raw payload amount</button>
+        </div>
+        <canvas id="cvHist" width="640" height="330"></canvas>
+        <div class="legend">
+          <span style="color:var(--accent)">training reference eᵢ</span>
+          <span style="color:var(--orange)">served current aᵢ</span>
+          <span style="color:var(--red)">per-bin PSI term</span>
+        </div>
+      </div>
+      <div>
+        <div class="cv-label">online AUC with each source injected alone (same sliders, same population)</div>
+        <canvas id="cvAuc" width="560" height="330"></canvas>
+        <div class="legend">
+          <span style="color:var(--green)">no skew — the honest ceiling</span>
+          <span style="color:var(--orange)">one source injected</span>
+          <span style="color:var(--red)">all three</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="sub-h">Attribution — what each source costs and what would have caught it</div>
+    <table class="exp" id="tblAttr">
+      <thead>
+        <tr>
+          <th>source</th><th class="num">offline</th><th class="num">online</th><th class="num">Δ vs clean</th>
+          <th class="num">gap</th><th class="num">flag@0.5</th><th class="num">PSI raw</th><th class="num">PSI tx</th>
+          <th>detector that fires first</th>
+        </tr>
+      </thead>
+      <tbody id="attrBody"></tbody>
+    </table>
+  </div>
+</section>
+
+<section id="interview-line">
+  <h2>The line to say</h2>
+  <div class="quote">
+    <p>
+      "Training-serving skew isn't one bug, it's three, and I'd want to know which one before touching anything.
+      First is <em>divergent transformation code</em> — two implementations of the same feature that drifted apart,
+      a log that only one side applies, a null filled with the training median offline and zero online. Second is
+      <em>divergent data</em> — the training set is a filtered slice, usually because only approved or accepted rows
+      ever got labels, so the model is extrapolating in production and the offline holdout can't see it because
+      it's drawn from the same slice. Third is the <em>feedback loop</em>: once the model is deciding, tomorrow's
+      traffic is a population it selected, so the region it most needs to discriminate is the region it's stopped
+      letting through."
+    </p>
+    <p>
+      "The fix for the first one is structural, not a code review — one transform definition, fitted once, the
+      fitted state persisted as an artifact that ships with the model version and gets loaded at serve time, never
+      recomputed. And I log the exact post-transform vector I scored, because that's the thing raw-input monitoring
+      can't see: with a fill or clipping bug the request payload is byte-identical and only the transformed value
+      moved. A unit bug is the exception — cents versus dollars shifts the raw value by 100×, so input monitoring
+      does catch that one, but it's the only common member of the family it catches.
+      For the feedback loop you need a small randomised exploration holdout — it costs money, and it's the only way
+      the retraining sample stays unbiased."
+    </p>
+    <p>
+      "One thing I'd be careful about saying: a drift alarm is <em>not</em> a performance alarm. Without labels all
+      I can measure is a PSI or an L-infinity gap against the training reference — 0.1 to 0.25 is investigate, past 0.25 I treat it as a real shift —
+      and benign covariate shift fires that exactly like a broken unit conversion does. The check that needs no
+      labels and can't be fooled is a replay: push yesterday's logged serving vectors back through the training
+      pipeline and diff them. That's an exact-match assertion, not a statistical one."
+    </p>
+  </div>
+</section>
+
+<section id="takeaways">
+  <h2>Key takeaways</h2>
+  <ul>
+    <li><strong>Name all three sources or the answer is incomplete.</strong> Divergent transformation code, divergent data (a filtered training sample), and the model's own feedback loop. Different mechanisms, different fixes — one shared transform artifact, an unbiased sampling strategy, and a randomised exploration holdout respectively.</li>
+    <li><strong>Log the post-transform vector, not the request.</strong> Fill-value, clipping and missing-transform bugs leave the raw payload byte-identical, so raw-input monitoring shows a PSI of roughly zero while the transformed feature has moved several standard deviations. A unit mismatch is the exception that proves the rule — cents-for-dollars scales the raw value by 100× and does show up on the input histogram, because that divergence sits upstream of the transform rather than inside it. Google's Rules of ML #29 — pipe the logged serving features into training — deletes this class of bug by construction.</li>
+    <li><strong>Fit once, load everywhere.</strong> Medians, means, standard deviations, encoder vocabularies and bucket edges are model artifacts. <code>tf.Transform</code> attaches the preprocessing graph to the serving signature; MLflow's <code>infer_signature</code> pins names and dtypes; a feature store makes one definition serve both paths. Re-fitting a scaler on live traffic is the canonical version of this bug.</li>
+    <li><strong>A drift alarm is not a performance alarm.</strong> Pre-label, PSI (0.1 investigate / 0.25 act) or TFDV's <code>skew_comparator</code> — L∞ for categorical, Jensen-Shannon for numeric — only tell you the distribution moved. With chargeback or default labels arriving weeks later, the deploy-to-first-honest-number window is silent degradation you cover with proxies. And when the labels do land, quote a noise band before you quote a regression: the Hanley-McNeil SE of an AUC on a 2,000-row holdout is on the order of a point or two, and two independently measured AUCs differ by √(SE₁²+SE₂²), so plenty of &ldquo;0.02 drops&rdquo; are sampling noise.</li>
+    <li><strong>The replay diff is the unfoolable check.</strong> Re-run yesterday's logged serving vectors through the training pipeline and assert exact equality per feature. It needs no labels, no thresholds and no statistics, and it localises the broken feature instead of telling you the model "got worse".</li>
+    <li><strong>The feedback loop is the one that looks like success.</strong> Observed bad rates fall because the model stopped letting the bad population through, and both retraining data and the online metric are computed on survivors. Budget the exploration traffic explicitly — a model with no unbiased sample cannot be honestly re-evaluated at any price.</li>
+  </ul>
+</section>
+
+</main>
+
+<nav class="concept-nav">
+  <a class="nav-link" href="./06-point-in-time-joins.html">
+    <span class="nav-dir">← Previous</span>
+    <span class="nav-title">Point-in-Time Correct Feature Joins</span>
+  </a>
+  <a class="nav-link" href="./08-experiment-tracking.html">
+    <span class="nav-dir">Next →</span>
+    <span class="nav-title">Experiment Tracking</span>
+  </a>
+</nav>
+
+<script>
+(function () {
+  'use strict';
+
+  /* ── deterministic RNG so the same settings always give the same picture ── */
+  function mulberry32(a) {
+    return function () {
+      a |= 0; a = (a + 0x6D2B79F5) | 0;
+      let t = Math.imul(a ^ (a >>> 15), 1 | a);
+      t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+      return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+    };
+  }
+  function gauss(rng) {
+    let u = 0, v = 0;
+    while (u === 0) u = rng();
+    while (v === 0) v = rng();
+    return Math.sqrt(-2 * Math.log(u)) * Math.cos(2 * Math.PI * v);
+  }
+  function poisson(rng, lam) {
+    const L = Math.exp(-lam);
+    let k = 0, p = 1;
+    do { k++; p *= rng(); } while (p > L);
+    return k - 1;
+  }
+  const clamp = (x, lo, hi) => Math.min(hi, Math.max(lo, x));
+  const sig = z => 1 / (1 + Math.exp(-clamp(z, -30, 30)));
+
+  /* ── canonical feature space: the transform the TRAINING pipeline defines ──
+     amount           -> log1p, fill missing with the fitted median, standardise
+     txn_count_7d     -> winsorise to [0,8], standardise
+     The clip is not arbitrary: in this population the true risk saturates at a
+     count of 8, so beyond that the extra counts carry no signal — which is the
+     usual reason an outlier bound gets added to a training pipeline at all. */
+  const MU_A = 3.0, SD_A = 1.0;     // log1p(amount) ≈ N(3,1)
+  const MU_C = 4.0, SD_C = 2.2;
+  const NULL_RATE = 0.12;           // share of requests with a missing amount
+  const MED_LOG_A = MU_A;           // fitted median of log1p(amount)
+  const BURST = 0.25, BURST_LAM = 8;  // high-frequency accounts: count = 9 + Pois(8)
+
+  // True log-odds. Non-monotone in amount (risk falls with amount, then rises
+  // again in the tail) and saturating in count. The non-monotonicity is what
+  // makes a training set truncated to low amounts fail to generalise: the
+  // relationship that holds inside the approved slice reverses outside it.
+  const B0 = -3.0, B1 = -1.4, B2 = 1.2, KV = 0.1, B3 = 1.1;
+
+  function zAmount(logAmt) { return (logAmt - MU_A) / SD_A; }
+  function zCount(cnt)     { return (Math.min(cnt, 8) - MU_C) / SD_C; }
+
+  /* ── the state we control ── */
+  const S = {
+    code: false, bug: 'nolog', share: 1.0,
+    sample: false, q: 0.50,
+    fb: false, lam: 0.70,
+    n: 6000, seed: 11,
+    feat: 'zA'
+  };
+
+  const BUG_SHORT = {
+    nolog: 'a missing log1p on the serving path',
+    fill:  'a divergent null-fill value',
+    cents: 'unit mismatch',
+    clip:  'an unwinsorised count'
+  };
+
+  const BUG_LABEL = {
+    nolog: 'serving skips log1p — raw dollars enter a log-space scaler',
+    fill:  'training fills a null amount with the fitted median, serving fills 0',
+    cents: 'one upstream client sends cents, training saw dollars',
+    clip:  'winsorise(0,8) on the count exists only in the training code'
+  };
+
+  /* ── population ── */
+  let POP = null, POP_KEY = '';
+
+  function buildPop() {
+    const key = S.n + ':' + S.seed;
+    if (key === POP_KEY) return;
+    POP_KEY = key;
+    const make = (seed) => {
+      const rng = mulberry32(seed);
+      const rows = [];
+      for (let i = 0; i < S.n; i++) {
+        const missing = rng() < NULL_RATE;
+        const amt = Math.exp(MU_A + SD_A * gauss(rng));        // dollars, lognormal
+        // txn_count_7d is bimodal: ordinary accounts, plus a quarter of traffic
+        // from high-frequency accounts whose counts run well past the clip bound.
+        const cnt = rng() < BURST ? 9 + poisson(rng, BURST_LAM) : poisson(rng, 4);
+        // truth lives in the canonical space; missing amounts are uninformative
+        const za = missing ? 0 : zAmount(Math.log1p(amt));
+        const zc = zCount(cnt);                                 // saturates at 8
+        const logit = B0 + B1 * za + B2 * (za - KV) * (za - KV) + B3 * zc;
+        rows.push({
+          amt: amt, cnt: cnt, missing: missing,
+          y: rng() < sig(logit) ? 1 : 0,
+          host: rng(),      // decides whether this request hits the bad code path
+          coin: rng()       // decides whether a risky request gets suppressed
+        });
+      }
+      return rows;
+    };
+    POP = { train: make(S.seed * 977 + 13), serve: make(S.seed * 977 + 991) };
+  }
+
+  /* ── the two transforms ── */
+  function trainTx(r) {
+    const logA = r.missing ? MED_LOG_A : Math.log1p(r.amt);
+    return [zAmount(logA), zCount(r.cnt)];
+  }
+
+  // What serving actually computes. `bad` = this request took the divergent path.
+  function serveTx(r, codeOn) {
+    const bad = codeOn && r.host < S.share;
+    if (!bad) return trainTx(r);
+    switch (S.bug) {
+      case 'nolog':                                   // dollars, never logged
+        return [zAmount(r.missing ? MED_LOG_A : r.amt), zCount(r.cnt)];
+      case 'fill':                                    // null -> 0 -> log1p(0) = 0
+        return [zAmount(r.missing ? 0 : Math.log1p(r.amt)), zCount(r.cnt)];
+      case 'cents':                                   // amount arrives x100
+        return [zAmount(r.missing ? MED_LOG_A : Math.log1p(r.amt * 100)), zCount(r.cnt)];
+      case 'clip':                                    // no clip on the serving side
+        return [zAmount(r.missing ? MED_LOG_A : Math.log1p(r.amt)), (r.cnt - MU_C) / SD_C];
+      default:
+        return trainTx(r);
+    }
+  }
+
+  // The raw payload value an input-monitoring job would see, in dollars.
+  // A missing amount has no raw value at all — an input monitor tracks it as a
+  // null rate, not as an imputed number, so it is excluded from this histogram.
+  function rawPayload(r, codeOn) {
+    if (r.missing) return null;
+    const bad = codeOn && r.host < S.share;
+    return (bad && S.bug === 'cents') ? r.amt * 100 : r.amt;
+  }
+  const rawCol = (rows, codeOn) => {
+    const out = [];
+    for (let i = 0; i < rows.length; i++) {
+      const v = rawPayload(rows[i], codeOn);
+      if (v !== null) out.push(v);
+    }
+    return out;
+  };
+
+  /* ── Hanley-McNeil standard error of an AUC estimate ──
+     SE = sqrt([A(1-A) + (nP-1)(Q1 - A²) + (nN-1)(Q2 - A²)] / (nP·nN))
+     with Q1 = A/(2-A) and Q2 = 2A²/(1+A). Two AUCs measured on independent
+     samples give SE(difference) = sqrt(SE1² + SE2²), and 2·SE is the band
+     inside which a gap is genuinely indistinguishable from sampling noise. */
+  function aucSE(A, nP, nN) {
+    if (!nP || !nN) return 0;
+    const Q1 = A / (2 - A), Q2 = 2 * A * A / (1 + A);
+    const v = (A * (1 - A) + (nP - 1) * (Q1 - A * A) + (nN - 1) * (Q2 - A * A)) / (nP * nN);
+    return Math.sqrt(Math.max(v, 1e-12));
+  }
+
+  /* ── logistic regression by full-batch gradient descent ── */
+  function fitLogistic(X, y) {
+    const w = [0, 0, 0];
+    const n = X.length, lr = 0.8, iters = 220;
+    if (!n) return w;
+    for (let it = 0; it < iters; it++) {
+      let g0 = 0, g1 = 0, g2 = 0;
+      for (let i = 0; i < n; i++) {
+        const e = sig(w[0] + w[1] * X[i][0] + w[2] * X[i][1]) - y[i];
+        g0 += e; g1 += e * X[i][0]; g2 += e * X[i][1];
+      }
+      w[0] -= lr * g0 / n; w[1] -= lr * g1 / n; w[2] -= lr * g2 / n;
+    }
+    return w;
+  }
+  const score = (w, x) => sig(w[0] + w[1] * x[0] + w[2] * x[1]);
+
+  /* ── AUC as the Mann-Whitney rank sum, with averaged ranks for ties ── */
+  function auc(scores, labels) {
+    const n = scores.length;
+    if (!n) return 0.5;
+    const idx = scores.map((_, i) => i).sort((a, b) => scores[a] - scores[b]);
+    let nPos = 0;
+    for (let i = 0; i < n; i++) nPos += labels[i];
+    const nNeg = n - nPos;
+    if (!nPos || !nNeg) return 0.5;
+    let rankSum = 0, i = 0;
+    while (i < n) {
+      let j = i;
+      while (j + 1 < n && scores[idx[j + 1]] === scores[idx[i]]) j++;
+      const avgRank = (i + j) / 2 + 1;
+      for (let k = i; k <= j; k++) if (labels[idx[k]] === 1) rankSum += avgRank;
+      i = j + 1;
+    }
+    return (rankSum - nPos * (nPos + 1) / 2) / (nPos * nNeg);
+  }
+
+  /* ── PSI over 10 quantile bins of the reference, floored so ln() is finite ── */
+  function psi(ref, cur, bins) {
+    bins = bins || 10;
+    const FLOOR = 1e-4;
+    if (!ref.length || !cur.length) return { total: 0, terms: [], e: [], a: [], edges: [] };
+    const sorted = ref.slice().sort((x, y) => x - y);
+    const cuts = [];
+    for (let i = 1; i < bins; i++) {
+      const v = sorted[Math.floor(i / bins * sorted.length)];
+      if (!cuts.length || v > cuts[cuts.length - 1]) cuts.push(v);   // dedupe flat regions
+    }
+    const nb = cuts.length + 1;
+    const binOf = (v) => { let b = 0; while (b < cuts.length && v > cuts[b]) b++; return b; };
+    const ce = new Array(nb).fill(0), ca = new Array(nb).fill(0);
+    for (let i = 0; i < ref.length; i++) ce[binOf(ref[i])]++;
+    for (let i = 0; i < cur.length; i++) ca[binOf(cur[i])]++;
+    const e = ce.map(c => Math.max(c / ref.length, FLOOR));
+    const a = ca.map(c => Math.max(c / cur.length, FLOOR));
+    const terms = e.map((ei, i) => (a[i] - ei) * Math.log(a[i] / ei));
+    return {
+      total: terms.reduce((s, t) => s + t, 0),
+      terms: terms, e: e, a: a, edges: cuts
+    };
+  }
+
+  /* ── one full train + serve cycle under a given set of injected sources ── */
+  function runSim(flags) {
+    let train = POP.train;
+    let cut = Infinity;
+    if (flags.sample) {
+      const amts = train.map(r => r.amt).sort((x, y) => x - y);
+      cut = amts[Math.min(amts.length - 1, Math.floor(S.q * amts.length))];
+      train = train.filter(r => r.amt <= cut);
+    }
+    const split = Math.max(1, Math.floor(train.length * 0.5));
+    const fitRows = train.slice(0, split), holdRows = train.slice(split);
+
+    const w = fitLogistic(fitRows.map(trainTx), fitRows.map(r => r.y));
+    const offline = auc(holdRows.map(r => score(w, trainTx(r))), holdRows.map(r => r.y));
+
+    // Serving traffic is the FULL population — plus, if the loop is on, whatever
+    // the deployed model has already suppressed.
+    let serve = POP.serve;
+    let suppressed = 0;
+    if (flags.fb) {
+      serve = serve.filter(r => {
+        const p = score(w, serveTx(r, flags.code));
+        const kill = p >= 0.5 && r.coin < S.lam;
+        if (kill) suppressed++;
+        return !kill;
+      });
+    }
+    const sTx = serve.map(r => serveTx(r, flags.code));
+    const sScore = sTx.map(x => score(w, x));
+    const online = auc(sScore, serve.map(r => r.y));
+
+    // The operating point moves even when the ranking survives — this is the
+    // symptom an on-call engineer sees first: the review queue triples overnight.
+    const hScore = holdRows.map(r => score(w, trainTx(r)));
+    const rate = arr => arr.length ? arr.filter(v => v >= 0.5).length / arr.length : 0;
+    const flagOff = rate(hScore), flagOn = rate(sScore);
+
+    const refTx = fitRows.map(trainTx);
+    const pA = psi(refTx.map(x => x[0]), sTx.map(x => x[0]));
+    const pC = psi(refTx.map(x => x[1]), sTx.map(x => x[1]));
+    const pR = psi(rawCol(fitRows, false), rawCol(serve, flags.code));
+
+    // Sampling noise on each AUC, so "within noise" is a computed band and not
+    // a made-up constant.
+    const hPos = holdRows.reduce((t, r) => t + r.y, 0);
+    const sPos = serve.reduce((t, r) => t + r.y, 0);
+    const seOff = aucSE(offline, hPos, holdRows.length - hPos);
+    const seOn = aucSE(online, sPos, serve.length - sPos);
+
+    // Range of the transformed count. PSI compares shares inside bins; a value
+    // that escapes the reference range entirely is better caught by an explicit
+    // max assertion, so both are surfaced.
+    const refMaxC = Math.max.apply(null, refTx.map(x => Math.abs(x[1])));
+    const curMaxC = Math.max.apply(null, sTx.map(x => Math.abs(x[1])));
+
+    return {
+      w: w, offline: offline, online: online, gap: offline - online,
+      flagOff: flagOff, flagOn: flagOn,
+      psiA: pA, psiC: pC, psiRaw: pR,
+      seOff: seOff, seOn: seOn, seGap: Math.sqrt(seOff * seOff + seOn * seOn),
+      refMaxC: refMaxC, curMaxC: curMaxC,
+      nTrain: fitRows.length, nHold: holdRows.length, nServe: serve.length,
+      suppressed: suppressed, cut: cut
+    };
+  }
+
+  /* ── DOM ── */
+  const $ = id => document.getElementById(id);
+  const fmt = (x, d) => (x === undefined || x === null || !isFinite(x)) ? '—' : x.toFixed(d === undefined ? 3 : d);
+
+  const histCv = $('cvHist'), histCtx = histCv.getContext('2d');
+  const aucCv = $('cvAuc'), aucCtx = aucCv.getContext('2d');
+
+  const C = {
+    bg: '#141720', border: '#252a3d', text: '#e2e8f0', dim: '#8892a4',
+    accent: '#00d4ff', orange: '#ff9500', red: '#ff4757',
+    green: '#00ff88', yellow: '#ffd700', purple: '#7c3aed'
+  };
+
+  function drawHist(res) {
+    const W = histCv.width, H = histCv.height;
+    histCtx.clearRect(0, 0, W, H);
+    histCtx.fillStyle = C.bg; histCtx.fillRect(0, 0, W, H);
+
+    const p = S.feat === 'zA' ? res.psiA : S.feat === 'zC' ? res.psiC : res.psiRaw;
+    const nb = p.e.length;
+    if (!nb) return;
+
+    const padL = 42, padR = 14, padT = 16;
+    const histH = 210, termH = 62, gapY = 22;
+    const plotW = W - padL - padR;
+    const bw = plotW / nb;
+    const maxShare = Math.max(0.02, Math.max.apply(null, p.e.concat(p.a)));
+
+    // y axis for shares
+    histCtx.strokeStyle = C.border; histCtx.lineWidth = 1;
+    histCtx.font = '10px JetBrains Mono, monospace';
+    histCtx.fillStyle = C.dim;
+    for (let g = 0; g <= 4; g++) {
+      const v = maxShare * g / 4;
+      const y = padT + histH - (v / maxShare) * histH;
+      histCtx.beginPath(); histCtx.moveTo(padL, y); histCtx.lineTo(W - padR, y); histCtx.stroke();
+      histCtx.fillText((v * 100).toFixed(0) + '%', 6, y + 3);
+    }
+
+    for (let i = 0; i < nb; i++) {
+      const x = padL + i * bw;
+      const he = (p.e[i] / maxShare) * histH;
+      const ha = (p.a[i] / maxShare) * histH;
+      histCtx.fillStyle = 'rgba(0,212,255,0.30)';
+      histCtx.fillRect(x + bw * 0.10, padT + histH - he, bw * 0.38, he);
+      histCtx.strokeStyle = C.accent; histCtx.lineWidth = 1;
+      histCtx.strokeRect(x + bw * 0.10, padT + histH - he, bw * 0.38, he);
+      histCtx.fillStyle = 'rgba(255,149,0,0.40)';
+      histCtx.fillRect(x + bw * 0.52, padT + histH - ha, bw * 0.38, ha);
+      histCtx.strokeStyle = C.orange;
+      histCtx.strokeRect(x + bw * 0.52, padT + histH - ha, bw * 0.38, ha);
+    }
+
+    // per-bin PSI contribution
+    const base = padT + histH + gapY + termH;
+    const maxT = Math.max(0.01, Math.max.apply(null, p.terms.map(Math.abs)));
+    histCtx.strokeStyle = C.border;
+    histCtx.beginPath(); histCtx.moveTo(padL, base); histCtx.lineTo(W - padR, base); histCtx.stroke();
+    for (let i = 0; i < nb; i++) {
+      const x = padL + i * bw;
+      const h = (Math.abs(p.terms[i]) / maxT) * termH;
+      histCtx.fillStyle = p.terms[i] > 0.01 ? 'rgba(255,71,87,0.75)' : 'rgba(136,146,164,0.55)';
+      histCtx.fillRect(x + bw * 0.18, base - h, bw * 0.64, h);
+    }
+    histCtx.fillStyle = C.dim;
+    histCtx.fillText('per-bin (aᵢ−eᵢ)·ln(aᵢ/eᵢ)', padL, base + 14);
+    histCtx.fillStyle = p.total > 0.25 ? C.red : p.total > 0.1 ? C.yellow : C.green;
+    histCtx.font = '12px JetBrains Mono, monospace';
+    histCtx.fillText('PSI = ' + fmt(p.total, 3), W - padR - 96, base + 14);
+
+    histCtx.font = '10px JetBrains Mono, monospace';
+    histCtx.fillStyle = C.dim;
+    const name = S.feat === 'zA' ? 'transformed amount (z)' :
+                 S.feat === 'zC' ? 'transformed count (z)' : 'raw payload amount ($)';
+    histCtx.fillText(name + ' — ' + nb + ' bins', padL, padT - 4);
+  }
+
+  function drawAuc(variants) {
+    const W = aucCv.width, H = aucCv.height;
+    aucCtx.clearRect(0, 0, W, H);
+    aucCtx.fillStyle = C.bg; aucCtx.fillRect(0, 0, W, H);
+
+    const padL = 130, padR = 58, padT = 26, padB = 26;
+    const plotW = W - padL - padR;
+    const rowH = (H - padT - padB) / variants.length;
+    const lo = 0.5, hi = 1.0;
+    const xOf = v => padL + clamp((v - lo) / (hi - lo), 0, 1) * plotW;
+
+    aucCtx.font = '10px JetBrains Mono, monospace';
+    for (let g = 0; g <= 5; g++) {
+      const v = lo + (hi - lo) * g / 5;
+      const x = xOf(v);
+      aucCtx.strokeStyle = C.border;
+      aucCtx.beginPath(); aucCtx.moveTo(x, padT - 6); aucCtx.lineTo(x, H - padB); aucCtx.stroke();
+      aucCtx.fillStyle = C.dim;
+      aucCtx.fillText(v.toFixed(1), x - 8, H - padB + 14);
+    }
+
+    const clean = variants[0].online;
+    aucCtx.strokeStyle = 'rgba(0,255,136,0.55)';
+    aucCtx.setLineDash([4, 3]);
+    aucCtx.beginPath(); aucCtx.moveTo(xOf(clean), padT - 6); aucCtx.lineTo(xOf(clean), H - padB); aucCtx.stroke();
+    aucCtx.setLineDash([]);
+
+    variants.forEach((v, i) => {
+      const y = padT + i * rowH + rowH * 0.18;
+      const h = rowH * 0.5;
+      const x0 = xOf(lo), x1 = xOf(v.online);
+      aucCtx.fillStyle = v.color;
+      aucCtx.globalAlpha = 0.75;
+      aucCtx.fillRect(x0, y, Math.max(1, x1 - x0), h);
+      aucCtx.globalAlpha = 1;
+      aucCtx.fillStyle = C.text;
+      aucCtx.font = '10px JetBrains Mono, monospace';
+      aucCtx.fillText(v.label, 6, y + h * 0.72);
+      aucCtx.fillStyle = v.color;
+      aucCtx.fillText(v.online.toFixed(3), x1 + 6, y + h * 0.72);
+    });
+
+    aucCtx.fillStyle = C.dim;
+    aucCtx.fillText('online AUC (0.5 = coin flip)', padL, 14);
+  }
+
+  /* ── render ── */
+  function render() {
+    buildPop();
+
+    const cur = runSim({ code: S.code, sample: S.sample, fb: S.fb });
+    const none = runSim({ code: false, sample: false, fb: false });
+    const onlyCode = runSim({ code: true, sample: false, fb: false });
+    const onlySamp = runSim({ code: false, sample: true, fb: false });
+    const onlyFb = runSim({ code: false, sample: false, fb: true });
+    const all = runSim({ code: true, sample: true, fb: true });
+
+    // pipeline diagram
+    $('pgTxS').classList.toggle('diverged', S.code);
+    $('pgTxS').classList.toggle('shared', !S.code);
+    $('pgTxSN').textContent = S.code
+      ? BUG_LABEL[S.bug] + ' — ' + Math.round(S.share * 100) + '% of traffic'
+      : 'loads the same fitted artifact';
+    $('pgFilt').classList.toggle('diverged', S.sample);
+    $('pgFiltN').textContent = S.sample
+      ? 'only the lowest ' + Math.round(S.q * 100) + '% by amount are labelled (≤ $' + cur.cut.toFixed(0) + ')'
+      : 'no filter — all rows labelled';
+    $('pgLogN').textContent = 'full population, n=' + S.n.toLocaleString();
+    $('pgReqN').textContent = S.fb
+      ? 'survivors only — ' + cur.suppressed.toLocaleString() + ' risky requests suppressed'
+      : 'full production traffic';
+    $('pgAct').classList.toggle('diverged', S.fb);
+    $('pgActN').textContent = S.fb
+      ? 'declines feed back: the risky region stops appearing'
+      : 'decision does not change the population';
+    $('pgFitN').textContent = cur.nTrain.toLocaleString() + ' fit / ' + cur.nHold.toLocaleString() +
+      ' holdout · w = [' + cur.w.map(v => v.toFixed(2)).join(', ') + ']';
+    $('fbBar').classList.toggle('on', S.fb);
+    $('fbBar').textContent = S.fb
+      ? '↺ feedback path ON — P(suppress | score ≥ 0.5) = ' + S.lam.toFixed(2) +
+        ' · serving population is now ' + cur.nServe.toLocaleString() + ' of ' + S.n.toLocaleString() +
+        ' rows the model itself selected'
+      : "↺ feedback path: today's decisions reshape tomorrow's serving population — off";
+
+    // stats
+    const band = 2 * cur.seGap;                 // 2 sigma on (offline - online)
+    const ceilLoss = cur.online - none.online;  // what the skew cost the ranking
+    const ceilBand = 2 * Math.sqrt(cur.seOn * cur.seOn + none.seOn * none.seOn);
+
+    $('stOff').textContent = fmt(cur.offline);
+    $('stOn').textContent = fmt(cur.online);
+    $('stGap').textContent = (cur.gap >= 0 ? '+' : '') + fmt(cur.gap);
+    const gapCls = Math.abs(cur.gap) <= band ? 'goodv' : Math.abs(cur.gap) > 2 * band ? 'badv' : 'warnv';
+    $('stOn').className = 'v ' + gapCls;
+    $('stGap').className = 'v ' + gapCls;
+    $('stGapN').textContent = Math.abs(cur.gap) <= band
+      ? 'inside the ±' + fmt(band) + ' noise band — the offline report predicted production'
+      : 'outside the ±' + fmt(band) + ' noise band — the offline report did not hold';
+    $('stCeil').textContent = (ceilLoss >= 0 ? '+' : '') + fmt(ceilLoss);
+    $('stCeil').className = 'v ' + (Math.abs(ceilLoss) <= ceilBand ? 'goodv'
+                                    : ceilLoss < -2 * ceilBand ? 'badv' : 'warnv');
+    $('stBand').textContent = '±' + fmt(band);
+    $('stBand').className = 'v';
+
+    const psiClass = v => v > 0.25 ? 'v badv' : v > 0.1 ? 'v warnv' : 'v goodv';
+    $('stPsiRaw').textContent = fmt(cur.psiRaw.total);
+    $('stPsiRaw').className = psiClass(cur.psiRaw.total);
+    $('stPsiA').textContent = fmt(cur.psiA.total);
+    $('stPsiA').className = psiClass(cur.psiA.total);
+    $('stPsiC').textContent = fmt(cur.psiC.total);
+    $('stPsiC').className = psiClass(cur.psiC.total);
+    $('stPsiCN').textContent = 'served |z| reaches ' + fmt(cur.curMaxC, 2) +
+      ' vs a training-reference max of ' + fmt(cur.refMaxC, 2);
+    const flagDrift = Math.abs(cur.flagOn - cur.flagOff);
+    $('stFlag').textContent = (cur.flagOff * 100).toFixed(1) + '% → ' + (cur.flagOn * 100).toFixed(1) + '%';
+    $('stFlag').className = 'v ' + (flagDrift > 0.10 ? 'badv' : flagDrift > 0.04 ? 'warnv' : 'goodv');
+    $('stFlagN').textContent = 'queue volume moves ' + (cur.flagOff > 0 ? (cur.flagOn / cur.flagOff).toFixed(2) + '×' : '—') + ' — visible without labels';
+
+    /* ── verdict ──────────────────────────────────────────────────────────
+       Every clause below is conditioned on which sources are actually
+       injected AND on the numbers this run produced. Nothing is inferred
+       from a PSI magnitude alone: a large raw-payload PSI means different
+       things depending on whether the unit bug or the training filter is on,
+       so the diagnosis reads S.code / S.bug / S.sample / S.fb explicitly. */
+    const v = $('verdict');
+    const P_ACT = 0.25, P_LOOK = 0.1;      // the conventional PSI thresholds
+    const pRaw = cur.psiRaw.total, pTxA = cur.psiA.total, pTxC = cur.psiC.total;
+    const txPsi = Math.max(pTxA, pTxC);
+    const anySource = S.code || S.sample || S.fb;
+    const gapReal = Math.abs(cur.gap) > band;
+    const lossReal = ceilLoss < -ceilBand;
+
+    let cls, head;
+    if (!anySource) {
+      cls = 'pass';
+      head = 'CLEAN BASELINE — offline ' + fmt(cur.offline) + ', online ' + fmt(cur.online) +
+             ', a gap of ' + fmt(cur.gap) + ' against a ±' + fmt(band) + ' two-sigma noise band.';
+    } else if (gapReal && cur.gap > 0) {
+      cls = Math.abs(cur.gap) > 2 * band ? 'fail' : 'warn';
+      head = 'SKEW — the offline report of ' + fmt(cur.offline) + ' did not survive production: online ' +
+             fmt(cur.online) + ', a gap of ' + fmt(cur.gap) + ' against a ±' + fmt(band) + ' noise band.';
+    } else if (lossReal) {
+      cls = 'fail';
+      head = 'SKEW — offline and online agree, but both sit ' + fmt(-ceilLoss) +
+             ' below the no-skew ceiling of ' + fmt(none.online) + '. The model itself is worse, ' +
+             'and comparing the offline number to the online one would never have shown it.';
+    } else {
+      cls = 'pass';
+      head = 'NO MEASURABLE DAMAGE at these settings — gap ' + fmt(cur.gap) + ' and ceiling loss ' +
+             fmt(ceilLoss) + ' are both inside their noise bands. The source is injected; it is not biting yet.';
+    }
+
+    // Per-source diagnosis. One clause per source that is actually switched on.
+    const notes = [];
+    if (S.code) {
+      const pct = Math.round(S.share * 100);
+      // The bug determines which transformed column it can possibly have moved —
+      // reading that off max(pTxA, pTxC) misattributes as soon as a second
+      // source is also shifting the other column.
+      const onCount = (S.bug === 'clip');
+      const worst = onCount ? 'transformed count' : 'transformed amount';
+      const worstV = onCount ? pTxC : pTxA;
+      const rawBand = pRaw > P_ACT ? 'past the 0.25 act line'
+                    : pRaw > P_LOOK ? 'past the 0.1 look-at line' : 'under the 0.1 look-at line';
+      // Source 2 truncates the training reference itself, so raw-payload PSI is
+      // no longer attributable to the code path while it is also switched on.
+      const rawConfound = S.sample
+        ? ' (confounded — source 2 is also on, and it moves the raw reference by itself; turn it off to read this row cleanly)'
+        : '';
+      if (S.bug === 'cents') {
+        notes.push('<b>Source 1, unit mismatch</b> on ' + pct + '% of traffic: the divergence is <em>upstream</em> ' +
+          'of the transform, so the request payload itself changed — raw-payload PSI ' + fmt(pRaw) +
+          ' and ' + worst + ' PSI ' + fmt(worstV) + '. This is the one member of the family a monitor ' +
+          'watching only the raw request would have caught.');
+      } else {
+        const detail = onCount
+          ? 'the count leaves the training range entirely — served |z| reaches ' + fmt(cur.curMaxC, 2) +
+            ' against a reference max of ' + fmt(cur.refMaxC, 2) + ', so a plain ' +
+            '<code>expect_column_max_to_be_between</code> assertion catches it as fast as PSI does'
+          : 'the request payload is byte-identical to what training saw; only the transformed vector moved';
+        notes.push('<b>Source 1, ' + BUG_SHORT[S.bug] + '</b> on ' + pct + '% of traffic: raw-payload PSI is ' +
+          fmt(pRaw) + ' — ' + rawBand + rawConfound +
+          (S.sample || pRaw > P_LOOK ? '' : ', so an input monitor watching the request stays silent') +
+          ' — while ' + worst + ' PSI is ' + fmt(worstV) + ' (' +
+          (worstV > P_ACT ? 'past the 0.25 act line' : worstV > P_LOOK ? 'past the 0.1 look-at line' : 'still quiet') +
+          '). ' + detail + '. This is the argument for logging post-transform features.');
+      }
+    }
+    if (S.sample) {
+      notes.push('<b>Source 2, filtered training sample</b> — labels only for the lowest ' + Math.round(S.q * 100) +
+        '% by amount. Offline reads ' + fmt(cur.offline) + ' because the holdout is drawn from that same slice, ' +
+        'and the true risk curve turns back upward in the amount tail the model never saw, so the fitted slope ' +
+        'is wrong exactly where it is extrapolating. Note this source <em>does</em> move raw-payload PSI (' + fmt(pRaw) +
+        '): the training reference is itself the truncated slice, so live traffic differs from it on the input side. ' +
+        'The offline holdout is the one thing that cannot see it.');
+    }
+    if (S.fb) {
+      notes.push('<b>Source 3, feedback loop</b> — online AUC is computed on ' + cur.nServe.toLocaleString() +
+        ' survivors the model itself selected (' + cur.suppressed.toLocaleString() + ' suppressed), so it is a ' +
+        'biased estimate and not merely a lower one. Highest feature PSI here is ' + fmt(Math.max(pRaw, txPsi)) +
+        ' — ' + (Math.max(pRaw, txPsi) > P_LOOK ? 'above' : 'below') + ' the 0.1 look-at line, so ' +
+        (Math.max(pRaw, txPsi) > P_LOOK ? 'a distribution detector fires but cannot tell you the metric is biased' :
+         'no distribution detector fires at all') + '. Only a randomised exploration holdout fixes the estimate.');
+    }
+    if (!anySource) {
+      notes.push('No sources injected. This is the ceiling every other configuration is measured against.');
+    }
+
+    v.className = 'verdict ' + cls;
+    v.innerHTML = head + '<span class="sub">' + notes.join(' ') + '</span>';
+
+    // attribution
+    const rows = [
+      { key: 'none', label: 'no skew (clean baseline)', state: '—', r: none, det: 'nothing to catch', color: C.green },
+      { key: 'code', label: '1 · divergent transform code', state: BUG_LABEL[S.bug].split('—')[0].trim(), r: onlyCode,
+        det: S.bug === 'cents' ? 'raw-payload PSI fires on its own — the divergence is upstream of the transform'
+             : 'replay diff on logged serving vectors — exact, no labels needed; PSI only on the post-transform column',
+        color: C.orange },
+      { key: 'sample', label: '2 · filtered training sample', state: 'keeps lowest ' + Math.round(S.q * 100) + '%', r: onlySamp, det: 'PSI of the truncated training reference vs live traffic — the offline holdout cannot see it', color: C.orange },
+      { key: 'fb', label: '3 · feedback loop', state: 'λ = ' + S.lam.toFixed(2), r: onlyFb, det: 'only a randomised exploration holdout — the metric itself is biased', color: C.orange },
+      { key: 'all', label: 'all three together', state: '—', r: all, det: 'effects compound; attribute one source at a time', color: C.red }
+    ];
+    const body = $('attrBody');
+    body.innerHTML = '';
+    rows.forEach(row => {
+      const d = row.r.online - none.online;
+      const txp = Math.max(row.r.psiA.total, row.r.psiC.total);
+      const tr = document.createElement('tr');
+      const active = (row.key === 'code' && S.code && !S.sample && !S.fb) ||
+                     (row.key === 'sample' && S.sample && !S.code && !S.fb) ||
+                     (row.key === 'fb' && S.fb && !S.code && !S.sample) ||
+                     (row.key === 'all' && S.code && S.sample && S.fb) ||
+                     (row.key === 'none' && !S.code && !S.sample && !S.fb);
+      if (active) tr.className = 'sel';
+      const dBand = 2 * Math.sqrt(row.r.seOn * row.r.seOn + none.seOn * none.seOn);
+      const gBand = 2 * row.r.seGap;
+      const dCls = d < -2 * dBand ? 'bad' : d < -dBand ? 'warnc' : 'ok';
+      const pCls = x => x > 0.25 ? 'bad' : x > 0.1 ? 'warnc' : 'obs';
+      const gCls = Math.abs(row.r.gap) > 2 * gBand ? 'bad' : Math.abs(row.r.gap) > gBand ? 'warnc' : 'ok';
+      tr.innerHTML =
+        '<td class="name">' + row.label + '<span class="obs" style="display:block">' + row.state + '</span></td>' +
+        '<td class="num obs">' + fmt(row.r.offline) + '</td>' +
+        '<td class="num">' + fmt(row.r.online) + '</td>' +
+        '<td class="num ' + dCls + '">' + (row.key === 'none' ? '—' : (d >= 0 ? '+' : '') + fmt(d)) + '</td>' +
+        '<td class="num ' + gCls + '">' + (row.r.gap >= 0 ? '+' : '') + fmt(row.r.gap) + '</td>' +
+        '<td class="num">' + (row.r.flagOn * 100).toFixed(1) + '%</td>' +
+        '<td class="num ' + pCls(row.r.psiRaw.total) + '">' + fmt(row.r.psiRaw.total) + '</td>' +
+        '<td class="num ' + pCls(txp) + '">' + fmt(txp) + '</td>' +
+        '<td class="obs">' + row.det + '</td>';
+      body.appendChild(tr);
+    });
+
+    drawHist(cur);
+    drawAuc([
+      { label: 'no skew', online: none.online, color: C.green },
+      { label: '1 · code divergence', online: onlyCode.online, color: C.orange },
+      { label: '2 · filtered sample', online: onlySamp.online, color: C.orange },
+      { label: '3 · feedback loop', online: onlyFb.online, color: C.orange },
+      { label: 'all three', online: all.online, color: C.red }
+    ]);
+  }
+
+  let queued = false;
+  function schedule() {
+    if (queued) return;
+    queued = true;
+    requestAnimationFrame(function () { queued = false; render(); });
+  }
+
+  /* ── controls ── */
+  function syncControls() {
+    $('tCode').classList.toggle('on', S.code);
+    $('tSample').classList.toggle('on', S.sample);
+    $('tFb').classList.toggle('on', S.fb);
+    $('rShare').classList.toggle('off', !S.code);
+    $('rQ').classList.toggle('off', !S.sample);
+    $('rLam').classList.toggle('off', !S.fb);
+    $('selBug').disabled = false;
+    $('vShare').textContent = Math.round(S.share * 100) + '%';
+    $('vQ').textContent = Math.round(S.q * 100) + '%';
+    $('vLam').textContent = S.lam.toFixed(2);
+    $('vN').textContent = S.n.toLocaleString();
+    $('vSeed').textContent = S.seed;
+    $('fA').classList.toggle('primary', S.feat === 'zA');
+    $('fC').classList.toggle('primary', S.feat === 'zC');
+    $('fR').classList.toggle('primary', S.feat === 'raw');
+  }
+
+  $('tCode').addEventListener('click', function () { S.code = !S.code; syncControls(); schedule(); });
+  $('tSample').addEventListener('click', function () { S.sample = !S.sample; syncControls(); schedule(); });
+  $('tFb').addEventListener('click', function () { S.fb = !S.fb; syncControls(); schedule(); });
+  $('bClear').addEventListener('click', function () {
+    S.code = S.sample = S.fb = false; syncControls(); schedule();
+  });
+  $('selBug').addEventListener('change', function () { S.bug = this.value; schedule(); });
+
+  $('sShare').addEventListener('input', function () { S.share = +this.value / 100; syncControls(); schedule(); });
+  $('sQ').addEventListener('input', function () { S.q = +this.value / 100; syncControls(); schedule(); });
+  $('sLam').addEventListener('input', function () { S.lam = +this.value / 100; syncControls(); schedule(); });
+  $('sN').addEventListener('input', function () { S.n = +this.value; syncControls(); schedule(); });
+  $('sSeed').addEventListener('input', function () { S.seed = +this.value; syncControls(); schedule(); });
+
+  $('fA').addEventListener('click', function () { S.feat = 'zA'; syncControls(); schedule(); });
+  $('fC').addEventListener('click', function () { S.feat = 'zC'; syncControls(); schedule(); });
+  $('fR').addEventListener('click', function () { S.feat = 'raw'; syncControls(); schedule(); });
+
+  syncControls();
+  render();
+})();
+</script>
+
+</body>
+</html>

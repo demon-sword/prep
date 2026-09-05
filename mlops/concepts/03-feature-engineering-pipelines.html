@@ -1,0 +1,929 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1.0"/>
+  <title>Reproducible Feature Engineering Pipelines — MLOps Concepts</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com"/>
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet"/>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg:        #0d0f17;
+      --surface:   #141720;
+      --card:      #1a1e2e;
+      --border:    #252a3d;
+      --accent:    #00d4ff;
+      --purple:    #7c3aed;
+      --green:     #00ff88;
+      --yellow:    #ffd700;
+      --red:       #ff4757;
+      --orange:    #ff9500;
+      --text:      #e2e8f0;
+      --text-dim:  #8892a4;
+      --mono:      'JetBrains Mono', monospace;
+      --sans:      'Inter', system-ui, sans-serif;
+    }
+
+    html { scroll-behavior: smooth; }
+
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: var(--sans);
+      font-size: 16px;
+      line-height: 1.7;
+      min-height: 100vh;
+    }
+
+    header {
+      background: var(--surface);
+      border-bottom: 1px solid var(--border);
+      padding: 2rem 2rem 1.5rem;
+      max-width: 1100px;
+      margin: 0 auto;
+    }
+
+    .group-badge {
+      display: inline-block;
+      font-family: var(--mono);
+      font-size: 0.7rem;
+      font-weight: 700;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      color: var(--accent);
+      background: rgba(0, 212, 255, 0.1);
+      border: 1px solid rgba(0, 212, 255, 0.3);
+      padding: 0.2em 0.7em;
+      border-radius: 4px;
+      margin-bottom: 0.75rem;
+    }
+
+    header h1 {
+      font-size: clamp(1.6rem, 4vw, 2.4rem);
+      font-weight: 700;
+      line-height: 1.2;
+      margin-bottom: 0.5rem;
+    }
+
+    header h1 span.id {
+      color: var(--text-dim);
+      font-size: 0.55em;
+      font-family: var(--mono);
+      margin-right: 0.5rem;
+      vertical-align: middle;
+    }
+
+    header p.desc { color: var(--text-dim); font-size: 1.05rem; max-width: 780px; }
+
+    main { max-width: 1100px; margin: 0 auto; padding: 0 2rem 4rem; }
+
+    section { margin-top: 3rem; }
+
+    section > h2 {
+      font-size: 1.4rem;
+      font-weight: 700;
+      color: var(--accent);
+      border-bottom: 1px solid var(--border);
+      padding-bottom: 0.5rem;
+      margin-bottom: 1.5rem;
+    }
+
+    h3 { font-size: 1.1rem; font-weight: 600; color: var(--yellow); margin: 1.6rem 0 0.6rem; }
+
+    p { margin-bottom: 1rem; }
+    ul, ol { padding-left: 1.5rem; margin-bottom: 1rem; }
+    li { margin-bottom: 0.4rem; }
+
+    code {
+      font-family: var(--mono);
+      font-size: 0.85em;
+      background: rgba(0, 212, 255, 0.08);
+      color: var(--accent);
+      padding: 0.1em 0.35em;
+      border-radius: 3px;
+    }
+
+    pre {
+      font-family: var(--mono);
+      font-size: 0.8rem;
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 1rem 1.2rem;
+      overflow-x: auto;
+      margin-bottom: 1rem;
+      color: var(--green);
+      line-height: 1.6;
+      white-space: pre;
+    }
+
+    pre .cm { color: var(--text-dim); }
+    pre .bad { color: var(--red); }
+
+    .formula-block {
+      background: var(--card);
+      border-left: 3px solid var(--purple);
+      border-radius: 0 8px 8px 0;
+      padding: 0.8rem 1.2rem;
+      margin: 1rem 0;
+      font-family: var(--mono);
+      font-size: 0.88rem;
+    }
+
+    .callout {
+      background: rgba(255, 149, 0, 0.07);
+      border: 1px solid rgba(255, 149, 0, 0.3);
+      border-radius: 8px;
+      padding: 1rem 1.2rem;
+      margin: 1.2rem 0;
+    }
+    .callout strong { color: var(--orange); }
+
+    /* ── Visualization ── */
+    .viz-card {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 1.5rem;
+    }
+    .viz-title { font-weight: 600; font-size: 1rem; margin-bottom: 0.3rem; }
+    .viz-desc { font-size: 0.88rem; color: var(--text-dim); margin-bottom: 1.2rem; }
+
+    .preset-row { display: flex; flex-wrap: wrap; gap: 0.5rem; margin-bottom: 1.2rem; }
+
+    .ctrl-btn {
+      font-family: var(--mono);
+      font-size: 0.75rem;
+      padding: 0.45em 0.9em;
+      border-radius: 6px;
+      border: 1px solid var(--border);
+      background: var(--surface);
+      color: var(--text-dim);
+      cursor: pointer;
+      transition: all 0.18s;
+    }
+    .ctrl-btn:hover { border-color: var(--accent); color: var(--accent); }
+    .ctrl-btn.primary { border-color: var(--accent); color: var(--accent); background: rgba(0,212,255,0.08); }
+
+    .slider-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(230px, 1fr));
+      gap: 1rem 1.6rem;
+      margin-bottom: 1.2rem;
+    }
+
+    .slider-row label {
+      display: flex;
+      justify-content: space-between;
+      font-size: 0.8rem;
+      color: var(--text-dim);
+      margin-bottom: 0.25rem;
+      gap: 0.5rem;
+    }
+    .slider-row .val { font-family: var(--mono); color: var(--accent); }
+    .slider-row input[type=range] { width: 100%; accent-color: var(--purple); }
+
+    .mode-row { display: flex; flex-wrap: wrap; gap: 0.6rem; margin-bottom: 1.2rem; }
+    .mode-opt {
+      flex: 1 1 260px;
+      border: 1px solid var(--border);
+      background: var(--surface);
+      border-radius: 8px;
+      padding: 0.7rem 0.9rem;
+      cursor: pointer;
+      transition: all 0.18s;
+    }
+    .mode-opt .mo-t { font-family: var(--mono); font-size: 0.78rem; color: var(--text); }
+    .mode-opt .mo-s { font-size: 0.72rem; color: var(--text-dim); display: block; margin-top: 0.15rem; line-height: 1.45; }
+    .mode-opt.on { border-color: var(--accent); background: rgba(0,212,255,0.07); }
+    .mode-opt.on.danger { border-color: var(--red); background: rgba(255,71,87,0.07); }
+    .mode-opt.on .mo-t { color: var(--accent); }
+    .mode-opt.on.danger .mo-t { color: var(--red); }
+
+    .verdict {
+      border-radius: 8px;
+      padding: 0.85rem 1.1rem;
+      font-family: var(--mono);
+      font-size: 0.85rem;
+      margin-bottom: 1.2rem;
+      border: 1px solid var(--border);
+      line-height: 1.55;
+    }
+    .verdict.pass  { border-color: rgba(0,255,136,0.45); background: rgba(0,255,136,0.07); color: var(--green); }
+    .verdict.warn  { border-color: rgba(255,215,0,0.45); background: rgba(255,215,0,0.07); color: var(--yellow); }
+    .verdict.fail  { border-color: rgba(255,71,87,0.45);  background: rgba(255,71,87,0.07);  color: var(--red); }
+    .verdict .sub { display: block; color: var(--text-dim); font-size: 0.78rem; margin-top: 0.3rem; }
+
+    .panes { display: grid; grid-template-columns: 1.35fr 1fr; gap: 1.5rem; }
+    @media (max-width: 900px) { .panes { grid-template-columns: 1fr; } }
+
+    table.exp {
+      width: 100%;
+      border-collapse: collapse;
+      font-family: var(--mono);
+      font-size: 0.72rem;
+    }
+    table.exp th {
+      text-align: left;
+      color: var(--text-dim);
+      font-weight: 500;
+      border-bottom: 1px solid var(--border);
+      padding: 0.4rem 0.4rem;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      font-size: 0.65rem;
+    }
+    table.exp td { padding: 0.45rem 0.4rem; border-bottom: 1px solid var(--border); vertical-align: top; }
+    table.exp td.name { color: var(--text); }
+    .ok   { color: var(--green); }
+    .bad  { color: var(--red); }
+    .obs  { color: var(--text-dim); }
+
+    canvas { display: block; width: 100%; height: auto; border-radius: 6px; }
+    .cv-label { font-size: 0.72rem; color: var(--text-dim); font-family: var(--mono); margin: 0.9rem 0 0.35rem; }
+    .legend { display: flex; flex-wrap: wrap; gap: 0.9rem; font-size: 0.7rem; color: var(--text-dim); font-family: var(--mono); margin-top: 0.5rem; }
+    .legend span::before {
+      content: ''; display: inline-block; width: 9px; height: 9px;
+      border-radius: 2px; margin-right: 5px; background: currentColor;
+    }
+
+    .pipe-wrap { overflow-x: auto; margin-bottom: 1.2rem; }
+    .pipe-wrap svg { display: block; width: 100%; min-width: 780px; height: auto; }
+
+    .bucket-row { display: grid; grid-template-columns: repeat(5, 1fr); gap: 0.4rem; margin-top: 0.4rem; }
+    .bkt { background: var(--surface); border: 1px solid var(--border); border-radius: 6px; padding: 0.4rem; text-align: center; }
+    .bkt .bar { height: 44px; display: flex; align-items: flex-end; justify-content: center; }
+    .bkt .fill { width: 60%; background: var(--purple); border-radius: 2px 2px 0 0; min-height: 1px; }
+    .bkt .pct { font-family: var(--mono); font-size: 0.68rem; color: var(--text-dim); margin-top: 0.25rem; }
+    .bkt .nm  { font-family: var(--mono); font-size: 0.6rem; color: var(--text-dim); }
+
+    .stat-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 0.7rem; margin-bottom: 1.1rem; }
+    .stat {
+      background: var(--surface); border: 1px solid var(--border);
+      border-radius: 8px; padding: 0.6rem 0.8rem;
+    }
+    .stat .k { font-size: 0.65rem; text-transform: uppercase; letter-spacing: 0.06em; color: var(--text-dim); }
+    .stat .v { font-family: var(--mono); font-size: 1.05rem; color: var(--accent); }
+    .stat .v.warnv { color: var(--yellow); }
+    .stat .v.badv { color: var(--red); }
+    .stat .n { font-size: 0.66rem; color: var(--text-dim); font-family: var(--mono); }
+
+    /* ── Interview line ── */
+    #interview-line .quote {
+      background: linear-gradient(180deg, rgba(124,58,237,0.12), rgba(124,58,237,0.04));
+      border: 1px solid rgba(124,58,237,0.45);
+      border-left: 4px solid var(--purple);
+      border-radius: 0 10px 10px 0;
+      padding: 1.3rem 1.5rem;
+      font-size: 1.02rem;
+      line-height: 1.75;
+    }
+    #interview-line .quote p:last-child { margin-bottom: 0; }
+    #interview-line .quote em { color: var(--yellow); font-style: normal; font-weight: 600; }
+
+    #takeaways li strong { color: var(--accent); }
+
+    .concept-nav {
+      max-width: 1100px;
+      margin: 0 auto;
+      padding: 1.5rem 2rem 3rem;
+      display: flex;
+      justify-content: space-between;
+      gap: 1rem;
+      border-top: 1px solid var(--border);
+    }
+    .nav-link {
+      display: flex; flex-direction: column; gap: 0.2rem;
+      text-decoration: none; padding: 0.6rem 1rem;
+      border-radius: 8px; border: 1px solid var(--border);
+      background: var(--surface); max-width: 240px; transition: all 0.2s;
+    }
+    .nav-link:hover:not(.disabled) { border-color: var(--accent); }
+    .nav-link.disabled { opacity: 0.35; pointer-events: none; }
+    .nav-dir { font-family: var(--mono); font-size: 0.7rem; color: var(--text-dim); }
+    .nav-title { font-size: 0.9rem; color: var(--text); font-weight: 500; }
+
+    @media (max-width: 640px) {
+      header, main { padding-left: 1rem; padding-right: 1rem; }
+      .concept-nav { padding-left: 1rem; padding-right: 1rem; flex-direction: column; }
+      .nav-link { max-width: 100%; }
+    }
+  </style>
+</head>
+<body>
+
+<header>
+  <div class="group-badge">Data</div>
+  <h1><span class="id">03</span>Reproducible Feature Engineering Pipelines</h1>
+  <p class="desc">One transformation definition shared by the batch and online paths, with fitted statistics — means, encoders, bucket edges — persisted as artifacts instead of recomputed, which is the fix for the classic bug where the serving path re-fits a scaler on live traffic.</p>
+</header>
+
+<main>
+
+<section id="theory">
+  <h2>Theory</h2>
+
+  <h3>A feature pipeline is code plus fitted state — and only one of them is in git</h3>
+  <p>A transformation looks like pure code: clip the amount, take a log, one-hot the merchant category, bucket the account age. But most useful transformations need a number that came from the data before they can run. <code>StandardScaler</code> needs a mean and a standard deviation. <code>OneHotEncoder</code> needs a vocabulary. A quantile bucketizer needs its bin edges. A median imputer needs the median. A target encoder needs per-category label means. Every one of those is a <em>full-pass statistic over the training set</em> — a tiny model fit on training data. Git versions the code. It does not version those numbers, and that gap is where this whole class of bug lives.</p>
+  <p>The discipline is one sentence long: <strong>fit once, at training time; persist the result; at serving, call transform and never fit.</strong> Everything below is a consequence of violating it.</p>
+
+  <h3>The re-fit-at-serving bug, mechanically</h3>
+  <p>Suppose serving computes <code>z = (x − mean(batch)) / std(batch)</code> over whatever requests are currently in flight, rather than loading the training mean and standard deviation. Nothing throws. The feature is in range. Unit tests pass, because on the training distribution the two agree. Then traffic moves — a price increase, a new country, a marketing push toward larger baskets — and the two paths diverge deterministically:</p>
+  <div class="formula-block">z_correct = (x − μ_train) / σ_train &nbsp;&nbsp;vs&nbsp;&nbsp; z_refit = (x − μ_live) / σ_live</div>
+  <p>The re-fit version is centred on the live batch by construction, so the mean of the scaled feature is pinned at ≈ 0 no matter how far the raw distribution has moved. The model was trained to read a rising z as "this transaction is unusually large". It now never sees one. The shift has been normalised away before the model gets a vote. This is <strong>training-serving skew</strong> in its purest form, and it is <strong>silent degradation</strong>: no exception, no error-rate spike, and — critically — no alarm from a drift monitor that watches the <em>transformed</em> feature, because that feature is stationary by construction. Monitor raw inputs as well as transformed ones, or you monitor the bug's cover story.</p>
+  <p>The categorical version is worse because it is not a smooth degradation. Fit an ordinal or label encoder on the live batch and the vocabulary is re-derived from whatever categories showed up. One new merchant category sorts into the middle of the list, every code after it shifts by one, and the model reads "travel" where the row actually said "grocery". The values stay in the valid range, so no schema check fires either.</p>
+
+  <h3>Where the fitted state should live</h3>
+  <p>Bundle it with the model, not beside it. In scikit-learn, put the <code>ColumnTransformer</code> and the estimator in a single <code>Pipeline</code> and log that one object — MLflow's <code>log_model</code> stores the fitted preprocessor and the weights as one artifact under one version, so there is no way to deploy a model with the wrong scaler. TFX's Transform component goes further: it runs the full pass in Beam and emits a TensorFlow graph containing the constants, which is then attached to the serving graph, so training and serving execute literally the same operations. Feast and Tecton attack the same problem from the definition side — a feature is declared once and the framework is responsible for producing it in both the offline and the online path.</p>
+
+  <h3>The other skew source: one definition, two engines</h3>
+  <p>Even with statistics persisted correctly, training features are usually built in Spark or SQL and serving features in Python inside a request handler. Two implementations of "the same" logic diverge on the boring things: null versus empty string, trailing whitespace, case folding, timezone of a timestamp truncation, integer division, and how each engine rounds. Either share one implementation (a UDF, a compiled transform graph, an on-demand feature view) or accept two and run a scheduled parity job over logged serving features to measure the divergence rather than assume it away.</p>
+
+  <h3>Fitting on the wrong rows: leakage</h3>
+  <p>Fit the scaler or the target encoder before splitting and the statistics have seen the validation rows. Offline metrics come out optimistic and the gap only shows up in production. Fit inside the training fold — for target encoding, with out-of-fold means — so the validation set is scored by a transformer that never saw it.</p>
+
+  <div class="callout">
+    <strong>Feature staleness is the honest counter-argument.</strong> Persisted statistics are frozen, and a scaler fit two years ago will centre today's traffic in the wrong place. That is real — but the fix is to refit on a <em>retraining</em> schedule and ship a new model version whose weights and statistics were fit together, not to refit at request time. Refreshing the scaler underneath a model that was trained against the old one is the same bug wearing a maintenance schedule.</div>
+
+  <h3>What this looks like in code</h3>
+  <pre><span class="cm"># WRONG — serving re-derives the scaler from whatever traffic is in flight.</span>
+<span class="cm"># Never raises. The drift is normalised away before the model sees it.</span>
+<span class="bad">def score(batch):
+    mu, sd = batch.amount.mean(), batch.amount.std()   # fitted at request time
+    z = (batch.amount - mu) / sd
+    return model.predict_proba(z.to_frame())[:, 1]</span>
+
+<span class="cm"># RIGHT — fit once on the training split, persist, transform-only at serving.</span>
+prep = ColumnTransformer([
+    ("num", StandardScaler(),                    ["amount", "velocity_1h"]),
+    ("cat", OneHotEncoder(handle_unknown="ignore"), ["merchant_category"]),
+])
+pipe = Pipeline([("prep", prep), ("clf", LGBMClassifier())])
+pipe.fit(X_train, y_train)          <span class="cm"># full-pass stats computed exactly once</span>
+
+<span class="cm"># The fitted stats travel with the weights as ONE versioned artifact.</span>
+mlflow.sklearn.log_model(pipe, artifact_path="model")
+
+<span class="cm"># serving: load that same artifact and call transform/predict — never fit.</span>
+pipe = mlflow.sklearn.load_model("models:/fraud@champion")
+scores = pipe.predict_proba(X_live)[:, 1]</pre>
+</section>
+
+<section id="visualization">
+  <h2>Visualization</h2>
+  <div class="viz-card">
+    <div class="viz-title">Fit-at-serving vs load-persisted-artifact</div>
+    <div class="viz-desc">
+      A fraud model was trained on 4,000 transactions and its scaler, encoder vocabulary and quantile edges were fit on that sample. Move the live-traffic sliders to shift the production distribution, then flip the serving mode. Every number below is computed in the browser from the two samples — the scaling, the encoder codes, the bucket occupancy and the model's mean score.
+    </div>
+
+    <div class="mode-row" id="modeRow">
+      <div class="mode-opt on" data-mode="persist">
+        <span class="mo-t">▸ Load persisted artifact</span>
+        <span class="mo-s">Serving loads μ, σ, vocabulary and bin edges fit at training time. transform() only.</span>
+      </div>
+      <div class="mode-opt danger" data-mode="refit">
+        <span class="mo-t">▸ Re-fit at serving time</span>
+        <span class="mo-s">Serving recomputes μ, σ, vocabulary and bin edges from the live batch. The bug.</span>
+      </div>
+    </div>
+
+    <div class="preset-row">
+      <button class="ctrl-btn primary" data-preset="reset">Reset — traffic matches training</button>
+      <button class="ctrl-btn" data-preset="inflation">Price shock (+40% basket)</button>
+      <button class="ctrl-btn" data-preset="segment">New merchant segment</button>
+      <button class="ctrl-btn" data-preset="both">Both at once</button>
+    </div>
+
+    <div class="slider-grid">
+      <div class="slider-row">
+        <label>Live traffic shift (log-scale μ offset) <span class="val" id="vShift">0.00</span></label>
+        <input type="range" id="sShift" min="-0.4" max="1.2" step="0.02" value="0"/>
+      </div>
+      <div class="slider-row">
+        <label>Live traffic spread (σ multiplier) <span class="val" id="vSpread">1.00×</span></label>
+        <input type="range" id="sSpread" min="0.5" max="2.2" step="0.05" value="1"/>
+      </div>
+      <div class="slider-row">
+        <label>Unseen category share <span class="val" id="vUnseen">0%</span></label>
+        <input type="range" id="sUnseen" min="0" max="40" step="1" value="0"/>
+      </div>
+    </div>
+
+    <div class="pipe-wrap">
+      <svg id="pipe" viewBox="0 0 900 132" role="img" aria-label="Feature pipeline stages and where each stage's fitted state comes from"></svg>
+    </div>
+
+    <div class="verdict pass" id="verdict"></div>
+
+    <div class="stat-grid">
+      <div class="stat"><div class="k">Mean scaled amount</div><div class="v" id="stZ">0.00</div><div class="n">training reference = 0.00</div></div>
+      <div class="stat"><div class="k">Mean model score</div><div class="v" id="stRisk">0.00</div><div class="n" id="stRiskN">offline base = 0.00</div></div>
+      <div class="stat"><div class="k">Encoder codes changed</div><div class="v" id="stEnc">0</div><div class="n">rows silently mislabelled</div></div>
+      <div class="stat"><div class="k">Serving μ / σ</div><div class="v" id="stStats">–</div><div class="n" id="stStatsN">train: μ=– σ=–</div></div>
+    </div>
+
+    <div class="panes">
+      <div>
+        <div class="cv-label">RAW amount ($) — training reference vs live traffic</div>
+        <canvas id="cRaw" width="1240" height="380"></canvas>
+        <div class="legend">
+          <span style="color:#00d4ff">training reference</span>
+          <span style="color:#ff9500">live traffic</span>
+        </div>
+
+        <div class="cv-label" id="lblScaled">SCALED amount (z) as the model actually receives it</div>
+        <canvas id="cScaled" width="1240" height="380"></canvas>
+        <div class="legend">
+          <span style="color:#00d4ff">what the model was trained on</span>
+          <span style="color:#7c3aed">what serving produces now</span>
+        </div>
+      </div>
+
+      <div>
+        <div class="cv-label">CATEGORICAL ENCODER — code assigned to each merchant category</div>
+        <table class="exp" id="encTable">
+          <thead><tr><th>Category</th><th>Train code</th><th>Serving code</th><th>Result</th></tr></thead>
+          <tbody></tbody>
+        </table>
+
+        <div class="cv-label">QUANTILE BUCKETIZER — live occupancy under the active bin edges</div>
+        <div class="bucket-row" id="bucketRow"></div>
+        <div class="legend" style="margin-top:0.6rem"><span style="color:#8892a4" id="edgeLbl">edges: –</span></div>
+
+        <div class="cv-label">PROBE — one transaction through both paths</div>
+        <table class="exp" id="probeTable">
+          <thead><tr><th>Raw</th><th>z persisted</th><th>z re-fit</th><th>Δ</th></tr></thead>
+          <tbody></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section id="interview-line">
+  <h2>The line to say</h2>
+  <div class="quote">
+    <p>"A feature pipeline isn't just code — it carries fitted state: the scaler's mean and variance, the encoder's vocabulary, the bucketizer's edges. Those are statistics fit on the training set, so they're <em>part of the model artifact</em>, not part of the serving code. The failure I look for first is a serving path that re-fits instead of loading — you compute the z-score against the live batch, which pins the scaled feature's mean at zero, so a genuine distribution shift gets normalised away before the model ever sees it. Nothing throws, and a drift monitor on the transformed feature stays green because that feature is stationary by construction. So I bundle the preprocessor and the estimator as one versioned artifact — an sklearn Pipeline logged through MLflow, or a tf.Transform graph baked into the serving graph — and I monitor raw inputs alongside transformed ones. <em>Stats get refreshed by retraining and shipping a new version, never underneath a model that was trained against the old ones.</em>"</p>
+  </div>
+</section>
+
+<section id="takeaways">
+  <h2>Key takeaways</h2>
+  <ul>
+    <li><strong>Fit once, transform forever.</strong> Any call to <code>.fit()</code> in a serving code path is a bug. The mean, the variance, the vocabulary and the bin edges are training artifacts — version them with the weights, not with the deployment.</li>
+    <li><strong>Re-fitting a scaler at serving is the drift-eraser.</strong> The scaled feature is centred on the live batch by construction, so its mean stays ≈ 0 through any raw shift. A monitor on the transformed feature is blind to it; only a monitor on the raw input catches it.</li>
+    <li><strong>Categorical encoders fail discretely, not gradually.</strong> One unseen category re-derives the vocabulary and shifts every subsequent code, so the model reads a different category than the row contained — in range, schema-valid, and completely wrong. Set <code>handle_unknown="ignore"</code> (or an equivalent reserved bucket) and pin the vocabulary.</li>
+    <li><strong>Ship the preprocessor inside the model artifact.</strong> One sklearn <code>Pipeline</code> logged via <code>mlflow.sklearn.log_model</code>, or TFX Transform emitting a graph attached to the serving graph, makes "wrong scaler with right weights" structurally impossible. Two files in two buckets makes it inevitable.</li>
+    <li><strong>Two engines is the second skew source.</strong> Spark for training, Python for serving diverge on nulls, whitespace, case, timezone and rounding long before they diverge on maths. Share one implementation, or run a scheduled parity job over logged serving features and measure the mismatch rate.</li>
+    <li><strong>Fitting before the split is leakage.</strong> Scalers and especially target encoders must be fit inside the training fold — target encoding with out-of-fold means — or the offline number is optimistic and production is the first honest measurement.</li>
+  </ul>
+</section>
+
+</main>
+
+<nav class="concept-nav">
+  <a class="nav-link" href="./02-dataset-versioning.html">
+    <span class="nav-dir">← Previous</span>
+    <span class="nav-title">Dataset Versioning</span>
+  </a>
+  <a class="nav-link" href="./04-feature-stores.html">
+    <span class="nav-dir">Next →</span>
+    <span class="nav-title">Feature Stores</span>
+  </a>
+</nav>
+
+<script>
+(function () {
+  'use strict';
+
+  // ── seeded RNG so the picture is stable across redraws ────────────────────
+  function mulberry32(a) {
+    return function () {
+      a |= 0; a = a + 0x6D2B79F5 | 0;
+      var t = Math.imul(a ^ a >>> 15, 1 | a);
+      t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t;
+      return ((t ^ t >>> 14) >>> 0) / 4294967296;
+    };
+  }
+  function gaussSampler(rand) {
+    var spare = null;
+    return function () {
+      if (spare !== null) { var s = spare; spare = null; return s; }
+      var u, v, s2;
+      do { u = rand() * 2 - 1; v = rand() * 2 - 1; s2 = u * u + v * v; }
+      while (s2 === 0 || s2 >= 1);
+      var m = Math.sqrt(-2 * Math.log(s2) / s2);
+      spare = v * m;
+      return u * m;
+    };
+  }
+
+  var N = 4000;
+  var MU0 = 3.2, SIG0 = 0.55;          // log-space params of the training amounts
+
+  // Fixed training sample — this is what the artifact was fit on.
+  var trainAmt = (function () {
+    var g = gaussSampler(mulberry32(20260830));
+    var out = new Array(N);
+    for (var i = 0; i < N; i++) out[i] = Math.exp(MU0 + SIG0 * g());
+    return out;
+  })();
+
+  // Pre-drawn standard normals reused for the live sample so slider moves are
+  // continuous rather than a fresh random cloud every input event.
+  var liveZ = (function () {
+    var g = gaussSampler(mulberry32(777123));
+    var out = new Array(N);
+    for (var i = 0; i < N; i++) out[i] = g();
+    return out;
+  })();
+  var liveU = (function () {
+    var r = mulberry32(99887);
+    var out = new Array(N);
+    for (var i = 0; i < N; i++) out[i] = r();
+    return out;
+  })();
+
+  function mean(a) { var s = 0; for (var i = 0; i < a.length; i++) s += a[i]; return s / a.length; }
+  function std(a, m) {
+    var s = 0; for (var i = 0; i < a.length; i++) { var d = a[i] - m; s += d * d; }
+    return Math.sqrt(s / (a.length - 1));
+  }
+  function quantile(sorted, q) {
+    var pos = (sorted.length - 1) * q, lo = Math.floor(pos), hi = Math.ceil(pos);
+    if (lo === hi) return sorted[lo];
+    return sorted[lo] + (sorted[hi] - sorted[lo]) * (pos - lo);
+  }
+  function sigmoid(x) { return 1 / (1 + Math.exp(-x)); }
+
+  // ── the persisted artifact: statistics fit ONCE on the training sample ────
+  var MU_T = mean(trainAmt);
+  var SD_T = std(trainAmt, MU_T);
+  var trainSorted = trainAmt.slice().sort(function (a, b) { return a - b; });
+  var EDGES_T = [0.2, 0.4, 0.6, 0.8].map(function (q) { return quantile(trainSorted, q); });
+  var TRAIN_VOCAB = ['books', 'electronics', 'grocery', 'travel'];   // fit at train time
+  var NEW_CAT = 'crypto';
+
+  // Downstream model: logistic on the scaled amount, trained against z_train.
+  var W = 1.1, B = -1.2;
+  var trainZ = trainAmt.map(function (x) { return (x - MU_T) / SD_T; });
+  var BASE_RISK = mean(trainZ.map(function (z) { return sigmoid(W * z + B); }));
+
+  // ── state ────────────────────────────────────────────────────────────────
+  var state = { shift: 0, spread: 1, unseen: 0, mode: 'persist' };
+
+  var el = function (id) { return document.getElementById(id); };
+  var sShift = el('sShift'), sSpread = el('sSpread'), sUnseen = el('sUnseen');
+
+  function liveSample() {
+    var out = new Array(N);
+    for (var i = 0; i < N; i++) {
+      out[i] = Math.exp(MU0 + state.shift + SIG0 * state.spread * liveZ[i]);
+    }
+    return out;
+  }
+
+  function liveCategories() {
+    // Baseline category mix, with `unseen`% of rows arriving as a category the
+    // training vocabulary has never seen.
+    var share = state.unseen / 100;
+    var out = new Array(N);
+    for (var i = 0; i < N; i++) {
+      if (liveU[i] < share) { out[i] = NEW_CAT; }
+      else {
+        var u = (liveU[i] - share) / (1 - share || 1);
+        out[i] = TRAIN_VOCAB[Math.min(TRAIN_VOCAB.length - 1, Math.floor(u * TRAIN_VOCAB.length))];
+      }
+    }
+    return out;
+  }
+
+  // ── histogram helpers ────────────────────────────────────────────────────
+  function hist(sample, lo, hi, bins) {
+    var h = new Array(bins).fill(0);
+    for (var i = 0; i < sample.length; i++) {
+      var idx = Math.floor((sample[i] - lo) / (hi - lo) * bins);
+      if (idx < 0) idx = 0;
+      if (idx >= bins) idx = bins - 1;
+      h[idx]++;
+    }
+    for (var b = 0; b < bins; b++) h[b] /= sample.length;
+    return h;
+  }
+
+  function drawHists(canvas, series, lo, hi, marks) {
+    var ctx = canvas.getContext('2d');
+    var W2 = canvas.width / 2, H2 = canvas.height / 2;
+    ctx.setTransform(2, 0, 0, 2, 0, 0);
+    ctx.clearRect(0, 0, W2, H2);
+
+    var padL = 34, padR = 10, padT = 12, padB = 24;
+    var pw = W2 - padL - padR, ph = H2 - padT - padB;
+
+    var peak = 0;
+    series.forEach(function (s) { s.h.forEach(function (v) { if (v > peak) peak = v; }); });
+    if (peak === 0) peak = 1;
+
+    // axis
+    ctx.strokeStyle = '#252a3d';
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(padL, padT); ctx.lineTo(padL, padT + ph); ctx.lineTo(padL + pw, padT + ph);
+    ctx.stroke();
+
+    var bins = series[0].h.length;
+    var bw = pw / bins;
+
+    series.forEach(function (s) {
+      ctx.beginPath();
+      ctx.moveTo(padL, padT + ph);
+      for (var i = 0; i < bins; i++) {
+        var y = padT + ph - (s.h[i] / peak) * ph;
+        ctx.lineTo(padL + i * bw, y);
+        ctx.lineTo(padL + (i + 1) * bw, y);
+      }
+      ctx.lineTo(padL + pw, padT + ph);
+      ctx.closePath();
+      if (s.fill) { ctx.fillStyle = s.fill; ctx.fill(); }
+      ctx.strokeStyle = s.color;
+      ctx.lineWidth = 1.5;
+      ctx.stroke();
+    });
+
+    // vertical marks (means, edges)
+    (marks || []).forEach(function (m) {
+      var x = padL + (m.x - lo) / (hi - lo) * pw;
+      if (x < padL || x > padL + pw) return;
+      ctx.save();
+      ctx.strokeStyle = m.color;
+      ctx.lineWidth = 1.2;
+      if (m.dash) ctx.setLineDash([4, 4]);
+      ctx.beginPath(); ctx.moveTo(x, padT); ctx.lineTo(x, padT + ph); ctx.stroke();
+      ctx.restore();
+      if (m.label) {
+        ctx.fillStyle = m.color;
+        ctx.font = '10px "JetBrains Mono", monospace';
+        var tw = ctx.measureText(m.label).width;
+        var tx = Math.min(x + 4, padL + pw - tw - 2);
+        ctx.fillText(m.label, tx, padT + 10 + (m.row || 0) * 12);
+      }
+    });
+
+    // x ticks
+    ctx.fillStyle = '#8892a4';
+    ctx.font = '10px "JetBrains Mono", monospace';
+    for (var t = 0; t <= 4; t++) {
+      var vx = lo + (hi - lo) * t / 4;
+      var px = padL + pw * t / 4;
+      var lab = (hi - lo > 20) ? Math.round(vx).toString() : vx.toFixed(1);
+      ctx.fillText(lab, px - 8, padT + ph + 15);
+    }
+    ctx.fillText('freq', 4, padT + 8);
+  }
+
+  // ── pipeline diagram ─────────────────────────────────────────────────────
+  var STAGES = [
+    { t: 'impute', s: 'median' },
+    { t: 'scale', s: 'μ, σ' },
+    { t: 'encode', s: 'vocabulary' },
+    { t: 'bucketize', s: 'bin edges' },
+    { t: 'model', s: 'weights' }
+  ];
+
+  function drawPipe() {
+    var svg = el('pipe');
+    var parts = [];
+    var w = 155, gap = 25, x0 = 12;
+    for (var i = 0; i < STAGES.length; i++) {
+      var x = x0 + i * (w + gap);
+      var isModel = STAGES[i].t === 'model';
+      var refit = (state.mode === 'refit') && !isModel;
+      var col = refit ? '#ff4757' : '#00ff88';
+      var bg = refit ? 'rgba(255,71,87,0.09)' : 'rgba(0,255,136,0.07)';
+      var src = isModel ? 'from artifact' : (refit ? 'fit on LIVE batch' : 'from artifact');
+      parts.push(
+        '<rect x="' + x + '" y="26" width="' + w + '" height="72" rx="8" fill="' + bg +
+        '" stroke="' + col + '" stroke-width="1.2"/>' +
+        '<text x="' + (x + 12) + '" y="48" fill="#e2e8f0" font-family="JetBrains Mono, monospace" font-size="13">' + STAGES[i].t + '()</text>' +
+        '<text x="' + (x + 12) + '" y="66" fill="#8892a4" font-family="JetBrains Mono, monospace" font-size="10">state: ' + STAGES[i].s + '</text>' +
+        '<text x="' + (x + 12) + '" y="84" fill="' + col + '" font-family="JetBrains Mono, monospace" font-size="10">' + src + '</text>'
+      );
+      if (i < STAGES.length - 1) {
+        var ax = x + w, bx = x + w + gap;
+        parts.push('<path d="M' + (ax + 4) + ' 62 L' + (bx - 6) + ' 62" stroke="#252a3d" stroke-width="1.5"/>' +
+          '<path d="M' + (bx - 10) + ' 58 L' + (bx - 4) + ' 62 L' + (bx - 10) + ' 66 Z" fill="#252a3d"/>');
+      }
+    }
+    parts.push('<text x="12" y="16" fill="#8892a4" font-family="JetBrains Mono, monospace" font-size="10">raw request ─▸ transformation stages ─▸ prediction</text>');
+    parts.push('<text x="12" y="122" fill="#8892a4" font-family="JetBrains Mono, monospace" font-size="10">' +
+      (state.mode === 'refit'
+        ? 'four stages derive their fitted state from live traffic — none of them matches what the weights were trained against'
+        : 'every stage loads state fit at training time — serving reproduces the training transformation exactly') +
+      '</text>');
+    svg.innerHTML = parts.join('');
+  }
+
+  // ── main render ──────────────────────────────────────────────────────────
+  function render() {
+    var amt = liveSample();
+    var cats = liveCategories();
+
+    var MU_L = mean(amt);
+    var SD_L = std(amt, MU_L);
+    var liveSorted = amt.slice().sort(function (a, b) { return a - b; });
+    var EDGES_L = [0.2, 0.4, 0.6, 0.8].map(function (q) { return quantile(liveSorted, q); });
+
+    var refit = state.mode === 'refit';
+    var muUse = refit ? MU_L : MU_T;
+    var sdUse = refit ? SD_L : SD_T;
+    var edgesUse = refit ? EDGES_L : EDGES_T;
+
+    // scaled feature as the model actually receives it
+    var zServe = amt.map(function (x) { return (x - muUse) / sdUse; });
+    var meanZ = mean(zServe);
+    if (Math.abs(meanZ) < 0.005) meanZ = 0;   // avoid a "-0.00" readout
+    var meanRisk = mean(zServe.map(function (z) { return sigmoid(W * z + B); }));
+
+    // ── encoder: train vocabulary vs whatever serving decided to use ────────
+    var presentSet = {};
+    for (var i = 0; i < cats.length; i++) presentSet[cats[i]] = true;
+    var present = Object.keys(presentSet).sort();
+    var serveVocab = refit ? present : TRAIN_VOCAB;
+
+    var rows = [], changedRows = 0;
+    var counts = {};
+    for (var j = 0; j < cats.length; j++) counts[cats[j]] = (counts[cats[j]] || 0) + 1;
+
+    present.forEach(function (c) {
+      var trainCode = TRAIN_VOCAB.indexOf(c);
+      var serveCode = serveVocab.indexOf(c);
+      var trainTxt = trainCode < 0 ? 'unseen' : String(trainCode);
+      var serveTxt = serveCode < 0 ? 'unknown' : String(serveCode);
+      var bad = trainCode >= 0 && serveCode >= 0 && trainCode !== serveCode;
+      if (bad) changedRows += counts[c] || 0;
+      var res = bad
+        ? '<span class="bad">mislabelled</span>'
+        : (trainCode < 0
+          ? (refit ? '<span class="bad">given a real code</span>' : '<span class="obs">→ unknown bucket</span>')
+          : '<span class="ok">matches</span>');
+      rows.push('<tr><td class="name">' + c + '</td><td class="obs">' + trainTxt +
+        '</td><td class="' + (bad ? 'bad' : 'obs') + '">' + serveTxt + '</td><td>' + res + '</td></tr>');
+    });
+    el('encTable').querySelector('tbody').innerHTML = rows.join('');
+
+    // ── bucketizer occupancy under the active edges ────────────────────────
+    var occ = [0, 0, 0, 0, 0];
+    for (var k = 0; k < amt.length; k++) {
+      var b = 0;
+      while (b < edgesUse.length && amt[k] > edgesUse[b]) b++;
+      occ[b]++;
+    }
+    var bhtml = occ.map(function (c, idx) {
+      var p = c / amt.length;
+      var far = Math.abs(p - 0.2) > 0.12;
+      return '<div class="bkt"><div class="bar"><div class="fill" style="height:' +
+        Math.max(1, Math.round(p / 0.6 * 44)) + 'px;background:' + (far ? '#ff9500' : '#7c3aed') +
+        '"></div></div><div class="pct">' + (p * 100).toFixed(0) + '%</div><div class="nm">q' + (idx + 1) + '</div></div>';
+    }).join('');
+    el('bucketRow').innerHTML = bhtml;
+    el('edgeLbl').textContent = 'edges (' + (refit ? 're-fit on live' : 'from artifact') + '): $' +
+      edgesUse.map(function (e) { return e.toFixed(0); }).join('  $');
+
+    // ── probe: one transaction down both paths ─────────────────────────────
+    var probes = [20, 60, 200];
+    el('probeTable').querySelector('tbody').innerHTML = probes.map(function (x) {
+      var zp = (x - MU_T) / SD_T;
+      var zr = (x - MU_L) / SD_L;
+      var d = Math.abs(zp - zr);
+      return '<tr><td class="name">$' + x + '</td><td class="obs">' + zp.toFixed(2) +
+        '</td><td class="obs">' + zr.toFixed(2) + '</td><td class="' + (d > 0.25 ? 'bad' : 'ok') + '">' +
+        d.toFixed(2) + '</td></tr>';
+    }).join('');
+
+    // ── stats ──────────────────────────────────────────────────────────────
+    el('stZ').textContent = (meanZ >= 0 ? '+' : '') + meanZ.toFixed(2);
+    el('stZ').className = 'v' + (Math.abs(meanZ) < 0.05 && (state.shift !== 0 || state.spread !== 1) ? ' badv' : '');
+    el('stRisk').textContent = meanRisk.toFixed(3);
+    el('stRisk').className = 'v' + (Math.abs(meanRisk - BASE_RISK) < 0.03 && state.shift > 0.05 ? ' badv' : '');
+    el('stRiskN').textContent = 'offline base = ' + BASE_RISK.toFixed(3);
+    el('stEnc').textContent = changedRows;
+    el('stEnc').className = 'v' + (changedRows > 0 ? ' badv' : '');
+    el('stStats').textContent = 'μ=' + muUse.toFixed(1) + ' σ=' + sdUse.toFixed(1);
+    el('stStatsN').textContent = 'train: μ=' + MU_T.toFixed(1) + ' σ=' + SD_T.toFixed(1);
+
+    // ── canvases ───────────────────────────────────────────────────────────
+    var RAW_LO = 0, RAW_HI = 200, BINS = 46;
+    drawHists(el('cRaw'),
+      [
+        { h: hist(trainAmt, RAW_LO, RAW_HI, BINS), color: '#00d4ff', fill: 'rgba(0,212,255,0.10)' },
+        { h: hist(amt, RAW_LO, RAW_HI, BINS), color: '#ff9500', fill: 'rgba(255,149,0,0.14)' }
+      ],
+      RAW_LO, RAW_HI,
+      [
+        { x: MU_T, color: '#00d4ff', dash: true, label: 'train mean $' + MU_T.toFixed(0), row: 0 },
+        { x: MU_L, color: '#ff9500', dash: true, label: 'live mean $' + MU_L.toFixed(0), row: 1 }
+      ]);
+
+    var Z_LO = -3, Z_HI = 7;
+    drawHists(el('cScaled'),
+      [
+        { h: hist(trainZ, Z_LO, Z_HI, BINS), color: '#00d4ff', fill: 'rgba(0,212,255,0.08)' },
+        { h: hist(zServe, Z_LO, Z_HI, BINS), color: '#7c3aed', fill: 'rgba(124,58,237,0.20)' }
+      ],
+      Z_LO, Z_HI,
+      [
+        { x: 0, color: '#00d4ff', dash: true, label: 'trained centre z=0', row: 0 },
+        { x: meanZ, color: '#7c3aed', label: 'served mean z=' + meanZ.toFixed(2), row: 1 }
+      ]);
+
+    el('lblScaled').textContent = 'SCALED amount (z) as the model actually receives it — ' +
+      (refit ? 'μ,σ re-fit on live traffic' : 'μ,σ loaded from the training artifact');
+
+    // ── verdict ────────────────────────────────────────────────────────────
+    var moved = Math.abs(state.shift) > 0.03 || Math.abs(state.spread - 1) > 0.03 || state.unseen > 0;
+    var v = el('verdict');
+    if (!refit) {
+      if (!moved) {
+        v.className = 'verdict pass';
+        v.innerHTML = 'PARITY — serving loads the persisted artifact and traffic still looks like training. ' +
+          'Scaled mean z = ' + meanZ.toFixed(2) + '.<span class="sub">This is the state both modes agree in, which is exactly why the re-fit bug survives code review and unit tests.</span>';
+      } else {
+        v.className = 'verdict warn';
+        v.innerHTML = 'CORRECT AND DRIFTING — the artifact is intact, so the shift reaches the model as signal: mean z = ' +
+          (meanZ >= 0 ? '+' : '') + meanZ.toFixed(2) + ', mean score ' + meanRisk.toFixed(3) +
+          ' vs offline base ' + BASE_RISK.toFixed(3) + '.<span class="sub">This is the desired behaviour. A drift detector should fire and trigger a retrain — the scaler is not the place to absorb a distribution shift.</span>';
+      }
+    } else {
+      if (!moved) {
+        v.className = 'verdict warn';
+        v.innerHTML = 'BUG PRESENT, INVISIBLE — serving re-fits, but live traffic matches training so both paths agree. ' +
+          'Mean z = ' + meanZ.toFixed(2) + '.<span class="sub">Move any slider. Nothing in CI can see this defect until the production distribution moves.</span>';
+      } else {
+        var bits = [];
+        bits.push('scaled mean pinned at ' + meanZ.toFixed(2) + ' despite a raw mean of $' + MU_L.toFixed(0) + ' vs $' + MU_T.toFixed(0) + ' at training');
+        if (changedRows > 0) bits.push(changedRows.toLocaleString() + ' rows given a different categorical code than training used');
+        v.className = 'verdict fail';
+        v.innerHTML = 'TRAINING-SERVING SKEW — ' + bits.join('; ') + '.<span class="sub">Mean score ' + meanRisk.toFixed(3) +
+          ' against an offline base of ' + BASE_RISK.toFixed(3) + ': the re-fit renormalises the shift away, so the model reports business as usual. No exception is raised and a drift monitor on the transformed feature stays green.</span>';
+      }
+    }
+
+    drawPipe();
+  }
+
+  // ── controls ─────────────────────────────────────────────────────────────
+  function syncLabels() {
+    el('vShift').textContent = (state.shift >= 0 ? '+' : '') + state.shift.toFixed(2);
+    el('vSpread').textContent = state.spread.toFixed(2) + '×';
+    el('vUnseen').textContent = state.unseen + '%';
+  }
+
+  function onInput() {
+    state.shift = parseFloat(sShift.value);
+    state.spread = parseFloat(sSpread.value);
+    state.unseen = parseInt(sUnseen.value, 10);
+    syncLabels();
+    render();
+  }
+  sShift.addEventListener('input', onInput);
+  sSpread.addEventListener('input', onInput);
+  sUnseen.addEventListener('input', onInput);
+
+  Array.prototype.forEach.call(document.querySelectorAll('.mode-opt'), function (node) {
+    node.addEventListener('click', function () {
+      state.mode = node.getAttribute('data-mode');
+      Array.prototype.forEach.call(document.querySelectorAll('.mode-opt'), function (n) {
+        n.classList.toggle('on', n === node);
+      });
+      render();
+    });
+  });
+
+  var PRESETS = {
+    reset: { shift: 0, spread: 1, unseen: 0 },
+    inflation: { shift: 0.34, spread: 1, unseen: 0 },
+    segment: { shift: 0, spread: 1.35, unseen: 22 },
+    both: { shift: 0.6, spread: 1.5, unseen: 30 }
+  };
+  Array.prototype.forEach.call(document.querySelectorAll('[data-preset]'), function (btn) {
+    btn.addEventListener('click', function () {
+      var p = PRESETS[btn.getAttribute('data-preset')];
+      sShift.value = p.shift; sSpread.value = p.spread; sUnseen.value = p.unseen;
+      Array.prototype.forEach.call(document.querySelectorAll('[data-preset]'), function (b) {
+        b.classList.toggle('primary', b === btn);
+      });
+      onInput();
+    });
+  });
+
+  syncLabels();
+  render();
+})();
+</script>
+
+</body>
+</html>

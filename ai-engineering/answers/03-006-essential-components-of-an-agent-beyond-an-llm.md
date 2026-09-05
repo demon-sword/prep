@@ -89,7 +89,7 @@ Without this layer, agents fail silently and catastrophically in production:
 
 ### Example / Tradeoff
 **LangGraph support agent (production stack):**
-- **LLM:** GPT-4o (reasoning), GPT-4o-mini (simple tool selection to save cost)
+- **LLM:** a frontier model (reasoning), a small fast model (simple tool selection to save cost)
 - **Tools:** `search_kb(query)`, `lookup_order(id)`, `create_ticket(details)`, `escalate(reason)` — each schema has rich description + typed params
 - **Memory:** Working context (last 10 turns), Pinecone episodic store (similar past tickets), Redis user-preference store
 - **Orchestrator:** LangGraph `StateGraph` with `interrupt_before` on `escalate` tool — human confirms before escalation; max 8 turns, $0.05 cost cap per session

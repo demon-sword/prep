@@ -5,6 +5,8 @@
     "slug": "caching-strategies",
     "group": "data",
     "description": "Cache placement, read/write patterns (cache-aside, write-through, write-behind, write-around), invalidation approaches, and the three named failure modes: thundering herd, penetration, avalanche.",
+    "depth": "intro",
+    "has_code": true,
     "source": "ralph-backend/sources/01-caching-strategies.md",
     "viz": "toggle between cache-aside/write-through/write-behind/write-around request flows animated through client to cache to DB, plus a thundering-herd stampede simulator with a single-flight lock toggle showing concurrent DB hits collapse from N to 1"
   },
@@ -14,6 +16,8 @@
     "slug": "queues-backpressure",
     "group": "messaging",
     "description": "Work queues vs event logs, delivery guarantees (at-least-once plus idempotency), per-key ordering, and backpressure mechanisms that keep overload from silently turning into unbounded latency.",
+    "depth": "core",
+    "has_code": false,
     "source": "ralph-backend/sources/02-queues-backpressure.md",
     "viz": "animated producer/consumer queue with adjustable production rate vs consumer pool size showing consumer lag grow under a 5x burst; bounded-queue toggle demonstrating backpressure kicking in vs an unbounded queue growing without limit"
   },
@@ -23,6 +27,8 @@
     "slug": "consistency-tradeoffs",
     "group": "consistency",
     "description": "CAP restated correctly via PACELC, the consistency spectrum (strong/sequential/causal/eventual), session guarantees, database isolation levels, and quorum math (W+R>N).",
+    "depth": "advanced",
+    "has_code": false,
     "source": "ralph-backend/sources/03-consistency-tradeoffs.md",
     "viz": "PACELC decision tree with a partition toggle (choose A or C) and a normal-operation toggle (choose L or C), plus a quorum simulator with N/W/R sliders showing whether W+R>N holds and whether a stale read becomes possible"
   },
@@ -32,8 +38,13 @@
     "slug": "sharding-partitioning",
     "group": "scaling",
     "description": "Range vs hash vs consistent-hash partitioning, shard-key selection criteria, the noisy-neighbour problem, fixed-partition-count rebalancing, and local vs global secondary indexes.",
+    "depth": "core",
+    "has_code": true,
     "source": "ralph-backend/sources/04-sharding-partitioning.md",
-    "viz": "ring diagram for consistent hashing showing keys and nodes as points on a circle, add/remove-node buttons animating how few keys remap, contrasted with a hash-mod-N toggle showing nearly all keys remapping on the same operation"
+    "viz": "ring diagram for consistent hashing showing keys and nodes as points on a circle, add/remove-node buttons animating how few keys remap, contrasted with a hash-mod-N toggle showing nearly all keys remapping on the same operation",
+    "gaps": [
+      "Add a worked <pre> code block for the consistent-hash ring with virtual nodes: building the sorted ring, key -> shard lookup by successor search, and what moves when a node is added or removed \u2014 the quantitative claim (only K/N keys migrate) is the reason to prefer it over hash-mod-N and the code makes it checkable."
+    ]
   },
   {
     "id": "05-idempotency",
@@ -41,8 +52,13 @@
     "slug": "idempotency",
     "group": "coordination",
     "description": "Why at-least-once delivery makes idempotency non-negotiable, the idempotency-key pattern (client-generated, atomic check-and-store), natural idempotency via conditional writes, and HTTP method semantics.",
+    "depth": "core",
+    "has_code": true,
     "source": "ralph-backend/sources/05-idempotency.md",
-    "viz": "animated request-retry sequence showing a client retry with the same idempotency key hitting a stored-response short-circuit, contrasted with a naive endpoint double-executing (double charge) when the key is regenerated per attempt"
+    "viz": "animated request-retry sequence showing a client retry with the same idempotency key hitting a stored-response short-circuit, contrasted with a naive endpoint double-executing (double charge) when the key is regenerated per attempt",
+    "gaps": [
+      "Add a worked <pre> code block for the idempotency-key pattern as an atomic check-and-store \u2014 INSERT ... ON CONFLICT DO NOTHING (or equivalent) returning whether this request is the first \u2014 plus replaying the stored response on a duplicate. The atomicity is the whole pattern; a read-then-write version is the bug the page warns about."
+    ]
   },
   {
     "id": "06-circuit-breakers-bulkheads",
@@ -50,8 +66,17 @@
     "slug": "circuit-breakers-bulkheads",
     "group": "reliability",
     "description": "Circuit breaker states (closed/open/half-open) and required fallback behavior, bulkheads as resource partitioning to limit blast radius, and the supporting cast: timeouts, jittered backoff, retry budgets.",
+    "depth": "core",
+    "has_code": true,
     "source": "ralph-backend/sources/06-circuit-breakers-bulkheads.md",
-    "viz": "state machine diagram (closed/open/half-open) with a failure-rate slider driving transitions, plus a bulkhead panel showing separate thread pools per dependency where one pool exhausting doesn't starve the others, compared to a shared-pool scenario cascading"
+    "viz": "state machine diagram (closed/open/half-open) with a failure-rate slider driving transitions, plus a bulkhead panel showing separate thread pools per dependency where one pool exhausting doesn't starve the others, compared to a shared-pool scenario cascading",
+    "gaps": [
+      "Derive retry amplification quantitatively: with a call chain of depth D where every hop retries up to r times, a single client request can produce r^D calls at the leaf (3 retries over 3 hops = 27x), and show how that turns a brief blip into a metastable failure that persists after the trigger is gone because the retry load alone sustains the overload.",
+      "Add retry budgets: cap retries at a fraction (e.g. 10%) of successful requests using a token bucket where each success adds tokens and each retry spends one, so retries degrade gracefully to zero exactly when the dependency is failing \u2014 contrast with per-call max-attempts, which does nothing to bound fleet-wide amplification.",
+      "Compare the backoff formulas explicitly with their sleep computations: plain exponential `min(cap, base*2^attempt)`, full jitter `random(0, min(cap, base*2^attempt))`, equal jitter `t/2 + random(0, t/2)` where `t = min(cap, base*2^attempt)`, and decorrelated jitter `min(cap, random(base, prev*3))` \u2014 noting full jitter minimizes total contention while decorrelated jitter finishes sooner at similar load.",
+      "Explain the collision math for why unjittered exponential backoff re-synchronizes clients: N clients failing on the same event all sleep exactly the same interval and retry in the same instant, so every round is another thundering herd of size N and the expected number of colliding retries per window stays O(N), whereas spreading retries uniformly over a window W drops expected simultaneous arrivals to about N/W.",
+      "Add a worked <pre> code block for the breaker state machine: the rolling failure-rate window, the closed -> open transition on threshold breach, the open -> half-open timer, and the half-open trial call that either closes the breaker or re-opens it. The half-open single-probe step is the part implementations get wrong and the page currently only names the states."
+    ]
   },
   {
     "id": "07-change-data-capture",
@@ -59,8 +84,13 @@
     "slug": "change-data-capture",
     "group": "data",
     "description": "Why dual writes aren't atomic, log-based CDC off the replication log (WAL/binlog/oplog) vs trigger-based vs query-based, and the transactional outbox pattern for explicit event-schema control.",
+    "depth": "advanced",
+    "has_code": true,
     "source": "ralph-backend/sources/07-change-data-capture.md",
-    "viz": "side-by-side animated diagram: dual-write anti-pattern showing a crash between the two writes leaving DB and event bus permanently inconsistent, vs CDC reading the replication log producing an exactly-committed event stream, with a transactional-outbox variant toggle"
+    "viz": "side-by-side animated diagram: dual-write anti-pattern showing a crash between the two writes leaving DB and event bus permanently inconsistent, vs CDC reading the replication log producing an exactly-committed event stream, with a transactional-outbox variant toggle",
+    "gaps": [
+      "Add a worked <pre> code block for the transactional outbox: the business write and the outbox INSERT inside one transaction, then the relay poller reading with a cursor and marking rows published. The page argues dual writes are not atomic; this shows the shape of the fix."
+    ]
   },
   {
     "id": "08-rate-limiting",
@@ -68,8 +98,13 @@
     "slug": "rate-limiting",
     "group": "traffic-management",
     "description": "Protection vs compliance limiting, algorithm comparison (token bucket, leaky bucket, fixed/sliding window), distributed rate limiting across a fleet, and cost-based limiting for variable-cost requests.",
+    "depth": "core",
+    "has_code": true,
     "source": "ralph-backend/sources/08-rate-limiting.md",
-    "viz": "token bucket visualizer with refill-rate and bucket-size sliders showing burst absorption, plus an algorithm selector cycling through token bucket / leaky bucket / fixed window (showing the boundary-doubling exploit) / sliding window counter"
+    "viz": "token bucket visualizer with refill-rate and bucket-size sliders showing burst absorption, plus an algorithm selector cycling through token bucket / leaky bucket / fixed window (showing the boundary-doubling exploit) / sliding window counter",
+    "gaps": [
+      "Add a worked <pre> code block for token bucket with lazy refill (tokens = min(capacity, tokens + elapsed*rate)) written as an atomic Redis Lua script, since the page's distributed section turns on the read-modify-write being atomic across the fleet \u2014 the single-node version silently over-admits under concurrency."
+    ]
   },
   {
     "id": "09-load-balancing",
@@ -77,6 +112,8 @@
     "slug": "load-balancing",
     "group": "traffic-management",
     "description": "L4 vs L7 load balancing, algorithm choice (round robin, least connections, consistent hashing, weighted), health checks, and connection draining during deploys.",
+    "depth": "intro",
+    "has_code": false,
     "viz": "traffic distribution simulator across backend instances with an algorithm selector (round robin/least-conn/consistent-hash), a slow/unhealthy instance toggle showing health-check ejection, and connection draining animated during a rolling restart"
   },
   {
@@ -84,16 +121,29 @@
     "title": "Service Discovery",
     "slug": "service-discovery",
     "group": "traffic-management",
-    "description": "Client-side vs server-side service discovery, DNS-based discovery, and service registries (Consul, etcd, ZooKeeper) — how services find each other as instances scale up and down.",
-    "viz": "animated service registry with instances registering/deregistering via heartbeat, client-side discovery calling the registry directly vs server-side discovery via a load balancer/sidecar, showing stale-endpoint risk when a heartbeat lags"
+    "description": "Client-side vs server-side service discovery, DNS-based discovery, and service registries (Consul, etcd, ZooKeeper) \u2014 how services find each other as instances scale up and down.",
+    "depth": "core",
+    "has_code": false,
+    "viz": "animated service registry with instances registering/deregistering via heartbeat, client-side discovery calling the registry directly vs server-side discovery via a load balancer/sidecar, showing stale-endpoint risk when a heartbeat lags",
+    "gaps": [
+      "Explain gossip/epidemic protocols as the membership mechanism behind registries: contrast anti-entropy (periodic pairwise full-state reconciliation, eventually consistent, high overhead) with rumor-mongering (a node forwards a 'hot' update to k random peers per round and stops after it sees the rumor already known m times).",
+      "Walk through SWIM concretely: every protocol period T each node picks one random peer and sends a direct ping; on timeout it asks k randomly chosen peers to ping-req the target indirectly; only after both fail does it mark the node SUSPECT, broadcast the suspicion, and wait a suspicion timeout for a refutation before declaring it DEAD \u2014 showing why the indirect probe suppresses false positives caused by a single congested link.",
+      "Derive why gossip converges in O(log N) rounds: with fanout k each round multiplies the informed set roughly k-fold, so full dissemination takes ~log_k(N) rounds and per-node load stays O(k) regardless of N \u2014 versus a central registry whose heartbeat load is O(N) on one node.",
+      "Compare directly against the heartbeat-to-a-central-registry model the page already covers: single point of failure and O(N) heartbeat fan-in vs peer-to-peer with no central node, and the tradeoff that gossip membership is only eventually consistent so two clients can briefly disagree on the member list."
+    ]
   },
   {
     "id": "11-consensus-algorithms",
     "title": "Consensus Algorithms (Raft/Paxos)",
     "slug": "consensus-algorithms",
     "group": "coordination",
-    "description": "Leader election and distributed consensus — how a cluster agrees on a single value despite node failures, why majority quorums prevent split-brain, and why consensus is expensive and reserved for metadata rather than data-plane traffic.",
-    "viz": "animated Raft cluster with leader election triggered on node failure, log replication requiring a majority quorum before commit, and a network-partition toggle showing split-brain prevented because only the majority side can elect a leader"
+    "description": "Leader election and distributed consensus \u2014 how a cluster agrees on a single value despite node failures, why majority quorums prevent split-brain, and why consensus is expensive and reserved for metadata rather than data-plane traffic.",
+    "depth": "advanced",
+    "has_code": true,
+    "viz": "animated Raft cluster with leader election triggered on node failure, log replication requiring a majority quorum before commit, and a network-partition toggle showing split-brain prevented because only the majority side can elect a leader",
+    "gaps": [
+      "Add a worked <pre> code block for Raft's RequestVote and AppendEntries handlers with the term comparison and the log-matching check (reject if the follower's log lacks an entry at prevLogIndex with prevLogTerm). Those two guards are what actually prevent split-brain, and the page currently asserts the property without showing the mechanism."
+    ]
   },
   {
     "id": "12-database-replication",
@@ -101,7 +151,15 @@
     "slug": "database-replication",
     "group": "data",
     "description": "Leader-follower vs multi-leader vs leaderless replication, synchronous vs asynchronous replication, replication lag, and failover mechanics when a follower falls behind or a leader dies.",
-    "viz": "replication topology selector (single-leader/multi-leader/leaderless) with an adjustable network-delay slider showing replication lag grow, a leader-failure button triggering failover, and a conflicting-write scenario in multi-leader mode"
+    "depth": "core",
+    "has_code": false,
+    "viz": "replication topology selector (single-leader/multi-leader/leaderless) with an adjustable network-delay slider showing replication lag grow, a leader-failure button triggering failover, and a conflicting-write scenario in multi-leader mode",
+    "gaps": [
+      "Add hinted handoff: when the coordinator cannot reach one of the N replicas for a write, it stores the value locally with a hint recording the intended replica, still counts toward W if sloppy quorum is enabled, and replays the hinted writes once the target node comes back \u2014 plus the failure case where the hint holder dies before replay.",
+      "Add read repair in both forms: synchronous read repair, where the coordinator compares the versions returned by the R responding replicas during a read and writes the newest value back to any stale replica before returning to the client, and asynchronous/background read repair, which queues the divergence for repair off the read path so read latency isn't paid.",
+      "Add anti-entropy via Merkle trees: each replica builds a hash tree over its key range, two replicas exchange root hashes and descend only into subtrees whose hashes differ, so divergence is located in O(log n) comparisons and only the differing keys are shipped \u2014 the mechanism that repairs keys never read (which read repair alone would never fix).",
+      "Tie the three together explicitly as why R+W>N is necessary but not sufficient: quorums bound staleness at read time, but only hinted handoff, read repair and anti-entropy actually drive replicas back to convergence."
+    ]
   },
   {
     "id": "13-distributed-transactions",
@@ -109,15 +167,25 @@
     "slug": "distributed-transactions",
     "group": "coordination",
     "description": "Two-phase commit and its coordinator-blocking failure mode, the Saga pattern (choreography vs orchestration) with compensating actions, TCC, and why atomic multi-service transactions are avoided in practice.",
-    "viz": "animated 2PC prepare/commit sequence across three services with a coordinator-crash-after-prepare failure mode leaving participants blocked, contrasted with a Saga executing sequential steps and running compensating actions when a later step fails"
+    "depth": "advanced",
+    "has_code": true,
+    "viz": "animated 2PC prepare/commit sequence across three services with a coordinator-crash-after-prepare failure mode leaving participants blocked, contrasted with a Saga executing sequential steps and running compensating actions when a later step fails",
+    "gaps": [
+      "Add a worked <pre> code block for a saga orchestrator: the ordered step list with each step's compensating action, and the failure path unwinding compensations in reverse order. The reverse ordering and the fact that compensation is a new forward transaction, not a rollback, are the parts readers get wrong."
+    ]
   },
   {
     "id": "14-concurrency-control",
     "title": "Concurrency Control (Optimistic, Pessimistic, MVCC)",
     "slug": "concurrency-control",
     "group": "consistency",
-    "description": "Optimistic vs pessimistic locking, and multi-version concurrency control (MVCC) — how databases let readers and writers avoid blocking each other, and when optimistic locking's retry cost bites.",
-    "viz": "two concurrent transactions editing the same row: pessimistic mode shows one transaction blocking on a lock, optimistic mode shows a version-check conflict and retry, MVCC mode shows each transaction reading its own consistent snapshot without blocking"
+    "description": "Optimistic vs pessimistic locking, and multi-version concurrency control (MVCC) \u2014 how databases let readers and writers avoid blocking each other, and when optimistic locking's retry cost bites.",
+    "depth": "core",
+    "has_code": true,
+    "viz": "two concurrent transactions editing the same row: pessimistic mode shows one transaction blocking on a lock, optimistic mode shows a version-check conflict and retry, MVCC mode shows each transaction reading its own consistent snapshot without blocking",
+    "gaps": [
+      "Add a worked <pre> code block for the optimistic path \u2014 UPDATE ... SET version = version + 1 WHERE id = ? AND version = ? \u2014 plus the retry loop that reads, recomputes and retries when zero rows are affected. Row count as the conflict signal is the detail that makes optimistic control work."
+    ]
   },
   {
     "id": "15-distributed-locking",
@@ -125,38 +193,64 @@
     "slug": "distributed-locking",
     "group": "coordination",
     "description": "Distributed locks (Redlock, lease-based locks) and why a naive lock built on a single key is dangerous under GC pauses or clock drift, and how fencing tokens close the gap between lock expiry and actual work completion.",
-    "viz": "two clients racing for a distributed lock with an adjustable GC-pause/clock-drift slider showing a lock expiring mid-critical-section and a second client acquiring it; a fencing-token toggle shows the stale client's late write rejected downstream"
+    "depth": "advanced",
+    "has_code": true,
+    "viz": "two clients racing for a distributed lock with an adjustable GC-pause/clock-drift slider showing a lock expiring mid-critical-section and a second client acquiring it; a fencing-token toggle shows the stale client's late write rejected downstream",
+    "gaps": [
+      "Add a worked <pre> code block showing the fencing token end to end: the lock service returning a monotonically increasing token on acquire, and the storage service rejecting any write whose token is lower than the highest it has seen. Without the storage-side check the token is decorative, which is the page's central warning."
+    ]
   },
   {
     "id": "16-event-sourcing-cqrs",
     "title": "Event Sourcing and CQRS",
     "slug": "event-sourcing-cqrs",
     "group": "messaging",
-    "description": "Storing state as an append-only sequence of events and separating write models from read models (CQRS) — rebuilding current state by replay, and the operational cost of eventual consistency between the two sides.",
-    "viz": "event log accumulating append-only events with a replay button rebuilding current state from scratch, alongside a CQRS diagram showing writes going to the command model while a projector asynchronously updates a separate read-optimized view"
+    "description": "Storing state as an append-only sequence of events and separating write models from read models (CQRS) \u2014 rebuilding current state by replay, and the operational cost of eventual consistency between the two sides.",
+    "depth": "core",
+    "has_code": true,
+    "viz": "event log accumulating append-only events with a replay button rebuilding current state from scratch, alongside a CQRS diagram showing writes going to the command model while a projector asynchronously updates a separate read-optimized view",
+    "gaps": [
+      "Add a worked <pre> code block for appending an event under expected-version optimistic concurrency, and the fold that replays a stream back into current state. The replay function is what makes the 'state is a derived view' claim concrete rather than slogan."
+    ]
   },
   {
     "id": "17-observability",
     "title": "Observability (Metrics, Logs, Traces)",
     "slug": "observability",
     "group": "operations",
-    "description": "The three pillars — metrics, logs, and distributed traces — plus SLIs/SLOs/SLAs and error budgets, and how they compose to answer 'is the system healthy' and 'why did this one request fail.'",
-    "viz": "a single request flowing through four services rendered as a distributed trace waterfall (spans with latency), paired with an SLO burn-rate gauge showing the error budget being consumed faster during a simulated incident"
+    "description": "The three pillars \u2014 metrics, logs, and distributed traces \u2014 plus SLIs/SLOs/SLAs and error budgets, and how they compose to answer 'is the system healthy' and 'why did this one request fail.'",
+    "depth": "core",
+    "has_code": false,
+    "viz": "a single request flowing through four services rendered as a distributed trace waterfall (spans with latency), paired with an SLO burn-rate gauge showing the error budget being consumed faster during a simulated incident",
+    "gaps": [
+      "Introduce OpenTelemetry as the vendor-neutral standard and separate its three layers precisely: the API (what instrumentation code compiles against, a no-op without an SDK), the SDK (sampling, batching, span processors, exporters), and OTLP (the gRPC/HTTP wire protocol backends receive) \u2014 so switching vendors changes only the exporter endpoint, not the code.",
+      "Cover traces, metrics and logs as three signals sharing one context: log records and exemplars carry the same trace_id/span_id, letting a spiking latency metric be pivoted straight to the exact slow trace and to that request's logs.",
+      "Contrast automatic instrumentation (agent or library hooks that wrap HTTP servers, clients, and DB drivers with no code change) against manual spans for business-meaningful operations, and when each is appropriate.",
+      "Show span context propagation across service boundaries via the W3C Trace Context `traceparent` header (version-traceid-spanid-flags, e.g. `00-<32 hex>-<16 hex>-01`) plus `tracestate`, and how a service that drops the header breaks the trace into two disconnected fragments.",
+      "Explain the Collector as a receive/process/export pipeline running out of process: tail-based sampling (buffer all spans of a trace, decide after the trace completes so every error and slow trace is kept while most fast successes are dropped) versus head-based probabilistic sampling, plus attribute scrubbing for PII and batching/retry \u2014 and semantic conventions (`http.request.method`, `db.system`, `service.name`) as the reason dashboards work across languages."
+    ]
   },
   {
     "id": "18-api-design-evolution",
     "title": "API Design and Evolution",
     "slug": "api-design-evolution",
     "group": "api-design",
-    "description": "REST vs gRPC vs GraphQL tradeoffs, backward-compatible schema evolution, and pagination strategies (offset vs cursor-based) — designing APIs that can change without breaking existing clients.",
-    "viz": "API style comparison panel (REST/gRPC/GraphQL) showing the same request represented in each, a schema-evolution timeline showing an added-vs-removed field breaking old clients, and an offset-vs-cursor pagination simulator under concurrent inserts"
+    "description": "REST vs gRPC vs GraphQL tradeoffs, backward-compatible schema evolution, and pagination strategies (offset vs cursor-based) \u2014 designing APIs that can change without breaking existing clients.",
+    "depth": "core",
+    "has_code": true,
+    "viz": "API style comparison panel (REST/gRPC/GraphQL) showing the same request represented in each, a schema-evolution timeline showing an added-vs-removed field breaking old clients, and an offset-vs-cursor pagination simulator under concurrent inserts",
+    "gaps": [
+      "Add a worked <pre> code block for cursor pagination: encoding an opaque cursor from the stable sort key plus tiebreaker id, and the WHERE (sort_key, id) > (?, ?) query \u2014 next to the OFFSET version and the row it skips when a concurrent insert shifts the window."
+    ]
   },
   {
     "id": "19-indexing-storage-engines",
     "title": "Indexing and Storage Engines (B-tree vs LSM-tree)",
     "slug": "indexing-storage-engines",
     "group": "data",
-    "description": "B-tree vs LSM-tree storage engines — why B-trees favor read-heavy in-place-update workloads and LSM-trees favor write-heavy workloads via compaction, and how this drives database engine choice.",
+    "description": "B-tree vs LSM-tree storage engines \u2014 why B-trees favor read-heavy in-place-update workloads and LSM-trees favor write-heavy workloads via compaction, and how this drives database engine choice.",
+    "depth": "core",
+    "has_code": false,
     "viz": "side-by-side animated write path: a B-tree performing in-place page updates vs an LSM-tree appending to a memtable/SSTable with background compaction merging levels, plus a read-amplification vs write-amplification comparison readout"
   },
   {
@@ -164,7 +258,9 @@
     "title": "Zero-Downtime Deployments",
     "slug": "zero-downtime-deployments",
     "group": "operations",
-    "description": "Blue-green, canary, and rolling deployment strategies, plus the expand-contract pattern for safe schema migrations — shipping changes without a maintenance window or a broken in-flight request.",
+    "description": "Blue-green, canary, and rolling deployment strategies, plus the expand-contract pattern for safe schema migrations \u2014 shipping changes without a maintenance window or a broken in-flight request.",
+    "depth": "core",
+    "has_code": false,
     "viz": "deployment strategy selector (blue-green/canary/rolling) animating traffic shifting across old and new instance pools, with an error-rate spike triggering an automatic rollback when in canary mode"
   },
   {
@@ -173,14 +269,31 @@
     "slug": "multi-region-architecture",
     "group": "operations",
     "description": "Active-active vs active-passive multi-region designs, cross-region latency, data residency constraints, and conflict resolution (last-write-wins, CRDTs) when the same data is writable in two regions.",
-    "viz": "two-region diagram with an adjustable cross-region latency slider; an active-active toggle shows concurrent writes to the same key in both regions with a CRDT merge resolving the conflict, vs a last-write-wins toggle silently dropping one write"
+    "depth": "advanced",
+    "has_code": true,
+    "viz": "two-region diagram with an adjustable cross-region latency slider; an active-active toggle shows concurrent writes to the same key in both regions with a CRDT merge resolving the conflict, vs a last-write-wins toggle silently dropping one write",
+    "gaps": [
+      "Add a worked <pre> code block contrasting conflict resolution: a last-write-wins register merge (and the write it silently discards) against a CRDT merge such as a G-Counter's per-replica max, showing why the CRDT converges without losing an update while LWW does not."
+    ]
   },
   {
     "id": "22-connection-pooling",
     "title": "Connection Pooling and Resource Exhaustion",
     "slug": "connection-pooling",
     "group": "operations",
-    "description": "Connection pool sizing, exhaustion, and the counterintuitive failure mode where increasing pool size makes an overloaded database worse — pool-per-dependency as a bulkhead, and external pooling (PgBouncer-style).",
+    "description": "Connection pool sizing, exhaustion, and the counterintuitive failure mode where increasing pool size makes an overloaded database worse \u2014 pool-per-dependency as a bulkhead, and external pooling (PgBouncer-style).",
+    "depth": "intro",
+    "has_code": false,
     "viz": "adjustable pool-size slider against a fixed downstream DB capacity showing queueing latency first improve then collapse past the DB's true capacity, illustrating why 'just increase the pool' backfires"
+  },
+  {
+    "id": "23-logical-clocks-causality",
+    "title": "Logical Clocks and Causality (Lamport & Vector Clocks)",
+    "slug": "logical-clocks-causality",
+    "group": "coordination",
+    "description": "Why wall-clock timestamps can't order distributed events (clock skew, NTP step/slew), Lamport timestamps and the happens-before relation, vector clocks as the mechanism that actually detects concurrency (per-node counters, increment-on-send, element-wise max on receive), version vectors and Dynamo-style sibling detection, and why last-write-wins silently loses concurrent writes.",
+    "depth": "advanced",
+    "has_code": true,
+    "viz": "three node timelines where you click a source node then a target node to send a message, each local event and delivery stamping a real computed vector clock (increment own slot on send, element-wise max plus own increment on receive); clicking any two events classifies the pair live as happens-before / happens-after / CONCURRENT using the componentwise <= comparison, with a Lamport-only toggle showing the same concurrent pair collapse into a misleading total order, and a last-write-wins vs sibling-set toggle on a replicated key showing one concurrent write silently dropped vs both retained as siblings; an NTP-step slider skews one node's wall clock to show physical timestamps ordering the pair backwards"
   }
 ]

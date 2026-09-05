@@ -55,7 +55,7 @@ Hallucination occurs when an LLM generates fluent text that is factually wrong o
 - Set alerts when hallucination rate exceeds SLO (e.g., > 5%); block deployment if regression detected on golden set
 
 ### Example / Tradeoff
-At a customer support deployment, baseline GPT-4 RAG at temperature=0.7 had ~18% hallucination rate (RAGAS faithfulness). Adding hybrid search + cross-encoder reranker dropped it to ~9%; grounding prompt + temperature=0 dropped it to ~5%; RAGAS faithfulness gate (auto-flag + HITL) reduced user-visible errors to < 2%. Full NLI post-processing added ~120ms latency per response — a tradeoff that's only viable on high-stakes queries (e.g., medical dosage, legal contract terms) rather than general Q&A.
+At a customer support deployment, baseline a frontier model RAG at temperature=0.7 had ~18% hallucination rate (RAGAS faithfulness). Adding hybrid search + cross-encoder reranker dropped it to ~9%; grounding prompt + temperature=0 dropped it to ~5%; RAGAS faithfulness gate (auto-flag + HITL) reduced user-visible errors to < 2%. Full NLI post-processing added ~120ms latency per response — a tradeoff that's only viable on high-stakes queries (e.g., medical dosage, legal contract terms) rather than general Q&A.
 
 **Key tradeoff:** Faithfulness gates reduce hallucinations but increase "I don't know" rate (deflection). Monitor both; optimizing only faithfulness can make the system feel useless.
 

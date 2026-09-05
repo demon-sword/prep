@@ -34,7 +34,7 @@ Exception handling in GenAI applications is a **multi-class problem**. Unlike a 
 
 - **Retry with exponential backoff + jitter**: `tenacity` or `httpx` retry logic, 3 attempts, base 1s, cap 30s, ±25% jitter to avoid thundering herd. Only retry idempotent calls (read, generation); do not retry payment or state-mutating tool calls without idempotency keys.
 - **Circuit breaker**: after 5 consecutive failures in a 60s window, open the circuit and route to the fallback model. Use `pybreaker` or a Redis-backed counter. Close the circuit after a 30s probe interval.
-- **Model fallback chain**: `gpt-4o` → `gpt-4o-mini` → cached response → static fallback string. Surface model-tier in logs for post-incident analysis.
+- **Model fallback chain**: `claude-sonnet-5` → `claude-haiku-4-5` → cached response → static fallback string. Surface model-tier in logs for post-incident analysis.
 
 **Class 2 — Schema violations (malformed or missing structured output)**
 
@@ -71,9 +71,9 @@ import structlog
 log = structlog.get_logger()
 
 try:
-    response = llm_call(prompt, model="gpt-4o")
+    response = llm_call(prompt, model="claude-sonnet-5")
 except RateLimitError as e:
-    log.warning("llm.rate_limit", model="gpt-4o", retry_attempt=attempt)
+    log.warning("llm.rate_limit", model="claude-sonnet-5", retry_attempt=attempt)
     # trigger backoff + fallback
 except ValidationError as e:
     log.error("llm.schema_violation", raw_output=response.text, error=str(e))
@@ -105,7 +105,7 @@ Total user-visible error rate: **0.12%** (down from 2.4% without structured exce
 "GenAI apps fail in fundamentally different ways than traditional APIs — you get non-deterministic responses, rate limits, context overflows, schema violations, and guardrail rejections all at once. I think of exception handling here as a six-class problem, and each class needs a different recovery strategy. Let me walk through how I'd structure it."
 
 **Core explanation (2–3 min):**
-"The first class is **provider errors** — 429 rate limits, 503 outages, and timeouts. For these I use exponential backoff with jitter: three attempts, starting at one second, capped at thirty, with ±25% jitter to avoid thundering herd. On top of backoff I add a circuit breaker — if I see five consecutive failures in a 60-second window, I open the circuit and route to a fallback model, say from GPT-4o down to GPT-4o-mini, or to a cached response.
+"The first class is **provider errors** — 429 rate limits, 503 outages, and timeouts. For these I use exponential backoff with jitter: three attempts, starting at one second, capped at thirty, with ±25% jitter to avoid thundering herd. On top of backoff I add a circuit breaker — if I see five consecutive failures in a 60-second window, I open the circuit and route to a fallback model, say from a frontier model down to a small fast model, or to a cached response.
 
 Second class is **schema violations** — you asked for JSON and got prose. I solve this with Instructor or OpenAI's `response_format` with a Pydantic schema. On `ValidationError`, I retry the call up to twice with the error message appended to the prompt. After two retries I don't keep spinning — I return a safe default or escalate to a human review queue.
 

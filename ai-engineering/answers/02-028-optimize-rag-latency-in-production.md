@@ -39,13 +39,13 @@ RAG latency is the sum of four stages: **embedding** (query vectorization), **re
 | ANN retrieval (Pinecone / HNSW) | 20–100 ms | 5–20% |
 | BM25 (Elasticsearch) | 10–50 ms | 2–10% |
 | Cross-encoder reranking (top-50) | 100–300 ms | 20–40% |
-| LLM generation (GPT-4o-mini, 500 tok) | 800–2000 ms | 50–70% |
+| LLM generation (a small fast model, 500 tok) | 800–2000 ms | 50–70% |
 
 The LLM call dominates. Target it first, then reranking.
 
 **2. Generation layer — biggest lever**
 
-- **Model tiering:** Route simple queries to GPT-4o-mini (~$0.15/1M tokens, ~500ms) and reserve GPT-4o for complex ones. Can cut p95 latency by 50%+ for most traffic.
+- **Model tiering:** Route simple queries to a small fast model (~$1/1M tokens, ~500ms) and reserve a frontier model for complex ones. Can cut p95 latency by 50%+ for most traffic.
 - **Streaming (SSE):** Return tokens as they generate. TTFT (time-to-first-token) drops to 200–400ms even if full response takes 2s — users perceive much faster response.
 - **Prompt compression:** Use LLMLingua or selective summarization to reduce context tokens by 30–50%. Fewer input tokens → lower prefill time.
 - **Reduce top-k:** Passing 20 chunks instead of 50 cuts both context length and reranker load. Use RAGAS `context_precision` to validate you're not losing signal.
@@ -82,7 +82,7 @@ The LLM call dominates. Target it first, then reranking.
 | Optimization | p95 latency before | p95 latency after | Change |
 |---|---|---|---|
 | Streaming enabled | 3200ms (full wait) | 350ms TTFT | −90% perceived |
-| GPT-4o → GPT-4o-mini (80% traffic) | 2100ms | 550ms | −74% |
+| A frontier model → a small fast model (80% traffic) | 2100ms | 550ms | −74% |
 | Rerank top-50 → top-20 | 280ms rerank | 80ms rerank | −71% |
 | Semantic cache (30% hit rate) | 3500ms avg | 2450ms avg | −30% |
 | ef_search 100 → 40 | 90ms ANN | 40ms ANN | −56% |
@@ -97,7 +97,7 @@ The LLM call dominates. Target it first, then reranking.
 "I'd approach this as a profiling problem first — RAG latency comes from four stages (embedding, retrieval, reranking, generation), and the fix depends on which one is binding. In my experience, the LLM call dominates at 60–70% of total latency, so I start there."
 
 **Core explanation (2–3 min):**
-"For the generation layer, the biggest wins are model tiering and streaming. I'd route simpler queries — keyword lookups, FAQs — to GPT-4o-mini, which is 4× cheaper and roughly 3× faster than GPT-4o. For the user experience angle, I'd enable token streaming (SSE) immediately — even if the full response takes 2 seconds, TTFT drops to 300–400ms and the UI feels snappy.
+"For the generation layer, the biggest wins are model tiering and streaming. I'd route simpler queries — keyword lookups, FAQs — to a small fast model, which is 5× cheaper and roughly 3× faster than a frontier model. For the user experience angle, I'd enable token streaming (SSE) immediately — even if the full response takes 2 seconds, TTFT drops to 300–400ms and the UI feels snappy.
 
 Next I'd look at the reranking layer. A cross-encoder over 100 candidates is expensive — 200–300ms. The fix is two-stage: use ANN to get 100, a fast bi-encoder to trim to 20, then cross-encoder on those 20 only. That cuts reranker latency by ~70%.
 
@@ -115,7 +115,7 @@ I'd also tune HNSW `ef_search` — dropping from 100 to 40 cuts ANN latency by h
 
 ## Pitfalls
 
-- **Mistake:** Saying "just use a faster model" without specifying which model, the accuracy tradeoff, or how you'd route traffic — **Better:** Name GPT-4o-mini vs GPT-4o, explain the routing heuristic (query complexity classifier or regex-based fast-path), and describe the A/B test to validate accuracy before full rollout.
+- **Mistake:** Saying "just use a faster model" without specifying which model, the accuracy tradeoff, or how you'd route traffic — **Better:** Name a small fast model vs a frontier model, explain the routing heuristic (query complexity classifier or regex-based fast-path), and describe the A/B test to validate accuracy before full rollout.
 - **Mistake:** Treating semantic caching as the first lever without mentioning threshold tuning — cache at cosine>0.80 will return wrong answers for superficially similar but semantically different queries — **Better:** Explain the threshold tuning process (0.92–0.97 depending on query variance), TTL strategy, and cache invalidation on knowledge base updates.
 - **Mistake:** Ignoring streaming and treating TTFT as the same as total latency — **Better:** Distinguish TTFT (user-perceived) from total response time, and explain that streaming makes a 2s response feel like a 350ms response to the user.
 - **Mistake:** Optimizing only the LLM call while ignoring that reranking can be the bottleneck in some pipelines — **Better:** Profile all four stages independently before assuming which is dominant; reranking on a large candidate set can exceed LLM latency.
@@ -134,4 +134,4 @@ I'd also tune HNSW `ef_search` — dropping from 100 to 40 cuts ANN latency by h
 
 ## One-liner recall
 
-> Profile the four RAG stages (embed→retrieve→rerank→generate), then hit the biggest contributor first: stream LLM output for perceived latency, tier to GPT-4o-mini for speed, semantic-cache repetitive queries, and trim reranker candidates from 100 to 20 with a fast bi-encoder pre-filter.
+> Profile the four RAG stages (embed→retrieve→rerank→generate), then hit the biggest contributor first: stream LLM output for perceived latency, tier to a small fast model for speed, semantic-cache repetitive queries, and trim reranker candidates from 100 to 20 with a fast bi-encoder pre-filter.

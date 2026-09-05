@@ -48,7 +48,7 @@ Defense-in-depth has three layers:
 - Async post-check in background for low-latency paths: log flagged responses and suppress future similar queries via semantic cache poisoning (cache the abstention response for that query cluster).
 
 ### Example / Tradeoff
-**Concrete scenario:** A customer support RAG for a SaaS product. User asks: *"Does your enterprise tier support HIPAA BAAs?"* The retrieval returns chunks about pricing tiers and SSO — semantically adjacent ("enterprise") but missing HIPAA content. Without a gate, GPT-4o-mini generates: *"Yes, our enterprise tier is HIPAA-compliant with BAAs available upon request."* — a confident hallucination.
+**Concrete scenario:** A customer support RAG for a SaaS product. User asks: *"Does your enterprise tier support HIPAA BAAs?"* The retrieval returns chunks about pricing tiers and SSO — semantically adjacent ("enterprise") but missing HIPAA content. Without a gate, a small fast model generates: *"Yes, our enterprise tier is HIPAA-compliant with BAAs available upon request."* — a confident hallucination.
 
 **With the retrieval gate:** max cosine score = 0.61 < threshold 0.70 → short-circuit → *"I don't have verified information on HIPAA compliance. Please contact sales@company.com."*
 

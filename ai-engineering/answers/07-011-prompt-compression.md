@@ -37,7 +37,7 @@ There are four complementary techniques, applied in order from cheapest to most 
 Before generating, run a cross-encoder reranker (Cohere Rerank, BGE-Reranker) over the retrieved chunks and pass only the top-3 instead of top-10. This shrinks the retrieval context by 5–7× with zero information loss relative to what the LLM actually uses — the discarded chunks were already the lowest-relevance ones. In practice this alone cuts 60–70% of RAG context tokens.
 
 **2. Chunk-level summarization (medium cost, small quality risk)**
-For each retrieved chunk, generate a 1–2 sentence extractive or abstractive summary that preserves key facts. The compressed chunk is cached with a hash of the original (TTL matched to source freshness). Effective for long parent chunks (512–1024 tokens) that contain mostly boilerplate. Implementation: GPT-4o-mini ($0.15/M) as the compression model; compression ratio 4–8×; latency overhead ~100ms if not cached.
+For each retrieved chunk, generate a 1–2 sentence extractive or abstractive summary that preserves key facts. The compressed chunk is cached with a hash of the original (TTL matched to source freshness). Effective for long parent chunks (512–1024 tokens) that contain mostly boilerplate. Implementation: a small fast model ($1/M) as the compression model; compression ratio 4–8×; latency overhead ~100ms if not cached.
 
 **3. LLMLingua / selective token pruning (high compression, measurable quality risk)**
 LLMLingua (Microsoft, 2023) uses a small proxy LLM (GPT-2 or Phi-1) to score each token's conditional perplexity, then drops the lowest-perplexity tokens (redundant or predictable words). The remaining tokens are passed to the target LLM as a compressed, grammatically imperfect but semantically dense string. Achieves 2–5× compression with approximately 2–8% accuracy degradation on QA benchmarks. LLMLingua-2 (2024) improves quality at the same compression ratios using a learned compression model rather than perplexity filtering.
@@ -46,7 +46,7 @@ LLMLingua (Microsoft, 2023) uses a small proxy LLM (GPT-2 or Phi-1) to score eac
 For multi-turn sessions, replace the raw turn-by-turn history with a rolling summary after N turns. LangChain's `ConversationSummaryBufferMemory` keeps the last 2–3 turns verbatim plus a compressed summary of older context. Typical reduction: 70–80% of conversation token cost beyond turn 5.
 
 **Output token optimization (often overlooked):**
-Output tokens cost 3–10× more than input tokens on most APIs (e.g., GPT-4o: $2.50/M input vs $10/M output). Set explicit `max_tokens` limits and use structured output (JSON schema / Instructor) to enforce concise responses — this alone can reduce output tokens 30–50% on verbose models.
+Output tokens cost 5× more than input tokens on most APIs (e.g., a frontier model: $5/M input vs $25/M output). Set explicit `max_tokens` limits and use structured output (JSON schema / Instructor) to enforce concise responses — this alone can reduce output tokens 30–50% on verbose models.
 
 ### Example / Tradeoff
 
@@ -60,9 +60,9 @@ Output tokens cost 3–10× more than input tokens on most APIs (e.g., GPT-4o: $
 | **Total input per query** | **6,800 tokens** | **1,400 tokens** | **79%** |
 | Output (`max_tokens` + structured JSON) | 500 tokens | 200 tokens | 60% |
 
-At 1M queries/day with GPT-4o ($2.50/M input, $10/M output):
-- Before: (6,800 × $2.50 + 500 × $10) / 1M × 1M = **$22,000/day**
-- After: (1,400 × $2.50 + 200 × $10) / 1M × 1M = **$5,500/day**
+At 1M queries/day with a frontier model ($5/M input, $25/M output):
+- Before: (6,800 × $5 + 500 × $25) / 1M × 1M = **$46,500/day**
+- After: (1,400 × $5 + 200 × $25) / 1M × 1M = **$12,000/day**
 
 79% cost reduction without changing the model.
 
@@ -78,11 +78,11 @@ At 1M queries/day with GPT-4o ($2.50/M input, $10/M output):
 **Core explanation (2–3 min):**
 "The first and highest-ROI layer is reranking plus top-K reduction. If I'm retrieving 10 chunks from my vector store, I'll run a cross-encoder reranker — Cohere Rerank or BGE-Reranker — and pass only the top-3 to the LLM. That shrinks the retrieval context by 5–7× with essentially zero quality loss because the dropped chunks were the least relevant anyway. This alone often eliminates 60–70% of RAG context tokens.
 
-The second layer is chunk-level summarization — for long parent chunks, I'll pre-generate a 1–2 sentence summary using a cheap model like GPT-4o-mini and cache it. The compression ratio is 4–8× with a small quality risk. Third, for aggressive cases, there's LLMLingua — a Microsoft technique that uses a proxy LLM to score token perplexity and drop the redundant ones, achieving 2–5× compression with about 2–8% accuracy degradation. That's acceptable for general QA but not for regulated domains.
+The second layer is chunk-level summarization — for long parent chunks, I'll pre-generate a 1–2 sentence summary using a cheap model like a small fast model and cache it. The compression ratio is 4–8× with a small quality risk. Third, for aggressive cases, there's LLMLingua — a Microsoft technique that uses a proxy LLM to score token perplexity and drop the redundant ones, achieving 2–5× compression with about 2–8% accuracy degradation. That's acceptable for general QA but not for regulated domains.
 
-Fourth, and often forgotten: output tokens cost 3–10× more than input tokens on most APIs. Setting explicit `max_tokens` and using structured JSON output can cut output tokens 30–50%.
+Fourth, and often forgotten: output tokens cost 5× more than input tokens on most APIs. Setting explicit `max_tokens` and using structured JSON output can cut output tokens 30–50%.
 
-A concrete example: on a customer support RAG system, combining reranking, history summarization, and a system prompt audit reduced our average prompt from 6,800 tokens to 1,400 tokens — a 79% reduction — saving roughly $16,500/day at GPT-4o pricing on 1M queries/day, without touching the model."
+A concrete example: on a customer support RAG system, combining reranking, history summarization, and a system prompt audit reduced our average prompt from 6,800 tokens to 1,400 tokens — a 79% reduction — saving roughly $16,500/day at a frontier model pricing on 1M queries/day, without touching the model."
 
 **Tradeoff / production angle (1 min):**
 "The main risk is lossy compression — LLMLingua's perplexity pruning can drop semantically critical tokens. I'd never use it in medical or legal RAG where omitting a negation or qualifier could cause harm. I'd gate each compression layer with a RAGAS Faithfulness delta check on a golden dataset before deploying. The other tradeoff is latency: the reranker adds ~80–200ms, and LLMLingua adds inference time for the proxy model. For latency-sensitive paths, I'd precompute chunk summaries offline and cache them, so the hot path only sees the cached compressed version."
@@ -95,7 +95,7 @@ A concrete example: on a customer support RAG system, combining reranking, histo
 ## Pitfalls
 
 - **Mistake:** Mentioning LLMLingua as the go-to compression tool without discussing quality risk — **Better:** "LLMLingua is a lossy technique — perplexity pruning can drop semantically important tokens. I'd benchmark it on a golden set and restrict it to use cases where a 2–8% QA accuracy drop is acceptable; for medical, legal, or financial RAG I'd stick to lossless techniques like reranking and summarization."
-- **Mistake:** Focusing only on input token compression and ignoring output tokens — **Better:** "Output tokens cost 3–10× more than input on most APIs. Setting `max_tokens` and enforcing structured JSON output is often the highest-ROI per-token optimization and is completely free to implement — it should be the first step, not an afterthought."
+- **Mistake:** Focusing only on input token compression and ignoring output tokens — **Better:** "Output tokens cost 5× more than input on most APIs. Setting `max_tokens` and enforcing structured JSON output is often the highest-ROI per-token optimization and is completely free to implement — it should be the first step, not an afterthought."
 - **Mistake:** Compressing the system prompt to near-zero without quality checking — **Better:** "System prompt compression should be done by manual semantic audit first (remove duplicate instructions, collapse example lists), then validated on a golden set. Automated compression of the system prompt risks removing the behavioral constraints that keep the model on-task."
 
 ---
@@ -112,4 +112,4 @@ A concrete example: on a customer support RAG system, combining reranking, histo
 
 ## One-liner recall
 
-> Compress prompts in four ordered layers — rerank to top-3 chunks (85% context reduction, lossless), summarize conversation history, manually audit the system prompt, then optionally apply LLMLingua (2–5× lossy compression) — and separately cap output tokens via `max_tokens` + structured JSON, since output costs 3–10× more than input per token.
+> Compress prompts in four ordered layers — rerank to top-3 chunks (85% context reduction, lossless), summarize conversation history, manually audit the system prompt, then optionally apply LLMLingua (2–5× lossy compression) — and separately cap output tokens via `max_tokens` + structured JSON, since output costs 5× more than input per token.

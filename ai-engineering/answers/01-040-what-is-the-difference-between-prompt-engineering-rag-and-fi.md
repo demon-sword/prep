@@ -61,9 +61,9 @@ Prompt engineering, RAG, and fine-tuning are three complementary strategies for 
 | Budget / latency critical? | Yes → defer fine-tuning, optimize prompts + RAG |
 
 **Concrete case:** A legal Q&A assistant at a Fortune 500.
-- *Prompt only*: GPT-4 already reads contracts well, but hallucinations on specific clause numbers.
+- *Prompt only*: a frontier model already reads contracts well, but hallucinations on specific clause numbers.
 - *+ RAG*: Embed 300K contracts into Pinecone; HNSW retrieval; faithfulness score (RAGAS) goes 0.61 → 0.89.
-- *+ LoRA fine-tune*: After 6 months, lawyers want a specific citation format and hedging style. Fine-tune on 2K lawyer-reviewed (question, answer) pairs with LoRA rank-16 on Llama 3 70B. Training: ~8 hrs on 4× A100s with QLoRA. Output style now consistent without prompt hacks.
+- *+ LoRA fine-tune*: After 6 months, lawyers want a specific citation format and hedging style. Fine-tune on 2K lawyer-reviewed (question, answer) pairs with LoRA rank-16 on a 70B-class open-weight model. Training: ~8 hrs on 4× A100s with QLoRA. Output style now consistent without prompt hacks.
 
 **Cost summary:**
 | Approach | Upfront | Per-query | Iteration speed |

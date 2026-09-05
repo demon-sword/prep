@@ -38,14 +38,14 @@ Practical prompt engineering judgment: knowing the mechanics of in-context learn
 5. Example selection matters: diverse, representative, correctly formatted — bad examples hurt more than help
 
 **Chain-of-thought prompting:**
-1. **Zero-shot CoT**: append `"Let's think step by step."` — triggers reasoning without examples (works on GPT-4-class models)
+1. **Zero-shot CoT**: append `"Let's think step by step."` — triggers reasoning without examples (works on a frontier model-class models)
 2. **Few-shot CoT**: include examples that show full reasoning traces: `Q: … A: First, … Then, … Therefore, …`
 3. Mechanism: model generates intermediate tokens that serve as a scratch-pad; the answer token is conditioned on correct intermediate steps rather than jumping from question to answer
 4. Most effective on tasks requiring multi-step arithmetic, symbolic reasoning, commonsense chains, and planning
 5. **Self-consistency** extension: sample N reasoning paths with temperature > 0, majority-vote the final answers — reduces variance for hard reasoning tasks (Google 2022, +10–20 pp on GSM8K)
 
 ### Example / Tradeoff
-**Few-shot CoT in production at Anthropic/OpenAI:** GPT-4 on GSM8K (grade-school math) jumps from ~56% (zero-shot) to ~92% (8-shot CoT). The cost is proportional: 8 examples × ~200 tokens = ~1,600 extra input tokens per request. At 1M daily queries and $0.003/1k input tokens, that's ~$4,800/day added cost — worth it for high-value tasks (legal reasoning, clinical decision support), not for simple FAQ retrieval.
+**Few-shot CoT in production at Anthropic/OpenAI:** a frontier model on GSM8K (grade-school math) jumps from ~56% (zero-shot) to ~92% (8-shot CoT). The cost is proportional: 8 examples × ~200 tokens = ~1,600 extra input tokens per request. At 1M daily queries and $0.003/1k input tokens, that's ~$4,800/day added cost — worth it for high-value tasks (legal reasoning, clinical decision support), not for simple FAQ retrieval.
 
 **When CoT fails:** Tasks that are not reasoning-based (e.g., style transfer, tone matching, simple classification). On smaller models (< 7B params), CoT often produces fluent-sounding but incorrect reasoning chains — the model generates plausible-looking steps that lead to wrong answers. At that scale, fine-tuning beats CoT.
 
@@ -63,7 +63,7 @@ Practical prompt engineering judgment: knowing the mechanics of in-context learn
 
 Chain-of-thought is a different idea: instead of just giving examples of inputs and outputs, you give examples that include the full reasoning trace. Or in zero-shot mode, you just append 'Let's think step by step.' The key mechanism is that the model generates intermediate tokens as a scratch-pad — the answer token is conditioned on those intermediate steps rather than jumping straight from question to answer. This makes a massive difference on multi-step arithmetic, planning, and symbolic reasoning.
 
-A concrete example: GPT-4 on GSM8K math benchmarks goes from ~56% accuracy zero-shot to ~92% with 8-shot chain-of-thought. But that's 8 examples × ~200 tokens = 1,600 extra input tokens per request. At 1M daily queries, that's real cost, so you'd use it selectively for high-value tasks."
+A concrete example: a frontier model on GSM8K math benchmarks goes from ~56% accuracy zero-shot to ~92% with 8-shot chain-of-thought. But that's 8 examples × ~200 tokens = 1,600 extra input tokens per request. At 1M daily queries, that's real cost, so you'd use it selectively for high-value tasks."
 
 **Tradeoff / production angle (1 min):**
 "The failure modes matter. CoT degrades on small models — a 7B-parameter model will generate confident-sounding reasoning that's wrong. In production, I'd pair CoT with self-consistency: sample 5–10 reasoning paths at temperature ~0.7 and majority-vote the final answers. That adds cost but dramatically reduces variance. Also: few-shot example quality is critical — a couple of bad examples can hurt more than no examples at all, so I'd maintain a curated example set and run regression tests when updating it."

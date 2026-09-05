@@ -51,8 +51,8 @@ Work through the decision ladder in order — abort as soon as a cheaper option 
 ### Example / Tradeoff
 
 **Real example — code review assistant:**
-- Prompt-only baseline: GPT-4o with a 2K-token system prompt describing the review rubric → inconsistent rating calibration across reviewers, ~$0.04/review, but the style varied enough to lose user trust.
-- SFT with LoRA on 5K human-reviewed diffs (Llama 3 8B, rank=32, α=64, 3 epochs on 4× A100 40GB): consistent rubric, $0.002/review, p95 latency < 800ms.
+- Prompt-only baseline: a hosted frontier model with a 2K-token system prompt describing the review rubric → inconsistent rating calibration across reviewers, and the style varied enough to lose user trust.
+- SFT with LoRA on 5K human-reviewed diffs (a small open-weight base model in the 7–8B class, rank=32, α=64, 3 epochs on 4× A100 40GB): consistent rubric, ~20× lower cost per review, p95 latency < 800ms.
 - Outcome: 95% cost reduction, ROUGE-L alignment with senior reviewer 0.71→0.84, catastrophic forgetting confirmed by MMLU drop of 0.3 pts (acceptable).
 
 **The trap:** Jumping to fine-tuning when better few-shot examples or chain-of-thought would have achieved 90% of the benefit. The 2-week fine-tuning iteration cycle (data curation → training → eval → regression test) vs a 30-minute prompt iteration is a real organizational cost.

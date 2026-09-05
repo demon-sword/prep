@@ -60,7 +60,7 @@
 ## Pitfalls
 
 <!-- ≥2 concrete mistakes weak candidates make. Format: Mistake → Better.
-     Be specific: "Saying 'just use GPT-4' without discussing cost, latency, or vendor lock-in"
+     Be specific: "Saying 'just use the biggest frontier model' without discussing cost, latency, or vendor lock-in"
      NOT "doesn't think about alternatives" -->
 - **Mistake:** <!-- what they say/skip --> — **Better:** <!-- what to say instead -->
 - **Mistake:** <!-- what they say/skip --> — **Better:** <!-- what to say instead -->

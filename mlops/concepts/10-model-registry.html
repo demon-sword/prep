@@ -1,0 +1,1052 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1.0"/>
+  <title>Model Registry and Stage Promotion — MLOps Concepts</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com"/>
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet"/>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg:        #0d0f17;
+      --surface:   #141720;
+      --card:      #1a1e2e;
+      --border:    #252a3d;
+      --accent:    #00d4ff;
+      --purple:    #7c3aed;
+      --green:     #00ff88;
+      --yellow:    #ffd700;
+      --red:       #ff4757;
+      --orange:    #ff9500;
+      --text:      #e2e8f0;
+      --text-dim:  #8892a4;
+      --mono:      'JetBrains Mono', monospace;
+      --sans:      'Inter', system-ui, sans-serif;
+    }
+
+    html { scroll-behavior: smooth; }
+
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: var(--sans);
+      font-size: 16px;
+      line-height: 1.7;
+      min-height: 100vh;
+    }
+
+    header {
+      background: var(--surface);
+      border-bottom: 1px solid var(--border);
+      padding: 2rem 2rem 1.5rem;
+      max-width: 1100px;
+      margin: 0 auto;
+    }
+
+    .group-badge {
+      display: inline-block;
+      font-family: var(--mono);
+      font-size: 0.7rem;
+      font-weight: 700;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      color: var(--accent);
+      background: rgba(0, 212, 255, 0.1);
+      border: 1px solid rgba(0, 212, 255, 0.3);
+      padding: 0.2em 0.7em;
+      border-radius: 4px;
+      margin-bottom: 0.75rem;
+    }
+
+    header h1 {
+      font-size: clamp(1.6rem, 4vw, 2.4rem);
+      font-weight: 700;
+      line-height: 1.2;
+      margin-bottom: 0.5rem;
+    }
+
+    header h1 span.id {
+      color: var(--text-dim);
+      font-size: 0.55em;
+      font-family: var(--mono);
+      margin-right: 0.5rem;
+      vertical-align: middle;
+    }
+
+    header p.desc { color: var(--text-dim); font-size: 1.05rem; max-width: 780px; }
+
+    main { max-width: 1100px; margin: 0 auto; padding: 0 2rem 4rem; }
+
+    section { margin-top: 3rem; }
+
+    section > h2 {
+      font-size: 1.4rem;
+      font-weight: 700;
+      color: var(--accent);
+      border-bottom: 1px solid var(--border);
+      padding-bottom: 0.5rem;
+      margin-bottom: 1.5rem;
+    }
+
+    h3 { font-size: 1.1rem; font-weight: 600; color: var(--yellow); margin: 1.6rem 0 0.6rem; }
+
+    p { margin-bottom: 1rem; }
+    ul, ol { padding-left: 1.5rem; margin-bottom: 1rem; }
+    li { margin-bottom: 0.4rem; }
+
+    code {
+      font-family: var(--mono);
+      font-size: 0.85em;
+      background: rgba(0, 212, 255, 0.08);
+      color: var(--accent);
+      padding: 0.1em 0.35em;
+      border-radius: 3px;
+    }
+
+    pre {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-left: 3px solid var(--green);
+      border-radius: 0 8px 8px 0;
+      padding: 1rem 1.2rem;
+      margin: 1.1rem 0;
+      overflow-x: auto;
+      font-family: var(--mono);
+      font-size: 0.78rem;
+      line-height: 1.65;
+      color: var(--text);
+    }
+    pre code { background: none; color: inherit; padding: 0; font-size: 1em; }
+    pre .cm { color: var(--text-dim); }
+    pre .kw { color: var(--purple); }
+    pre .st { color: var(--green); }
+    pre .fn { color: var(--accent); }
+
+    .callout {
+      background: rgba(255, 149, 0, 0.07);
+      border: 1px solid rgba(255, 149, 0, 0.3);
+      border-radius: 8px;
+      padding: 1rem 1.2rem;
+      margin: 1.2rem 0;
+    }
+    .callout strong { color: var(--orange); }
+
+    /* ── Visualization ── */
+    .viz-card {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 1.5rem;
+    }
+    .viz-card + .viz-card { margin-top: 1.5rem; }
+    .viz-title { font-weight: 600; font-size: 1rem; margin-bottom: 0.3rem; }
+    .viz-desc { font-size: 0.88rem; color: var(--text-dim); margin-bottom: 1.2rem; }
+
+    .sub-h {
+      font-family: var(--mono);
+      font-size: 0.68rem;
+      letter-spacing: 0.09em;
+      text-transform: uppercase;
+      color: var(--text-dim);
+      margin: 1.4rem 0 0.5rem;
+      border-bottom: 1px solid var(--border);
+      padding-bottom: 0.3rem;
+    }
+
+    .preset-row { display: flex; flex-wrap: wrap; gap: 0.5rem; margin-bottom: 1rem; align-items: center; }
+
+    .ctrl-btn {
+      font-family: var(--mono);
+      font-size: 0.75rem;
+      padding: 0.45em 0.9em;
+      border-radius: 6px;
+      border: 1px solid var(--border);
+      background: var(--surface);
+      color: var(--text-dim);
+      cursor: pointer;
+      transition: all 0.18s;
+    }
+    .ctrl-btn:hover:not(:disabled) { border-color: var(--accent); color: var(--accent); }
+    .ctrl-btn.primary { border-color: var(--accent); color: var(--accent); background: rgba(0,212,255,0.08); }
+    .ctrl-btn.on { border-color: var(--green); color: var(--green); background: rgba(0,255,136,0.08); }
+    .ctrl-btn.danger { border-color: rgba(255,71,87,0.5); color: var(--red); }
+    .ctrl-btn:disabled { opacity: 0.35; cursor: default; }
+
+    select.ctrl-btn { appearance: none; padding-right: 1.6em; }
+
+    .chk {
+      display: inline-flex; align-items: center; gap: 0.45rem;
+      font-family: var(--mono); font-size: 0.74rem; color: var(--text-dim);
+      border: 1px solid var(--border); background: var(--surface);
+      padding: 0.4em 0.8em; border-radius: 6px; cursor: pointer;
+    }
+    .chk input { accent-color: var(--accent); cursor: pointer; }
+
+    .slider-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(215px, 1fr));
+      gap: 0.9rem 1.5rem;
+      margin-bottom: 1rem;
+    }
+    .slider-row label {
+      display: flex;
+      justify-content: space-between;
+      font-size: 0.78rem;
+      color: var(--text-dim);
+      margin-bottom: 0.25rem;
+      gap: 0.5rem;
+    }
+    .slider-row .val { font-family: var(--mono); color: var(--accent); }
+    .slider-row input[type=range] { width: 100%; accent-color: var(--purple); }
+
+    .verdict {
+      border-radius: 8px;
+      padding: 0.85rem 1.1rem;
+      font-family: var(--mono);
+      font-size: 0.82rem;
+      margin: 1rem 0 1.2rem;
+      border: 1px solid var(--border);
+      line-height: 1.6;
+    }
+    .verdict.pass  { border-color: rgba(0,255,136,0.45); background: rgba(0,255,136,0.07); color: var(--green); }
+    .verdict.warn  { border-color: rgba(255,215,0,0.45); background: rgba(255,215,0,0.07); color: var(--yellow); }
+    .verdict.fail  { border-color: rgba(255,71,87,0.45);  background: rgba(255,71,87,0.07);  color: var(--red); }
+    .verdict .sub { display: block; color: var(--text-dim); font-size: 0.76rem; margin-top: 0.35rem; }
+
+    /* ── Registry table ── */
+    .tbl-wrap { overflow-x: auto; background: var(--surface); border-radius: 8px; border: 1px solid var(--border); }
+    table.registry { width: 100%; min-width: 760px; border-collapse: collapse; font-family: var(--mono); font-size: 0.74rem; }
+    table.registry th {
+      text-align: left; color: var(--text-dim); font-weight: 500;
+      font-size: 0.64rem; letter-spacing: 0.07em; text-transform: uppercase;
+      padding: 0.6rem 0.7rem; border-bottom: 1px solid var(--border); white-space: nowrap;
+    }
+    table.registry td { padding: 0.55rem 0.7rem; border-bottom: 1px solid rgba(37,42,61,0.6); vertical-align: middle; white-space: nowrap; }
+    table.registry tr:last-child td { border-bottom: none; }
+    table.registry tr.is-prod { background: rgba(0,255,136,0.05); }
+    table.registry tr.is-serving td:first-child { box-shadow: inset 3px 0 0 var(--accent); }
+    .vnum { color: var(--text); font-weight: 700; }
+    .dim { color: var(--text-dim); }
+    .missing { color: var(--red); }
+    .stage-pill {
+      display: inline-block; padding: 0.12em 0.6em; border-radius: 999px;
+      font-size: 0.66rem; border: 1px solid var(--border); color: var(--text-dim);
+    }
+    .stage-pill.Production { color: var(--green); border-color: rgba(0,255,136,0.5); background: rgba(0,255,136,0.08); }
+    .stage-pill.Staging { color: var(--yellow); border-color: rgba(255,215,0,0.5); background: rgba(255,215,0,0.08); }
+    .stage-pill.Archived { color: var(--text-dim); opacity: 0.7; }
+    .stage-pill.None { color: var(--text-dim); }
+    .lin-ok { color: var(--green); }
+    .lin-bad { color: var(--red); }
+    .row-btn {
+      font-family: var(--mono); font-size: 0.66rem; padding: 0.22em 0.55em;
+      margin-right: 0.28rem; border-radius: 4px; cursor: pointer;
+      border: 1px solid var(--border); background: var(--card); color: var(--text-dim);
+    }
+    .row-btn:hover:not(:disabled) { border-color: var(--accent); color: var(--accent); }
+    .row-btn:disabled { opacity: 0.28; cursor: default; }
+
+    /* ── Serving pane ── */
+    .serve-pane {
+      background: #0b0d14; border: 1px solid var(--border); border-radius: 8px;
+      padding: 0.9rem 1.1rem; font-family: var(--mono); font-size: 0.74rem; line-height: 1.8;
+    }
+    .serve-pane .k { color: var(--text-dim); display: inline-block; min-width: 148px; }
+    .serve-pane .uri { color: var(--accent); word-break: break-all; }
+    .serve-pane .warnv { color: var(--yellow); }
+    .serve-pane .badv { color: var(--red); }
+    .serve-pane .goodv { color: var(--green); }
+
+    .ttlbar { height: 5px; background: var(--border); border-radius: 3px; overflow: hidden; margin-top: 0.5rem; }
+    .ttlbar > div { height: 100%; background: var(--accent); width: 0%; }
+
+    .logbox {
+      background: #0b0d14; border: 1px solid var(--border); border-radius: 8px;
+      font-family: var(--mono); font-size: 0.7rem; line-height: 1.65;
+      padding: 0.7rem 0.9rem; height: 180px; overflow-y: auto;
+    }
+    .log-line { white-space: pre-wrap; color: var(--text-dim); }
+    .log-line .t { color: #5b6479; }
+    .log-line.ok .m { color: var(--green); }
+    .log-line.info .m { color: var(--accent); }
+    .log-line.warn .m { color: var(--yellow); }
+    .log-line.err .m { color: var(--red); }
+
+    .stat-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(145px, 1fr)); gap: 0.7rem; margin: 1rem 0 0.6rem; }
+    .stat {
+      background: var(--surface); border: 1px solid var(--border);
+      border-radius: 8px; padding: 0.6rem 0.8rem;
+    }
+    .stat .k { font-size: 0.62rem; text-transform: uppercase; letter-spacing: 0.06em; color: var(--text-dim); }
+    .stat .v { font-family: var(--mono); font-size: 1.05rem; color: var(--accent); }
+    .stat .v.warnv { color: var(--yellow); }
+    .stat .v.badv { color: var(--red); }
+    .stat .v.goodv { color: var(--green); }
+    .stat .n { font-size: 0.64rem; color: var(--text-dim); font-family: var(--mono); }
+
+    .note-line {
+      font-family: var(--mono); font-size: 0.72rem; color: var(--text-dim);
+      border-left: 2px solid var(--border); padding-left: 0.7rem; margin: 0.8rem 0 0.2rem;
+    }
+
+    .legend { display: flex; flex-wrap: wrap; gap: 0.9rem; font-size: 0.68rem; color: var(--text-dim); font-family: var(--mono); margin-top: 0.6rem; }
+
+    /* ── Interview line ── */
+    #interview-line .quote {
+      background: linear-gradient(180deg, rgba(124,58,237,0.12), rgba(124,58,237,0.04));
+      border: 1px solid rgba(124,58,237,0.45);
+      border-left: 4px solid var(--purple);
+      border-radius: 0 10px 10px 0;
+      padding: 1.3rem 1.5rem;
+      font-size: 1.02rem;
+      line-height: 1.75;
+    }
+    #interview-line .quote p:last-child { margin-bottom: 0; }
+    #interview-line .quote em { color: var(--yellow); font-style: normal; font-weight: 600; }
+
+    #takeaways li strong { color: var(--accent); }
+
+    .concept-nav {
+      max-width: 1100px;
+      margin: 0 auto;
+      padding: 1.5rem 2rem 3rem;
+      display: flex;
+      justify-content: space-between;
+      gap: 1rem;
+      border-top: 1px solid var(--border);
+    }
+    .nav-link {
+      display: flex; flex-direction: column; gap: 0.2rem;
+      text-decoration: none; padding: 0.6rem 1rem;
+      border-radius: 8px; border: 1px solid var(--border);
+      background: var(--surface); max-width: 240px; transition: all 0.2s;
+    }
+    .nav-link:hover:not(.disabled) { border-color: var(--accent); }
+    .nav-link.disabled { opacity: 0.35; pointer-events: none; }
+    .nav-dir { font-family: var(--mono); font-size: 0.7rem; color: var(--text-dim); }
+    .nav-title { font-size: 0.9rem; color: var(--text); font-weight: 500; }
+
+    @media (max-width: 640px) {
+      header, main { padding-left: 1rem; padding-right: 1rem; }
+      .concept-nav { padding-left: 1rem; padding-right: 1rem; flex-direction: column; }
+      .nav-link { max-width: 100%; }
+    }
+  </style>
+</head>
+<body>
+
+<header>
+  <div class="group-badge">Training</div>
+  <h1><span class="id">10</span>Model Registry and Stage Promotion</h1>
+  <p class="desc">Immutable model versions with stage transitions (staging, production, archived), the metadata that must ride along (training dataset hash, metrics, input signature), and why serving resolves a registry alias rather than a filesystem path.</p>
+</header>
+
+<main>
+
+<section id="theory">
+  <h2>Theory</h2>
+
+  <h3>A registry is an indirection layer, not a file server</h3>
+  <p>
+    The naive way to ship a model is to write <code>model.pkl</code> somewhere and point the serving container at
+    it. That works exactly until the first question you cannot answer: <em>which</em> model is currently answering
+    requests, what data trained it, and how do I get the previous one back in under a minute. A model registry
+    exists to make those three questions cheap. It does that by inserting a level of indirection between the
+    artifact and the thing that loads it: training writes an immutable version, promotion moves a
+    <em>name</em>, and serving resolves the name. Nobody in the loop types a path.
+  </p>
+  <p>
+    The consequence people miss is that promotion becomes a metadata write rather than a deploy. Moving
+    <code>@production</code> from version 7 to version 8 does not rebuild an image, does not restart a pod, and
+    does not touch the artifact store. That is also why rollback is fast — it is the same metadata write in
+    reverse — and it is why a registry is worth having even on a team with three models.
+  </p>
+
+  <h3>Immutability, and the metadata that must ride along</h3>
+  <p>
+    A version is append-only. Registries assign monotonically increasing integers and fix the artifact source at
+    creation time; you cannot re-point version 7 at different bytes, you can only register version 8. That single
+    property is what makes "the model that scored this customer in March" a resolvable object rather than a
+    guess. The moment someone overwrites artifacts in place, every audit answer downstream becomes unprovable.
+  </p>
+  <p>
+    Immutability is worthless without lineage, though, and lineage is the part teams skip because nothing breaks
+    when they do. Four things have to be attached to the version at registration:
+  </p>
+  <ul>
+    <li><strong>Training dataset identity</strong> — a snapshot hash or table version, not a query string. Without
+      it the version is unreproducible: you can serve it forever and never rebuild it.</li>
+    <li><strong>The input signature</strong> — column names and types the model expects. This is the only thing
+      standing between a dropped upstream column and silent garbage predictions.</li>
+    <li><strong>The evaluation metrics and the eval set they were computed on</strong> — a number with no
+      denominator cannot be compared against the incumbent at promotion time.</li>
+    <li><strong>Code provenance</strong> — the git SHA and the environment spec. "Trained by the notebook on
+      someone's laptop" is not provenance.</li>
+  </ul>
+  <p>
+    Missing metadata is a <strong>broken lineage</strong> failure, and its defining trait is that it is silent
+    at write time and expensive at read time — you discover it during an incident or an audit, months after the
+    person who ran the training job left.
+  </p>
+
+  <h3>Stages, aliases and approval flags are three vocabularies for one idea</h3>
+  <p>
+    MLflow originally shipped fixed stages — <code>None</code>, <code>Staging</code>, <code>Production</code>,
+    <code>Archived</code> — and has since deprecated them in favour of arbitrary named aliases such as
+    <code>@champion</code> plus tags, because a fixed four-value enum cannot express "the model serving the EU
+    region" or "the challenger". SageMaker's Model Registry never had stages at all: model packages carry a
+    <code>ModelApprovalStatus</code> of <code>PendingManualApproval</code>, <code>Approved</code> or
+    <code>Rejected</code>, and flipping it to <code>Approved</code> is the event a deployment pipeline subscribes
+    to. Vertex AI does the same thing with version aliases including a <code>default</code> alias.
+    Underneath, all three are a mutable pointer into an immutable version list, with an audit trail of who moved
+    it and when. Interviewers care that you know it is a pointer; the vendor noun is incidental.
+  </p>
+
+  <h3>Why serving resolves an alias, not a path</h3>
+  <p>
+    Three resolution strategies, and only one of them survives an incident:
+  </p>
+  <ul>
+    <li><strong>Alias</strong> — <code>models:/fraud_scorer@production</code>. Rollback is a pointer move.
+      The one real cost is that resolution is usually cached, so your rollback takes effect after that cache
+      expires; that TTL <em>is</em> your rollback latency floor, and it is worth knowing the number.</li>
+    <li><strong>Pinned URI</strong> — the deployment hardcodes the artifact path of a specific version. Fully
+      reproducible, but rollback now requires a redeploy: a config change, a review, an image roll. Reasonable
+      for a regulated system where every change must be a tracked deploy, painful at 3am.</li>
+    <li><strong>Mutable "latest" path</strong> — <code>s3://models/fraud/latest/</code>, overwritten by the
+      training job. This is the trap. Any training run that finishes, including one that failed the evaluation
+      gate and was never approved, silently becomes production. There is no previous version to roll back to
+      because it was overwritten, and no record of when the change happened.</li>
+  </ul>
+
+  <h3>The named failure modes</h3>
+  <p>
+    <strong>Broken lineage</strong>: a version with no dataset hash or signature — servable, unreproducible.
+    <strong>Registry/serving drift</strong>: the registry says version 8 is production while a pinned deployment
+    is still running version 5, so the dashboard and reality disagree — always report the version the serving
+    process actually loaded, not the one the registry believes is current. <strong>Schema drift</strong> reaching
+    an unsignatured model: an upstream column disappears and, with no signature to enforce, the model scores a
+    null-filled feature instead of raising; with a signature it fails loudly at the boundary, which is what you
+    want. And <strong>promotion without a rollback path</strong>: promoting a version that archives its
+    predecessor's artifact, or promoting from a training run whose environment was never captured, leaves you
+    with a pointer that has nowhere to point back to.
+  </p>
+
+  <h3>Registering with lineage attached</h3>
+  <pre><code><span class="kw">import</span> mlflow, hashlib, subprocess
+<span class="kw">from</span> mlflow.models <span class="kw">import</span> infer_signature
+
+<span class="kw">with</span> mlflow.start_run() <span class="kw">as</span> run:
+    model.fit(X_train, y_train)
+
+    <span class="cm"># The signature is the schema contract the serving layer enforces.</span>
+    signature = infer_signature(X_train, model.predict(X_train))
+
+    mlflow.sklearn.log_model(
+        model,
+        artifact_path=<span class="st">"model"</span>,
+        signature=signature,
+        input_example=X_train.head(<span class="st">5</span>),
+    )
+    mlflow.log_metric(<span class="st">"auc"</span>, auc)
+    mlflow.log_metric(<span class="st">"auc_eval_n"</span>, len(X_eval))
+
+    <span class="cm"># Lineage: pin WHAT trained it, not the query that selected it.</span>
+    mlflow.set_tags({
+        <span class="st">"dataset_hash"</span>: snapshot_sha256,
+        <span class="st">"dataset_uri"</span>: <span class="st">"s3://lake/fraud/snapshots/2026-09-01/"</span>,
+        <span class="st">"git_sha"</span>: subprocess.check_output(
+            [<span class="st">"git"</span>, <span class="st">"rev-parse"</span>, <span class="st">"HEAD"</span>]).decode().strip(),
+    })
+
+mv = mlflow.register_model(<span class="fn">f</span><span class="st">"runs:/{run.info.run_id}/model"</span>, <span class="st">"fraud_scorer"</span>)
+
+<span class="cm"># Promotion is a pointer move — no rebuild, no redeploy.</span>
+client = mlflow.MlflowClient()
+client.set_registered_model_alias(<span class="st">"fraud_scorer"</span>, <span class="st">"production"</span>, mv.version)
+
+<span class="cm"># Serving never sees a path. Rollback = point the alias back.</span>
+predictor = mlflow.pyfunc.load_model(<span class="st">"models:/fraud_scorer@production"</span>)</code></pre>
+
+  <div class="callout">
+    <strong>The gotcha:</strong> a registry version records the artifact and its metadata, not the runtime.
+    If the serving image upgrades a library the model was pickled against, resolving the alias still succeeds and
+    the load fails — or worse, succeeds with different numerics. Log the environment
+    (<code>conda.yaml</code> / <code>requirements.txt</code> are emitted alongside the MLflow model) and pin it
+    in the serving image, or your "immutable version" is only immutable on one axis.
+  </div>
+</section>
+
+<section id="visualization">
+  <h2>Visualization</h2>
+
+  <div class="viz-card">
+    <div class="viz-title">Live registry — register, promote, roll back, and watch serving resolve</div>
+    <div class="viz-desc">
+      Register candidate versions with or without their lineage metadata, promote them through the stages, and
+      watch the serving pane below re-resolve. Traffic is scored continuously against whatever version resolution
+      currently returns. Switch the resolution strategy to see rollback stop working.
+    </div>
+
+    <div class="sub-h">Register a candidate</div>
+    <div class="preset-row">
+      <label class="chk"><input type="checkbox" id="cbHash" checked/> log dataset_hash</label>
+      <label class="chk"><input type="checkbox" id="cbSig" checked/> log input signature</label>
+      <label class="chk">
+        trained on
+        <select class="ctrl-btn" id="selFeat" style="padding:0.1em 1.4em 0.1em 0.4em">
+          <option value="base">3 features</option>
+          <option value="ext">4 features (+ geo_velocity)</option>
+        </select>
+      </label>
+      <button class="ctrl-btn primary" id="btnRegister">+ Register version</button>
+      <label class="chk"><input type="checkbox" id="cbGate" checked/> block Production promotion on broken lineage</label>
+    </div>
+
+    <div class="sub-h">Registry — model: fraud_scorer</div>
+    <div class="tbl-wrap">
+      <table class="registry">
+        <thead>
+          <tr>
+            <th>ver</th><th>run</th><th>git_sha</th><th>dataset_hash</th><th>signature</th>
+            <th>AUC</th><th>stage</th><th>lineage</th><th>actions</th>
+          </tr>
+        </thead>
+        <tbody id="regBody"></tbody>
+      </table>
+    </div>
+    <div class="preset-row" style="margin-top:0.9rem">
+      <button class="ctrl-btn danger" id="btnRollback">⟲ Rollback @production</button>
+      <span class="note-line" id="rbNote" style="margin:0"></span>
+    </div>
+
+    <div id="gateMsg" class="verdict pass" style="display:none"></div>
+  </div>
+
+  <div class="viz-card">
+    <div class="viz-title">Serving resolution</div>
+    <div class="viz-desc">
+      The inference service resolves a reference on a cache TTL, then scores requests against whatever it got.
+      Change the strategy and the payload schema, then promote or roll back and watch how long the change takes
+      to reach traffic — or whether it reaches it at all.
+    </div>
+
+    <div class="preset-row">
+      <label class="chk">
+        resolve by
+        <select class="ctrl-btn" id="selMode" style="padding:0.1em 1.4em 0.1em 0.4em">
+          <option value="alias">registry alias @production</option>
+          <option value="pinned">pinned artifact URI</option>
+          <option value="latest">mutable s3://…/latest/</option>
+        </select>
+      </label>
+      <button class="ctrl-btn" id="btnRedeploy">↻ Redeploy (re-pin URI)</button>
+      <label class="chk">
+        request payload
+        <select class="ctrl-btn" id="selPayload" style="padding:0.1em 1.4em 0.1em 0.4em">
+          <option value="ext">4 features</option>
+          <option value="base">3 features (upstream dropped geo_velocity)</option>
+        </select>
+      </label>
+      <button class="ctrl-btn" id="btnReset">reset counters</button>
+    </div>
+
+    <div class="slider-grid">
+      <div class="slider-row">
+        <label>alias resolution cache TTL <span class="val" id="ttlVal">10 s</span></label>
+        <input type="range" id="sldTtl" min="1" max="60" step="1" value="10"/>
+      </div>
+    </div>
+
+    <div class="serve-pane" id="servePane"></div>
+    <div class="ttlbar"><div id="ttlFill"></div></div>
+
+    <div class="stat-grid">
+      <div class="stat"><div class="k">scored ok</div><div class="v goodv" id="stOk">0</div><div class="n">signature satisfied</div></div>
+      <div class="stat"><div class="k">schema-rejected</div><div class="v warnv" id="stRej">0</div><div class="n">loud 400 at the boundary</div></div>
+      <div class="stat"><div class="k">silently scored</div><div class="v badv" id="stSil">0</div><div class="n">no signature → null-filled</div></div>
+      <div class="stat"><div class="k">unresolved</div><div class="v badv" id="stUnres">0</div><div class="n">alias points at nothing</div></div>
+      <div class="stat"><div class="k">serving version</div><div class="v" id="stVer">—</div><div class="n">what actually loaded</div></div>
+      <div class="stat"><div class="k">registry says</div><div class="v" id="stReg">—</div><div class="n">@production target</div></div>
+    </div>
+
+    <div class="sub-h">Audit log</div>
+    <div class="logbox" id="logBox"></div>
+    <div class="legend">
+      <span>traffic: 20 req/s simulated · resolution re-checked on TTL expiry only</span>
+    </div>
+  </div>
+</section>
+
+<section id="interview-line">
+  <h2>The Interview Line</h2>
+  <div class="quote">
+    <p>
+      "The registry gives me two things I can't get from a file in S3: <em>immutable versions</em> and a
+      <em>mutable pointer</em>. Training registers a version with the dataset hash, the input signature, the eval
+      metrics and the git SHA attached — if any of those are missing the version is servable but unreproducible,
+      and I gate Production promotion on them for exactly that reason. Serving then resolves
+      <em>models:/fraud_scorer@production</em>, never a path, so promotion and rollback are both a pointer move
+      rather than a redeploy."
+    </p>
+    <p>
+      "The trade-off I'd call out is the resolution cache. Alias resolution is cached in the serving process, so
+      whatever that TTL is — say thirty seconds — that's the floor on how fast a rollback actually reaches
+      traffic, and it's why I report the version the pod <em>loaded</em> rather than the one the registry thinks is
+      current. The alternative, pinning the artifact URI, is more auditable but turns rollback into a redeploy.
+      What I won't accept is a mutable <em>latest</em> path: that means any training run that finishes ships
+      itself, including one that failed the eval gate, and there's nothing to roll back to."
+    </p>
+  </div>
+</section>
+
+<section id="takeaways">
+  <h2>Key Takeaways</h2>
+  <ul>
+    <li><strong>Promotion is a metadata write, not a deploy.</strong> Moving <code>@production</code> from v7 to v8
+      touches no artifact and restarts no pod — which is exactly why rollback is cheap. If your rollback requires
+      a CI pipeline, you have a pinned path, not a registry.</li>
+    <li><strong>Four fields or the version is unreproducible:</strong> dataset snapshot hash (not a query),
+      input signature, eval metrics with their eval-set size, and git SHA plus environment. MLflow's
+      <code>infer_signature</code> + tags, SageMaker's model package metadata, Vertex's version labels — every
+      registry has the slots; teams just don't fill them.</li>
+    <li><strong>Stages are deprecated in MLflow; aliases replaced them.</strong> The fixed
+      <code>Staging</code>/<code>Production</code> enum could not express per-region or challenger pointers, so
+      MLflow moved to named aliases plus tags. SageMaker uses <code>ModelApprovalStatus</code> and Vertex uses
+      version aliases — all of them a mutable pointer over an immutable list.</li>
+    <li><strong>The alias cache TTL is your rollback latency floor.</strong> A serving process that resolves the
+      alias once per N seconds cannot roll back faster than N. Know the number, and expose the loaded version on a
+      health endpoint so registry state and serving state can be reconciled.</li>
+    <li><strong>A logged signature converts silent degradation into a loud 4xx.</strong> When an upstream column
+      disappears, an unsignatured model scores a null-filled feature and your metrics quietly sag; a signatured
+      one rejects at the boundary and pages someone. Prefer the page.</li>
+    <li><strong>Never serve from a mutable path.</strong> <code>s3://models/fraud/latest/</code> means every
+      finished training run self-promotes, including the ones that failed evaluation, with no prior artifact to
+      return to and no record of when it changed.</li>
+  </ul>
+</section>
+
+</main>
+
+<nav class="concept-nav">
+  <a class="nav-link" href="./09-pipeline-orchestration.html">
+    <span class="nav-dir">← Previous</span>
+    <span class="nav-title">ML Pipeline Orchestration</span>
+  </a>
+  <a class="nav-link" href="./11-evaluation-gates.html">
+    <span class="nav-dir">Next →</span>
+    <span class="nav-title">Offline Evaluation Gates</span>
+  </a>
+</nav>
+
+<script>
+(function () {
+  'use strict';
+
+  var FEATSETS = {
+    base: ['amount', 'merchant_risk', 'device_age'],
+    ext:  ['amount', 'merchant_risk', 'device_age', 'geo_velocity']
+  };
+
+  var S = {
+    seq: 0,
+    versions: [],          // immutable, append-only
+    aliasTarget: null,     // version number @production resolves to
+    aliasHistory: [],      // stack of previous alias targets — enables rollback
+    mode: 'alias',
+    pinned: null,          // version number pinned into the deployment
+    ttl: 10,
+    cacheVer: null,
+    cacheAge: 0,           // seconds since last resolution
+    payload: 'ext',
+    gate: true,
+    clock: 0,
+    reqAcc: 0,             // fractional request accumulator across frames
+    stats: { ok: 0, rej: 0, sil: 0, unres: 0 }
+  };
+
+  var el = function (id) { return document.getElementById(id); };
+  var regBody = el('regBody'), logBox = el('logBox'), servePane = el('servePane');
+
+  function hex(n) {
+    var s = '';
+    for (var i = 0; i < n; i++) s += '0123456789abcdef'[Math.floor(Math.random() * 16)];
+    return s;
+  }
+
+  function fmtClock() {
+    var t = Math.floor(S.clock);
+    var m = String(Math.floor(t / 60) % 60).padStart(2, '0');
+    var s = String(t % 60).padStart(2, '0');
+    return '00:' + m + ':' + s;
+  }
+
+  function log(kind, msg) {
+    var d = document.createElement('div');
+    d.className = 'log-line ' + kind;
+    d.innerHTML = '<span class="t">' + fmtClock() + '</span>  <span class="m">' + msg + '</span>';
+    logBox.appendChild(d);
+    while (logBox.children.length > 120) logBox.removeChild(logBox.firstChild);
+    logBox.scrollTop = logBox.scrollHeight;
+  }
+
+  function byVer(v) {
+    for (var i = 0; i < S.versions.length; i++) if (S.versions[i].v === v) return S.versions[i];
+    return null;
+  }
+
+  // ── Lineage check: exactly the fields that make a version reproducible ──
+  function missingLineage(mv) {
+    var miss = [];
+    if (!mv.datasetHash) miss.push('dataset_hash');
+    if (!mv.signature) miss.push('signature');
+    if (!mv.gitSha) miss.push('git_sha');
+    if (mv.auc === null) miss.push('metrics');
+    return miss;
+  }
+
+  // ── Register: append-only, never mutates an existing version ──
+  function register(logHash, logSig, featset) {
+    S.seq += 1;
+    var mv = {
+      v: S.seq,
+      runId: hex(8),
+      gitSha: hex(7),
+      datasetHash: logHash ? hex(10) : null,
+      signature: logSig ? FEATSETS[featset].slice() : null,
+      featset: featset,
+      auc: Math.round((0.905 + Math.random() * 0.035) * 1000) / 1000,
+      stage: 'None'
+    };
+    S.versions.push(mv);
+    var miss = missingLineage(mv);
+    log(miss.length ? 'warn' : 'info',
+      'REGISTER  fraud_scorer v' + mv.v + '  run=' + mv.runId + '  stage=None' +
+      (miss.length ? '   ⚠ missing ' + miss.join(', ') : ''));
+    return mv;
+  }
+
+  function promote(v, stage) {
+    var mv = byVer(v);
+    if (!mv) return;
+
+    if (stage === 'Production') {
+      var miss = missingLineage(mv);
+      if (S.gate && miss.length) {
+        showGate('fail', 'PROMOTION BLOCKED — v' + mv.v + ' is missing ' + miss.join(', ') +
+          '.<span class="sub">The artifact would serve fine. It just could never be rebuilt, ' +
+          'and nothing would enforce its input schema. Re-run training with the metadata logged, ' +
+          'or turn the gate off to ship an unreproducible model.</span>');
+        log('err', 'BLOCKED   v' + mv.v + ' → Production   missing: ' + miss.join(', '));
+        render();
+        return;
+      }
+      var prev = S.aliasTarget;
+      if (prev !== null && prev !== mv.v) {
+        var pm = byVer(prev);
+        if (pm) pm.stage = 'Archived';
+        S.aliasHistory.push(prev);
+      }
+      mv.stage = 'Production';
+      S.aliasTarget = mv.v;
+      showGate('pass', 'ALIAS MOVED — @production → v' + mv.v +
+        '<span class="sub">No artifact was copied and no pod restarted. ' +
+        'Serving picks this up when its resolution cache expires.</span>');
+      log('ok', 'ALIAS     set_registered_model_alias("fraud_scorer", "production", ' + mv.v + ')' +
+        (prev !== null ? '   (was v' + prev + ' → Archived)' : ''));
+    } else if (stage === 'Staging') {
+      mv.stage = 'Staging';
+      log('info', 'STAGE     v' + mv.v + ' → Staging');
+    } else if (stage === 'Archived') {
+      mv.stage = 'Archived';
+      if (S.aliasTarget === mv.v) {
+        S.aliasTarget = null;
+        showGate('fail', 'ARCHIVED THE ALIAS TARGET — @production now resolves to nothing.' +
+          '<span class="sub">The artifact still exists; the pointer does not. Every request that ' +
+          'misses the resolution cache fails to load a model.</span>');
+        log('err', 'ALIAS     @production now unresolved — v' + mv.v + ' was archived while holding it');
+      } else {
+        log('info', 'STAGE     v' + mv.v + ' → Archived');
+      }
+    }
+    render();
+  }
+
+  function rollback() {
+    if (!S.aliasHistory.length) {
+      showGate('warn', 'NOTHING TO ROLL BACK TO — @production has never been moved.' +
+        '<span class="sub">Rollback is only a pointer move if a previous target still exists as an ' +
+        'immutable version. This is the argument against overwriting artifacts in place.</span>');
+      return;
+    }
+    var prev = S.aliasHistory.pop();
+    var cur = S.aliasTarget;
+    var cm = byVer(cur), pm = byVer(prev);
+    if (cm) cm.stage = 'Archived';
+    if (pm) pm.stage = 'Production';
+    S.aliasTarget = prev;
+    log('ok', 'ROLLBACK  @production: v' + cur + ' → v' + prev + '   (metadata write, no redeploy)');
+    if (S.mode === 'pinned') {
+      showGate('warn', 'ROLLBACK RECORDED, TRAFFIC UNCHANGED — the deployment pins v' + S.pinned + '.' +
+        '<span class="sub">With a pinned artifact URI the registry pointer is decorative. ' +
+        'Getting v' + prev + ' onto traffic needs a config change and a redeploy.</span>');
+    } else if (S.mode === 'latest') {
+      showGate('fail', 'ROLLBACK HAS NO EFFECT — serving reads a mutable latest/ path.' +
+        '<span class="sub">Whatever training run wrote last is serving, regardless of stage. ' +
+        'The registry is not in the request path at all.</span>');
+    } else {
+      showGate('pass', 'ROLLING BACK — @production → v' + prev + ', live in ≤ ' + S.ttl + 's.' +
+        '<span class="sub">That TTL is the rollback latency floor: serving will not notice until ' +
+        'its cached resolution expires.</span>');
+    }
+    render();
+  }
+
+  function showGate(kind, html) {
+    var g = el('gateMsg');
+    g.className = 'verdict ' + kind;
+    g.innerHTML = html;
+    g.style.display = 'block';
+  }
+
+  // ── Resolution: what the serving process would get right now ──
+  function resolveTarget() {
+    if (S.mode === 'pinned') return S.pinned;
+    if (S.mode === 'latest') return S.versions.length ? S.versions[S.versions.length - 1].v : null;
+    return S.aliasTarget;
+  }
+
+  function servingVersion() {
+    // Only the alias path is cached; a pinned URI never changes and the mutable
+    // path is read straight from object storage on each load.
+    return S.mode === 'alias' ? S.cacheVer : resolveTarget();
+  }
+
+  // ── Traffic: score requests against whatever resolution returned ──
+  function tick(dt) {
+    S.clock += dt;
+
+    if (S.mode === 'alias') {
+      S.cacheAge += dt;
+      if (S.cacheAge >= S.ttl || S.cacheVer === undefined) {
+        var t = resolveTarget();
+        if (t !== S.cacheVer) {
+          log('info', 'RESOLVE   models:/fraud_scorer@production → ' +
+            (t === null ? 'NOT FOUND' : 'v' + t) + '   (cache refreshed)');
+        }
+        S.cacheVer = t;
+        S.cacheAge = 0;
+      }
+    }
+
+    // 20 req/s, accumulated across frames so a 16ms frame doesn't round to zero
+    S.reqAcc += 20 * dt;
+    var n = Math.floor(S.reqAcc);
+    S.reqAcc -= n;
+    var sv = servingVersion();
+    var mv = sv === null || sv === undefined ? null : byVer(sv);
+    var payload = FEATSETS[S.payload];
+
+    for (var i = 0; i < n; i++) {
+      if (!mv) { S.stats.unres++; continue; }
+      var required = mv.signature || FEATSETS[mv.featset];
+      var missing = required.filter(function (f) { return payload.indexOf(f) === -1; });
+      if (missing.length === 0) S.stats.ok++;
+      else if (mv.signature) S.stats.rej++;   // enforced at the boundary
+      else S.stats.sil++;                     // no signature → null-filled, scored anyway
+    }
+  }
+
+  // ── Rendering ──
+  function render() {
+    var rows = '';
+    var serving = servingVersion();
+    for (var i = S.versions.length - 1; i >= 0; i--) {
+      var mv = S.versions[i];
+      var miss = missingLineage(mv);
+      var cls = (mv.stage === 'Production' ? 'is-prod ' : '') + (serving === mv.v ? 'is-serving' : '');
+      rows += '<tr class="' + cls + '">' +
+        '<td class="vnum">v' + mv.v + (S.aliasTarget === mv.v ? ' <span class="dim">@production</span>' : '') + '</td>' +
+        '<td class="dim">' + mv.runId + '</td>' +
+        '<td class="dim">' + mv.gitSha + '</td>' +
+        '<td class="' + (mv.datasetHash ? 'dim' : 'missing') + '">' + (mv.datasetHash || '— missing —') + '</td>' +
+        '<td class="' + (mv.signature ? 'dim' : 'missing') + '">' +
+          (mv.signature ? mv.signature.length + ' cols' : '— missing —') + '</td>' +
+        '<td>' + mv.auc.toFixed(3) + '</td>' +
+        '<td><span class="stage-pill ' + mv.stage + '">' + mv.stage + '</span></td>' +
+        '<td class="' + (miss.length ? 'lin-bad' : 'lin-ok') + '">' +
+          (miss.length ? '⚠ broken' : '✓ complete') + '</td>' +
+        '<td>' +
+          '<button class="row-btn" data-act="Staging" data-v="' + mv.v + '"' +
+            (mv.stage === 'Staging' ? ' disabled' : '') + '>→ Staging</button>' +
+          '<button class="row-btn" data-act="Production" data-v="' + mv.v + '"' +
+            (mv.stage === 'Production' ? ' disabled' : '') + '>→ Production</button>' +
+          '<button class="row-btn" data-act="Archived" data-v="' + mv.v + '"' +
+            (mv.stage === 'Archived' ? ' disabled' : '') + '>Archive</button>' +
+        '</td></tr>';
+    }
+    regBody.innerHTML = rows;
+
+    el('btnRollback').disabled = !S.aliasHistory.length;
+    el('rbNote').textContent = S.aliasHistory.length
+      ? 'previous @production targets on the stack: ' + S.aliasHistory.map(function (v) { return 'v' + v; }).join(' → ')
+      : 'no previous @production target — nothing to roll back to yet';
+
+    renderServe();
+  }
+
+  function renderServe() {
+    var sv = servingVersion();
+    var mv = (sv === null || sv === undefined) ? null : byVer(sv);
+    var ref, refNote;
+    if (S.mode === 'alias') {
+      ref = '<span class="uri">models:/fraud_scorer@production</span>';
+      refNote = 'resolved every ' + S.ttl + 's';
+    } else if (S.mode === 'pinned') {
+      var pm = S.pinned === null ? null : byVer(S.pinned);
+      ref = '<span class="uri">s3://mlflow/artifacts/' + (pm ? pm.runId : '—') + '/model</span>';
+      refNote = 'baked into the deployment at redeploy time';
+    } else {
+      ref = '<span class="uri">s3://models/fraud_scorer/latest/</span>';
+      refNote = 'overwritten in place by every training run';
+    }
+
+    var lines = '';
+    lines += '<div><span class="k">reference</span>' + ref + '</div>';
+    lines += '<div><span class="k">strategy</span><span class="dim">' + refNote + '</span></div>';
+
+    if (!mv) {
+      lines += '<div><span class="k">resolves to</span><span class="badv">NOT FOUND — no model loaded, requests failing</span></div>';
+    } else {
+      lines += '<div><span class="k">resolves to</span><span class="goodv">version ' + mv.v +
+        '</span> <span class="dim">· run ' + mv.runId + ' · stage ' + mv.stage + '</span></div>';
+      lines += '<div><span class="k">enforced schema</span>' +
+        (mv.signature
+          ? '<span class="goodv">' + mv.signature.join(', ') + '</span>'
+          : '<span class="badv">none logged — no enforcement</span>') + '</div>';
+      lines += '<div><span class="k">incoming payload</span><span class="dim">' +
+        FEATSETS[S.payload].join(', ') + '</span></div>';
+
+      var required = mv.signature || FEATSETS[mv.featset];
+      var missing = required.filter(function (f) { return FEATSETS[S.payload].indexOf(f) === -1; });
+      if (missing.length && mv.signature) {
+        lines += '<div><span class="k">status</span><span class="warnv">400 — schema enforcement rejects: missing ' +
+          missing.join(', ') + '</span></div>';
+      } else if (missing.length) {
+        lines += '<div><span class="k">status</span><span class="badv">200 — silent degradation: ' +
+          missing.join(', ') + ' null-filled, model scores anyway</span></div>';
+      } else {
+        lines += '<div><span class="k">status</span><span class="goodv">200 — scoring normally</span></div>';
+      }
+
+      if (mv.stage !== 'Production') {
+        lines += '<div><span class="k">⚠ drift</span><span class="badv">serving v' + mv.v +
+          ' which is stage=' + mv.stage + ' — the registry does not consider this the production model</span></div>';
+      }
+    }
+
+    if (S.mode === 'alias' && S.cacheVer !== S.aliasTarget) {
+      lines += '<div><span class="k">pending</span><span class="warnv">alias now points at ' +
+        (S.aliasTarget === null ? 'nothing' : 'v' + S.aliasTarget) + ' — reaches traffic in ' +
+        Math.max(0, S.ttl - S.cacheAge).toFixed(1) + 's</span></div>';
+    }
+    if (S.mode === 'pinned' && S.pinned !== S.aliasTarget) {
+      lines += '<div><span class="k">pending</span><span class="warnv">registry @production = ' +
+        (S.aliasTarget === null ? 'nothing' : 'v' + S.aliasTarget) +
+        ' — will never reach traffic without a redeploy</span></div>';
+    }
+
+    servePane.innerHTML = lines;
+
+    el('ttlFill').style.width =
+      (S.mode === 'alias' ? Math.min(100, (S.cacheAge / S.ttl) * 100) : 100).toFixed(1) + '%';
+
+    el('stOk').textContent = S.stats.ok;
+    el('stRej').textContent = S.stats.rej;
+    el('stSil').textContent = S.stats.sil;
+    el('stUnres').textContent = S.stats.unres;
+    el('stVer').textContent = (sv === null || sv === undefined) ? '—' : 'v' + sv;
+    el('stReg').textContent = S.aliasTarget === null ? '—' : 'v' + S.aliasTarget;
+  }
+
+  // ── Wiring ──
+  el('btnRegister').addEventListener('click', function () {
+    register(el('cbHash').checked, el('cbSig').checked, el('selFeat').value);
+    render();
+  });
+
+  regBody.addEventListener('click', function (e) {
+    var b = e.target.closest('.row-btn');
+    if (!b) return;
+    promote(parseInt(b.dataset.v, 10), b.dataset.act);
+  });
+
+  el('btnRollback').addEventListener('click', rollback);
+
+  el('cbGate').addEventListener('change', function () { S.gate = this.checked; });
+
+  el('selMode').addEventListener('change', function () {
+    S.mode = this.value;
+    if (S.mode === 'pinned' && S.pinned === null) S.pinned = S.aliasTarget;
+    log('info', 'DEPLOY    resolution strategy → ' + S.mode +
+      (S.mode === 'pinned' ? ' (pinned v' + S.pinned + ')' : ''));
+    if (S.mode === 'latest') {
+      showGate('fail', 'MUTABLE PATH — serving now reads whatever was written last.' +
+        '<span class="sub">Register a version with broken lineage and watch it reach traffic ' +
+        'without ever being promoted.</span>');
+    }
+    render();
+  });
+
+  el('btnRedeploy').addEventListener('click', function () {
+    S.pinned = S.aliasTarget;
+    log('ok', 'DEPLOY    re-pinned artifact URI → v' + S.pinned + '   (image roll, ~minutes)');
+    render();
+  });
+
+  el('selPayload').addEventListener('change', function () {
+    S.payload = this.value;
+    log('warn', 'UPSTREAM  request payload schema → ' + FEATSETS[S.payload].length + ' features');
+    render();
+  });
+
+  el('sldTtl').addEventListener('input', function () {
+    S.ttl = parseInt(this.value, 10);
+    el('ttlVal').textContent = S.ttl + ' s';
+    renderServe();
+  });
+
+  el('btnReset').addEventListener('click', function () {
+    S.stats = { ok: 0, rej: 0, sil: 0, unres: 0 };
+    renderServe();
+  });
+
+  // ── Seed a plausible registry ──
+  var v1 = register(true, true, 'ext');
+  promote(v1.v, 'Production');
+  var v2 = register(true, true, 'ext');
+  promote(v2.v, 'Staging');
+  register(false, false, 'ext');   // the untracked notebook run
+  S.cacheVer = S.aliasTarget;
+  S.pinned = S.aliasTarget;
+  el('gateMsg').style.display = 'none';
+  log('info', 'READY     3 versions registered, @production → v' + S.aliasTarget);
+  render();
+
+  var last = performance.now();
+  function loop(now) {
+    var dt = Math.min(0.25, (now - last) / 1000);
+    last = now;
+    tick(dt);
+    renderServe();
+    requestAnimationFrame(loop);
+  }
+  requestAnimationFrame(loop);
+})();
+</script>
+
+</body>
+</html>

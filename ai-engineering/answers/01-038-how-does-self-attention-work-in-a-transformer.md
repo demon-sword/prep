@@ -60,12 +60,12 @@ MultiHead(Q, K, V) = Concat(head_1, ..., head_H) · W_O
 
 Different heads specialise — one may track syntactic dependencies, another coreference, another positional patterns. This diversity is empirically critical to model quality.
 
-**Complexity:** O(n² · d) in time and O(n²) in memory, where n is sequence length. At n = 128k tokens (Claude 3.5) the attention matrix is the primary memory bottleneck — why FlashAttention (IO-aware tiling) and GQA (sharing K/V heads) exist.
+**Complexity:** O(n² · d) in time and O(n²) in memory, where n is sequence length. At n = 1M tokens — the current frontier context length — the attention matrix is the primary memory bottleneck — why FlashAttention (IO-aware tiling) and GQA (sharing K/V heads) exist.
 
 ### Example / Tradeoff
-In GPT-4 (96 heads, d_model = 12 288), each head has d_k = 128. With a 32k context, the raw attention matrix per head is 32k × 32k = 1B float16 values (~2 GB) — before activations. FlashAttention rewrites this as tiled SRAM ops to avoid materialising that matrix in HBM, cutting memory ~5× at the cost of recomputation during the backward pass (training only).
+In a frontier model (96 heads, d_model = 12 288), each head has d_k = 128. With a 32k context, the raw attention matrix per head is 32k × 32k = 1B float16 values (~2 GB) — before activations. FlashAttention rewrites this as tiled SRAM ops to avoid materialising that matrix in HBM, cutting memory ~5× at the cost of recomputation during the backward pass (training only).
 
-For serving, GQA (grouped-query attention) reduces the number of distinct K and V heads (e.g., 8 groups instead of 96 heads in Llama 3 70B), shrinking the KV cache proportionally — critical when batching many concurrent users.
+For serving, GQA (grouped-query attention) reduces the number of distinct K and V heads (e.g., 8 groups instead of 96 heads in a 70B-class open-weight model), shrinking the KV cache proportionally — critical when batching many concurrent users.
 
 ---
 
@@ -78,7 +78,7 @@ For serving, GQA (grouped-query attention) reduces the number of distinct K and 
 "Here's how it works mechanically. For each token, we learn three linear projections: a Query, a Key, and a Value. You can think of it like a soft database lookup — the Query is what I'm searching for, the Key is the index that other tokens expose, and the Value is the content I'd retrieve. We compute dot products between each query and all keys, scale by the square root of the key dimension to keep gradients stable, apply softmax to get attention weights, then take a weighted sum of the values. The output for each token is now a blend of every other token's information, weighted by how relevant they are. For decoder-only models like GPT, we add a causal mask — tokens can only attend backwards, not to future positions. Multi-head attention just runs this independently H times with different learned projections, then concatenates. Different heads tend to specialise: I've seen heads that clearly track subject-verb agreement and others that track coreference chains."
 
 **Tradeoff / production angle (1 min):**
-"The main cost is quadratic: both time and memory scale as O(n²) in sequence length. At 32k tokens, the attention matrix per head is enormous — that's why FlashAttention was such a breakthrough. It avoids materialising that matrix in GPU HBM by computing attention in tiles that fit in fast SRAM, getting a 3–4× memory reduction with no accuracy loss. On the KV cache side, GQA — used in Llama 3, Mistral, Gemma — reduces the number of distinct K/V heads, sometimes by 8–12×, which directly cuts the per-request memory footprint during serving."
+"The main cost is quadratic: both time and memory scale as O(n²) in sequence length. At 32k tokens, the attention matrix per head is enormous — that's why FlashAttention was such a breakthrough. It avoids materialising that matrix in GPU HBM by computing attention in tiles that fit in fast SRAM, getting a 3–4× memory reduction with no accuracy loss. On the KV cache side, GQA — used in a modern open-weight model, Mistral, Gemma — reduces the number of distinct K/V heads, sometimes by 8–12×, which directly cuts the per-request memory footprint during serving."
 
 **Wrap-up (30s):**
 "So in summary: self-attention computes pairwise relevance across all positions via Q/K/V projections, multi-head attention runs it H times in parallel for richer representations, and the quadratic cost is managed in production with FlashAttention and GQA. Happy to go deeper on any part — the math, the masking, or how this interacts with the KV cache at inference."

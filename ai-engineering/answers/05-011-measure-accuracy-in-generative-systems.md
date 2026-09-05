@@ -43,7 +43,7 @@ Whether the candidate can design a multi-layer eval stack — property checks �
 - **Golden dataset recall** — 200–500 human-annotated (question, reference answer) pairs; score with Exact Match on extractive sub-fields or BERTScore F1 for fluent comparison
 
 **Layer 3 — LLM-as-judge (sample, 5–10% of traffic)**
-- GPT-4o judges each answer on 1–5 rubrics (correctness, completeness, tone); inter-rater agreement calibration with human baseline
+- A frontier model judges each answer on 1–5 rubrics (correctness, completeness, tone); inter-rater agreement calibration with human baseline
 - Self-consistency check: same prompt × 3 at T=0.7 → majority vote as accuracy proxy for reasoning tasks
 - Tools: `promptfoo`, `deepeval`, `RAGAS` judge mode
 
@@ -66,7 +66,7 @@ A customer support RAG system: Layer 1 catches format errors (JSON missing `tick
 "Great question — accuracy in generative systems is genuinely harder than in classification because there's rarely one right answer. I think about it as a four-layer stack: structural checks that run on every response, semantic accuracy on a golden dataset and sampled traffic, an LLM-as-judge layer for nuanced quality, and then downstream business metrics as the north star."
 
 **Core explanation (2–3 min):**
-"The first layer is fast and cheap: schema validation, length checks, citation presence — anything that can be asserted without an LLM. These run synchronously on 100% of traffic and catch the obvious failures. The second layer is semantic accuracy. I use RAGAS Faithfulness to check whether every claim in the answer is grounded in the retrieved context — a score below 0.85 triggers a fallback. For extractive fields, I'll also have a golden dataset of 200–500 annotated examples and score exact match or BERTScore F1. Third, I run an LLM-as-judge on a 5% sample — GPT-4o scoring correctness, completeness, and tone on a 1–5 rubric. I calibrate it with human ratings first so I know where it diverges. Finally, the business layer: deflection rate, task completion, and thumbs-down rate. These are the metrics that actually tell you whether accuracy translates to value."
+"The first layer is fast and cheap: schema validation, length checks, citation presence — anything that can be asserted without an LLM. These run synchronously on 100% of traffic and catch the obvious failures. The second layer is semantic accuracy. I use RAGAS Faithfulness to check whether every claim in the answer is grounded in the retrieved context — a score below 0.85 triggers a fallback. For extractive fields, I'll also have a golden dataset of 200–500 annotated examples and score exact match or BERTScore F1. Third, I run an LLM-as-judge on a 5% sample — a frontier model scoring correctness, completeness, and tone on a 1–5 rubric. I calibrate it with human ratings first so I know where it diverges. Finally, the business layer: deflection rate, task completion, and thumbs-down rate. These are the metrics that actually tell you whether accuracy translates to value."
 
 **Tradeoff / production angle (1 min):**
 "The honest tradeoff is cost and latency. Running RAGAS synchronously on every response adds ~200ms and real API cost. So I gate: Layer 1 is synchronous, Layer 2 faithfulness runs async after delivery (alerts on 1-hour rolling average), Layer 3 judge is nightly batch. The other trap is over-trusting BLEU or ROUGE — they look like accuracy but they penalise valid paraphrases and miss factual errors entirely. In production I replaced BLEU with faithfulness + answer_relevancy as primary eval SLOs."

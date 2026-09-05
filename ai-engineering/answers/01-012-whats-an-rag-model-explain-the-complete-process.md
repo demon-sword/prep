@@ -16,7 +16,7 @@ Interviewers use this as a gating question at technical screens and deep dives. 
 ### Trigger phrases
 - "What is RAG and how does it work?"
 - "Walk me through how you'd build a RAG system."
-- "How would you use GPT-4 to answer questions from our internal documents?"
+- "How would you use a frontier model to answer questions from our internal documents?"
 
 ### What it tests
 End-to-end pipeline fluency: can the candidate describe the 9 stages of a production RAG system, name the failure points at each stage, and explain why RAG is often better than fine-tuning for knowledge injection.
@@ -40,7 +40,7 @@ A production RAG system has two main phases: **offline indexing** and **online s
 **Online (serving pipeline):**
 5. **Retrieve** — encode the user query, run ANN top-k (k=10–20) against the vector DB. Apply metadata filters (date, source, tenant) at the DB layer.
 6. **Rerank** — optionally pass top-k results through a cross-encoder (Cohere Rerank, `bge-reranker-v2`) to re-score by query-document relevance and keep top-3–5. This improves precision without hurting recall.
-7. **Generate** — assemble retrieved chunks into the prompt context and call the LLM (GPT-4o, Claude 3.5 Sonnet). Place most-relevant chunks at the beginning or end of context — not the middle — to avoid "lost in the middle" degradation.
+7. **Generate** — assemble retrieved chunks into the prompt context and call the LLM (frontier models). Place most-relevant chunks at the beginning or end of context — not the middle — to avoid "lost in the middle" degradation.
 8. **Evaluate** — measure faithfulness (does the answer stick to the retrieved context?), answer relevancy, and context precision/recall using RAGAS or a custom LLM-as-judge harness.
 9. **Observe** — trace every request end-to-end (LangSmith, Phoenix/Arize). Maintain a golden QA set; run regression before any index or prompt change.
 

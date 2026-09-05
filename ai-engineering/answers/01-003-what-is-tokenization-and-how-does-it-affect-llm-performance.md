@@ -16,7 +16,7 @@ Tokenization is a surprisingly deep topic that separates candidates who have rea
 ### Trigger phrases
 - "What is tokenization and why does it matter?"
 - "How does tokenization affect cost and context windows?"
-- "Why does GPT-4 sometimes fail on simple string operations?"
+- "Why do LLMs sometimes fail on simple string operations?"
 - "What are the risks of using a general-purpose tokenizer on medical/legal text?"
 
 ### What it tests
@@ -30,10 +30,10 @@ Understanding of the text preprocessing pipeline before LLM inference, and the d
 Tokenization is the process of converting raw text into a sequence of integer IDs (tokens) that the model can process. Rather than operating on characters or words, modern LLMs use **subword tokenization** — algorithms like BPE (Byte-Pair Encoding) or WordPiece that split text into frequently-occurring subword units. A "token" is typically 3–4 characters of English text on average, meaning 1K words ≈ 750 tokens. The entire LLM — from context windows to pricing to inference speed — is measured in tokens, making tokenization the foundational unit of LLM engineering.
 
 ### Mechanism
-**Byte-Pair Encoding (BPE) — used by GPT-3/4, Llama:**
+**Byte-Pair Encoding (BPE) — used by the GPT and Llama families:**
 1. Start with a character-level vocabulary.
 2. Iteratively merge the most frequent adjacent pair of tokens into a single new token.
-3. Repeat until vocabulary size target is reached (e.g., 50K for GPT-2, 100K for GPT-4o, 128K for Llama-3).
+3. Repeat until vocabulary size target is reached (e.g., 50K for GPT-2; ~100K–128K for modern frontier and open-weight models).
 4. At inference: apply the learned merge rules to split input text into the longest matching tokens.
 
 **WordPiece — used by BERT, embedding models:**
@@ -68,7 +68,7 @@ Tokenization is the process of converting raw text into a sequence of integer ID
 "Tokenization is how raw text gets converted into the integer sequences that LLMs actually process. I think of it as the hidden variable that drives almost every engineering tradeoff — cost, context window consumption, model capability on specialized text. Let me walk through the mechanics and then hit the practical implications."
 
 **Core explanation (2–3 min):**
-"Modern LLMs use subword tokenization, most commonly BPE — Byte-Pair Encoding. The idea is: start with individual characters, then iteratively merge the most frequent adjacent pairs into a single token. You repeat this until you hit your vocabulary size target — GPT-4 uses about 100K tokens, Llama-3 uses 128K. The result is a vocabulary where common English words like 'the' or 'running' are single tokens, but rare or compound words get split: 'acetylcholinesterase' might become 8 or 10 tokens.
+"Modern LLMs use subword tokenization, most commonly BPE — Byte-Pair Encoding. The idea is: start with individual characters, then iteratively merge the most frequent adjacent pairs into a single token. You repeat this until you hit your vocabulary size target — modern models land in the 100K–128K range. The result is a vocabulary where common English words like 'the' or 'running' are single tokens, but rare or compound words get split: 'acetylcholinesterase' might become 8 or 10 tokens.
 
 At inference time, the tokenizer applies those learned merge rules to your input, producing a sequence of integer IDs. The model operates entirely on these IDs — it never sees individual characters.
 
@@ -90,7 +90,7 @@ Context window is also measured in tokens. A '128K token context' holds far less
 
 - **Mistake:** Saying "tokenization just splits text into words" — **Better:** Explain BPE/subword tokenization specifically: common words become single tokens, rare/compound words are split into subword pieces, and the vocabulary is learned from corpus statistics rather than a dictionary — which is why "strawberry" → ["straw", "berry"] and arithmetic on split numbers fails.
 - **Mistake:** Not connecting tokenization to cost and context windows — **Better:** Explicitly state that APIs charge per token, non-English text uses more tokens per character than English, and context window limits are in tokens not words — all of which are directly engineered tradeoffs in production system design.
-- **Mistake:** Missing the domain-specificity problem — saying "tokenization is just a preprocessing step" — **Better:** Explain that general-purpose tokenizers (GPT-4, Llama) are trained on web text, so specialized vocabulary in medical, legal, or code domains is often poorly covered — resulting in more tokens per concept, worse generation quality, and higher perplexity, which is why domain-specific models (BioMedBERT, ClinicalBERT, CodeLlama) use domain-adapted tokenizers.
+- **Mistake:** Missing the domain-specificity problem — saying "tokenization is just a preprocessing step" — **Better:** Explain that general-purpose tokenizers (frontier and open-weight alike) are trained on web text, so specialized vocabulary in medical, legal, or code domains is often poorly covered — resulting in more tokens per concept, worse generation quality, and higher perplexity, which is why domain-specific models (BioMedBERT, ClinicalBERT, CodeLlama) use domain-adapted tokenizers.
 
 ---
 

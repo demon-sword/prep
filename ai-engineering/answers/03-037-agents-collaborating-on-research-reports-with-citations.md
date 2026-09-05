@@ -36,13 +36,13 @@ A multi-agent research pipeline assigns specialized roles — Planner, parallel 
 [Planner agent]
   Input: user research question
   Output: structured outline {sections[], search_queries_per_section[], source_domains[]}
-  Model: GPT-4o, T=0.3 (some creativity in decomposition)
+  Model: a frontier model, T=0.3 (some creativity in decomposition)
 
 [Researcher agents — run in parallel, one per section or domain]
   Input: sub-query + assigned source domain (web, internal docs, arXiv, SEC filings)
   Tools: web_search, doc_retrieval (Pinecone/hybrid BM25+dense), pdf_extract
   Output: [{claim, supporting_chunk, source_url, source_title, confidence}]
-  Model: GPT-4o-mini, T=0 (factual extraction)
+  Model: a small fast model, T=0 (factual extraction)
 
 [Dedup + Merge step — orchestrator code, not an agent]
   Cosine-dedup retrieved chunks (threshold > 0.92 → keep highest-confidence version)
@@ -51,13 +51,13 @@ A multi-agent research pipeline assigns specialized roles — Planner, parallel 
 [Synthesizer agent]
   Input: outline + deduplicated claim-evidence pairs per section
   Output: prose report draft with inline [n] citation markers, structured bibliography
-  Model: GPT-4o, T=0.3
+  Model: a frontier model, T=0.3
 
 [Citation Validator agent]
   Input: report draft + source chunks
   Per [n] citation: NLI entailment check — does the source chunk entail the cited claim?
   Output: {citation_id, valid: bool, entailment_score, suggested_fix}
-  Model: DeBERTa-v3-large fine-tuned for NLI, or GPT-4o-mini as LLM judge
+  Model: DeBERTa-v3-large fine-tuned for NLI, or a small fast model as LLM judge
   Threshold: entailment_score < 0.75 → flag for revision or removal
 
 [Revision loop — max 2 iterations]
@@ -92,11 +92,11 @@ recent evidence suggests a data-compute optimum [2]."
 
 ### Example / Tradeoff
 
-**Concrete stack:** LangGraph for supervisor/parallel dispatch, GPT-4o for Planner + Synthesizer, GPT-4o-mini for Researcher extraction, DeBERTa-v3-large NLI model for Citation Validator (faster + cheaper than GPT-4o at high citation volume), Pinecone hybrid BM25+dense for internal doc retrieval, Tavily or Bing API for web search, Postgres for shared claim state.
+**Concrete stack:** LangGraph for supervisor/parallel dispatch, a frontier model for Planner + Synthesizer, a small fast model for Researcher extraction, DeBERTa-v3-large NLI model for Citation Validator (faster + cheaper than a frontier model at high citation volume), Pinecone hybrid BM25+dense for internal doc retrieval, Tavily or Bing API for web search, Postgres for shared claim state.
 
 **Cost math (one 10-section report, 3 Researcher agents per section):**
-- 30 Researcher calls × ~2K tokens avg = 60K tokens at GPT-4o-mini → ~$0.024
-- 1 Synthesizer call × ~8K tokens = $0.04 at GPT-4o
+- 30 Researcher calls × ~2K tokens avg = 60K tokens at a small fast model → ~$0.024
+- 1 Synthesizer call × ~8K tokens = $0.04 at a frontier model
 - 1 Validator pass × 50 citations × ~300 tokens NLI = 15K tokens → DeBERTa inference ~$0.002
 - Total: ~$0.07/report at this scope; scales to ~$70/1K reports
 
@@ -116,7 +116,7 @@ recent evidence suggests a data-compute optimum [2]."
 "I'd design this as a supervisor-worker multi-agent system: a Planner decomposes the research question into sections and sub-queries, parallel Researcher agents retrieve and extract claims with source metadata, a Synthesizer produces the narrative draft with inline citation markers, and a Citation Validator does an NLI entailment pass to confirm every claim is actually supported by the retrieved source. Let me walk through each layer."
 
 **Core explanation (2–3 min):**
-"The Planner uses GPT-4o to produce a structured JSON outline — sections, search sub-queries per section, and which source domains to search. That decomposition is the most important step: a badly scoped sub-query means Researchers bring back irrelevant evidence, and the Synthesizer hallucinates to fill the gap.
+"The Planner uses a frontier model to produce a structured JSON outline — sections, search sub-queries per section, and which source domains to search. That decomposition is the most important step: a badly scoped sub-query means Researchers bring back irrelevant evidence, and the Synthesizer hallucinates to fill the gap.
 
 Researcher agents run in parallel — one per section or one per source domain depending on the task. Each one searches its domain (web via Tavily, internal docs via Pinecone hybrid BM25+dense, PDFs via a parser), extracts structured claim-evidence pairs, and returns them with source metadata: URL, title, the exact supporting chunk. This structured output is critical — if you let Researchers return free-form prose, you lose provenance and the Citation Validator can't verify anything.
 
@@ -124,7 +124,7 @@ Before synthesis, I run an orchestrator-code dedup step: cosine similarity on re
 
 The Synthesizer then gets the deduplicated claim-evidence pairs grouped by section. It writes prose and places inline [n] markers referencing the citation index. Temperature 0.3 here — factual accuracy matters more than creativity, but some fluency is needed.
 
-Then the Citation Validator — I'd use DeBERTa-v3-large fine-tuned for NLI rather than GPT-4o-mini because it's 5× faster and 10× cheaper at scale, and citation validation is a binary entailment task, not a generation task. Any citation with entailment score below 0.75 gets flagged: the Synthesizer revises the claim or removes it if no supporting evidence exists. I cap this at 2 revision loops to control cost."
+Then the Citation Validator — I'd use DeBERTa-v3-large fine-tuned for NLI rather than a small fast model because it's 5× faster and 10× cheaper at scale, and citation validation is a binary entailment task, not a generation task. Any citation with entailment score below 0.75 gets flagged: the Synthesizer revises the claim or removes it if no supporting evidence exists. I cap this at 2 revision loops to control cost."
 
 **Tradeoff / production angle (1 min):**
 "The hardest production problem is conflicting claims across Researchers — two agents find sources that say opposite things. I handle this by surfacing the conflict explicitly in the Synthesizer's prompt: 'Source A says X, Source B says Y — acknowledge the disagreement and cite both.' Suppressing conflicts produces a confident-but-wrong report, which is worse than an uncertain one.

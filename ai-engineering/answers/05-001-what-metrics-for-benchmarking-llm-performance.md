@@ -34,11 +34,11 @@ LLM benchmarking operates across three distinct layers: **academic benchmarks** 
 
 | Benchmark | What it measures | Saturation risk |
 |-----------|-----------------|-----------------|
-| MMLU | 57-subject factual MC (undergrad–grad level) | GPT-4 class models hit 85–90%; nearly saturated |
+| MMLU | 57-subject factual MC (undergrad–grad level) | a frontier model class models hit 85–90%; nearly saturated |
 | HumanEval / MBPP | Python function synthesis, pass@1 | Increasingly saturated on frontier models |
 | BIG-Bench Hard | 23 hard reasoning tasks | More headroom; harder to game |
 | MATH / GSM8K | Mathematical reasoning, chain-of-thought | MATH still discriminates at frontier |
-| MT-Bench | Multi-turn chat quality via GPT-4 judge | Good for instruction-following; judge model bias |
+| MT-Bench | Multi-turn chat quality via a frontier model judge | Good for instruction-following; judge model bias |
 
 **Layer 2 — Task-specific offline metrics**
 
@@ -46,7 +46,7 @@ For generative tasks (QA, summarization, RAG):
 - **RAGAS Faithfulness** — does the answer follow from the retrieved context? (threshold: ≥ 0.85)
 - **RAGAS Answer Relevancy** — does the answer address the question?
 - **RAGAS Context Recall** — did retrieval surface the right chunks?
-- **LLM-judge** (GPT-4o as judge) — pairwise or rubric-scored quality; use on 5–10% sample due to cost
+- **LLM-judge** (a frontier model as judge) — pairwise or rubric-scored quality; use on 5–10% sample due to cost
 - **ROUGE-L / BLEU** — n-gram overlap; only meaningful for extractive tasks; do NOT treat as a primary signal for open-ended generation
 
 For classification/extraction:

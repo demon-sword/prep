@@ -1,0 +1,996 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1.0"/>
+  <title>Data Validation for ML Pipelines — MLOps Concepts</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com"/>
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet"/>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg:        #0d0f17;
+      --surface:   #141720;
+      --card:      #1a1e2e;
+      --border:    #252a3d;
+      --accent:    #00d4ff;
+      --purple:    #7c3aed;
+      --green:     #00ff88;
+      --yellow:    #ffd700;
+      --red:       #ff4757;
+      --orange:    #ff9500;
+      --text:      #e2e8f0;
+      --text-dim:  #8892a4;
+      --mono:      'JetBrains Mono', monospace;
+      --sans:      'Inter', system-ui, sans-serif;
+    }
+
+    html { scroll-behavior: smooth; }
+
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: var(--sans);
+      font-size: 16px;
+      line-height: 1.7;
+      min-height: 100vh;
+    }
+
+    header {
+      background: var(--surface);
+      border-bottom: 1px solid var(--border);
+      padding: 2rem 2rem 1.5rem;
+      max-width: 1100px;
+      margin: 0 auto;
+    }
+
+    .group-badge {
+      display: inline-block;
+      font-family: var(--mono);
+      font-size: 0.7rem;
+      font-weight: 700;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      color: var(--accent);
+      background: rgba(0, 212, 255, 0.1);
+      border: 1px solid rgba(0, 212, 255, 0.3);
+      padding: 0.2em 0.7em;
+      border-radius: 4px;
+      margin-bottom: 0.75rem;
+    }
+
+    header h1 {
+      font-size: clamp(1.6rem, 4vw, 2.4rem);
+      font-weight: 700;
+      line-height: 1.2;
+      margin-bottom: 0.5rem;
+    }
+
+    header h1 span.id {
+      color: var(--text-dim);
+      font-size: 0.55em;
+      font-family: var(--mono);
+      margin-right: 0.5rem;
+      vertical-align: middle;
+    }
+
+    header p.desc { color: var(--text-dim); font-size: 1.05rem; max-width: 780px; }
+
+    main { max-width: 1100px; margin: 0 auto; padding: 0 2rem 4rem; }
+
+    section { margin-top: 3rem; }
+
+    section > h2 {
+      font-size: 1.4rem;
+      font-weight: 700;
+      color: var(--accent);
+      border-bottom: 1px solid var(--border);
+      padding-bottom: 0.5rem;
+      margin-bottom: 1.5rem;
+    }
+
+    h3 { font-size: 1.1rem; font-weight: 600; color: var(--yellow); margin: 1.6rem 0 0.6rem; }
+
+    p { margin-bottom: 1rem; }
+    ul, ol { padding-left: 1.5rem; margin-bottom: 1rem; }
+    li { margin-bottom: 0.4rem; }
+
+    code {
+      font-family: var(--mono);
+      font-size: 0.85em;
+      background: rgba(0, 212, 255, 0.08);
+      color: var(--accent);
+      padding: 0.1em 0.35em;
+      border-radius: 3px;
+    }
+
+    pre {
+      font-family: var(--mono);
+      font-size: 0.8rem;
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 1rem 1.2rem;
+      overflow-x: auto;
+      margin-bottom: 1rem;
+      color: var(--green);
+      line-height: 1.6;
+      white-space: pre;
+    }
+
+    pre .cm { color: var(--text-dim); }
+
+    .formula-block {
+      background: var(--card);
+      border-left: 3px solid var(--purple);
+      border-radius: 0 8px 8px 0;
+      padding: 0.8rem 1.2rem;
+      margin: 1rem 0;
+      font-family: var(--mono);
+      font-size: 0.88rem;
+    }
+
+    .callout {
+      background: rgba(255, 149, 0, 0.07);
+      border: 1px solid rgba(255, 149, 0, 0.3);
+      border-radius: 8px;
+      padding: 1rem 1.2rem;
+      margin: 1.2rem 0;
+    }
+    .callout strong { color: var(--orange); }
+
+    /* ── Visualization ── */
+    .viz-card {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 1.5rem;
+    }
+    .viz-title { font-weight: 600; font-size: 1rem; margin-bottom: 0.3rem; }
+    .viz-desc { font-size: 0.88rem; color: var(--text-dim); margin-bottom: 1.2rem; }
+
+    .preset-row { display: flex; flex-wrap: wrap; gap: 0.5rem; margin-bottom: 1.2rem; }
+
+    .ctrl-btn {
+      font-family: var(--mono);
+      font-size: 0.75rem;
+      padding: 0.45em 0.9em;
+      border-radius: 6px;
+      border: 1px solid var(--border);
+      background: var(--surface);
+      color: var(--text-dim);
+      cursor: pointer;
+      transition: all 0.18s;
+    }
+    .ctrl-btn:hover { border-color: var(--accent); color: var(--accent); }
+    .ctrl-btn.primary { border-color: var(--accent); color: var(--accent); background: rgba(0,212,255,0.08); }
+
+    .slider-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(230px, 1fr));
+      gap: 1rem 1.6rem;
+      margin-bottom: 1.2rem;
+    }
+
+    .slider-row label {
+      display: flex;
+      justify-content: space-between;
+      font-size: 0.8rem;
+      color: var(--text-dim);
+      margin-bottom: 0.25rem;
+      gap: 0.5rem;
+    }
+    .slider-row .val { font-family: var(--mono); color: var(--accent); }
+    .slider-row input[type=range] { width: 100%; accent-color: var(--purple); }
+
+    .toggle-row {
+      display: flex; align-items: center; gap: 0.55rem;
+      font-size: 0.82rem; color: var(--text-dim);
+      margin-bottom: 1.2rem;
+    }
+    .toggle-row input { accent-color: var(--orange); width: 16px; height: 16px; }
+
+    .verdict {
+      border-radius: 8px;
+      padding: 0.85rem 1.1rem;
+      font-family: var(--mono);
+      font-size: 0.85rem;
+      margin-bottom: 1.2rem;
+      border: 1px solid var(--border);
+      line-height: 1.55;
+    }
+    .verdict.pass  { border-color: rgba(0,255,136,0.45); background: rgba(0,255,136,0.07); color: var(--green); }
+    .verdict.warn  { border-color: rgba(255,215,0,0.45); background: rgba(255,215,0,0.07); color: var(--yellow); }
+    .verdict.fail  { border-color: rgba(255,71,87,0.45);  background: rgba(255,71,87,0.07);  color: var(--red); }
+    .verdict .sub { display: block; color: var(--text-dim); font-size: 0.78rem; margin-top: 0.3rem; }
+
+    .panes { display: grid; grid-template-columns: 1.4fr 1fr; gap: 1.5rem; }
+    @media (max-width: 860px) { .panes { grid-template-columns: 1fr; } }
+
+    table.exp {
+      width: 100%;
+      border-collapse: collapse;
+      font-family: var(--mono);
+      font-size: 0.72rem;
+    }
+    table.exp th {
+      text-align: left;
+      color: var(--text-dim);
+      font-weight: 500;
+      border-bottom: 1px solid var(--border);
+      padding: 0.4rem 0.4rem;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      font-size: 0.65rem;
+    }
+    table.exp td { padding: 0.5rem 0.4rem; border-bottom: 1px solid var(--border); vertical-align: top; }
+    table.exp td.obs { white-space: nowrap; }
+    table.exp td.name { color: var(--text); }
+    table.exp td.name .kw { color: var(--text-dim); display: block; font-size: 0.68rem; }
+    .scope {
+      display: inline-block; font-size: 0.6rem; letter-spacing: 0.06em;
+      padding: 0.1em 0.45em; border-radius: 3px; text-transform: uppercase;
+    }
+    .scope.row { color: var(--accent); background: rgba(0,212,255,0.1); border: 1px solid rgba(0,212,255,0.3); }
+    .scope.agg { color: var(--purple); background: rgba(124,58,237,0.14); border: 1px solid rgba(124,58,237,0.45); }
+    .ok   { color: var(--green); }
+    .bad  { color: var(--red); }
+    .obs  { color: var(--text-dim); }
+
+    canvas { display: block; width: 100%; height: auto; border-radius: 6px; }
+    .cv-label { font-size: 0.72rem; color: var(--text-dim); font-family: var(--mono); margin: 0.9rem 0 0.35rem; }
+    .legend { display: flex; flex-wrap: wrap; gap: 0.9rem; font-size: 0.7rem; color: var(--text-dim); font-family: var(--mono); margin-top: 0.5rem; }
+    .legend span::before {
+      content: ''; display: inline-block; width: 9px; height: 9px;
+      border-radius: 2px; margin-right: 5px; background: currentColor;
+    }
+
+    /* ── Interview line ── */
+    #interview-line .quote {
+      background: linear-gradient(180deg, rgba(124,58,237,0.12), rgba(124,58,237,0.04));
+      border: 1px solid rgba(124,58,237,0.45);
+      border-left: 4px solid var(--purple);
+      border-radius: 0 10px 10px 0;
+      padding: 1.3rem 1.5rem;
+      font-size: 1.02rem;
+      line-height: 1.75;
+    }
+    #interview-line .quote p:last-child { margin-bottom: 0; }
+    #interview-line .quote em { color: var(--yellow); font-style: normal; font-weight: 600; }
+
+    #takeaways li strong { color: var(--accent); }
+
+    .concept-nav {
+      max-width: 1100px;
+      margin: 0 auto;
+      padding: 1.5rem 2rem 3rem;
+      display: flex;
+      justify-content: space-between;
+      gap: 1rem;
+      border-top: 1px solid var(--border);
+    }
+    .nav-link {
+      display: flex; flex-direction: column; gap: 0.2rem;
+      text-decoration: none; padding: 0.6rem 1rem;
+      border-radius: 8px; border: 1px solid var(--border);
+      background: var(--surface); max-width: 240px; transition: all 0.2s;
+    }
+    .nav-link:hover:not(.disabled) { border-color: var(--accent); }
+    .nav-link.disabled { opacity: 0.35; pointer-events: none; }
+    .nav-dir { font-family: var(--mono); font-size: 0.7rem; color: var(--text-dim); }
+    .nav-title { font-size: 0.9rem; color: var(--text); font-weight: 500; }
+
+    @media (max-width: 640px) {
+      header, main { padding-left: 1rem; padding-right: 1rem; }
+      .concept-nav { padding-left: 1rem; padding-right: 1rem; flex-direction: column; }
+      .nav-link { max-width: 100%; }
+    }
+  </style>
+</head>
+<body>
+
+<header>
+  <div class="group-badge">Data</div>
+  <h1><span class="id">01</span>Data Validation for ML Pipelines</h1>
+  <p class="desc">Schema and distribution assertions run on every batch before it reaches training — catching null-rate spikes, unseen categorical values and silently rescaled units before they become a quietly worse model.</p>
+</header>
+
+<main>
+
+  <!-- ── THEORY ── -->
+  <section id="theory">
+    <h2>Theory</h2>
+
+    <h3>Three layers of assertion, not one</h3>
+    <p>
+      A validation gate sits between ingestion and training and answers three different
+      questions, which fail in three different ways. <strong>Structural</strong> assertions
+      cover the shape of the data: are the expected columns present, are the dtypes what
+      they were last week, is the batch complete. <strong>Value-level</strong> assertions
+      cover individual cells: is <code>amount</code> non-null, is it inside a plausible
+      range, is <code>merchant_category</code> drawn from the set of codes the encoder was
+      fitted on. <strong>Aggregate</strong> assertions cover properties only the batch as a
+      whole has: row count, mean, distinct-value count, and the distance between this
+      batch's distribution and a reference one.
+    </p>
+    <p>
+      The reason to keep these separate is not tidiness — it is that the remediation
+      differs. A value-level failure is attributable to specific rows, so you can drop them
+      and continue. An aggregate failure is a property of the batch, so there is nothing to
+      drop; either the batch is acceptable or it is not.
+    </p>
+
+    <h3>Row-level tolerance vs. batch rejection</h3>
+    <p>
+      Great Expectations encodes exactly this with the <code>mostly</code> parameter: a
+      column-value expectation succeeds when the fraction of rows satisfying it is at least
+      <code>mostly</code>. That single number is your quarantine budget.
+    </p>
+    <div class="formula-block">
+      success_fraction = valid_elements / evaluated_elements &nbsp; → &nbsp; pass if ≥ mostly<br/>
+      pass  → drop the offending rows, continue on the remainder<br/>
+      fail  → the batch is not salvageable by dropping rows; reject it
+    </div>
+    <p>
+      One sharp edge here: column-value expectations in Great Expectations exclude missing
+      values from the evaluated set by default. So
+      <code>expect_column_values_to_be_between</code> on a column that just went 100% null
+      passes — every value it evaluated was in range, because it evaluated none. The
+      not-null expectation is what catches that, and it has to be written explicitly.
+    </p>
+
+    <h3>The failure modes worth naming</h3>
+    <ul>
+      <li><strong>Schema drift</strong> — an upstream service adds an enum value, renames a
+      column, or flips a dtype from int to string after an export format change. Your
+      one-hot encoder maps the new value to the unknown bucket, or the join silently drops.</li>
+      <li><strong>Null-rate spike</strong> — a partner feed times out and the join
+      left-joins to nothing. Imputation happily fills the gap with the training mean, and
+      the model degrades without raising a single exception.</li>
+      <li><strong>Silent unit rescale</strong> — cents become dollars, or milliseconds
+      become seconds. Every individual value stays plausible, so range checks stay green;
+      only an aggregate check on the mean sees it.</li>
+      <li><strong>Sentinel-for-null</strong> — upstream encodes missing as <code>-1</code>
+      or <code>999999</code>. The not-null check passes; the range check is the only thing
+      standing between that and a poisoned feature.</li>
+      <li><strong>Partial delivery</strong> — half the expected partitions landed. A
+      row-count expectation is the cheapest check in the suite and catches it.</li>
+    </ul>
+
+    <h3>What this gate cannot tell you</h3>
+    <div class="callout">
+      <strong>An input-side gate is not a performance alarm.</strong> Every expectation can
+      pass while the model gets worse, because a change in P(y|X) — concept drift — leaves
+      P(X) untouched. Validation stops garbage from reaching training; it says nothing
+      about whether the model is still accurate. That requires labels, and labels usually
+      arrive late.
+    </div>
+
+    <h3>Tools, and where the gate lives</h3>
+    <p>
+      <strong>Great Expectations</strong> gives you named expectation suites, checkpoints
+      that run a suite against a batch, and Data Docs to render the result.
+      <strong>TensorFlow Data Validation</strong> takes the opposite route: it infers a
+      schema from a baseline dataset's statistics and validates later batches against it,
+      surfacing anomalies such as unseen categorical values or missing features. Its schema
+      carries a <code>skew_comparator</code> for training-vs-serving comparison and a
+      <code>drift_comparator</code> for batch-vs-previous-batch, both using L∞ distance for
+      categorical features and Jensen–Shannon divergence for numeric ones — with thresholds
+      you choose, since there is no universal default. <strong>Pandera</strong> is the
+      lightweight in-process option for pandas and PySpark dataframes, and
+      <strong>Deequ</strong> the Spark-native one for batches too large to pull into a
+      driver.
+    </p>
+    <p>
+      Wherever it lives, the gate has to be a hard stop in the DAG — an Airflow task that
+      raises and blocks the downstream training task — not a report someone reads the next
+      morning. And the suite belongs in git next to the pipeline, so that loosening a
+      threshold shows up in a code review rather than in a model that quietly got worse.
+    </p>
+  </section>
+
+  <!-- ── VISUALIZATION ── -->
+  <section id="visualization">
+    <h2>Visualization</h2>
+
+    <div class="viz-card">
+      <div class="viz-title">Live expectation suite over a synthetic transaction batch</div>
+      <div class="viz-desc">
+        Every number below is computed in the browser from a freshly generated batch. Move the sliders to
+        corrupt the batch and watch each expectation re-evaluate. Note what happens on <em>Silent unit rescale</em>:
+        the value-range check stays green because every individual amount is still plausible — only the aggregate
+        mean expectation catches it.
+      </div>
+
+      <div class="preset-row">
+        <button class="ctrl-btn primary" data-preset="clean">Clean batch</button>
+        <button class="ctrl-btn" data-preset="nulls">Upstream null spike</button>
+        <button class="ctrl-btn" data-preset="unseen">New merchant codes</button>
+        <button class="ctrl-btn" data-preset="rescale">Silent unit rescale</button>
+        <button class="ctrl-btn" data-preset="sentinel">Sentinel instead of NULL</button>
+        <button class="ctrl-btn" data-preset="partial">Partial delivery</button>
+        <button class="ctrl-btn" id="resample">↻ Re-sample</button>
+      </div>
+
+      <div class="slider-grid">
+        <div class="slider-row">
+          <label for="s-null"><span>null rate on <code>amount</code></span><span class="val" id="v-null">0.5%</span></label>
+          <input type="range" id="s-null" min="0" max="20" step="0.5" value="0.5"/>
+        </div>
+        <div class="slider-row">
+          <label for="s-unseen"><span>unseen category share</span><span class="val" id="v-unseen">0.0%</span></label>
+          <input type="range" id="s-unseen" min="0" max="20" step="0.5" value="0"/>
+        </div>
+        <div class="slider-row">
+          <label for="s-scale"><span>mean shift (× on <code>amount</code>)</span><span class="val" id="v-scale">1.00×</span></label>
+          <input type="range" id="s-scale" min="0.4" max="3" step="0.05" value="1"/>
+        </div>
+        <div class="slider-row">
+          <label for="s-rows"><span>rows delivered in batch</span><span class="val" id="v-rows">500</span></label>
+          <input type="range" id="s-rows" min="120" max="800" step="20" value="500"/>
+        </div>
+      </div>
+
+      <div class="toggle-row">
+        <input type="checkbox" id="s-sentinel"/>
+        <label for="s-sentinel">upstream encodes missing as <code>-1</code> instead of NULL (the not-null check stops seeing it)</label>
+      </div>
+
+      <div class="verdict" id="verdict"></div>
+
+      <div class="panes">
+        <div>
+          <table class="exp">
+            <thead>
+              <tr><th>Expectation</th><th>Scope</th><th>Observed</th><th>Result</th></tr>
+            </thead>
+            <tbody id="exp-body"></tbody>
+          </table>
+        </div>
+        <div>
+          <div class="cv-label"><code>amount</code> — reference profile vs. this batch</div>
+          <canvas id="hist" width="520" height="330"></canvas>
+          <div class="legend">
+            <span style="color:#8892a4">reference (training profile)</span>
+            <span style="color:#00d4ff">current batch</span>
+            <span style="color:#00ff88">allowed mean band</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="cv-label">Row map — every row in the batch, in delivery order. A white outline marks a row that failed a check whose tolerance was breached: the batch was rejected, so it was never quarantined.</div>
+      <canvas id="rowmap" width="1040" height="260"></canvas>
+      <div class="legend">
+        <span style="color:#00ff88">clean</span>
+        <span style="color:#ff9500">quarantined: unseen merchant category</span>
+        <span style="color:#ff4757">quarantined: null / out-of-range amount</span>
+      </div>
+    </div>
+
+    <h3>The gate, written out</h3>
+    <p>
+      This is the whole mechanism the visualization runs, with nothing hidden behind a
+      library. The only structural decision is the one that matters: which expectations can
+      be remediated by dropping rows, and which cannot.
+    </p>
+<pre><span class="cm"># validate.py — row-level tolerance vs. aggregate rejection</span>
+KNOWN_MCC = {"5411", "5812", "5999", "4121", "7995"}
+
+def validate(batch):
+    n = len(batch)
+    results, quarantine = [], set()
+
+    <span class="cm"># --- row-level: attributable to specific rows, so droppable ---</span>
+    def row_check(name, predicate, mostly, evaluate_nulls=False):
+        <span class="cm"># Great Expectations excludes missing values from the</span>
+        <span class="cm"># evaluated set for column-value expectations.</span>
+        idx = [i for i, r in enumerate(batch)
+               if evaluate_nulls or r["amount"] is not None]
+        bad = [i for i in idx if not predicate(batch[i])]
+        evaluated = len(idx)
+        frac = 1.0 if evaluated == 0 else 1 - len(bad) / evaluated
+        results.append((name, "row", frac, frac >= mostly))
+        if frac >= mostly:
+            quarantine.update(bad)      <span class="cm"># tolerated: drop the rows</span>
+        return frac >= mostly
+
+    row_check("expect_column_values_to_not_be_null(amount)",
+              lambda r: r["amount"] is not None, mostly=0.98, evaluate_nulls=True)
+    row_check("expect_column_values_to_be_in_set(merchant_category)",
+              lambda r: r["merchant_category"] in KNOWN_MCC, mostly=0.98,
+              evaluate_nulls=True)
+    row_check("expect_column_values_to_be_between(amount, 0.01, 5000)",
+              lambda r: 0.01 &lt;= r["amount"] &lt;= 5000, mostly=0.99)
+
+    <span class="cm"># --- aggregate: a property of the batch, so NOT droppable ---</span>
+    vals = [r["amount"] for r in batch if r["amount"] is not None]
+    mean = sum(vals) / len(vals) if vals else 0.0
+    results.append(("expect_column_mean_to_be_between(amount, 60, 100)",
+                    "agg", mean, 60 &lt;= mean &lt;= 100))
+    results.append(("expect_table_row_count_to_be_between(400, 900)",
+                    "agg", n, 400 &lt;= n &lt;= 900))
+
+    failed = [r for r in results if not r[3]]
+    if failed:
+        raise BatchRejected(failed)     <span class="cm"># hard stop, nothing is salvaged</span>
+    return [r for i, r in enumerate(batch) if i not in quarantine]
+</pre>
+
+    <h3>Making it a hard stop in the DAG</h3>
+    <p>
+      Raising <code>AirflowFailException</code> marks the task failed without retrying —
+      the right behaviour for a deterministic data problem, since retrying the same bad
+      partition will fail the same way and only delay the page.
+    </p>
+<pre><span class="cm"># dags/train_fraud_model.py</span>
+from airflow.decorators import dag, task
+from airflow.exceptions import AirflowFailException
+
+@dag(schedule="@daily", catchup=False, max_active_runs=1)
+def train_fraud_model():
+
+    @task
+    def validate_batch(ds=None):
+        batch = load_partition(ds)
+        try:
+            clean = validate(batch)
+        except BatchRejected as e:
+            <span class="cm"># non-retryable: the same partition will fail identically</span>
+            raise AirflowFailException(f"{ds}: {e.failed_expectations}")
+        quarantined = len(batch) - len(clean)
+        if quarantined:
+            write_quarantine(ds, batch, clean)
+        return write_clean(ds, clean)
+
+    @task
+    def train(path: str):
+        ...
+
+    train(validate_batch())
+
+train_fraud_model()
+</pre>
+  </section>
+
+  <!-- ── INTERVIEW LINE ── -->
+  <section id="interview-line">
+    <h2>The Interview Line</h2>
+    <div class="quote">
+      <p>
+        "Before anything trains, every batch runs an expectation suite, and I split those
+        expectations by <em>what I can actually do about a failure</em>. Row-level checks —
+        nulls, out-of-range values, categories outside the set the encoder was fitted on —
+        carry a tolerance; under it I quarantine the offending rows and let the batch
+        through, over it the batch is rejected outright. Aggregate checks like a mean or a
+        row count can't be fixed by dropping rows, so those always fail the whole batch —
+        and that's the one that catches an upstream team switching cents to dollars, where
+        every individual value is still perfectly valid and the model just quietly gets
+        worse."
+      </p>
+      <p>
+        "The thing I'd want to be clear about is that this is an <em>input-side</em> gate.
+        It stops bad data reaching training. It tells me nothing about whether the model is
+        still accurate — a green suite is entirely compatible with concept drift, and I
+        need labels for that."
+      </p>
+    </div>
+  </section>
+
+  <!-- ── TAKEAWAYS ── -->
+  <section id="takeaways">
+    <h2>Key Takeaways</h2>
+    <ul>
+      <li>
+        <strong>Split expectations by remediation, not by column.</strong> Row-level
+        value checks get a <code>mostly</code> tolerance and quarantine what fails
+        underneath it; aggregate checks (mean, row count, distinct count) have no
+        per-row attribution, so they can only pass or fail the entire batch. Getting this
+        split wrong is why teams either reject good batches over three bad rows or accept a
+        batch whose mean moved 40%.
+      </li>
+      <li>
+        <strong>Column-value expectations skip nulls by default.</strong> In Great
+        Expectations, <code>expect_column_values_to_be_between</code> on a column that just
+        went entirely null <em>passes</em> — the evaluated set was empty. Always pair a
+        range expectation with an explicit not-null expectation, and add a range check to
+        catch <code>-1</code>/<code>999999</code> sentinels that make the not-null check
+        useless.
+      </li>
+      <li>
+        <strong>Don't infer a schema from one day of data.</strong> TFDV's
+        <code>infer_schema</code> and Deequ's constraint suggestion are starting points, not
+        answers — bounds derived from a single batch will page you on the first legitimate
+        seasonal outlier. Infer over a window, review the schema by hand, then commit it to
+        git so threshold changes show up in a diff.
+      </li>
+      <li>
+        <strong>The gate must block, not report.</strong> A validation task that logs and
+        returns success is decoration. In Airflow, raise <code>AirflowFailException</code>
+        (non-retryable — the same partition will fail identically) or short-circuit the
+        downstream training task, and route quarantined rows to a table someone actually
+        looks at.
+      </li>
+      <li>
+        <strong>Validation is where training-serving skew gets caught early.</strong> TFDV
+        keeps <code>skew_comparator</code> (training vs. serving) separate from
+        <code>drift_comparator</code> (batch vs. previous batch) for exactly this reason —
+        they compare different pairs of distributions and warrant different thresholds,
+        using L∞ distance for categorical features and Jensen–Shannon divergence for
+        numeric ones.
+      </li>
+      <li>
+        <strong>A green suite is not a healthy model.</strong> Data validation constrains
+        P(X). Concept drift changes P(y|X) and shows up nowhere in these checks. Treat this
+        as the cheapest layer of monitoring, not the whole of it — the rest needs
+        prediction-distribution monitoring and, eventually, labels.
+      </li>
+    </ul>
+  </section>
+
+</main>
+
+<nav class="concept-nav">
+  <a class="nav-link disabled" href="#">
+    <span class="nav-dir">← Previous</span>
+    <span class="nav-title">—</span>
+  </a>
+  <a class="nav-link" href="./02-dataset-versioning.html">
+    <span class="nav-dir">Next →</span>
+    <span class="nav-title">Dataset Versioning</span>
+  </a>
+</nav>
+
+<script>
+// ─── Deterministic RNG ──────────────────────────────────────────────────────
+function mulberry32(a) {
+  return function () {
+    a |= 0; a = (a + 0x6D2B79F5) | 0;
+    let t = Math.imul(a ^ (a >>> 15), 1 | a);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+function gauss(rnd) {
+  let u = 0, v = 0;
+  while (u === 0) u = rnd();
+  while (v === 0) v = rnd();
+  return Math.sqrt(-2 * Math.log(u)) * Math.cos(2 * Math.PI * v);
+}
+
+// ─── Batch generation ───────────────────────────────────────────────────────
+// amount ~ LogNormal(mu = ln 60, sigma = 0.7)  → E[amount] = 60·e^(0.245) ≈ 76.7
+const MU = Math.log(60), SIGMA = 0.7;
+const KNOWN_MCC = ["5411", "5812", "5999", "4121", "7995"];
+const MCC_P     = [0.42, 0.24, 0.16, 0.11, 0.07];
+const UNSEEN_MCC = ["6051", "5967", "7801"];
+
+function sampleMcc(rnd) {
+  const u = rnd();
+  let acc = 0;
+  for (let i = 0; i < KNOWN_MCC.length; i++) {
+    acc += MCC_P[i];
+    if (u <= acc) return KNOWN_MCC[i];
+  }
+  return KNOWN_MCC[KNOWN_MCC.length - 1];
+}
+
+let seed = 20260830;
+
+function generateBatch(cfg) {
+  const rnd = mulberry32(cfg.seed);
+  const rows = [];
+  for (let i = 0; i < cfg.rows; i++) {
+    let amount = Math.exp(MU + SIGMA * gauss(rnd)) * cfg.scale;
+    amount = Math.round(amount * 100) / 100;
+    let mcc = sampleMcc(rnd);
+    if (rnd() < cfg.unseenRate) mcc = UNSEEN_MCC[Math.floor(rnd() * UNSEEN_MCC.length)];
+    if (rnd() < cfg.nullRate) amount = cfg.sentinel ? -1 : null;
+    rows.push({ amount: amount, merchant_category: mcc });
+  }
+  return rows;
+}
+
+// ─── The expectation suite (the real thing, computed live) ──────────────────
+const MEAN_MIN = 60, MEAN_MAX = 100;
+const ROWS_MIN = 400, ROWS_MAX = 900;
+const AMT_MIN = 0.01, AMT_MAX = 5000;
+
+function runSuite(batch) {
+  const n = batch.length;
+  const results = [];
+  const quarantine = new Set();
+  const reasons = new Array(n).fill(0); // 0 clean, 1 unseen category, 2 null/range
+
+  function rowCheck(name, kwargs, predicate, mostly, evaluateNulls, reasonCode) {
+    const idx = [];
+    for (let i = 0; i < n; i++) {
+      if (evaluateNulls || batch[i].amount !== null) idx.push(i);
+    }
+    const bad = idx.filter(function (i) { return !predicate(batch[i]); });
+    const evaluated = idx.length;
+    const frac = evaluated === 0 ? 1 : 1 - bad.length / evaluated;
+    const success = frac >= mostly;
+    if (success) {
+      bad.forEach(function (i) { quarantine.add(i); reasons[i] = reasonCode; });
+    } else {
+      // Batch is rejected, but still colour the offending rows so the map is honest.
+      bad.forEach(function (i) { if (reasons[i] === 0) reasons[i] = reasonCode; });
+    }
+    results.push({
+      name: name, kwargs: kwargs, scope: 'row', success: success,
+      observed: (frac * 100).toFixed(1) + '% valid',
+      detail: 'n=' + evaluated + ' · mostly ' + mostly, badCount: bad.length
+    });
+    return success;
+  }
+
+  rowCheck('expect_column_values_to_not_be_null',
+    'column=amount, mostly=0.98',
+    function (r) { return r.amount !== null; }, 0.98, true, 2);
+
+  rowCheck('expect_column_values_to_be_in_set',
+    'column=merchant_category, value_set=[5411,5812,5999,4121,7995], mostly=0.98',
+    function (r) { return KNOWN_MCC.indexOf(r.merchant_category) !== -1; }, 0.98, true, 1);
+
+  rowCheck('expect_column_values_to_be_between',
+    'column=amount, min=0.01, max=5000, mostly=0.99',
+    function (r) { return r.amount >= AMT_MIN && r.amount <= AMT_MAX; }, 0.99, false, 2);
+
+  // Aggregates — no per-row attribution, so no quarantine is possible.
+  const vals = [];
+  for (let i = 0; i < n; i++) if (batch[i].amount !== null) vals.push(batch[i].amount);
+  let mean = 0;
+  for (let i = 0; i < vals.length; i++) mean += vals[i];
+  mean = vals.length ? mean / vals.length : 0;
+
+  results.push({
+    name: 'expect_column_mean_to_be_between',
+    kwargs: 'column=amount, min_value=60, max_value=100',
+    scope: 'agg', success: mean >= MEAN_MIN && mean <= MEAN_MAX,
+    observed: mean.toFixed(2), detail: 'n=' + vals.length + ' non-null', badCount: 0
+  });
+
+  results.push({
+    name: 'expect_table_row_count_to_be_between',
+    kwargs: 'min_value=400, max_value=900',
+    scope: 'agg', success: n >= ROWS_MIN && n <= ROWS_MAX,
+    observed: String(n), detail: 'rows delivered', badCount: 0
+  });
+
+  return { results: results, quarantine: quarantine, reasons: reasons, mean: mean, vals: vals };
+}
+
+// ─── Reference profile (training distribution, generated once) ──────────────
+const REF = (function () {
+  const rnd = mulberry32(987654321);
+  const out = [];
+  for (let i = 0; i < 8000; i++) out.push(Math.exp(MU + SIGMA * gauss(rnd)));
+  return out;
+})();
+
+// ─── State + DOM ────────────────────────────────────────────────────────────
+const el = function (id) { return document.getElementById(id); };
+const cfg = { rows: 500, nullRate: 0.005, unseenRate: 0, scale: 1, sentinel: false, seed: seed };
+
+const PRESETS = {
+  clean:    { nullRate: 0.005, unseenRate: 0,     scale: 1,   rows: 500, sentinel: false },
+  nulls:    { nullRate: 0.12,  unseenRate: 0,     scale: 1,   rows: 500, sentinel: false },
+  unseen:   { nullRate: 0.005, unseenRate: 0.06,  scale: 1,   rows: 500, sentinel: false },
+  rescale:  { nullRate: 0.005, unseenRate: 0,     scale: 2,   rows: 500, sentinel: false },
+  sentinel: { nullRate: 0.12,  unseenRate: 0,     scale: 1,   rows: 500, sentinel: true  },
+  partial:  { nullRate: 0.005, unseenRate: 0,     scale: 1,   rows: 220, sentinel: false }
+};
+
+function syncControls() {
+  el('s-null').value = (cfg.nullRate * 100).toFixed(1);
+  el('s-unseen').value = (cfg.unseenRate * 100).toFixed(1);
+  el('s-scale').value = cfg.scale;
+  el('s-rows').value = cfg.rows;
+  el('s-sentinel').checked = cfg.sentinel;
+}
+
+function readControls() {
+  cfg.nullRate = parseFloat(el('s-null').value) / 100;
+  cfg.unseenRate = parseFloat(el('s-unseen').value) / 100;
+  cfg.scale = parseFloat(el('s-scale').value);
+  cfg.rows = parseInt(el('s-rows').value, 10);
+  cfg.sentinel = el('s-sentinel').checked;
+}
+
+function render() {
+  el('v-null').textContent = (cfg.nullRate * 100).toFixed(1) + '%';
+  el('v-unseen').textContent = (cfg.unseenRate * 100).toFixed(1) + '%';
+  el('v-scale').textContent = cfg.scale.toFixed(2) + '×';
+  el('v-rows').textContent = String(cfg.rows);
+
+  const batch = generateBatch(cfg);
+  const out = runSuite(batch);
+
+  // Expectation table
+  let html = '';
+  out.results.forEach(function (r) {
+    html += '<tr>' +
+      '<td class="name">' + r.name + '<span class="kw">' + r.kwargs + '</span></td>' +
+      '<td><span class="scope ' + (r.scope === 'row' ? 'row' : 'agg') + '">' +
+        (r.scope === 'row' ? 'row-level' : 'aggregate') + '</span></td>' +
+      '<td class="obs">' + r.observed + '<br/><span style="opacity:.7">' + r.detail + '</span></td>' +
+      '<td class="' + (r.success ? 'ok' : 'bad') + '">' + (r.success ? '✔ pass' : '✘ fail') + '</td>' +
+      '</tr>';
+  });
+  el('exp-body').innerHTML = html;
+
+  // Verdict
+  const failedAgg = out.results.filter(function (r) { return r.scope === 'agg' && !r.success; });
+  const failedRow = out.results.filter(function (r) { return r.scope === 'row' && !r.success; });
+  const v = el('verdict');
+  v.className = 'verdict';
+  if (failedAgg.length) {
+    v.classList.add('fail');
+    v.innerHTML = 'BATCH REJECTED — aggregate expectation failed: <strong>' +
+      failedAgg.map(function (r) { return r.name; }).join(', ') + '</strong>' +
+      '<span class="sub">An aggregate is a property of the whole batch. There are no specific rows to quarantine, so there is no partial acceptance — training does not run on this partition.</span>';
+  } else if (failedRow.length) {
+    v.classList.add('fail');
+    v.innerHTML = 'BATCH REJECTED — row-level tolerance breached: <strong>' +
+      failedRow.map(function (r) { return r.name; }).join(', ') + '</strong>' +
+      '<span class="sub">Too many rows failed to be treated as quarantinable noise. Below the <code>mostly</code> threshold these rows would simply be dropped; above it, the batch itself is suspect.</span>';
+  } else if (out.quarantine.size) {
+    v.classList.add('warn');
+    v.innerHTML = 'BATCH ACCEPTED — ' + out.quarantine.size + ' of ' + batch.length +
+      ' rows quarantined (' + (100 * out.quarantine.size / batch.length).toFixed(2) + '%)' +
+      '<span class="sub">Every expectation passed its tolerance. The offending rows are written to the quarantine table and training proceeds on the remaining ' +
+      (batch.length - out.quarantine.size) + ' rows.</span>';
+  } else {
+    v.classList.add('pass');
+    v.innerHTML = 'BATCH ACCEPTED — all 5 expectations passed, 0 rows quarantined' +
+      '<span class="sub">Reminder: this only constrains P(X). It is not evidence that the model is still accurate.</span>';
+  }
+
+  drawRowMap(out.reasons, out.quarantine);
+  drawHist(out.vals, out.mean);
+}
+
+// ─── Row map ────────────────────────────────────────────────────────────────
+function drawRowMap(reasons, quarantine) {
+  const cv = el('rowmap'), ctx = cv.getContext('2d');
+  const n = reasons.length;
+  const cols = 64;
+  const rows = Math.ceil(n / cols);
+  const cell = Math.max(4, Math.floor(cv.width / cols) - 2);
+  const pitch = cell + 2;
+  cv.height = rows * pitch + 4;
+  ctx.clearRect(0, 0, cv.width, cv.height);
+  for (let i = 0; i < n; i++) {
+    const x = (i % cols) * pitch + 1;
+    const y = Math.floor(i / cols) * pitch + 2;
+    let fill = 'rgba(0,255,136,0.28)';
+    if (reasons[i] === 1) fill = '#ff9500';
+    else if (reasons[i] === 2) fill = '#ff4757';
+    ctx.fillStyle = fill;
+    ctx.fillRect(x, y, cell, cell);
+    if (reasons[i] !== 0 && !quarantine.has(i)) {
+      // failed but not quarantined → the batch was rejected instead
+      ctx.strokeStyle = '#e2e8f0';
+      ctx.lineWidth = 1;
+      ctx.strokeRect(x + 0.5, y + 0.5, cell - 1, cell - 1);
+    }
+  }
+}
+
+// ─── Histogram ──────────────────────────────────────────────────────────────
+const HIST_MAX = 400, BINS = 34;
+function histogram(vals) {
+  const h = new Array(BINS).fill(0);
+  for (let i = 0; i < vals.length; i++) {
+    let b = Math.floor((vals[i] / HIST_MAX) * BINS);
+    if (b < 0) b = 0;
+    if (b >= BINS) b = BINS - 1;
+    h[b]++;
+  }
+  const total = vals.length || 1;
+  return h.map(function (c) { return c / total; });
+}
+
+function drawHist(vals, mean) {
+  const cv = el('hist'), ctx = cv.getContext('2d');
+  const W = cv.width, H = cv.height;
+  const pad = { l: 42, r: 14, t: 16, b: 34 };
+  ctx.clearRect(0, 0, W, H);
+
+  const cur = histogram(vals);
+  const ref = histogram(REF);
+  let maxY = 0;
+  for (let i = 0; i < BINS; i++) maxY = Math.max(maxY, cur[i], ref[i]);
+  maxY = maxY || 1;
+
+  const x = function (v) { return pad.l + (v / HIST_MAX) * (W - pad.l - pad.r); };
+  const y = function (p) { return H - pad.b - (p / maxY) * (H - pad.t - pad.b); };
+
+  // allowed mean band
+  ctx.fillStyle = 'rgba(0,255,136,0.09)';
+  ctx.fillRect(x(MEAN_MIN), pad.t, x(MEAN_MAX) - x(MEAN_MIN), H - pad.t - pad.b);
+
+  // axes
+  ctx.strokeStyle = '#252a3d';
+  ctx.lineWidth = 1;
+  ctx.beginPath();
+  ctx.moveTo(pad.l, pad.t); ctx.lineTo(pad.l, H - pad.b); ctx.lineTo(W - pad.r, H - pad.b);
+  ctx.stroke();
+
+  const bw = (W - pad.l - pad.r) / BINS;
+
+  // current batch bars
+  ctx.fillStyle = 'rgba(0,212,255,0.4)';
+  for (let i = 0; i < BINS; i++) {
+    const bx = pad.l + i * bw;
+    ctx.fillRect(bx + 1, y(cur[i]), Math.max(1, bw - 2), H - pad.b - y(cur[i]));
+  }
+
+  // reference outline
+  ctx.strokeStyle = '#8892a4';
+  ctx.lineWidth = 1.5;
+  ctx.beginPath();
+  for (let i = 0; i < BINS; i++) {
+    const bx = pad.l + i * bw;
+    if (i === 0) ctx.moveTo(bx, y(ref[i]));
+    else ctx.lineTo(bx, y(ref[i]));
+    ctx.lineTo(bx + bw, y(ref[i]));
+  }
+  ctx.stroke();
+
+  // mean marker
+  const inBand = mean >= MEAN_MIN && mean <= MEAN_MAX;
+  const mx = x(Math.min(mean, HIST_MAX));
+  ctx.strokeStyle = inBand ? '#ffd700' : '#ff4757';
+  ctx.lineWidth = 2;
+  ctx.setLineDash([4, 3]);
+  ctx.beginPath(); ctx.moveTo(mx, pad.t); ctx.lineTo(mx, H - pad.b); ctx.stroke();
+  ctx.setLineDash([]);
+
+  ctx.font = '11px JetBrains Mono, monospace';
+  ctx.fillStyle = inBand ? '#ffd700' : '#ff4757';
+  const label = 'mean ' + mean.toFixed(1);
+  const lx = Math.min(mx + 6, W - pad.r - ctx.measureText(label).width - 2);
+  ctx.fillText(label, lx, pad.t + 11);
+
+  ctx.fillStyle = '#00ff88';
+  ctx.fillText('mean band 60–100', x(MEAN_MIN) + 3, pad.t + 26);
+  ctx.fillStyle = '#8892a4';
+  ctx.textAlign = 'center';
+  [0, 100, 200, 300, 400].forEach(function (t) {
+    ctx.fillText(String(t), x(t), H - pad.b + 16);
+  });
+  ctx.textAlign = 'left';
+  ctx.fillText('share', 6, pad.t + 10);
+}
+
+// ─── Wiring ─────────────────────────────────────────────────────────────────
+['s-null', 's-unseen', 's-scale', 's-rows'].forEach(function (id) {
+  el(id).addEventListener('input', function () { readControls(); render(); });
+});
+el('s-sentinel').addEventListener('change', function () { readControls(); render(); });
+
+document.querySelectorAll('[data-preset]').forEach(function (btn) {
+  btn.addEventListener('click', function () {
+    const p = PRESETS[btn.getAttribute('data-preset')];
+    Object.keys(p).forEach(function (k) { cfg[k] = p[k]; });
+    document.querySelectorAll('[data-preset]').forEach(function (b) { b.classList.remove('primary'); });
+    btn.classList.add('primary');
+    syncControls();
+    render();
+  });
+});
+
+el('resample').addEventListener('click', function () {
+  cfg.seed = (cfg.seed * 1664525 + 1013904223) >>> 0;
+  render();
+});
+
+syncControls();
+render();
+</script>
+
+</body>
+</html>

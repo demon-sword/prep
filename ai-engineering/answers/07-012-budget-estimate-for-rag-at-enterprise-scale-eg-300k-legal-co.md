@@ -64,14 +64,14 @@ Assumptions: 5,000 queries/day (enterprise internal tool), average 3 chunks retr
 |------|---------------|
 | Query embedding | `text-embedding-3-small`: ~$0.00002 |
 | ANN retrieval + reranking | Compute-bound, ~$0.001 (Cohere Rerank API) |
-| Generation: GPT-4o-mini (2K input, 500 output) | ~$0.0009 |
-| Generation: GPT-4o (for complex/sensitive docs) | ~$0.015 |
-| **Blended (80% mini / 20% GPT-4o)** | **~$0.004/query** |
+| Generation: a small fast model (2K input, 500 output) | ~$0.0045 |
+| Generation: a frontier model (for complex/sensitive docs) | ~$0.0225 |
+| **Blended (80% small tier / 20% frontier)** | **~$0.0081/query** |
 
-5,000 queries/day × $0.004 × 30 = **~$600/month**
+5,000 queries/day × $0.0081 × 30 = **~$1,220/month**
 
 **5. Evaluation + observability overhead**
-- RAGAS golden-dataset eval (nightly, 200 queries × GPT-4o-mini judge): ~$5/night → **~$150/month**
+- RAGAS golden-dataset eval (nightly, 200 queries × a small fast model judge): ~$5/night → **~$150/month**
 - LangSmith traces: free tier covers 5K traces/day
 - **Total eval/obs**: ~$150–$200/month
 
@@ -80,9 +80,9 @@ Assumptions: 5,000 queries/day (enterprise internal tool), average 3 chunks retr
 | Category | Monthly |
 |----------|---------|
 | Storage | $150–$350 |
-| Serving (5K queries/day) | $600 |
+| Serving (5K queries/day) | $1,220 |
 | Eval/observability | $150–$200 |
-| **Total** | **$900–$1,150/month** |
+| **Total** | **~$1,520–$1,770/month** |
 
 **One-time ingestion: ~$7,500**
 
@@ -92,7 +92,7 @@ Assumptions: 5,000 queries/day (enterprise internal tool), average 3 chunks retr
 
 **Textract vs native PDF parsing:** Scanned contracts add $6,750 in Textract costs upfront. If >80% of the corpus is digitally-born PDFs (selectable text), PyMuPDF parses them for free — only route scanned/image-heavy docs through Textract. This halves extraction costs.
 
-**Sensitivity tiers:** Legal contracts often need citation-level accuracy. Run GPT-4o-mini for background synthesis tasks and GPT-4o only for clause extraction or compliance comparisons. This 80/20 blend keeps serving costs at $0.004/query vs $0.015/query for GPT-4o-only.
+**Sensitivity tiers:** Legal contracts often need citation-level accuracy. Run a small fast model for background synthesis tasks and a frontier model only for clause extraction or compliance comparisons. This 80/20 blend keeps serving costs at ~$0.008/query versus ~$0.0225/query for frontier-only.
 
 ---
 
@@ -106,20 +106,20 @@ Assumptions: 5,000 queries/day (enterprise internal tool), average 3 chunks retr
 
 Storage is remarkably cheap. 1.7 million 1536-dimensional vectors fit in a Pinecone s1 pod for about $70 per month — or a self-hosted Qdrant cluster for $250/month if you need data residency for the legal corpus.
 
-Serving is where the ongoing bill lives. At 5,000 queries per day — which is typical for an internal enterprise tool — using an 80/20 blend of GPT-4o-mini and GPT-4o, you're looking at about $0.004 per query, or roughly $600/month in generation costs. Add reranking via Cohere Rerank, storage, and eval observability, and your steady-state OpEx is around $900–$1,150 per month."
+Serving is where the ongoing bill lives. At 5,000 queries per day — which is typical for an internal enterprise tool — using an 80/20 blend of the small tier and the frontier tier, you're looking at about $0.008 per query, or roughly $1,200/month in generation costs. Add reranking via Cohere Rerank, storage, and eval observability, and your steady-state OpEx is around $900–$1,150 per month."
 
 **Tradeoff / production angle (1 min):**
-"The biggest lever is extraction method — native parsing vs. Textract changes upfront costs by $6,000+. The second lever is model tiering: routing routine queries to GPT-4o-mini and only complex clause analysis to GPT-4o cuts serving costs 5–10×. For a legal corpus specifically, I'd also flag that data residency and audit requirements may push you toward self-hosted infrastructure, which shifts the cost structure but gives you compliance headroom."
+"The biggest lever is extraction method — native parsing vs. Textract changes upfront costs by $6,000+. The second lever is model tiering: routing routine queries to the small tier and only complex clause analysis to the frontier tier cuts serving costs by roughly 3×. For a legal corpus specifically, I'd also flag that data residency and audit requirements may push you toward self-hosted infrastructure, which shifts the cost structure but gives you compliance headroom."
 
 **Wrap-up (30s):**
-"So in summary: about $7,500 to ingest, roughly $1,000/month to run at 5K queries/day, and the biggest optimizations are native PDF parsing where possible, model tiering, and self-hosting if data residency is non-negotiable."
+"So in summary: about $7,500 to ingest, roughly $1,500–1,800/month to run at 5K queries/day, and the biggest optimizations are native PDF parsing where possible, model tiering, and self-hosting if data residency is non-negotiable."
 
 ---
 
 ## Pitfalls
 
 - **Mistake:** Quoting only embedding + generation costs and ignoring ingestion/extraction — **Better:** Lead with the three-phase breakdown (ingestion, storage, serving) and note that ingestion is often the largest one-time cost for large corpora; for 300K scanned docs, Textract extraction alone can dwarf embedding costs by 200×.
-- **Mistake:** Assuming all queries will use the largest/most expensive model — **Better:** Explicitly introduce model tiering (80% GPT-4o-mini / 20% GPT-4o) and show the cost delta; failing to tier is often a 5–10× overspend in enterprise RAG.
+- **Mistake:** Assuming all queries will use the largest/most expensive model — **Better:** Explicitly introduce model tiering (80% a small fast model / 20% a frontier model) and show the cost delta; failing to tier is often a 5–10× overspend in enterprise RAG.
 - **Mistake:** Ignoring storage costs or saying "vector DBs are cheap" without numbers — **Better:** Give concrete figures (Pinecone $70/month for 1.7M vectors; S3 $23/month for 1TB PDFs) and note that at 10M+ vectors, self-hosting becomes cheaper than managed services.
 
 ---
@@ -130,10 +130,10 @@ Serving is where the ongoing bill lives. At 5,000 queries per day — which is t
 |----------|--------------|
 | [Q1: Your app gets 1M queries/day — how optimize cost?](07-001-your-app-gets-1m-queriesday-how-optimize-cost.md) | Serving-cost optimization levers that reduce the per-query line item |
 | [Q4: Cost and capacity planning for LLM app at scale](07-004-cost-and-capacity-planning-for-llm-app-at-scale.md) | General cost-modeling framework this answer instantiates for a specific domain |
-| [Q10: Model tiering — small distilled vs large LLM?](07-010-model-tiering-small-distilled-vs-large-llm.md) | How to set up the 80/20 GPT-4o-mini/GPT-4o dispatch that drives cost savings |
+| [Q10: Model tiering — small distilled vs large LLM?](07-010-model-tiering-small-distilled-vs-large-llm.md) | How to set up the 80/20 a small fast model/a frontier model dispatch that drives cost savings |
 
 ---
 
 ## One-liner recall
 
-> Enterprise RAG budget has three phases — one-time ingestion (~$7.5K for 300K legal contracts, dominated by PDF extraction), monthly storage (~$150–$350 for vector DB + object store), and per-query serving (~$0.004 blended with model tiering) totaling ~$1K/month at 5K queries/day.
+> Enterprise RAG budget has three phases — one-time ingestion (~$7.5K for 300K legal contracts, dominated by PDF extraction), monthly storage (~$150–$350 for vector DB + object store), and per-query serving (~$0.008 blended with model tiering) totaling ~$1.5–1.8K/month at 5K queries/day.

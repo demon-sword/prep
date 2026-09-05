@@ -105,3 +105,14 @@ Each concept is tested by the generating agent via **Playwright MCP**:
 |-----|---------|-------------|
 | `RALPH_BACKEND_MODEL` | (claude default) | Model slug to use |
 | `RALPH_BACKEND_TIMEOUT` | `3600` | Agent timeout in seconds |
+
+## Shared environment
+
+| Var | Default | Effect |
+|---|---|---|
+| `RALPH_MAX_ATTEMPTS` | 3 | Rejections before the run gives up |
+| `RALPH_SKIP_FACTCHECK` | 0 | `1` skips the adversarial fact-check pass |
+| `RALPH_FACTCHECK_TIMEOUT` | 900 | Seconds for the fact-check pass |
+| `RALPH_LOOP_SLEEP` | 5 | Seconds `loop.sh` pauses between iterations |
+| `RALPH_MAX_STALLS` | 3 | Consecutive no-output iterations before the loop stops |
+| `RALPH_CORPUS_FINAL` | — | `1` makes `validate-corpus.sh` apply its completeness gate |

@@ -72,13 +72,80 @@
 - Previous and next concept links using relative paths within `machine_learning/concepts/`.
 - If first concept, prev link is disabled. If last, next link is disabled.
 
+## Depth and code requirements (from `concepts.json`)
+
+Each concept entry carries fields that shape the page; the first two are
+enforced by the validator:
+
+- **`depth`** — sets the minimum word count for `#theory`:
+  `intro` → 300 words, `core` → 500, `advanced` → 700.
+  An entry with no `depth` falls back to the spec floor of 400.
+  Write to the concept's depth; do not pad a `core` topic to `advanced` length.
+- **`has_code`** — when `true`, the page **must** contain at least one `<pre>`
+  block holding real, multi-line, code-shaped content: the algorithm's inner
+  loop, the update rule, a config snippet, the key API call with its decisive
+  hyperparameter. A `<pre>` holding a single line, or prose, does not count.
+  When `false`, do not add a code block just to satisfy a checker.
+
+- **`gaps`** — present only on concepts whose page **already exists** and was
+  audited as correct but one layer short of senior-interview depth. Each string
+  is a specific, named omission, written by the auditor who read the page.
+  When the entry you are working has a `gaps` array:
+  - This run **extends** the existing page. Read the current file first and keep
+    what is already right — its structure, its voice, its working visualization.
+    Do not rewrite it from scratch and do not drop existing sections.
+  - Every item in the array must be genuinely covered in the finished page, in
+    the section where it belongs. A gap naming a formula means the formula
+    appears and is derived or explained, not name-dropped.
+  - Several gaps ask for a worked code block; that is also how a page with
+    `has_code: true` and no `<pre>` gets fixed. 41 of the 58 existing ML and
+    backend pages currently fail exactly that check.
+  - When — and only when — every item is covered, re-read `concepts.json`,
+    remove the `gaps` array from **this entry only**, and write the file back.
+    Re-read immediately before writing: other agents edit this file too. Leave
+    every other entry and field byte-identical. If you covered some but not all
+    items, leave the array in place; a partly-drained queue is a lie.
+
+## Fact-check gate (runs after you finish — you cannot bypass it)
+
+Once you finish, a **separate agent** is given your finished file and nothing
+else. It is told it did not write the file, and asked to find any incorrect
+formula, wrong mechanism description, or false factual claim. Its verdict is
+required before this item is accepted, and it does not see your reasoning — so a
+claim that only looks right in context will be caught.
+
+Write for that reviewer:
+
+- Every formula must be correct as written, including scaling factors,
+  normalisation terms and exponents. If you write softmax(QKᵀ/√d_k)V, the √d_k
+  must be there and must be in the denominator.
+- Every number must be real. Do not invent benchmark figures, parameter counts,
+  latencies or costs to make a sentence land. If you are not sure of a number,
+  describe the magnitude qualitatively instead.
+- Attribute papers, tools and techniques correctly, or not at all.
+- Do not pad to hit a word count with claims you cannot stand behind. A shorter
+  section that is true beats a longer one that is not — the word floor is a
+  minimum for *real* content, not a licence to speculate.
+- Keep the visualization's numbers consistent with the prose. If the text says
+  the ring has 128 virtual nodes, the JS must not use 64.
+
+If this item comes back rejected, you will be shown the exact FAIL lines. Fix the
+underlying fact — do not reword around it.
+
 ## Validation Checklist (run before marking done)
 
 - [ ] File exists at correct path
 - [ ] All 5 structural elements present
 - [ ] Visualization has at least one event listener or animation loop
 - [ ] No placeholder text (grep for "TODO", "PLACEHOLDER", "Lorem ipsum", "coming soon", "<!-- ")
-- [ ] File is self-contained (no local `src=` or `href=` references except Google Fonts)
+- [ ] File is self-contained — no local asset files. Sibling concept `.html`
+      links in the `.concept-nav` are required and allowed.
+- [ ] `#theory` meets the word floor for this concept's `depth` (intro 300 / core 500 / advanced 700)
+- [ ] If `has_code` is true: at least one `<pre>` with real multi-line code
+- [ ] If the entry has `gaps`: every item covered, and the `gaps` array removed
+      from that entry in `concepts.json` (only when all of them are done)
+- [ ] Every topic named in a compound title is actually implemented in the JS
+      (a page titled "X & Y" whose script never mentions Y will be rejected)
 - [ ] Playwright: file opens and renders content (not blank white page)
 - [ ] Playwright: no uncaught JS errors in console
 - [ ] Playwright: screenshot shows the visualization is visible

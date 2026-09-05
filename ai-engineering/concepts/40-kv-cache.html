@@ -351,17 +351,17 @@
   </div>
   <p><strong>Why the factor of 2?</strong> Both K and V tensors are cached (Q is not cached — it's computed fresh for each new token).</p>
   <p>
-    <strong>Concrete example — Llama 3 70B</strong> (80 layers, 8 GQA KV heads, 128 head_dim, fp16):
+    <strong>Concrete example — a 70B-class open-weight model</strong> (80 layers, 8 GQA KV heads, 128 head_dim, fp16):
     <br><code>2 &times; 80 &times; 8 &times; 128 &times; 2 = 327,680 bytes &asymp; 320 KB per token</code>
     <br>A 4096-token sequence: ~1.3 GB of KV cache per request.
     <br>A <strong>128K context request</strong>: ~40 GB of KV cache alone — dwarfing model weights for most deployments.
   </p>
   <p>
-    <strong>Llama 3 8B</strong> (32 layers, 8 GQA, 128 head_dim, fp16):
+    <strong>a small open-weight model (7–8B class)</strong> (32 layers, 8 GQA, 128 head_dim, fp16):
     <br><code>2 &times; 32 &times; 8 &times; 128 &times; 2 = 131,072 bytes &asymp; 128 KB per token</code>
     <br>128K context: ~16 GB KV cache — still more than the model weights (~16 GB).
   </p>
-  <p>Without GQA, using standard MHA with 64 heads: the KV cache would be <strong>8x larger</strong> — 320 GB for a 128K sequence on Llama 3 70B, completely infeasible on any single GPU.</p>
+  <p>Without GQA, using standard MHA with 64 heads: the KV cache would be <strong>8x larger</strong> — 320 GB for a 128K sequence on a 70B-class open-weight model, completely infeasible on any single GPU.</p>
 
   <h3>3. The Fragmentation Problem (Naive Allocation)</h3>
   <p>
@@ -391,7 +391,7 @@
     <strong>Grouped Query Attention (GQA)</strong> divides query heads into groups that share a single K/V head pair. Instead of each query head having its own K and V (as in standard Multi-Head Attention), G groups of query heads share one K/V pair, reducing the number of K/V heads by a factor of G.
   </p>
   <p>
-    Llama 3 70B uses 64 query heads but only <strong>8 KV heads</strong> (G = 8) — an <strong>8x reduction</strong> in KV cache size compared to standard MHA. Llama 3 8B and Mistral models use GQA as well. The quality impact: MMLU scores on Llama 2 using GQA vs MHA differ by <strong>less than 0.5 percentage points</strong> — negligible for most production use cases.
+    a 70B-class open-weight model uses 64 query heads but only <strong>8 KV heads</strong> (G = 8) — an <strong>8x reduction</strong> in KV cache size compared to standard MHA. a small open-weight model (7–8B class) and Mistral models use GQA as well. The quality impact: MMLU scores on Llama 2 using GQA vs MHA differ by <strong>less than 0.5 percentage points</strong> — negligible for most production use cases.
   </p>
   <p>
     <strong>Multi-Query Attention (MQA)</strong> takes this to the extreme: <em>all</em> query heads share a single K/V pair. Used in PaLM, Falcon, and older Google models. MQA offers the maximum KV cache reduction but with a slightly larger quality penalty than GQA — especially for tasks requiring fine-grained attention patterns (long-context retrieval, multi-document reasoning).
@@ -423,7 +423,7 @@
     In a chat application, every conversation turn appends tokens to the sequence. A 20-turn conversation with 400-token responses and a 2000-token system prompt:
     <br><strong>System prompt:</strong> 2,000 tokens
     <br><strong>Turns:</strong> 20 x (100 user + 400 assistant) = 10,000 tokens
-    <br><strong>Total KV cache:</strong> 12,000 tokens &times; 320 KB = ~3.8 GB for Llama 3 70B (GQA), or ~30 GB without GQA.
+    <br><strong>Total KV cache:</strong> 12,000 tokens &times; 320 KB = ~3.8 GB for a 70B-class open-weight model (GQA), or ~30 GB without GQA.
   </p>
   <p>
     This is why serving systems must budget KV cache memory per user and enforce a max-context limit — an unbounded conversation will eventually exhaust even the best-optimized GPU memory. Some systems evict the oldest turns (LRU eviction of KV cache pages) to make room for new tokens, at the cost of the model "forgetting" earlier parts of the conversation.
@@ -437,7 +437,7 @@
     </div>
     <div class="info-card">
       <h4>GQA in Modern LLMs</h4>
-      <p>Llama 3 (all sizes), Mistral, Gemma, Qwen all use GQA with 4-8 KV head groups. Standard MHA is now rare in production models.</p>
+      <p>a modern open-weight model (all sizes), Mistral, Gemma, Qwen all use GQA with 4-8 KV head groups. Standard MHA is now rare in production models.</p>
     </div>
     <div class="info-card">
       <h4>Anthropic Prompt Caching</h4>
@@ -522,7 +522,7 @@
 <section id="takeaways">
   <h2 class="section-title">Key Takeaways</h2>
   <ul>
-    <li><strong>KV cache is the memory budget killer at long context:</strong> A single 128K-context request on Llama 3 70B uses ~40 GB of KV cache alone — more than the model weights (70 GB). Without GQA (standard MHA), that same request would demand ~320 GB of KV cache, completely infeasible on any single GPU. Every decision about context length flows from this formula: <code>2 x L x Hkv x d x n x bytes</code>.</li>
+    <li><strong>KV cache is the memory budget killer at long context:</strong> A single 128K-context request on a 70B-class open-weight model uses ~40 GB of KV cache alone — more than the model weights (70 GB). Without GQA (standard MHA), that same request would demand ~320 GB of KV cache, completely infeasible on any single GPU. Every decision about context length flows from this formula: <code>2 x L x Hkv x d x n x bytes</code>.</li>
     <li><strong>PagedAttention is the virtual-memory solution applied to LLMs:</strong> vLLM's key insight is that KV cache management is isomorphic to OS virtual memory — fixed-size pages, on-demand allocation, page tables for logical-to-physical mapping, and copy-on-write prefix sharing. This eliminates fragmentation and enables 10-20x higher concurrent throughput. It is not an incremental optimization; it is a category-defining architectural change.</li>
     <li><strong>GQA is an architecture-level optimization that pays for itself 8x:</strong> Grouped Query Attention reduces KV cache by the ratio of query heads to KV heads (typically 8x) with less than 0.5% quality degradation on standard benchmarks. Every modern production model uses GQA — standard MHA is effectively obsolete for large-scale serving.</li>
     <li><strong>Prefix caching makes system prompts free (or nearly free):</strong> When 100 requests share a 10K-token system prompt, PagedAttention stores it once and serves all 100 from the same physical pages. Anthropic charges 1% for cache hits. This changes the economics of prompt design — you can afford elaborate system prompts, extensive few-shot examples, or long document contexts when they're cached.</li>
@@ -840,7 +840,7 @@ function computeStats() {
     if (b.state === STATE_SHARED) sharedCount++;
   }
 
-  const bytesPerBlock = TOKENS_PER_BLOCK * 2 * 80 * 8 * 128 * 2; // Llama 3 70B per-block KV
+  const bytesPerBlock = TOKENS_PER_BLOCK * 2 * 80 * 8 * 128 * 2; // a 70B-class open-weight model per-block KV
   const mbPerBlock = bytesPerBlock / (1024 * 1024);
 
   const naiveUsedMB = (naiveFilled + naiveWasted) * mbPerBlock;

@@ -35,7 +35,7 @@ The three transformer families differ in which tokens can attend to which at tra
 |-----------|-------------|--------------|-----------------|
 | **Attention** | Bidirectional (every token sees every token) | Causal (each token sees only past tokens) | Encoder: bidirectional; Decoder: causal + cross-attention to encoder |
 | **Pretraining objective** | Masked language modeling (MLM) — predict masked tokens | Next-token prediction (CLM) — predict next token | Span corruption (T5), seq2seq LM, or denoising |
-| **Canonical models** | BERT, RoBERTa, DeBERTa, BGE, E5 | GPT-4, Claude, Llama 3, Mistral | T5, BART, mBART, Flan-T5 |
+| **Canonical models** | BERT, RoBERTa, DeBERTa, BGE, E5 | a frontier model, Claude, a modern open-weight model, Mistral | T5, BART, mBART, Flan-T5 |
 | **Native strengths** | Classification, NER, embeddings, reranking | Open-ended generation, few-shot, instruction following | Translation, summarization, structured generation (code→test) |
 | **Context efficiency** | Every token in full attention → O(n²) but over full input | Same O(n²) but KV cache reuse across tokens | Encoder O(n²), decoder O(m²) + cross-attn |
 | **Typical size (2025)** | 110M–7B | 1B–100B+ | 250M–11B |
@@ -44,7 +44,7 @@ The three transformer families differ in which tokens can attend to which at tra
 MLM pretraining forces the model to build rich contextual representations for every position because any token might be masked. The `[CLS]` token or mean-pooled output captures a dense sentence embedding. BERT fine-tuned on a sentiment task updates a tiny classification head; the backbone already "understands" syntax, coreference, and semantics.
 
 **Why decoder-only models are now dominant even for classification:**
-Decoder-only models with instruction tuning (RLHF/DPO) can do classification zero-shot by generating the label as text. At 70B+ parameters they outperform fine-tuned BERT on most understanding benchmarks. The tradeoff: they're much larger, slower, and more expensive for the same classification task. For a production classification API at 1M QPS, a fine-tuned BERT-base (110M) at $0.001/1K tokens beats GPT-4 by 100×-cost margin.
+Decoder-only models with instruction tuning (RLHF/DPO) can do classification zero-shot by generating the label as text. At 70B+ parameters they outperform fine-tuned BERT on most understanding benchmarks. The tradeoff: they're much larger, slower, and more expensive for the same classification task. For a production classification API at 1M QPS, a fine-tuned BERT-base (110M) at $0.001/1K tokens beats a frontier model by 100×-cost margin.
 
 **Why encoder-decoder models fit seq2seq:**
 Cross-attention lets the decoder attend to the *full* encoded input while generating each output token — ideal when output depends on the entire input (translation, summarization). A decoder-only model can do this with "input || output" in one sequence, but wastes KV cache re-encoding the input for every generated token. Encoder-decoder is more parameter-efficient for fixed-length transduction tasks.
@@ -53,7 +53,7 @@ Cross-attention lets the decoder attend to the *full* encoded input while genera
 
 **Production example — RAG reranking:** Cross-encoders used for reranking (e.g., `cross-encoder/ms-marco-MiniLM-L-6-v2` from sentence-transformers) are encoder-only models that score query-document pairs via classification. They're far more accurate than bi-encoder (also encoder-only) dot-product search, but 10–50× slower because they process each query-doc pair jointly. In practice: bi-encoder for top-K retrieval, cross-encoder reranker on top-16 only.
 
-**Production example — Summarization at scale:** Flan-T5-XL (3B, encoder-decoder) outperforms GPT-3.5 on faithful summarization benchmarks (ROUGE-L, BERTScore) at ~5× lower inference cost. Used in enterprise document workflows where budget matters.
+**Production example — Summarization at scale:** Flan-T5-XL (3B, encoder-decoder) outperforms a small fast model on faithful summarization benchmarks (ROUGE-L, BERTScore) at ~5× lower inference cost. Used in enterprise document workflows where budget matters.
 
 **The trend (2025–2026):** Decoder-only models with instruction tuning have eaten encoder-decoder's lunch for most NLP tasks because scale and RLHF compensate for the architectural mismatch. Encoder-only models remain dominant for *embedding* and *fast classification* use cases where latency and cost are paramount. T5/BART family persists in specialized seq2seq pipelines where training data and compute efficiency matter.
 
@@ -69,10 +69,10 @@ Cross-attention lets the decoder attend to the *full* encoded input while genera
 
 Decoder-only models like GPT and Llama use *causal* masking — each token only attends to past tokens. They're pretrained to predict the next token, which gives them powerful generative ability. The KV cache makes autoregressive generation efficient because you reuse past key/value computations. With instruction tuning and RLHF, decoder-only models can now do classification, summarization — basically anything — just by generating the answer as text. At 70B scale they beat fine-tuned BERT on most tasks, but they cost 100× more per query.
 
-Encoder-decoder models like T5 and BART take the best of both: the encoder reads the full input bidirectionally, the decoder generates output autoregressively and attends back to the encoder via cross-attention. This is architecturally ideal for translation or summarization where the output depends on the entire input. The classic use case is Flan-T5 for summarization — it outperforms GPT-3.5 on some benchmarks at a fraction of the inference cost."
+Encoder-decoder models like T5 and BART take the best of both: the encoder reads the full input bidirectionally, the decoder generates output autoregressively and attends back to the encoder via cross-attention. This is architecturally ideal for translation or summarization where the output depends on the entire input. The classic use case is Flan-T5 for summarization — it outperforms a small fast model on some benchmarks at a fraction of the inference cost."
 
 **Tradeoff / production angle (1 min):**
-"In production, I'd choose encoder-only for embedding generation or fast classification — DeBERTa or BGE give me top-tier accuracy at 110M–400M parameters with low latency. I'd choose a decoder-only model when I need open-ended generation, instruction-following, or few-shot adaptability and I can afford GPT-4 / Claude pricing. I'd consider encoder-decoder for a constrained seq2seq pipeline — say a medical report summarizer — where I have fine-tuning data and need cost efficiency at scale. The trend is that decoder-only models with enough scale and instruction tuning have become general-purpose, but encoder-only models for embeddings and cross-encoders for reranking remain the right call in RAG pipelines."
+"In production, I'd choose encoder-only for embedding generation or fast classification — DeBERTa or BGE give me top-tier accuracy at 110M–400M parameters with low latency. I'd choose a decoder-only model when I need open-ended generation, instruction-following, or few-shot adaptability and I can afford a frontier model / Claude pricing. I'd consider encoder-decoder for a constrained seq2seq pipeline — say a medical report summarizer — where I have fine-tuning data and need cost efficiency at scale. The trend is that decoder-only models with enough scale and instruction tuning have become general-purpose, but encoder-only models for embeddings and cross-encoders for reranking remain the right call in RAG pipelines."
 
 **Wrap-up (30s):**
 "So the one-liner: encoder-only = understand/embed, decoder-only = generate/instruct, encoder-decoder = transduce — and decoder-only has taken over most of the middle ground at scale. Happy to go deeper on any of the three."

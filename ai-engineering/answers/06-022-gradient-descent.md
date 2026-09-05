@@ -72,7 +72,7 @@ Gradient descent is an iterative first-order optimization algorithm that minimiz
 | Learning rate too low | Loss plateaus slowly | Increase η or use LR finder |
 
 ### Example / Tradeoff
-Training Llama 3 8B with QLoRA: AdamW with β₁=0.9, β₂=0.999, η_peak=2e-4, 100-step linear warmup, cosine decay to 2e-5, gradient clipping at 1.0. Mini-batch size 4 with gradient accumulation steps=8 (effective batch=32) to fit in 16 GB VRAM. Without gradient clipping, loss spikes to NaN within the first 50 steps on noisy instruction data.
+Training a small open-weight model (7–8B class) with QLoRA: AdamW with β₁=0.9, β₂=0.999, η_peak=2e-4, 100-step linear warmup, cosine decay to 2e-5, gradient clipping at 1.0. Mini-batch size 4 with gradient accumulation steps=8 (effective batch=32) to fit in 16 GB VRAM. Without gradient clipping, loss spikes to NaN within the first 50 steps on noisy instruction data.
 
 SGD with momentum is still used in computer vision (ResNet ImageNet training) because it generalizes better than Adam in some regimes (Wilson et al., 2017) — but Adam dominates NLP/LLM training due to sparse gradient handling.
 

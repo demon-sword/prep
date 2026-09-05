@@ -58,8 +58,8 @@ Instrument every stage with a timer and trace with a correlation ID. Typical bre
 
 **Layer 3 — Reduce decode latency (output generation)**
 - **Constrain output length**: `max_tokens` + "respond in ≤2 sentences" instruction; decode time scales linearly with output tokens
-- **Speculative decoding**: small draft model (e.g. Llama 3 8B) generates K tokens, large target model (Llama 3 70B) verifies in one forward pass; 2–4× speedup on structured/predictable outputs (code, JSON, SQL); vLLM `--speculative-model` flag
-- **Model tiering**: route short-answer and FAQ queries to a smaller, faster model (GPT-4o-mini: ~400 ms vs GPT-4o: ~1500 ms for typical 500-token response)
+- **Speculative decoding**: small draft model (e.g. A small open-weight model (7–8B class)) generates K tokens, large target model (a 70B-class open-weight model) verifies in one forward pass; 2–4× speedup on structured/predictable outputs (code, JSON, SQL); vLLM `--speculative-model` flag
+- **Model tiering**: route short-answer and FAQ queries to a smaller, faster model (a small fast model: ~400 ms vs a frontier model: ~1500 ms for typical 500-token response)
 
 **Layer 4 — Reduce retrieval and reranking latency**
 - **HNSW ef_search tuning**: lower ef_search → faster ANN search at slight recall cost; Pinecone/Qdrant expose this parameter
@@ -78,11 +78,11 @@ Instrument every stage with a timer and trace with a correlation ID. Typical bre
 
 | Optimization | p95 TTFT | Notes |
 |-------------|---------|-------|
-| Baseline (GPT-4o, top-20 chunks, no cache) | ~2400 ms | Over SLO |
+| Baseline (a frontier model, top-20 chunks, no cache) | ~2400 ms | Over SLO |
 | + Streaming SSE | ~2400 ms total, ~300 ms perceived | UX win, no structural change |
 | + Semantic cache (30% hit → < 5 ms) | ~1700 ms (blended p95) | Significant but depends on hit rate |
 | + Prompt compression + top-3 rerank (60% token reduction) | ~1100 ms | Prefill speedup + smaller context |
-| + Model tiering (60% traffic → GPT-4o-mini) | ~700 ms blended | ~3× faster for tier-1 queries |
+| + Model tiering (60% traffic → a small fast model) | ~700 ms blended | ~3× faster for tier-1 queries |
 | + Prefix caching on system prompt | ~550 ms | High discount if prefix is stable |
 
 **Key tradeoff:** semantic caching threshold is latency vs correctness — at cosine < 0.92, semantically distinct queries can get stale cached answers. Tune threshold per query type with a quality golden set.
@@ -101,7 +101,7 @@ Second, I'd add streaming. This doesn't reduce actual latency, but for interacti
 
 Third, I'd reduce the prefill cost — which is what drives TTFT. The two best levers here are prompt compression with something like LLMLingua, which can cut system prompt length by 30-50%, and reducing retrieved context via cross-encoder reranking from top-20 down to top-3 chunks. That can take input tokens from 4K to 1K, proportionally cutting TTFT since prefill is compute-bound and scales with input length.
 
-Fourth, model tiering. GPT-4o-mini is roughly 3-4× faster than GPT-4o for a typical 500-token response, and 80% of FAQ-style queries don't need the more capable model. A lightweight complexity router lets you send those to the fast path.
+Fourth, model tiering. A small fast model is roughly 3-4× faster than a frontier model for a typical 500-token response, and 80% of FAQ-style queries don't need the more capable model. A lightweight complexity router lets you send those to the fast path.
 
 For self-hosted systems, I'd look at vLLM's PagedAttention for continuous batching and consistent decode throughput, and speculative decoding for structured outputs like JSON or SQL — a small draft model generates candidates that the large model verifies in one forward pass, giving 2-4× decode speedup."
 
@@ -134,4 +134,4 @@ For self-hosted systems, I'd look at vLLM's PagedAttention for continuous batchi
 
 ## One-liner recall
 
-> Reduce GenAI latency in priority order: semantic cache (skip call, 20–35% hit → < 10 ms), streaming SSE (perceived TTFT fix), prompt compression + top-3 reranking (cut prefill tokens 60%), model tiering (GPT-4o-mini 3–4× faster for easy queries), then vLLM PagedAttention + speculative decoding for self-hosted serving — always profile first to find which stage owns the budget.
+> Reduce GenAI latency in priority order: semantic cache (skip call, 20–35% hit → < 10 ms), streaming SSE (perceived TTFT fix), prompt compression + top-3 reranking (cut prefill tokens 60%), model tiering (a small fast model 3–4× faster for easy queries), then vLLM PagedAttention + speculative decoding for self-hosted serving — always profile first to find which stage owns the budget.

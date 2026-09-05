@@ -17,7 +17,7 @@ Interviewers ask this in cost/latency optimization and system design rounds to t
 - "How do you reduce inference cost and latency at scale?"
 - "Explain quantization — when does it hurt quality?"
 - "When would you use model distillation instead of quantization?"
-- "We're running Llama 3 70B — how do we cut costs without switching to GPT-4o-mini?"
+- "We're running a 70B-class open-weight model — how do we cut costs without switching to a small fast model?"
 
 ### What it tests
 Understanding of inference efficiency at the hardware level: memory-bandwidth bottleneck, precision tradeoffs, PTQ algorithm mechanics (GPTQ/AWQ), knowledge distillation training procedure, and the decision framework for when each technique applies.
@@ -46,7 +46,7 @@ Understanding of inference efficiency at the hardware level: memory-bandwidth bo
 - **AWQ** (Lin et al. 2023, MIT): "activation-aware weight quantization" — identifies the 1% of weight channels that cause the largest activation magnitude (outliers) and protects them with higher precision or scaling. Outperforms GPTQ at 4-bit on most benchmarks, especially reasoning/math tasks. vLLM supports `--quantization awq`.
 - **SmoothQuant** (W8A8): migrates quantization difficulty from activations to weights via a mathematically equivalent per-channel scaling; enables full INT8 inference (both weights and activations), maximizing throughput on A100/H100 INT8 tensor cores.
 
-**VRAM math for Llama 3 70B:**
+**VRAM math for a 70B-class open-weight model:**
 
 | Precision | VRAM | GPU config |
 |-----------|------|------------|
@@ -58,7 +58,7 @@ Going BF16→AWQ INT4 halves deployment hardware cost and roughly doubles decode
 
 **Knowledge distillation:**
 
-- **Offline (black-box) distillation**: use the teacher model (e.g., GPT-4o) to generate high-quality completions for a task-specific dataset; fine-tune the student (e.g., Llama 3 8B or Mistral 7B) via SFT on these synthetic examples. DistilBERT, Phi-2, and Phi-3 were produced this way. Cost: training + GPU hours, but zero per-query teacher calls afterward.
+- **Offline (black-box) distillation**: use the teacher model (e.g., a frontier model) to generate high-quality completions for a task-specific dataset; fine-tune the student (e.g., a small open-weight model (7–8B class) or a small open-weight model (7–8B class)) via SFT on these synthetic examples. DistilBERT, Phi-2, and a small open-weight model (7–8B class) were produced this way. Cost: training + GPU hours, but zero per-query teacher calls afterward.
 - **Online (soft-label) distillation**: student trained to minimize KL divergence against teacher's full output distribution (logit-level), not just the argmax token. Requires teacher logit access — not possible with closed-source APIs. Used internally (e.g., DistilBERT from BERT, TinyLlama from Llama).
 - **Layer-wise / intermediate distillation**: match hidden states, attention maps, or feature representations layer-by-layer (TinyBERT, PKD). More expensive to train but higher compression ratios.
 
@@ -74,18 +74,18 @@ If you need a permanently smaller model for edge/mobile:
 If you control the serving infra:
   → Quantize the existing model; combine with speculative decoding
 If you only have API access (e.g. OpenAI):
-  → Model tiering (GPT-4o-mini), not quantization/distillation
+  → Model tiering (a small fast model), not quantization/distillation
 ```
 
 ### Example / Tradeoff
 
-**Production scenario — Llama 3 70B customer support chatbot:**
+**Production scenario — a 70B-class open-weight model customer support chatbot:**
 
 | Approach | VRAM | Throughput | Quality (RAGAS faithfulness) | Monthly cloud cost |
 |----------|------|-----------|------------------------------|--------------------|
 | BF16 full precision | 140 GB (2× A100) | 18 tok/s | 0.94 | ~$14K |
 | AWQ INT4 | 35 GB (1× A100 40GB) | 35 tok/s | 0.92 | ~$3.5K |
-| Distilled student (Llama 3 8B LoRA on teacher outputs) | 16 GB (1× A100 40GB) | 80 tok/s | 0.89 | ~$2K |
+| Distilled student (a small open-weight model (7–8B class) LoRA on teacher outputs) | 16 GB (1× A100 40GB) | 80 tok/s | 0.89 | ~$2K |
 | Distilled + AWQ INT4 | 4 GB (1× A10G) | 120 tok/s | 0.87 | ~$600 |
 
 Key tradeoff: AWQ INT4 on complex math/code tasks can degrade by 3-5%; for RAG factual Q&A, degradation is typically <1% (faithfulness 0.94→0.92). Always validate on your golden task set before switching to INT4 in production.
@@ -102,9 +102,9 @@ Key tradeoff: AWQ INT4 on complex math/code tasks can degrade by 3-5%; for RAG f
 
 The two leading post-training quantization algorithms are GPTQ and AWQ. GPTQ minimizes the L2 error of quantized layer outputs on a calibration set. AWQ is smarter — it identifies the small fraction of weight channels that produce large activations and protects them with higher precision; it outperforms GPTQ at 4-bit, especially on math and code tasks. Both are supported in vLLM with a flag: `--quantization awq` or `--quantization gptq`.
 
-Concretely, Llama 3 70B in BF16 requires two A100 80GB GPUs at ~$14K/month. With AWQ INT4, it fits on one A100 40GB at ~$3.5K/month, and decode throughput roughly doubles because you're streaming fewer bytes per token from memory.
+Concretely, a 70B-class open-weight model in BF16 requires two A100 80GB GPUs at ~$14K/month. With AWQ INT4, it fits on one A100 40GB at ~$3.5K/month, and decode throughput roughly doubles because you're streaming fewer bytes per token from memory.
 
-Knowledge distillation is a different lever. You use the big teacher model — say GPT-4o — to generate high-quality completions for your task-specific dataset, then fine-tune a smaller student like Llama 3 8B on those synthetic examples using SFT. The student learns the teacher's behavior, not its weights. Phi-2, Phi-3, and DistilBERT were all produced this way. The tradeoff is training cost upfront — days of GPU time — but the resulting model is permanently smaller and can be further quantized."
+Knowledge distillation is a different lever. You use the big teacher model — say a frontier model — to generate high-quality completions for your task-specific dataset, then fine-tune a smaller student like a small open-weight model (7–8B class) on those synthetic examples using SFT. The student learns the teacher's behavior, not its weights. Phi-2, a small open-weight model (7–8B class), and DistilBERT were all produced this way. The tradeoff is training cost upfront — days of GPU time — but the resulting model is permanently smaller and can be further quantized."
 
 **Tradeoff / production angle (1 min):**
 "The key production decision is: quantize first, distill only if needed. PTQ takes hours and no training data; distillation takes weeks and a curated dataset. I always benchmark INT4 against my golden task set before deploying — for RAG factual Q&A the quality loss is typically under 1%; for math-heavy or multi-step reasoning tasks, INT4 can lose 3-5%, which may not be acceptable.

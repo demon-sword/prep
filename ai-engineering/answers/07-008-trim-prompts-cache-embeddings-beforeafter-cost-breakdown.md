@@ -39,7 +39,7 @@ The ability to quantify two specific cost levers — prompt size reduction and e
 
 3. **LLMLingua / prompt compression** — perplexity-guided token-level compression on system prompt and few-shot examples; achieves **2-5× reduction** on static content with <2% quality loss on RAG tasks. Apply after manual trimming.
 
-4. **max_tokens cap + conciseness instruction** — output tokens cost 3-10× more than input (GPT-4o: $2.50/M input, $10/M output); setting `max_tokens=300` and adding "respond in ≤3 sentences" cuts average output 30-50%.
+4. **max_tokens cap + conciseness instruction** — output tokens cost 5× more than input (a frontier model: $5/M input, $25/M output); setting `max_tokens=300` and adding "respond in ≤3 sentences" cuts average output 30-50%.
 
 **Embedding caching — two layers:**
 
@@ -72,14 +72,14 @@ After: Re-log same fields; compute reduction per bucket
 
 **Generation cost (prompt trimming):**
 
-| Optimization | Avg Input Tokens | Avg Output Tokens | Daily Generation Cost (GPT-4o) |
+| Optimization | Avg Input Tokens | Avg Output Tokens | Daily Generation Cost (a frontier model) |
 |---|---|---|---|
-| Baseline | 4,200 (system 800 + context 3,000 + user 400) | 400 | ~$6,300/day |
-| + Manual prompt audit (-25% system prompt) | 4,000 | 400 | ~$6,000/day |
-| + Rerank to top-3 chunks (context: 3K→600 tokens) | 1,600 | 400 | ~$2,400/day |
-| + LLMLingua on system prompt+few-shots (2× compression) | 1,200 | 400 | ~$1,800/day |
-| + max_tokens=250 + conciseness instruction | 1,200 | 400→200 | **~$1,400/day** |
-| **Total reduction: $6,300 → $1,400/day (~78%)** | | | |
+| Baseline | 4,200 (system 800 + context 3,000 + user 400) | 400 | ~$15,500/day |
+| + Manual prompt audit (-25% system prompt) | 4,000 | 400 | ~$15,000/day |
+| + Rerank to top-3 chunks (context: 3K→600 tokens) | 1,600 | 400 | ~$9,000/day |
+| + LLMLingua on system prompt+few-shots (2× compression) | 1,200 | 400 | ~$8,000/day |
+| + max_tokens=250 + conciseness instruction | 1,200 | 400→200 | **~$5,500/day** |
+| **Total reduction: $15,500 → $5,500/day (~65%)** — note output tokens now dominate the residual bill | | | |
 
 Quality gate at each step: RAGAS Faithfulness ≥ 0.85 and Answer Relevancy ≥ 0.80 on a 200-query golden dataset.
 
@@ -95,9 +95,9 @@ Quality gate at each step: RAGAS Faithfulness ≥ 0.85 and Answer Relevancy ≥ 
 **Core explanation (2–3 min):**
 "On the generation side — prompt trimming — the highest-impact lever is reducing the retrieved context. In a typical RAG system, retrieved chunks make up 60-70% of total input tokens. If I'm passing 20 chunks at ~150 tokens each, that's around 3,000 tokens of context. Running a cross-encoder reranker — Cohere Rerank or BGE-Reranker — and passing only the top 3 reduces context to around 600 tokens. That's a 5× reduction on the largest token bucket, before touching anything else.
 
-After that, I'd do a manual prompt audit — removing hedge phrases, flattening bullet structures — which typically saves another 20-30% on the system prompt with zero tooling. Then LLMLingua on the few-shot examples for another 2-5× compression. And finally, setting max_tokens and adding a conciseness instruction for output: output tokens cost 4× more than input on GPT-4o, so cutting average output from 400 to 200 tokens is a significant lever.
+After that, I'd do a manual prompt audit — removing hedge phrases, flattening bullet structures — which typically saves another 20-30% on the system prompt with zero tooling. Then LLMLingua on the few-shot examples for another 2-5× compression. And finally, setting max_tokens and adding a conciseness instruction for output: output tokens cost 4× more than input on a frontier model, so cutting average output from 400 to 200 tokens is a significant lever.
 
-A concrete example: at 500K queries/day on GPT-4o, I'd expect to go from about $6,300/day to around $1,400/day with these four steps combined — roughly 78% reduction.
+A concrete example: at 500K queries/day on a frontier model, I'd expect to go from about $15,500/day to around $5,500/day with these four steps combined — roughly 65% reduction, and what's left is dominated by output tokens.
 
 On the embedding side: document embedding caching works by storing the SHA-256 hash of each chunk alongside its vector in the vector DB. On re-ingestion, you hash the content first; if it matches, you skip the embedding API call. For a knowledge base that changes less than 5% per day, this eliminates 95% of document embedding calls. For query embeddings, I'd cache in Redis with a 1-hour TTL — FAQ workloads get 20-40% hit rates on repeated queries. The dollar savings on embeddings are modest — text-embedding-3-small is very cheap — but the latency and rate-limit benefits are material at scale."
 

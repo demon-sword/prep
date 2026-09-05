@@ -40,7 +40,7 @@ Production evaluation closes the gap between offline benchmarks and real-world b
 - Emit metrics to a time-series store (Prometheus + Grafana / Datadog).
 
 **Layer 2 — LLM-as-judge sampling (1–5% of traffic)**
-- A GPT-4o-class judge evaluates conversation quality on a random sample: helpfulness, groundedness, tone.
+- A frontier-class model as judge evaluates conversation quality on a random sample: helpfulness, groundedness, tone.
 - Results flow into the same Grafana dashboard as async metrics.
 - Cost budget: 1M queries/day × 1% sample × ~$0.005/judge call ≈ **$50/day**.
 
@@ -66,7 +66,7 @@ Production evaluation closes the gap between offline benchmarks and real-world b
 
 ### Example / Tradeoff
 
-At a customer support deployment (GPT-4o-mini, Pinecone, 200K queries/day):
+At a customer support deployment (a small fast model, Pinecone, 200K queries/day):
 - Async RAGAS pipeline added ~40ms latency overhead (async, non-blocking).
 - Nightly golden-set regression caught a prompt-rewrite that dropped Faithfulness from 0.93 → 0.81 before it hit prod — blocker in the deployment gate.
 - Thumbs-down spikes (> 6%) were the first signal that the chunking strategy had drifted after a Confluence re-indexing; retrieval cosine scores confirmed it 30 min later.
@@ -84,7 +84,7 @@ Running RAGAS synchronously in the request path adds ~200–400ms latency; runni
 **Core explanation (2–3 min):**
 "The async pipeline is the backbone. Every request-response pair goes into Kafka. A sidecar consumer computes RAGAS Faithfulness and Answer Relevancy, plus retrieval cosine scores and latency, without touching the user-facing serving path. These emit into Grafana, and I set SLO thresholds — say, Faithfulness p50 below 0.90 fires a warning, below 0.85 pages on-call.
 
-For conversation quality — things like tone, helpfulness, nuance — I run a GPT-4o judge on 1–5% of traffic. That's cheap: at 1M queries/day and 1% sampling, it costs around $50/day. The judge scores come into the same dashboard.
+For conversation quality — things like tone, helpfulness, nuance — I run a frontier model judge on 1–5% of traffic. That's cheap: at 1M queries/day and 1% sampling, it costs around $50/day. The judge scores come into the same dashboard.
 
 Then nightly, a CI job runs the prod model against a golden dataset of 200–500 hand-annotated query-context-answer triples. If Faithfulness drops more than 3 points from the previous passing run, the next deployment is blocked automatically. This is the safety net that catches silent regressions from prompt changes, model updates, or index drift.
 

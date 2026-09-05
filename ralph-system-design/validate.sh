@@ -35,8 +35,13 @@ pass "shared assets present"
 
 # Section count from design doc
 SECTION_COUNT=$(grep -cE '^## [0-9]+\.' "$DESIGN" 2>/dev/null || echo 0)
-MD_COUNT=$(find "$DIR/answers" -maxdepth 1 -name '[0-9]*.md' 2>/dev/null | wc -l | tr -d ' ')
-HTML_COUNT=$(find "$DIR/answers-html" -maxdepth 1 -name '[0-9]*.html' 2>/dev/null | wc -l | tr -d ' ')
+# find exits 1 on a path that does not exist, pipefail makes that the whole
+# pipeline's status, and errexit then kills the script — so a missing answers/
+# dir crashed the validator instead of producing the FAIL: line written for it.
+MD_COUNT=0
+HTML_COUNT=0
+[[ -d "$DIR/answers" ]] && MD_COUNT=$(find "$DIR/answers" -maxdepth 1 -name '[0-9]*.md' | wc -l | tr -d ' ')
+[[ -d "$DIR/answers-html" ]] && HTML_COUNT=$(find "$DIR/answers-html" -maxdepth 1 -name '[0-9]*.html' | wc -l | tr -d ' ')
 
 if [[ "$SECTION_COUNT" -gt 0 && "$MD_COUNT" -ge "$SECTION_COUNT" ]]; then
   pass "answers md count ($MD_COUNT) >= sections ($SECTION_COUNT)"

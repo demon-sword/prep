@@ -63,7 +63,7 @@ Orchestrator (LangGraph graph):
   - interrupt_before("escalate")  ← HITL gate
   - Checkpoints to Redis
 
-LLM (GPT-4o-mini, T=0):
+LLM (a small fast model, T=0):
   - ReAct format: Thought → Action → Observation
   - Decides which tool to call and with what args
   - Synthesises final response

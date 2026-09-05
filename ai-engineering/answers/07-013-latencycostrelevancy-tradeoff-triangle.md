@@ -46,7 +46,7 @@ In LLM-powered retrieval systems, **latency, cost, and relevancy form a constrai
    - *Mitigation:* cross-encoder reranking on top-k, then pass top-3 to the LLM — buy relevancy cheaply
 
 2. **Using a stronger model (relevancy ↑):**
-   - GPT-4o vs GPT-4o-mini: 16× input cost ($2.50/M vs $0.15/M), 2-4× higher latency
+   - A frontier model vs a small fast model: 5× input cost ($5/M vs $1/M), 2-4× higher latency
    - *Mitigation:* model tiering — route ≥60% of simple queries to the cheap model
 
 3. **Semantic caching (latency ↓, cost ↓):**
@@ -69,11 +69,11 @@ In LLM-powered retrieval systems, **latency, cost, and relevancy form a constrai
 
 | Configuration | Recall@5 | p95 latency | Cost/query |
 |---------------|----------|-------------|------------|
-| Baseline: top-5 dense, GPT-4o | 0.74 | 4.2s | $0.0105 |
-| + hybrid BM25+dense (RRF) | 0.81 (+9%) | 4.6s (+10%) | $0.0108 (+3%) |
-| + cross-encoder rerank top-20→3 | 0.86 (+16%) | 3.1s (−26%) | $0.0045 (−57%) |
-| + model tiering 80% mini / 20% full | 0.84 (−2%) | 2.8s (−7%) | $0.0018 (−60%) |
-| + semantic cache θ=0.93 | 0.84 (0%) | 1.4s (−50%) | $0.0013 (−28%) |
+| Baseline: top-5 dense, a frontier model | 0.74 | 4.2s | $0.0225 |
+| + hybrid BM25+dense (RRF) | 0.81 (+9%) | 4.6s (+10%) | $0.0232 (+3%) |
+| + cross-encoder rerank top-20→3 | 0.86 (+16%) | 3.1s (−26%) | $0.0100 (−57%) |
+| + model tiering 80% small tier / 20% frontier | 0.84 (−2%) | 2.8s (−7%) | $0.0040 (−60%) |
+| + semantic cache θ=0.93 | 0.84 (0%) | 1.4s (−50%) | $0.0029 (−28%) |
 
 The reranker is the key insight: **it simultaneously improves relevancy AND reduces cost** by cutting context length to the LLM from 5 chunks to 3 — a rare win-win. The only pure tradeoff is model tiering (−2% Recall@5 for 60% cost savings), which is acceptable for FAQ-style queries.
 
@@ -92,7 +92,7 @@ The key tensions are: first, increasing top-k improves recall but raises cost an
 The insight I've found most useful in practice is that cross-encoder reranking is the rare optimization that wins on two axes simultaneously: it improves relevancy by reordering candidates, AND it lets you cut context length from top-k=10 to top-3 chunks, which reduces both latency and cost. In one system I tuned, adding a BGE-Reranker on top-20 candidates cut p95 latency by 26% and cost by 57% while improving Recall@5 by 16%."
 
 **Tradeoff / production angle (1 min):**
-"Where I accept a tradeoff is model tiering: routing 80% of simple queries to GPT-4o-mini costs 60% less but sacrifices about 2% on Recall@5. That's a business decision — for FAQ-style queries, 2% recall loss is fine; for high-stakes compliance queries, I'd route everything to the full model. The key discipline is to quantify the tradeoff on a golden dataset before committing, not assume it's acceptable."
+"Where I accept a tradeoff is model tiering: routing 80% of simple queries to a small fast model costs 60% less but sacrifices about 2% on Recall@5. That's a business decision — for FAQ-style queries, 2% recall loss is fine; for high-stakes compliance queries, I'd route everything to the full model. The key discipline is to quantify the tradeoff on a golden dataset before committing, not assume it's acceptable."
 
 **Wrap-up (30s):**
 "So my framework is: treat one constraint as the hard SLO — usually p95 latency for interactive use cases — then use the decision tree to reduce cost without sacrificing relevancy: cache first, rerank to fewer chunks, tier the model, and compress the prompt. Happy to go deeper on any specific lever."

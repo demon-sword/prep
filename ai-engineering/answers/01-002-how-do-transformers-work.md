@@ -71,7 +71,7 @@ A transformer has two variants: **encoder** (BERT-style, bidirectional), **decod
 - **Scalability:** transformer performance scales predictably with data and compute (Chinchilla scaling laws); RNNs didn't
 
 ### Example / Tradeoff
-**Concrete example — Llama-3-8B architecture:**
+**Concrete example — a small open-weight model (7–8B class):**
 - 32 transformer layers, d_model = 4096, 32 attention heads
 - GQA: 8 KV heads (4 query heads share each KV head) → 4× KV cache reduction vs MHA
 - FFN: SwiGLU with intermediate dim 14336
@@ -79,7 +79,7 @@ A transformer has two variants: **encoder** (BERT-style, bidirectional), **decod
 - Total: ~8B parameters
 
 **Key tradeoff — attention is O(n²) in sequence length:**
-The attention matrix is `[seq_len × seq_len]`, so doubling the context quadruples attention compute and memory. At 128K tokens, the raw attention matrix would be 16B cells — infeasible without optimizations like FlashAttention (tiled computation that avoids materializing the full matrix) and sliding window / sparse attention patterns.
+The attention matrix is `[seq_len × seq_len]`, so doubling the context quadruples attention compute and memory. At 1M tokens, the raw attention matrix would be 10¹² cells — infeasible without optimizations like FlashAttention (tiled computation that avoids materializing the full matrix) and sliding window / sparse attention patterns.
 
 ---
 
@@ -100,7 +100,7 @@ The second component is a per-token feedforward network: two linear layers with 
 Residual connections and layer norm wrap each sublayer, which are critical for training stability at scale."
 
 **Tradeoff / production angle (1 min):**
-"The big architectural tradeoff is attention's quadratic complexity in sequence length. The attention matrix is seq_len × seq_len — doubling context quadruples memory and compute. FlashAttention solves this by computing attention in tiles without materializing the full matrix, cutting memory from O(n²) to O(n). GQA reduces KV cache size by sharing K/V heads across multiple Q heads — Llama-3 uses 8 KV heads for 32 query heads, a 4× reduction that's critical for serving large contexts.
+"The big architectural tradeoff is attention's quadratic complexity in sequence length. The attention matrix is seq_len × seq_len — doubling context quadruples memory and compute. FlashAttention solves this by computing attention in tiles without materializing the full matrix, cutting memory from O(n²) to O(n). GQA reduces KV cache size by sharing K/V heads across multiple Q heads — a typical 7–8B-class open-weight model uses 8 KV heads for 32 query heads, a 4× reduction that's critical for serving large contexts.
 
 In production, this means you're constantly trading off context length against VRAM and latency. A 70B model with 128K context can eat 20GB just for the KV cache."
 

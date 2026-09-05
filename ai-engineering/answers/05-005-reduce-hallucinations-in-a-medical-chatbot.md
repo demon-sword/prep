@@ -51,7 +51,7 @@ In a medical chatbot, hallucinations are not just a quality problem — they are
 - For drug dosage, contraindications, and adverse event claims: apply a **regex/NER extraction step** (SpaCy + medspaCy) to identify numeric claims and verify against structured drug database (RxNorm/OpenFDA API).
 
 **Layer 4 — HITL escalation for high-risk query classes**
-- Classify every query into risk tiers using a lightweight classifier (GPT-4o-mini or fine-tuned BERT):
+- Classify every query into risk tiers using a lightweight classifier (a small fast model or fine-tuned BERT):
   - **Tier 1** (general info: "What is metformin?"): auto-respond with NLI-validated output.
   - **Tier 2** (clinical guidance: "What is the standard first-line treatment for T2DM?"): auto-respond + log for clinician spot-check.
   - **Tier 3** (patient-specific advice: "Should I take 1000mg metformin given my kidney disease?"): block auto-response → escalate to clinician queue + show: "This question requires a clinician review."
@@ -66,8 +66,8 @@ In a medical chatbot, hallucinations are not just a quality problem — they are
 ### Example / Tradeoff
 
 A clinical decision support chatbot at a hospital system:
-- **Stack:** PubMedBERT embeddings → Pinecone + Elasticsearch BM25 hybrid → GPT-4o at T=0 with closed-world prompt + citation requirement → DeBERTa NLI gate (sync, 50ms) → tier classifier for HITL routing.
-- **Before:** general-purpose RAG with `text-embedding-ada-002` + GPT-4o at T=0.7 → 6.4% hallucination rate on drug dosage queries (model blended parametric knowledge with retrieved context).
+- **Stack:** PubMedBERT embeddings → Pinecone + Elasticsearch BM25 hybrid → a frontier model at T=0 with closed-world prompt + citation requirement → DeBERTa NLI gate (sync, 50ms) → tier classifier for HITL routing.
+- **Before:** general-purpose RAG with `text-embedding-ada-002` + a frontier model at T=0.7 → 6.4% hallucination rate on drug dosage queries (model blended parametric knowledge with retrieved context).
 - **After domain adaptation:** PubMedBERT + hybrid retrieval + NLI gate → 0.4% hallucination rate; NLI gate blocked 3.2% of responses that would have contained contradictions.
 - **HITL impact:** tier-3 escalation caught 100% of patient-specific advice requests; clinician review queue processed ~8% of daily queries.
 

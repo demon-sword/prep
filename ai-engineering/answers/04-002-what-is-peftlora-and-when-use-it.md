@@ -84,7 +84,7 @@ Task requires behavior change (style, format, instruction-following)?
 
 ### Example / Tradeoff
 
-**Concrete example — Llama 3 8B code review assistant (HuggingFace PEFT + TRL):**
+**Concrete example — a small open-weight base model (7–8B class) as a code review assistant (HuggingFace PEFT + TRL):**
 
 ```python
 from peft import LoraConfig, get_peft_model
@@ -106,7 +106,7 @@ model = get_peft_model(base_model, lora_config)
 - **Dataset:** 8K (instruction, code-diff, review-comment) triples
 - **Hardware:** 1× A100 40GB
 - **Training time:** ~4 hours
-- **Result:** ROUGE-L 0.71 → 0.84 vs GPT-4o baseline; inference cost $0.002/review vs $0.04 with GPT-4o
+- **Result:** ROUGE-L 0.71 → 0.84 vs a hosted frontier-model baseline; inference cost roughly 20× lower per review than that baseline
 - **Catastrophic forgetting:** MMLU benchmark dropped 0.3 pts — acceptable for production
 
 **Key tradeoff:** LoRA rank controls quality ceiling. A rank-8 adapter is fast and cheap to train but may underfit complex tasks. Rank-64 approaches full fine-tune quality but training memory and time grow proportionally. In practice, rank 16–32 hits the sweet spot for most NLP tasks.

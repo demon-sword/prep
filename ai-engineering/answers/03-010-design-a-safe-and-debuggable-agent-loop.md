@@ -89,7 +89,7 @@ LangGraph's built-in checkpointer (`SqliteSaver` / `PostgresSaver`) implements t
 
 ```
 Loop iteration (LangGraph node):
-  1. LLM call (GPT-4o-mini, T=0, ReAct format)  ← traced with LangSmith run_id
+  1. LLM call (a small fast model, T=0, ReAct format)  ← traced with LangSmith run_id
   2. Orchestrator parses tool call JSON
   3. Allowlist check: tool ∈ {search_kb, get_order, escalate}?  ← rejects unknown tools
   4. HITL gate: is tool "escalate"?  → interrupt_before, await human

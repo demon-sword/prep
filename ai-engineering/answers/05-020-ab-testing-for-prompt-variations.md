@@ -87,7 +87,7 @@ Auto-rollback trigger:
 
 **Customer support chatbot prompt test:** Baseline prompt (A): system-role only with general instructions. Variant B: added explicit chain-of-thought instruction + citation format requirement.
 
-- Offline test: 200 golden queries, T=0, LLM-as-judge (GPT-4o, 1–5 scale). Variant B: 3.7 vs 3.2 (p < 0.001). RAGAS Faithfulness: 0.91 vs 0.88. Token cost: +22% (more verbose CoT).
+- Offline test: 200 golden queries, T=0, LLM-as-judge (a frontier model, 1–5 scale). Variant B: 3.7 vs 3.2 (p < 0.001). RAGAS Faithfulness: 0.91 vs 0.88. Token cost: +22% (more verbose CoT).
 - Canary (10% traffic, 72h): Deflection rate +4pp (61% → 65%), CSAT +0.2 (3.9 → 4.1), p95 latency +180ms (token inflation). Guardrails held.
 - Decision: roll out B (quality win outweighs latency cost); added LLMLingua post-processing to trim verbose CoT from final response, recovering 140ms.
 

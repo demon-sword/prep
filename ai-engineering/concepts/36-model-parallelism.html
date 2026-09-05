@@ -305,7 +305,7 @@
   <h2>Theory</h2>
 
   <p>
-    Modern frontier LLMs are simply too large to fit on a single GPU. GPT-4's rumored ~1.8T parameters, Llama-3-70B's 70B parameters at float16 (~140 GB), or even a 7B model with optimizer states during training (~100 GB) all exceed the VRAM of a single A100 (80 GB) or H100 (80 GB SXM). Model parallelism is the collection of strategies that spread computation across multiple GPUs or nodes so training and inference remain feasible.
+    Modern frontier LLMs are simply too large to fit on a single GPU. a frontier model's rumored ~1.8T parameters, a 70B-class open-weight model's 70B parameters at float16 (~140 GB), or even a 7B model with optimizer states during training (~100 GB) all exceed the VRAM of a single A100 (80 GB) or H100 (80 GB SXM). Model parallelism is the collection of strategies that spread computation across multiple GPUs or nodes so training and inference remain feasible.
   </p>
   <p>
     There are four distinct strategies, each operating at a different granularity. In practice, production systems (<code>Megatron-LM</code>, <code>vLLM</code>, <code>TensorRT-LLM</code>, <code>DeepSpeed</code>) combine all of them simultaneously — this is called <strong>3D parallelism</strong> (tensor × pipeline × data).
@@ -354,12 +354,12 @@
     For very long contexts (128K+), attention memory itself becomes the bottleneck: attention scores are O(n²) in sequence length. <strong>Sequence parallelism</strong> (Megatron-LM) splits the sequence dimension of LayerNorm and dropout outputs across TP ranks, complementing tensor parallelism. <strong>Ring Attention</strong> (Liu et al., 2023) shards the sequence across hosts in a ring topology so each host processes its local chunk with a causal mask, passing KV chunks around the ring — enabling essentially unlimited context by paying bandwidth.
   </p>
   <p>
-    <strong>Context Parallelism</strong> (used in Llama 3's training) further distributes prefill computation across devices. This is distinct from tensor parallelism: it slices the batch × sequence dimension rather than the hidden dimension.
+    <strong>Context Parallelism</strong> (used in a modern open-weight model's training) further distributes prefill computation across devices. This is distinct from tensor parallelism: it slices the batch × sequence dimension rather than the hidden dimension.
   </p>
 
   <h3>3D Parallelism: Combining All Strategies</h3>
   <p>
-    Production systems nest all strategies. A typical Llama-3 405B training run uses:
+    Production systems nest all strategies. A typical a frontier-scale open-weight model training run uses:
   </p>
   <ul>
     <li><strong>TP = 8</strong> — within each node (NVLink)</li>
@@ -442,7 +442,7 @@
     <li><strong>Pipeline bubble tax is real and scales with stages.</strong> With PP=16 and only 1 micro-batch, 15/16 ≈ 94% of each stage is idle. Use micro-batch counts ≥ 4×PP to keep bubble below 20%. Megatron's 1F1B schedule halves peak activation memory vs GPipe at the same throughput.</li>
     <li><strong>ZeRO-3 effectively shards the model like TP but with data-parallel semantics.</strong> No code changes to the model graph are required. The trade-off: ZeRO-3 doubles all-gather communication vs ZeRO-1. In practice, ZeRO-2 is the sweet spot — it shards optimizer states + gradients (the 12-byte-per-param overhead) but keeps parameters replicated, avoiding the all-gather on every forward pass.</li>
     <li><strong>For inference, TP dominates; PP adds latency proportional to pipeline depth × inter-stage bandwidth.</strong> At 200 Gb/s InfiniBand (25 GB/s), transferring a 4096-token × 8192-hidden activation tensor (≈256 MB at fp16) takes ~10 ms per stage boundary — a 16-stage pipeline adds 160 ms to TTFT. vLLM uses TP=4 for 70B models instead.</li>
-    <li><strong>Ring Attention + context parallelism enables 1M+ token contexts</strong> at the cost of O(n) all-to-all communication across the ring. Used in Llama 3's training (up to 128K context), Gemini 1.5 (1M context claims to use a similar approach). Bandwidth-efficient but requires custom CUDA kernels to pipeline communication with computation.</li>
+    <li><strong>Ring Attention + context parallelism enables 1M+ token contexts</strong> at the cost of O(n) all-to-all communication across the ring. Used in a modern open-weight model's training (up to 128K context), a frontier model (1M context claims to use a similar approach). Bandwidth-efficient but requires custom CUDA kernels to pipeline communication with computation.</li>
     <li><strong>The 3D parallelism grid</strong> (TP × PP × DP) must divide evenly into total GPU count. Misconfigurations waste GPUs or cause OOM. Always verify: <code>assert total_gpus == tp * pp * dp</code>. Megatron-LM enforces this at launch; DeepSpeed does not, leading to silent under-utilisation bugs in naive configs.</li>
   </ul>
 </section>

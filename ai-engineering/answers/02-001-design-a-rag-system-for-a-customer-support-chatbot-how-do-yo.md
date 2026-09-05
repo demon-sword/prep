@@ -53,7 +53,7 @@ The production pipeline has **9 stages**:
 
 | Stage | What happens | Key decisions |
 |-------|-------------|---------------|
-| **7. Generate** | Construct prompt: system instructions + retrieved chunks (most relevant first and last) + user query; call LLM | `gpt-4o-mini` for cost/latency; `gpt-4o` for complex multi-step; temperature=0 for determinism; include citations |
+| **7. Generate** | Construct prompt: system instructions + retrieved chunks (most relevant first and last) + user query; call LLM | a small fast model for cost/latency, a frontier model for complex multi-step; temperature=0 for determinism; include citations |
 
 **Eval + Observe (continuous)**
 
@@ -67,15 +67,15 @@ The production pipeline has **9 stages**:
 **Concrete stack for a 50K-article support KB:**
 - Pinecone (1536-dim vectors) + Elasticsearch BM25, RRF fusion
 - Cohere Rerank v3 on top-50 → top-5
-- GPT-4o-mini at temperature=0
+- A small fast model at temperature=0
 - RAGAS eval on 200 golden Q&A pairs (real support tickets with verified answers)
 
 **Production numbers to anchor the story:**
 - Retrieval p95: ~80ms (HNSW) + ~200ms (cross-encoder rerank) = ~280ms retrieval
-- LLM generation: ~600ms p50 (gpt-4o-mini streaming)
+- LLM generation: ~600ms p50 (small fast model, streaming)
 - Total TTFB: ~400ms with streaming
-- Cost: ~$0.003/query at 50K questions/day = ~$150/day before semantic caching
-- Semantic cache (GPTCache, cosine threshold 0.95): ~35–40% cache hit rate → ~$90/day
+- Cost: ~$0.002/query at 50K questions/day = ~$100/day before semantic caching
+- Semantic cache (GPTCache, cosine threshold 0.95): ~35–40% cache hit rate → ~$60/day
 
 **The tradeoff interviewers probe:** "Why rerank instead of just increasing top-k?"
 - Increasing top-k without reranking introduces the **"lost in the middle"** problem (Liu et al. 2023) — accuracy drops from ~70% → ~45% when the relevant chunk sits in the middle of a 20-chunk context window
@@ -95,7 +95,7 @@ For ingestion, I'd pull docs from wherever they live — Confluence, Zendesk, PD
 
 On the retrieval side, production RAG always needs hybrid retrieval. Dense embeddings fail on exact-match queries — product IDs, model numbers, codes — which are extremely common in support. BM25 handles those. I'd fuse the two result lists using Reciprocal Rank Fusion to get top-50 candidates, then run a cross-encoder reranker — something like ms-marco-MiniLM or Cohere Rerank — to reorder to top-5. Reranking is the single biggest precision lever I've seen in production.
 
-For generation, I'd call GPT-4o-mini at temperature=0, with a grounding prompt that says 'Answer only based on the provided context; if the answer isn't there, say so.' I'd place the most relevant chunks first and last in the context window to avoid the lost-in-the-middle problem."
+For generation, I'd call a small fast model at temperature=0, with a grounding prompt that says 'Answer only based on the provided context; if the answer isn't there, say so.' I'd place the most relevant chunks first and last in the context window to avoid the lost-in-the-middle problem."
 
 **Tradeoff / production angle (1 min):**
 "For evaluation, I separate retrieval quality from generation quality. I'd build a golden dataset of 200 real support questions with verified answers and the ground-truth docs that contain those answers. Then I'd run RAGAS: `context_recall` tells me whether my retrieval is finding the right chunks; `faithfulness` tells me whether the LLM is staying grounded in what was retrieved. These can diverge — you can have high faithfulness but low recall, which means the model is confidently wrong because it never retrieved the right doc.
@@ -110,7 +110,7 @@ In production, I'd track: deflection rate (did the user resolve without escalati
 ## Pitfalls
 
 - **Mistake:** Describing RAG as "embed your docs and do semantic search" — stopping after 2 stages — **Better:** Walk the full 9-stage pipeline; name chunking, hybrid retrieval, reranking, and evaluation as distinct engineering decisions, not afterthoughts
-- **Mistake:** Saying "I'd use GPT-4" without discussing cost, latency, or when to use a smaller model — **Better:** "I'd default to gpt-4o-mini at temperature=0 for ~3× cost savings; escalate to gpt-4o for complex multi-step queries where reasoning quality matters"
+- **Mistake:** Naming one big model for everything without discussing cost, latency, or when to use a smaller model — **Better:** "I'd default to a small fast model at temperature=0 for roughly an order of magnitude in cost savings; escalate to a frontier model for complex multi-step queries where reasoning quality matters"
 - **Mistake:** Proposing "increase top-k" as the fix when answers are wrong — **Better:** "Increasing top-k without reranking causes 'lost in the middle' degradation — I'd add a cross-encoder reranker on the existing top-50 candidates instead"
 - **Mistake:** Conflating retrieval failures with generation failures in evaluation — **Better:** "I separate RAGAS `context_recall` (did we retrieve the right chunks?) from `faithfulness` (did the LLM stay grounded?) — they fail for different reasons"
 

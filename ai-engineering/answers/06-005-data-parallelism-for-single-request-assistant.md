@@ -37,11 +37,11 @@ Data parallelism is a **training-time** technique that splits a dataset across m
 
 **Single-request inference (what actually matters):**
 - One request in flight means batch size = 1; data parallelism adds zero value.
-- Latency-critical levers: **streaming (SSE)** for first-token UX, **model tiering** (use GPT-4o-mini / a small local model), **KV cache** (avoid re-prefilling on follow-ups), **quantization** (INT8/AWQ reduces memory bandwidth pressure), **semantic caching** (skip LLM call on repeated queries).
+- Latency-critical levers: **streaming (SSE)** for first-token UX, **model tiering** (use a small fast model / a small local model), **KV cache** (avoid re-prefilling on follow-ups), **quantization** (INT8/AWQ reduces memory bandwidth pressure), **semantic caching** (skip LLM call on repeated queries).
 - For a *very large* model that doesn't fit on one GPU, **tensor parallelism** (split weight matrices across GPUs, e.g., Megatron-LM) or **pipeline parallelism** (split layers across GPUs) are the inference-time parallelism strategies — not data parallelism.
 
 ### Example / Tradeoff
-A personal voice assistant running Llama 3 8B on a single A100 (80 GB): the entire model fits, batch size = 1, TTFT target < 200 ms. The correct optimization is **INT8 quantization** (2× throughput, memory bandwidth halved) + **streaming tokens over WebSocket** so the user hears output within 100 ms. If the model were Llama 3 70B (140 GB), one A100 is insufficient — you'd split with **tensor parallelism across 2 × A100s** (Megatron-style), not data parallelism. vLLM supports tensor parallelism via `--tensor-parallel-size 2` with near-linear latency improvement.
+A personal voice assistant running a small open-weight model (7–8B class) on a single A100 (80 GB): the entire model fits, batch size = 1, TTFT target < 200 ms. The correct optimization is **INT8 quantization** (2× throughput, memory bandwidth halved) + **streaming tokens over WebSocket** so the user hears output within 100 ms. If the model were a 70B-class open-weight model (140 GB), one A100 is insufficient — you'd split with **tensor parallelism across 2 × A100s** (Megatron-style), not data parallelism. vLLM supports tensor parallelism via `--tensor-parallel-size 2` with near-linear latency improvement.
 
 | Scenario | Right technique | Why |
 |----------|----------------|-----|
@@ -60,7 +60,7 @@ A personal voice assistant running Llama 3 8B on a single A100 (80 GB): the enti
 **Core explanation (2–3 min):**
 "Let me break down what data parallelism actually is first. In training, you copy the full model to N GPUs, split your mini-batch, run forward and backward passes in parallel on each GPU, then AllReduce the gradients so all workers stay in sync. This scales training throughput linearly with GPU count — it's how large models are trained in hours rather than weeks.
 
-Now at inference for a personal assistant handling one request at a time — your batch size is literally 1. There's no dataset to split. The bottleneck is *latency*, not throughput. The levers I'd reach for are: streaming tokens over SSE so the user sees output within 100–200 ms (TTFT), quantization to reduce memory bandwidth pressure on the GPU, semantic caching to skip the LLM call on repeated queries, and model tiering — use a smaller model like GPT-4o-mini or a local Llama 3 8B for routine turns and escalate to a larger model only when needed.
+Now at inference for a personal assistant handling one request at a time — your batch size is literally 1. There's no dataset to split. The bottleneck is *latency*, not throughput. The levers I'd reach for are: streaming tokens over SSE so the user sees output within 100–200 ms (TTFT), quantization to reduce memory bandwidth pressure on the GPU, semantic caching to skip the LLM call on repeated queries, and model tiering — use a smaller model like a small fast model or a local a small open-weight model (7–8B class) for routine turns and escalate to a larger model only when needed.
 
 The *only* inference-time parallelism that helps latency for a single request is **tensor parallelism** — splitting weight matrices across multiple GPUs — which is what vLLM's `--tensor-parallel-size` flag does. That's relevant if your model is too large to fit on one GPU."
 
@@ -76,7 +76,7 @@ The *only* inference-time parallelism that helps latency for a single request is
 
 - **Mistake:** Saying "I'd use data parallelism to speed up the assistant's responses" — **Better:** Recognize that data parallelism is a *training* concept; at inference with batch size = 1, the right lever is latency-oriented (streaming, quantization, model tiering, KV cache), not dataset-splitting parallelism.
 - **Mistake:** Conflating data parallelism with horizontal replica scaling — **Better:** Clarify that running multiple inference replicas behind a load balancer increases *throughput* (many concurrent users), not per-request latency; for a single user, replicas give redundancy but don't reduce TTFT.
-- **Mistake:** Jumping to tensor parallelism as the default answer for all inference scenarios — **Better:** Note that tensor parallelism only helps when the model doesn't fit on one GPU; for a Llama 3 8B on an A100, single-GPU + quantization + streaming beats multi-GPU communication overhead.
+- **Mistake:** Jumping to tensor parallelism as the default answer for all inference scenarios — **Better:** Note that tensor parallelism only helps when the model doesn't fit on one GPU; for a small open-weight model (7–8B class) on an A100, single-GPU + quantization + streaming beats multi-GPU communication overhead.
 
 ---
 

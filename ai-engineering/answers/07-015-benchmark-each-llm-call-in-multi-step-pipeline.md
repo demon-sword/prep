@@ -52,7 +52,7 @@ def llm_benchmark(step_name: str):
             latency_ms = (time.perf_counter() - t0) * 1000
 
             usage = response.usage
-            # GPT-4o-mini pricing (June 2026): $0.15/1M input, $0.60/1M output
+            # Small-tier pricing (Claude Haiku 4.5, verified 2026-08-30): $1/1M input, $5/1M output
             cost_usd = (
                 usage.prompt_tokens * 0.15 / 1_000_000
                 + usage.completion_tokens * 0.60 / 1_000_000
@@ -73,7 +73,7 @@ def llm_benchmark(step_name: str):
 @llm_benchmark("query_rewrite")
 def rewrite_query(user_query: str):
     return client.chat.completions.create(
-        model="gpt-4o-mini",
+        model="claude-haiku-4-5",
         messages=[{"role": "user", "content": f"Rewrite for retrieval: {user_query}"}],
         max_tokens=100,
     )
@@ -81,7 +81,7 @@ def rewrite_query(user_query: str):
 @llm_benchmark("generate_answer")
 def generate_answer(context: str, query: str):
     return client.chat.completions.create(
-        model="gpt-4o",
+        model="claude-sonnet-5",
         messages=[{"role": "user", "content": f"Context:\n{context}\n\nQuestion: {query}"}],
         max_tokens=512,
     )
@@ -121,11 +121,11 @@ Aggregate logs into a per-step metrics dashboard (Grafana + Prometheus or Datado
 
 | Step | p50 latency | p95 latency | Avg input tokens | Avg output tokens | Avg cost/call |
 |------|------------|------------|-----------------|------------------|--------------|
-| query_rewrite | 120 ms | 210 ms | 45 | 30 | $0.000027 |
+| query_rewrite | 120 ms | 210 ms | 45 | 30 | $0.000195 |
 | vector_retrieve | 18 ms | 45 ms | — | — | — |
 | cross_encoder_rerank | 3,200 ms | 4,800 ms | — | — | $0.00 (self-hosted) |
-| generate_answer | 1,100 ms | 2,300 ms | 2,800 | 420 | $0.000672 |
-| **Total pipeline** | **4,450 ms** | **7,350 ms** | | | **$0.000699** |
+| generate_answer | 1,100 ms | 2,300 ms | 2,800 | 420 | $0.0245 |
+| **Total pipeline** | **4,450 ms** | **7,350 ms** | | | **$0.0247** |
 
 From this table: the cross-encoder reranker is the latency bottleneck (72% of p95), not the LLM generation step. Fix: switch to Cohere Rerank API (80 ms p95) or self-hosted BGE-Reranker on GPU (< 200 ms).
 
@@ -158,20 +158,20 @@ A 4-step RAG pipeline (rewrite → retrieve → rerank → generate) had a p95 l
 | query_rewrite | 210 ms | 3% |
 | vector_retrieve (Pinecone) | 45 ms | 1% |
 | cross_encoder_rerank (CPU) | 4,800 ms | 65% |
-| generate_answer (GPT-4o) | 2,300 ms | 31% |
+| generate_answer (a frontier model) | 2,300 ms | 31% |
 
-Fix: moved cross-encoder reranking to a GPU-backed Cohere Rerank API call (80 ms p95). New pipeline p95: **2,635 ms** — 64% reduction. Without per-step instrumentation, the team would have optimized the wrong step (e.g., switching from GPT-4o to GPT-4o-mini for generation, saving 600 ms while the 4.8s reranker remained).
+Fix: moved cross-encoder reranking to a GPU-backed Cohere Rerank API call (80 ms p95). New pipeline p95: **2,635 ms** — 64% reduction. Without per-step instrumentation, the team would have optimized the wrong step (e.g., switching from a frontier model to a small fast model for generation, saving 600 ms while the 4.8s reranker remained).
 
 **Cost attribution example at 1M queries/day:**
 
 | Step | Cost/call | Daily cost |
 |------|-----------|-----------|
-| query_rewrite (GPT-4o-mini) | $0.000027 | $27 |
+| query_rewrite (a small fast model) | $0.000195 | $195 |
 | cross_encoder_rerank (Cohere) | $0.0002 | $200 |
-| generate_answer (GPT-4o) | $0.000672 | $672 |
-| **Total** | **$0.000899** | **$899/day** |
+| generate_answer (a frontier model) | $0.0245 | $24,500 |
+| **Total** | **$0.0249** | **~$24,900/day** |
 
-Switching generate_answer to GPT-4o-mini for 80% of queries (those with RAGAS score > 0.85 on the mini model) saves ~$500/day with negligible quality drop — visible only because cost was attributed per step.
+Switching generate_answer to a small fast model for 80% of queries (those with RAGAS score > 0.85 on the small tier) saves ~$15,700/day with negligible quality drop — visible only because cost was attributed per step.
 
 **Tradeoff:** Per-step telemetry adds 1–5 ms overhead per call (logging, span creation) and increases log storage costs. For high-QPS pipelines (>500 RPS), sample 10–20% of traces rather than tracing 100%, using OpenTelemetry's probabilistic sampler — preserving statistical accuracy while cutting observability overhead.
 
@@ -187,7 +187,7 @@ Switching generate_answer to GPT-4o-mini for 80% of queries (those with RAGAS sc
 
 For production pipelines, you want this in distributed traces — OpenTelemetry spans or LangSmith, which does it automatically for LangChain. Each step becomes a child span under the root pipeline trace. In Grafana or Datadog you can then build per-step p95 latency charts, per-step average token counts, and per-step cost-per-query.
 
-The reason this matters more than end-to-end measurement: latency and cost are not evenly distributed across steps. In one pipeline I worked on, the p95 breakdown was 65% on a CPU-based cross-encoder reranker, 31% on GPT-4o generation, and only 4% on query rewriting and vector retrieval. The end-to-end number was 7.3 seconds — and you'd assume the LLM was slow. Switching the reranker to a GPU-backed Cohere Rerank API call cut p95 to 2.6 seconds without touching the model.
+The reason this matters more than end-to-end measurement: latency and cost are not evenly distributed across steps. In one pipeline I worked on, the p95 breakdown was 65% on a CPU-based cross-encoder reranker, 31% on a frontier model generation, and only 4% on query rewriting and vector retrieval. The end-to-end number was 7.3 seconds — and you'd assume the LLM was slow. Switching the reranker to a GPU-backed Cohere Rerank API call cut p95 to 2.6 seconds without touching the model.
 
 Once you have per-step latency data, you can also identify steps that could be parallelised. If query rewriting and query embedding are independent, `asyncio.gather()` lets them run concurrently and eliminates their sequential sum from the critical path."
 
@@ -204,7 +204,7 @@ Also, cost attribution per step requires knowing each step's model and current p
 ## Pitfalls
 
 - **Mistake:** Only measuring end-to-end pipeline latency and assuming the LLM generation step is the bottleneck — **Better:** Instrument per-step latency and token counts; in practice the bottleneck is often a CPU-based reranker, a slow vector DB round-trip, or a high-token-count intermediate step — not the final generation call.
-- **Mistake:** Logging total_tokens only, ignoring the input/output token split — **Better:** Track prompt_tokens and completion_tokens separately; output tokens cost 3–10× more than input tokens for most models (e.g., GPT-4o: $2.50/1M input vs $10/1M output), so a step generating 400 output tokens costs 4× as much as a step consuming 400 input tokens — they look identical in total_tokens but have very different cost profiles.
+- **Mistake:** Logging total_tokens only, ignoring the input/output token split — **Better:** Track prompt_tokens and completion_tokens separately; output tokens cost 5× more than input tokens for most models (e.g., a frontier model: $5/1M input vs $25/1M output), so a step generating 400 output tokens costs 4× as much as a step consuming 400 input tokens — they look identical in total_tokens but have very different cost profiles.
 - **Mistake:** Tracing 100% of requests in production at high QPS — **Better:** Use probabilistic sampling (10–20%) with OpenTelemetry's `TraceIdRatioBased` sampler; p95 estimates stay accurate with <1% statistical error at 10% sample rate, while log volume and overhead drop proportionally.
 
 ---

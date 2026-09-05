@@ -54,8 +54,8 @@ Factual errors in summarization fall into two types: **extrinsic hallucinations*
 ### Example / Tradeoff
 
 At a financial document summarizer handling 10K earnings calls/day:
-- Stack: PyMuPDF extraction → 512-token recursive chunks → GPT-4o-mini with closed-world prompt at T=0 → async RAGAS faithfulness check (gpt-4o-mini-as-judge) on 10% sample.
-- Switching from GPT-4o (full context stuffing) to Map-Reduce with GPT-4o-mini reduced intrinsic error rate from 8% → 1.8% while cutting cost by 70%.
+- Stack: PyMuPDF extraction → 512-token recursive chunks → a small fast model with closed-world prompt at T=0 → async RAGAS faithfulness check (claude-haiku-4-5-as-judge) on 10% sample.
+- Switching from a frontier model (full context stuffing) to Map-Reduce with a small fast model reduced intrinsic error rate from 8% → 1.8% while cutting cost by 70%.
 - RAGAS faithfulness gate caught a batch where currency normalization failed (model invented "amounts in millions" when source said "thousands") — prevented a compliance incident.
 
 **Tradeoff table:**
@@ -82,7 +82,7 @@ For long documents, the single biggest win is switching from context-stuffing to
 
 For post-generation validation, I'd run RAGAS faithfulness asynchronously on a 5–10% sample. It scores each claim in the summary against the source using an LLM judge. For regulated domains like healthcare or legal, I'd swap in a DeBERTa NLI model — it's cheaper, faster, and auditable. Any summary sentence labeled 'contradiction' gets flagged or regenerated.
 
-A concrete example: at a financial document summarizer I worked on, switching from full-context GPT-4o to Map-Reduce with GPT-4o-mini dropped intrinsic error rate from 8% to under 2%, while reducing cost by 70%. The async RAGAS gate then caught the tail of remaining errors before they reached users."
+A concrete example: at a financial document summarizer I worked on, switching from full-context a frontier model to Map-Reduce with a small fast model dropped intrinsic error rate from 8% to under 2%, while reducing cost by 70%. The async RAGAS gate then caught the tail of remaining errors before they reached users."
 
 **Tradeoff / production angle (1 min):**
 "The main tradeoff is latency vs coverage. Synchronous NLI validation adds 80–200ms per summary; async is better for throughput but means some hallucinations reach users before detection. For high-stakes outputs — insurance claim summaries, medical notes — I'd accept the sync latency. For consumer-facing content summaries, async monitoring with a human-review queue for flagged outputs is the right balance.

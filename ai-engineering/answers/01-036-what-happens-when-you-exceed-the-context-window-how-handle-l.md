@@ -33,7 +33,7 @@ Every LLM has a fixed context window (measured in tokens) that bounds the total 
 **What happens mechanically:**
 - The transformer's attention matrix is O(n²) in token count — doubling the sequence length quadruples compute and memory cost.
 - API providers hard-cap at their advertised context length. Exceeding it returns an error (`context_length_exceeded` in OpenAI) or triggers automatic truncation depending on the provider/SDK.
-- Even if the model supports 128K tokens, TTFT (time to first token) grows with context length because prefill is compute-bound; a 128K prompt takes significantly longer and costs more than a 4K prompt.
+- Even if the model supports a million tokens, TTFT (time to first token) grows with context length because prefill is compute-bound; a 500K-token prompt takes far longer and costs far more than a 4K one. The window stopped being the wall; prefill cost and latency became the wall.
 
 **Mitigation strategies (ordered by complexity / cost):**
 
@@ -42,8 +42,8 @@ Every LLM has a fixed context window (measured in tokens) that bounds the total 
 | **Chunking + RAG** | Knowledge retrieval over large corpora | FAISS, Pinecone, LangChain, LlamaIndex |
 | **Sliding window** | Sequential text where adjacent context matters (transcripts) | Custom, LangChain `ConversationTokenBufferMemory` |
 | **Map-Reduce / Refine summarization** | Summarize or extract from large docs | LangChain map-reduce chains |
-| **Hierarchical summarization** | Very long docs needing full coverage | Custom pipeline, GPT-4 Turbo |
-| **Long-context model** | Moderate docs where recall precision > cost | Gemini 1.5 Pro (1M tokens), Claude 3.7 (200K) |
+| **Hierarchical summarization** | Very long docs needing full coverage | Custom pipeline, a frontier model |
+| **Long-context model** | Moderate docs where recall precision > cost | a frontier model (1M tokens), a frontier model.7 (200K) |
 | **Semantic routing / doc-level filter** | Multi-document retrieval to reduce candidates | Cohere Rerank, cross-encoders |
 
 **Chunking + RAG (most common production path):**
@@ -60,10 +60,10 @@ Every LLM has a fixed context window (measured in tokens) that bounds the total 
 4. Works well for summarization; loses cross-chunk reasoning.
 
 ### Example / Tradeoff
-A 300-page legal contract (~120K words ≈ 160K tokens) exceeds GPT-4's 128K context. Two practical approaches:
+A 300-page legal contract (~120K words ≈ 160K tokens) now fits comfortably inside a current frontier model's ~1M-token window — so the question is no longer *can it fit* but *should you send it*, given prefill latency, per-query cost, and mid-context recall. Two practical approaches:
 
 - **RAG approach**: chunk into 1,024-token segments, embed with `text-embedding-3-large`, index in Pinecone. At query time, retrieve 6 chunks → ~6K tokens, well within context. Works for specific clause lookups. Fails if the question requires integrating evidence scattered across 50 pages.
-- **Long-context model**: route to Gemini 1.5 Pro (1M context). Entire contract fits; latency ~30–90s, cost ~$1.50 per contract. Works well for holistic analysis but expensive at scale.
+- **Long-context model**: route to a frontier model (1M context). Entire contract fits; latency ~30–90s, cost ~$1.50 per contract. Works well for holistic analysis but expensive at scale.
 
 In production, a common pattern is **tiered routing**: use RAG by default for specific Q&A (cheap, fast), fall back to a long-context model only when the retriever confidence is low or the question explicitly requires full-doc reasoning. Anthropic's Claude claude-3-7-sonnet-20250219 at 200K tokens is a good middle tier.
 
@@ -77,11 +77,11 @@ The **"lost in the middle" trap**: Liu et al. 2023 showed that even when all rel
 "This is a really practical constraint every production AI system hits. The short answer is: you can't attend to what isn't in the window, so the question is really which of several mitigation strategies fits your use case. I'd organize it around three levers: chunking + RAG, summarization hierarchies, and long-context models — and the right choice depends on query type, latency budget, and cost."
 
 **Core explanation (2–3 min):**
-"First, the mechanics. Every transformer has an O(n²) attention matrix, so context has a hard limit — both a technical cap and a cost/latency penalty as you approach it. When you exceed the limit, you get a hard API error or silent truncation. Even within a 128K window, there's a subtler problem: the 'lost in the middle' phenomenon — models reliably attend better to content at the beginning and end of context than to content buried in the middle.
+"First, the mechanics. Every transformer has an O(n²) attention matrix, so context has a hard limit — both a technical cap and a cost/latency penalty as you approach it. When you exceed the limit, you get a hard API error or silent truncation. Even well within a 1M window, there's a subtler problem: the 'lost in the middle' phenomenon — models reliably attend better to content at the beginning and end of context than to content buried in the middle.
 
 So for long documents, I think of it as a routing decision. For specific question-answering — 'what does clause 12 say about liability?' — chunking and RAG is the right move. I'd chunk the document into overlapping 512–1K token segments, embed them, index in a vector DB like Pinecone or FAISS, retrieve the top-6 most relevant chunks at query time, rerank with a cross-encoder, then feed only those chunks to the LLM. That keeps the context tight, fast, and cheap.
 
-For holistic tasks — 'summarize this 300-page contract' — chunking loses cross-chunk reasoning. There I'd use a map-reduce pattern: summarize each chunk independently in parallel, then combine. Or, if the doc is critical and cost allows, route to a long-context model like Gemini 1.5 Pro at 1M tokens or Claude claude-3-7-sonnet-20250219 at 200K.
+For holistic tasks — 'summarize this 300-page contract' — chunking loses cross-chunk reasoning. There I'd use a map-reduce pattern: summarize each chunk independently in parallel, then combine. Or, if the doc is critical and cost allows, route to a long-context model like a frontier model at 1M tokens or Claude claude-3-7-sonnet-20250219 at 200K.
 
 In production I've seen a tiered routing pattern work well: RAG first by default, then fall back to a long-context model when retriever confidence is low or the query semantically requires full-document reasoning."
 
@@ -95,7 +95,7 @@ In production I've seen a tiered routing pattern work well: RAG first by default
 
 ## Pitfalls
 
-- **Mistake:** Saying "just use a bigger context window" or "switch to Gemini 1M" without discussing cost, latency, or when RAG is strictly better — **Better:** Frame it as a tiered routing decision: RAG is default for Q&A (cheap, fast), long-context is the fallback for holistic tasks, and explain the cost/latency numbers (e.g., Gemini 1.5 Pro at full 1M context can cost $1–2 per query).
+- **Mistake:** Saying "just use a bigger context window" or "switch to Gemini 1M" without discussing cost, latency, or when RAG is strictly better — **Better:** Frame it as a tiered routing decision: RAG is default for Q&A (cheap, fast), long-context is the fallback for holistic tasks, and explain the cost/latency numbers (e.g., a frontier model at full 1M context can cost $1–2 per query).
 - **Mistake:** Not mentioning the "lost in the middle" problem — treating context overflow as purely a capacity issue — **Better:** Explicitly flag that even when content fits in the window, placement degrades quality; mitigation is to front-load and back-load the highest-relevance chunks.
 - **Mistake:** Describing chunking without mentioning overlap or reranking — **Better:** Explain that naive fixed-size chunking breaks semantic units, overlap preserves cross-boundary context, and reranking (cross-encoder) improves precision after ANN retrieval.
 

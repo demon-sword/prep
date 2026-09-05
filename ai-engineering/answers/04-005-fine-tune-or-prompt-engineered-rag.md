@@ -42,22 +42,22 @@ Fine-tuning and RAG solve *different* problems: RAG closes a **knowledge gap** (
 **Use fine-tuning when:**
 
 1. **The failure is behavioral, not factual** — the model knows the material but can't produce the right format (structured JSON, a specific citation style, medical SOAP notes), safety constraints, or tone consistently even with detailed prompting.
-2. **Inference cost or latency is the constraint** — baking instructions and domain style into weights lets you use a smaller (cheaper, faster) model without a large system prompt or retrieval overhead. A fine-tuned Llama 3 8B can beat a prompted GPT-4o-mini at 10% of the cost per call.
+2. **Inference cost or latency is the constraint** — baking instructions and domain style into weights lets you use a smaller (cheaper, faster) model without a large system prompt or retrieval overhead. A fine-tuned small open-weight model (7–8B class) can beat a prompted small hosted model at 10% of the cost per call.
 3. **You have confidential data that can't enter prompts** — if proprietary context can't be injected into inference-time prompts (due to security or IP policy), fine-tuning encodes that knowledge into weights at training time on a controlled cluster.
 4. **You need guaranteed output schema** — fine-tuning on structured-output examples is more reliable than prompt-only JSON extraction for complex nested schemas.
 5. **RAG retrieval itself is the bottleneck** — if retrieval accuracy is the root cause and the relevant context is too diffuse to retrieve (general domain style, not specific documents), fine-tuning may outperform RAG.
 
 **The hybrid pattern (most production systems eventually reach this):**
 
-Fine-tuned model + RAG retrieval is the strongest combination: fine-tuning teaches the model *how* to reason, format, and respond; RAG provides *what* facts to reason over. Example: fine-tune a Llama 3 8B on your company's QA style (tone, citation format, structured output schema) with LoRA, then deploy it with a Pinecone RAG pipeline for live knowledge retrieval. This gives smaller model cost + dynamic knowledge + consistent behavior.
+Fine-tuned model + RAG retrieval is the strongest combination: fine-tuning teaches the model *how* to reason, format, and respond; RAG provides *what* facts to reason over. Example: fine-tune a small open-weight model (7–8B class) on your company's QA style (tone, citation format, structured output schema) with LoRA, then deploy it with a Pinecone RAG pipeline for live knowledge retrieval. This gives smaller model cost + dynamic knowledge + consistent behavior.
 
 ### Example / Tradeoff
 
 **Customer support QA at a SaaS company (real pattern):**
 
-- **RAG baseline:** GPT-4o-mini + Pinecone hybrid BM25+dense retrieval. Faithfulness RAGAS score 0.78, but 22% of answers used incorrect product-name casing, missed required disclaimer text, and returned inconsistent JSON for the ticket API.
+- **RAG baseline:** a small hosted model + Pinecone hybrid BM25+dense retrieval. Faithfulness RAGAS score 0.78, but 22% of answers used incorrect product-name casing, missed required disclaimer text, and returned inconsistent JSON for the ticket API.
 - **Root cause diagnosis:** Retrieval recall@5 was 0.87 (good) — the facts were present. The failure was behavioral: the model couldn't consistently follow the output schema and safety instructions even with a 1K-token system prompt.
-- **Fix:** LoRA fine-tuning on 8K labeled (ticket, response) pairs (Llama 3 8B, rank=32, α=64, 3 epochs). Kept RAG for live product catalog retrieval. Outcome: schema compliance 78%→99%, disclaimer adherence 81%→100%, cost $0.018/ticket → $0.004/ticket vs GPT-4o-mini RAG.
+- **Fix:** LoRA fine-tuning on 8K labeled (ticket, response) pairs (a small open-weight model in the 7–8B class, rank=32, α=64, 3 epochs). Kept RAG for live product catalog retrieval. Outcome: schema compliance 78%→99%, disclaimer adherence 81%→100%, cost per ticket down ~4.5× vs the small-hosted-model RAG baseline.
 - **Tradeoff:** Fine-tune iteration cycle was 2 weeks (data curation + training + eval). The system prompt fix would have taken 2 hours — but it had already been tried 4 times without success, which was the signal to escalate to fine-tuning.
 
 | Criterion | RAG | Fine-tune | Hybrid |
@@ -82,7 +82,7 @@ Fine-tuned model + RAG retrieval is the strongest combination: fine-tuning teach
 
 For RAG: it's the right default because it's updateable, needs no labeled training data, gives you source attribution, and iterates fast. It handles knowledge gaps well and can handle moderate behavior guidance through prompt engineering — a detailed system prompt with examples covers a lot of ground.
 
-Fine-tuning earns its place when prompt iteration has genuinely failed — say, 3–4 serious attempts at improving the system prompt still produce inconsistent schema or tone — and when I have at least 1K labeled examples. In practice I'd use LoRA (rank 32, α=64, targeting q_proj/v_proj) on a smaller base model, which also solves the cost problem: a fine-tuned Llama 3 8B can often beat a prompted GPT-4o-mini at 10–20% of the per-call cost.
+Fine-tuning earns its place when prompt iteration has genuinely failed — say, 3–4 serious attempts at improving the system prompt still produce inconsistent schema or tone — and when I have at least 1K labeled examples. In practice I'd use LoRA (rank 32, α=64, targeting q_proj/v_proj) on a smaller base model, which also solves the cost problem: a fine-tuned small open-weight model (7–8B class) can often beat a prompted small hosted model at 10–20% of the per-call cost.
 
 The strongest production pattern is the hybrid: fine-tune for behavior and style, RAG for live knowledge. Fine-tuning teaches the model *how* to respond; RAG tells it *what facts* to use."
 

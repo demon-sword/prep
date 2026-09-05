@@ -39,7 +39,7 @@ In a single-turn RAG system, each query is independent — you embed it, retriev
    - TTL the session key (e.g. 30 min inactivity = session reset).
 
 2. **Query reformulation (condense + rewrite)**
-   - Before retrieval, call a cheap LLM (GPT-4o-mini, ~50 tokens in + 30 out) with a *standalone-question* prompt:
+   - Before retrieval, call a cheap LLM (a small fast model, ~50 tokens in + 30 out) with a *standalone-question* prompt:
      ```
      Given this conversation history:
      {last 3 turns}
@@ -74,9 +74,9 @@ In a single-turn RAG system, each query is independent — you embed it, retriev
 **Cost breakdown at 1M sessions/day (avg 5 turns):**
 | Component | Cost |
 |-----------|------|
-| Query reformulation (GPT-4o-mini, 80 tokens) | ~$0.04/1K sessions = $40/day |
+| Query reformulation (a small fast model, 80 tokens) | ~$0.04/1K sessions = $40/day |
 | Retrieval (unchanged from single-turn) | ~$200/day |
-| Generation (GPT-4o-mini, 600 tokens) | ~$600/day |
+| Generation (a small fast model, 600 tokens) | ~$600/day |
 | Session store (Redis, 1KB/session, 30-min TTL) | ~$5/day |
 
 The reformulation step adds only ~2% cost overhead for a major retrieval quality improvement.
@@ -94,7 +94,7 @@ The reformulation step adds only ~2% cost overhead for a major retrieval quality
 "Multi-turn RAG is one of the trickiest production problems because it looks simple until users start saying things like 'tell me more about that' — and your retrieval completely fails because 'that' means nothing to the vector store. I'd tackle it with three layers: query reformulation, session state management, and a summarization buffer for long sessions."
 
 **Core explanation (2–3 min):**
-"The root problem is query resolution — user messages in a conversation are elliptical. So before I ever touch the vector store, I run a cheap query reformulation step using GPT-4o-mini with a 'condense to standalone question' prompt. I pass the last 3 turns and the current message, and the model rewrites it as a self-contained search query. In LangChain this is `ConversationalRetrievalChain`; in LlamaIndex it's `CondenseQuestionChatEngine`.
+"The root problem is query resolution — user messages in a conversation are elliptical. So before I ever touch the vector store, I run a cheap query reformulation step using a small fast model with a 'condense to standalone question' prompt. I pass the last 3 turns and the current message, and the model rewrites it as a self-contained search query. In LangChain this is `ConversationalRetrievalChain`; in LlamaIndex it's `CondenseQuestionChatEngine`.
 
 "The session state — the last N turns — lives in Redis keyed by session ID with a TTL. I keep about 5–10 turns verbatim. Once the session gets longer, I run a summarization pass using `ConversationSummaryBufferMemory`: older turns collapse into a rolling paragraph summary, and recent turns stay verbatim. That keeps my generation prompt within context budget.
 
@@ -103,7 +103,7 @@ The reformulation step adds only ~2% cost overhead for a major retrieval quality
 "A concrete production example: in a support bot, a user asks 'What's your refund policy?' in turn 1, then 'What about for digital downloads?' in turn 2. Without reformulation, the embedding for 'what about for digital downloads?' retrieves nothing useful. With reformulation: 'What is the refund policy for digital product downloads?' → correct retrieval."
 
 **Tradeoff / production angle (1 min):**
-"The main tradeoffs are: how many turns to feed the reformulation step — I've found 3–5 is the sweet spot, more than that and the condensed query gets over-specified. And when to summarize vs keep verbatim — I trigger summarization after 8–10 turns to avoid context window inflation. At scale (1M sessions/day, 5 turns avg), the reformulation step costs about $40/day on GPT-4o-mini — roughly 2% of total pipeline cost, well worth the retrieval quality improvement. One failure mode to watch: if the reformulation model hallucinates topic continuity that doesn't exist, you get retrieval for questions the user never actually asked — I validate by checking if the reformulated query is semantically similar to recent turns before firing."
+"The main tradeoffs are: how many turns to feed the reformulation step — I've found 3–5 is the sweet spot, more than that and the condensed query gets over-specified. And when to summarize vs keep verbatim — I trigger summarization after 8–10 turns to avoid context window inflation. At scale (1M sessions/day, 5 turns avg), the reformulation step costs about $40/day on a small fast model — roughly 2% of total pipeline cost, well worth the retrieval quality improvement. One failure mode to watch: if the reformulation model hallucinates topic continuity that doesn't exist, you get retrieval for questions the user never actually asked — I validate by checking if the reformulated query is semantically similar to recent turns before firing."
 
 **Wrap-up (30s):**
 "So the mental model is: treat each turn's retrieval query as a first-class citizen that must be self-contained. Query reformulation + session state + summarization buffer — those three layers give you robust multi-turn RAG without blowing up latency or cost. Happy to go deeper on any of these layers."

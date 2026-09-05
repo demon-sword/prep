@@ -13,6 +13,9 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 PREP_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
+
+# shellcheck source=../ralph-common.sh
+. "$PREP_ROOT/ralph-common.sh"
 cd "$PREP_ROOT"
 
 MODEL="${RALPH_CONCEPTS_MODEL:-}"
@@ -44,6 +47,9 @@ done
 
 PLAN="$SCRIPT_DIR/plan.md"
 PROGRESS="$SCRIPT_DIR/progress.txt"
+OUTPUT_DIR="$PREP_ROOT/ai-engineering/concepts"
+CORPUS_TRACK="concepts"
+OUTPUT_EXT="html"
 SPEC="$SCRIPT_DIR/spec.md"
 PROMPT_FILE="$SCRIPT_DIR/prompt.md"
 CONCEPTS_JSON="$SCRIPT_DIR/concepts.json"
@@ -83,7 +89,25 @@ for c in concepts:
 fi
 
 # Check if anything is left to do (only relevant when no specific target)
-if [[ -z "$TARGET_CONCEPT" ]] && ! grep -q '^\- \[ \]' "$PLAN" 2>/dev/null; then
+if [[ -z "${TARGET_CONCEPT}" ]] && ! grep -q '^\- \[ \]' "$PLAN" 2>/dev/null; then
+  # "Nothing left to do" is a completion claim, so it answers to exactly the
+  # gates the COMPLETE branch answers to. It used to `exit 0` outright, which
+  # meant re-running the loop over an already-generated track reported success
+  # without the corpus gate spec.md calls binding ever running.
+  echo "All concepts complete (no unchecked items in plan.md) — verifying before reporting it."
+  SHORTCUT_RC=0
+  ralph_validate bash "$SCRIPT_DIR/validate.sh" || SHORTCUT_RC=$?
+  if [[ "$SHORTCUT_RC" -eq 0 ]]; then
+    ralph_require_complete "$PLAN" "$OUTPUT_DIR" "$OUTPUT_EXT" || SHORTCUT_RC=$?
+  fi
+  if [[ "$SHORTCUT_RC" -eq 0 ]]; then
+    ralph_validate bash "$PREP_ROOT/validate-corpus.sh" --final "$CORPUS_TRACK" || SHORTCUT_RC=$?
+  fi
+  if [[ "$SHORTCUT_RC" -ne 0 ]]; then
+    echo "" >&2
+    echo "Plan is fully checked but the corpus does not pass — not reporting complete." >&2
+    exit 3
+  fi
   echo "All concepts complete (no unchecked items in plan.md)."
   exit 0
 fi
@@ -112,7 +136,43 @@ echo "Timeout: ${AGENT_TIMEOUT_SEC}s" >&2
 # Build prompt: inline all context
 CONTEXT="$(cat "$SPEC" "$CONCEPTS_JSON" "$PLAN" "$PROGRESS" "$PROMPT_FILE" 2>/dev/null || true)"
 
-TASK="You are generating interactive HTML concept files for AI Engineering study.
+# Resolve which concept this run produces, so validation can be scoped to it.
+# Empty (no id-shaped next item) means validate the whole corpus instead.
+if [[ -n "$TARGET_CONCEPT" ]]; then
+  RESOLVED_CONCEPT="$TARGET_CONCEPT"
+else
+  # One sed, no pipeline. `grep -m1 ... | sed` looks equivalent but exits 1 the
+  # moment grep matches nothing, and under `set -o pipefail` that failure becomes
+  # the assignment's, which errexit turns into a silent death of the whole run.
+  RESOLVED_CONCEPT="$(sed -n 's/^- \[ \] \([0-9][0-9]*-[a-z0-9][a-z0-9-]*\).*/\1/p' "$PLAN" 2>/dev/null || true)"
+  RESOLVED_CONCEPT="${RESOLVED_CONCEPT%%$'\n'*}"
+fi
+VALIDATE_ARGS=()
+[[ -n "$RESOLVED_CONCEPT" ]] && VALIDATE_ARGS+=("$RESOLVED_CONCEPT")
+
+
+# Build claude command
+CLAUDE_FLAGS=(-p --dangerously-skip-permissions --output-format stream-json --verbose)
+[[ -n "$MODEL" ]] && CLAUDE_FLAGS+=(--model "$MODEL")
+
+# A failed run must not leave a half-written page sitting in the corpus, and a
+# failed REGENERATION must not destroy the accepted page it was replacing.
+TARGET_FILE=""
+PRISTINE=""
+if [[ -n "${RESOLVED_CONCEPT}" ]]; then
+  TARGET_FILE="$OUTPUT_DIR/${RESOLVED_CONCEPT}.$OUTPUT_EXT"
+  if [[ -s "$TARGET_FILE" ]]; then PRISTINE="$(mktemp)"; cp "$TARGET_FILE" "$PRISTINE"; fi
+fi
+
+FEEDBACK=""
+FACT_NOTES=""
+VERIFIED=0
+
+for ((attempt = 1; attempt <= RALPH_MAX_ATTEMPTS; attempt++)); do
+  echo ""
+  echo "---------- attempt $attempt / $RALPH_MAX_ATTEMPTS ----------"
+
+  TASK="You are generating interactive HTML concept files for AI Engineering study.
 
 WORKSPACE ROOT: $PREP_ROOT
 OUTPUT DIR: $PREP_ROOT/ai-engineering/concepts/
@@ -122,44 +182,155 @@ ${CONTEXT}
 TASK: ${TARGET_INSTRUCTION}
 Generate the HTML file. Validate it. Test it with Playwright MCP.
 Fix any issues. Mark the plan item done. Append to progress.txt.
+
+After you finish, ralph runs two gates you cannot bypass:
+  1. bash ralph-concepts/validate.sh <id> — a hard gate. Its exit code is honoured.
+  2. an independent fact-check agent that reads ONLY your finished file and
+     hunts for wrong formulas, wrong mechanisms and false claims.
+If either fails, this item is regenerated and you will be shown the failures.
+So get the content factually right the first time — do not pad word counts with
+claims you are not sure of.
+
 Emit <promise>COMPLETE</promise> ONLY if ALL plan items are now checked (entire plan done).
-Otherwise just finish normally after completing the ONE item."
+Otherwise just finish normally after completing the ONE item.
+${FEEDBACK}"
 
-# Build claude command
-CLAUDE_FLAGS=(-p --dangerously-skip-permissions --output-format stream-json --verbose)
-[[ -n "$MODEL" ]] && CLAUDE_FLAGS+=(--model "$MODEL")
+  echo "Running Claude..." >&2
 
-echo "Running Claude..." >&2
+  set +e
+  # Redirect to the log this script has always ANNOUNCED but never wrote:
+  # every plan-driven .logs/ was empty, which is why 11 generated mlops
+  # pages left no evidence that any gate fired on them. Redirecting a
+  # background job is safe; piping is not, because $! must stay the
+  # agent for the watchdog to signal the right process tree.
+  claude "${CLAUDE_FLAGS[@]}" "$TASK" >"$LOG_FILE" 2>&1 &
+  AGENT_PID=$!
 
-set +e
-claude "${CLAUDE_FLAGS[@]}" "$TASK" &
-AGENT_PID=$!
+  # Watchdog. It stamps a marker BEFORE signalling, because the exit status
+  # cannot be trusted: a background job in a script has job control off and
+  # POSIX makes it IGNORE SIGINT, so the old graceful kill was a no-op and only
+  # the SIGKILL 60s later landed — reporting 137, which the old 124/142 test
+  # never matched. SIGTERM is NOT ignored, so it now does the graceful stop and
+  # the timeout takes effect on time. See ralph_agent_timed_out.
+  TIMEOUT_MARKER="${LOG_FILE}.timeout"
+  rm -f "$TIMEOUT_MARKER"
+  (sleep "$AGENT_TIMEOUT_SEC"; : > "$TIMEOUT_MARKER"; ralph_kill_tree "$AGENT_PID" TERM; sleep 30; ralph_kill_tree "$AGENT_PID" KILL) &
+  WATCHDOG_PID=$!
 
-# Watchdog
-(sleep "$AGENT_TIMEOUT_SEC" && kill -INT "$AGENT_PID" 2>/dev/null && sleep 60 && kill -KILL "$AGENT_PID" 2>/dev/null) &
-WATCHDOG_PID=$!
+  wait "$AGENT_PID"
+  RC=$?
 
-wait "$AGENT_PID"
-RC=$?
+  kill "$WATCHDOG_PID" 2>/dev/null || true
+  wait "$WATCHDOG_PID" 2>/dev/null || true
+  cat "$LOG_FILE" 2>/dev/null || true
+  ralph_agent_record "$LOG_FILE" "$RC" "${#TASK}" "claude ${CLAUDE_FLAGS[*]}" || true
+  set -e
 
-kill "$WATCHDOG_PID" 2>/dev/null || true
-wait "$WATCHDOG_PID" 2>/dev/null || true
-set -e
+  if ralph_agent_timed_out "$TIMEOUT_MARKER" "$RC"; then
+    echo "Agent killed after ${AGENT_TIMEOUT_SEC}s (exit $RC)" >&2
+    rm -f "$TIMEOUT_MARKER"
+    ralph_quarantine_partial "$TARGET_FILE" "$PRISTINE"
 
-# Capture output for promise detection — re-run briefly to get last output
-# (stream-json goes to stdout; we redirect to tee via background trick)
-# Actually: re-read log if we had tee. For simplicity, check plan directly.
-if [[ "$RC" -eq 124 ]] || [[ "$RC" -eq 142 ]]; then
-  echo "Agent killed after ${AGENT_TIMEOUT_SEC}s" >&2
-  exit 124
+    exit 124
+  fi
+  rm -f "$TIMEOUT_MARKER"
+
+  # Gate 1 — structural validation. Binding: the exit code decides.
+  VALIDATE_RC=0
+  ralph_validate bash "$SCRIPT_DIR/validate.sh" ${VALIDATE_ARGS[@]+"${VALIDATE_ARGS[@]}"} || VALIDATE_RC=$?
+
+  # An item that was never generated is SKIPped by the validator, which then
+  # exits 0 — correct for a validation sweep over a half-built corpus, and wrong
+  # here, where this iteration was supposed to produce exactly that file. Without
+  # this, an agent that wrote nothing passes gate 1.
+  if [[ "$VALIDATE_RC" -eq 0 && -n "${RESOLVED_CONCEPT}" && ! -s "$OUTPUT_DIR/${RESOLVED_CONCEPT}.$OUTPUT_EXT" ]]; then
+    VALIDATE_RC=1
+    RALPH_FAIL_LINES="FAIL: ${RESOLVED_CONCEPT} — this iteration produced no file at $OUTPUT_DIR/${RESOLVED_CONCEPT}.$OUTPUT_EXT"
+    printf '%s\n' "$RALPH_FAIL_LINES" >&2
+  fi
+
+  # Gate 2 — adversarial fact-check of the finished file, only worth spending
+  # once the file is structurally sound.
+  FACT_RC=0
+  FACT_NOTES=""
+  if [[ "$VALIDATE_RC" -eq 0 && -n "$RESOLVED_CONCEPT" ]]; then
+    FACT_RC=0
+    ralph_factcheck "$PREP_ROOT/ai-engineering/concepts/${RESOLVED_CONCEPT}.html" "an AI-engineering study page" "$MODEL" || FACT_RC=$?
+    FACT_NOTES="$RALPH_FACTCHECK_NOTES"
+  fi
+
+  # FACT_RC=2 means the fact-check HARNESS failed — no verdict was produced at
+  # all. Regenerating cannot fix that, and three more generations at ~$4 and
+  # ~9 minutes each buys nothing. Fail fast, like the environment cases.
+  if [[ "$FACT_RC" -eq 2 ]]; then
+    echo "" >&2
+    echo "Fact-check could not run — infrastructure failure, not a content failure." >&2
+    printf '%s\n' "$FACT_NOTES" >&2
+    echo "Fix it and re-run. Not spending the retry budget on it." >&2
+    ralph_quarantine_partial "$TARGET_FILE" "$PRISTINE"
+
+    exit 4
+  fi
+
+  if [[ "$VALIDATE_RC" -eq 0 && "$FACT_RC" -eq 0 ]]; then
+    VERIFIED=1
+    # Leave evidence that the gates actually ran on this item. The agent writes
+    # its own progress line; this one is the HARNESS's, and it records which
+    # verdict the adversarial pass returned — including SKIPPED, so a run made
+    # with RALPH_SKIP_FACTCHECK=1 can never again be mistaken for a checked one.
+    printf '%s | %s | gate | validate=PASS factcheck=%s attempts=%s\n' \
+      "$(date +%Y-%m-%d)" "${RESOLVED_CONCEPT}" "${RALPH_FACTCHECK_VERDICT:-NOT-RUN}" "$attempt" \
+      >> "$PROGRESS" 2>/dev/null || true
+    rm -f "$PRISTINE" 2>/dev/null || true
+    break
+  fi
+
+  FEEDBACK="$(ralph_feedback "$attempt" "$RALPH_MAX_ATTEMPTS" "$RALPH_FAIL_LINES" "$FACT_NOTES")"
+  echo "Attempt $attempt rejected — feeding the specific failures into the next attempt." >&2
+done
+
+if [[ "$VERIFIED" -ne 1 ]]; then
+  echo "" >&2
+  echo "ERROR: ${RESOLVED_CONCEPT:-this item} still fails after $RALPH_MAX_ATTEMPTS attempts." >&2
+  echo "Giving up rather than accepting unverified content. Last failures:" >&2
+  [[ -n "$RALPH_FAIL_LINES" ]] && printf '%s\n' "$RALPH_FAIL_LINES" >&2
+  [[ -n "$FACT_NOTES" ]] && printf '%s\n' "$FACT_NOTES" >&2
+  ralph_quarantine_partial "$TARGET_FILE" "$PRISTINE"
+  exit 3
 fi
 
-# Check if plan is fully done now
+# Plan fully done? COMPLETE is only real if the whole corpus still validates.
 if ! grep -q '^\- \[ \]' "$PLAN" 2>/dev/null; then
-  echo "All concepts complete!"
-  bash "$SCRIPT_DIR/validate.sh" || true
+  FINAL_RC=0
+  ralph_validate bash "$SCRIPT_DIR/validate.sh" || FINAL_RC=$?
+  if [[ "$FINAL_RC" -ne 0 ]]; then
+    echo "" >&2
+    echo "Plan is fully checked but corpus validation FAILED — refusing to report COMPLETE." >&2
+    exit 3
+  fi
+  # A per-file validator iterates over the files that exist, so on an empty or
+  # half-finished corpus it checks nothing and passes. Before believing
+  # COMPLETE, confirm the plan was actually carried out.
+  COMPLETE_RC=0
+  ralph_require_complete "$PLAN" "$OUTPUT_DIR" "$OUTPUT_EXT" || COMPLETE_RC=$?
+  if [[ "$COMPLETE_RC" -ne 0 ]]; then
+    echo "" >&2
+    echo "Plan is fully checked but the corpus is empty or incomplete — refusing to report COMPLETE." >&2
+    exit 3
+  fi
+  # The corpus-level gate: cross-file redundancy, plus completeness against the
+  # generator queue. Three specs called it binding under "Enforcement" while no
+  # script anywhere actually invoked it. It does now.
+  DEDUP_RC=0
+  ralph_validate bash "$PREP_ROOT/validate-corpus.sh" --final "$CORPUS_TRACK" || DEDUP_RC=$?
+  if [[ "$DEDUP_RC" -ne 0 ]]; then
+    echo "" >&2
+    echo "Corpus-level validation FAILED — refusing to report COMPLETE." >&2
+    exit 3
+  fi
+  echo "All concepts complete and validated!"
   exit 0
 fi
 
-echo "Concept generated. Continue loop for next item."
+echo "Concept generated and verified. Continue loop for next item."
 exit 2

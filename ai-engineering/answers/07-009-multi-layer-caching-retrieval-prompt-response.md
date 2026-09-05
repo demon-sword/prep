@@ -75,16 +75,16 @@ LLM call → response → store in L3 cache → return
 
 ### Example / Tradeoff
 
-**Before caching (1M queries/day, GPT-4o, avg 1 200 input / 300 output tokens):**
+**Before caching (1M queries/day, a frontier model, avg 1 200 input / 300 output tokens):**
 - Embedding: 1M × $0.00002 = $20/day
-- LLM: 1M × (1 200 × $0.0025 + 300 × $0.010) / 1 000 = ~$6 000/day
-- **Total: ~$6 020/day**
+- LLM: 1M × (1 200 × $0.005 + 300 × $0.025) / 1 000 = ~$13 500/day
+- **Total: ~$13 520/day**
 
 **After 3-layer caching:**
 - L3 semantic cache: 30% hit → 700K LLM calls remain
-- L2 prefix cache (1 000-token static prefix at 90% discount): saves ~$1 750/day
+- L2 prefix cache (1 000-token static prefix, cache reads at 0.1x): saves ~$3 150/day
 - L1 embedding cache: 40% hit → 420K embed calls → $8.40/day
-- **Total: ~$2 300/day (62% reduction)**
+- **Total: ~$6 310/day (53% reduction)**
 
 **Key tradeoffs:**
 | Layer | Hit rate | Staleness risk | Invalidation complexity |

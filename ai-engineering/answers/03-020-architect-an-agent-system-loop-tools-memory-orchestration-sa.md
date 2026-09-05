@@ -61,7 +61,7 @@ Every tool is a **typed contract**, not a Python function:
 | Semantic | Cross-session facts — user preferences, resolved cases, knowledge base | Pinecone / Qdrant vector store | Long-lived |
 | Procedural | Agent's "how-to" — tool schemas, system prompt, hard-coded policies | System prompt / code | Static per deploy |
 
-Retrieval: at session start, top-3 episodic summaries + top-5 semantic facts are injected into the system prompt (≈500 tokens). Working memory uses a sliding window that summarizes older turns via GPT-4o-mini before they fall off.
+Retrieval: at session start, top-3 episodic summaries + top-5 semantic facts are injected into the system prompt (≈500 tokens). Working memory uses a sliding window that summarizes older turns via a small fast model before they fall off.
 
 **4. Orchestration layer (multi-agent)**
 
@@ -74,7 +74,7 @@ For systems with more than one agent, choose **orchestration** (central controll
 | Latency | Sequential by default | Parallel naturally |
 | Best for | Support ticket triage, code review pipeline | Real-time alert processing, data enrichment |
 
-For most enterprise use cases, **orchestration wins** because auditability and debuggability matter more than flexibility. Use a **supervisor agent** (GPT-4o) that decomposes the goal and delegates to specialist sub-agents (retrieval agent, drafting agent, verification agent) via typed handoff messages.
+For most enterprise use cases, **orchestration wins** because auditability and debuggability matter more than flexibility. Use a **supervisor agent** (a frontier model) that decomposes the goal and delegates to specialist sub-agents (retrieval agent, drafting agent, verification agent) via typed handoff messages.
 
 **5. Safety & observability layer**
 
@@ -88,10 +88,10 @@ For most enterprise use cases, **orchestration wins** because auditability and d
 ### Example / Tradeoff
 
 **Production example — multi-agent legal contract reviewer:**
-- **Supervisor agent** (GPT-4o): receives contract PDF, decomposes into clauses, routes each to specialist
-- **Clause extraction agent** (GPT-4o-mini): PyMuPDF + chunking tool, extracts clause objects as structured JSON
-- **Risk assessment agent** (GPT-4o): for each clause, queries legal KB (Pinecone RAG), returns risk score + rationale
-- **Drafting agent** (GPT-4o): proposes redline language for high-risk clauses
+- **Supervisor agent** (a frontier model): receives contract PDF, decomposes into clauses, routes each to specialist
+- **Clause extraction agent** (a small fast model): PyMuPDF + chunking tool, extracts clause objects as structured JSON
+- **Risk assessment agent** (a frontier model): for each clause, queries legal KB (Pinecone RAG), returns risk score + rationale
+- **Drafting agent** (a frontier model): proposes redline language for high-risk clauses
 - **HITL**: interrupt before any clause is marked "approved" — lawyer reviews in UI
 - Stack: LangGraph multi-agent `StateGraph`, Redis episodic store, Pinecone semantic memory, LangSmith observability
 - Outcome: 300 clauses reviewed in 4 min, lawyer reviews 12 flagged items (vs. reading all 300)
@@ -121,7 +121,7 @@ The **tool layer** is where safety lives. Every tool is a typed JSON schema — 
 
 **Memory** is four tiers: working memory is the sliding context window, episodic is Redis session state, semantic is a Pinecone vector store for cross-session facts, and procedural is the system prompt and tool schemas. At session start I inject top-3 episodic summaries and top-5 semantic hits — about 500 tokens — to give the agent continuity without bloating the context.
 
-For **multi-agent orchestration**, I default to a centralized supervisor pattern: a GPT-4o supervisor decomposes the goal and routes typed tasks to specialist sub-agents. That's more debuggable and auditable than choreography — which works for event-driven pipelines but is hard to trace. LangGraph or AutoGen both support this pattern well.
+For **multi-agent orchestration**, I default to a centralized supervisor pattern: a frontier model supervisor decomposes the goal and routes typed tasks to specialist sub-agents. That's more debuggable and auditable than choreography — which works for event-driven pipelines but is hard to trace. LangGraph or AutoGen both support this pattern well.
 
 Finally, **safety and observability**: every step emits a structured trace to LangSmith — step, tool, args, token count, latency, cost. HITL is wired via LangGraph interrupt_before for irreversible actions. Guardrails run on inputs and observations. And the agent state is checkpointed in Redis after each successful step so a worker crash doesn't lose progress."
 

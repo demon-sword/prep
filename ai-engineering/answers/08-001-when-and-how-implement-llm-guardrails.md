@@ -35,7 +35,7 @@ LLM guardrails are **middleware layers that enforce behavioral policy** on model
 
 1. **Input guardrail (pre-LLM, synchronous)**
    - Run a lightweight classifier on every user message before the LLM call.
-   - Tools: **Llama Guard 3** (Meta, open-source, <50ms on GPU), **Perspective API** (Google, toxicity), or a fine-tuned DistilBERT on your policy taxonomy.
+   - Tools: **Llama Guard** (Meta, open-source, <50ms on GPU), **Perspective API** (Google, toxicity), or a fine-tuned DistilBERT on your policy taxonomy.
    - On block: return a canned refusal and skip the LLM call entirely — saves both latency and cost.
    - Threshold tuning: start at p95 confidence → measure false positive rate on 1,000 representative real queries → lower threshold until FP rate < 0.5%.
 
@@ -47,7 +47,7 @@ LLM guardrails are **middleware layers that enforce behavioral policy** on model
 3. **Output guardrail (post-LLM)**
    - Synchronous: blocks the response before it reaches the user — use for high-risk domains (healthcare, finance, legal). Adds 50–150ms for a fast classifier.
    - Asynchronous: logs the response and flags for human review — use for medium-risk deployments where latency budget is tight (<200ms p95). A small percentage of flagged responses reach users but are caught within seconds.
-   - Tools: **Llama Guard 3** (reuse for output), **NeMo Guardrails** (NVIDIA, dialog-level policy enforcement with LLM-backed classifiers), **Guardrails AI** (output schema + semantic validators), custom fine-tuned classifiers.
+   - Tools: **Llama Guard** (reuse for output), **NeMo Guardrails** (NVIDIA, dialog-level policy enforcement with LLM-backed classifiers), **Guardrails AI** (output schema + semantic validators), custom fine-tuned classifiers.
    - For regulated domains: add a **DeBERTa NLI entailment check** — response must be entailed by retrieved context, else block.
 
 4. **PII and data layer (cross-cutting)**
@@ -59,16 +59,16 @@ LLM guardrails are **middleware layers that enforce behavioral policy** on model
 User message
     │
     ▼
-[Input classifier: Llama Guard 3]  ←— block + log if policy violation
+[Input classifier: Llama Guard]  ←— block + log if policy violation
     │
     ▼
 [Prompt builder: system prompt + sanitized context]
     │
     ▼
-[LLM call: GPT-4o / Llama 3]
+[LLM call: a frontier model / a modern open-weight model]
     │
     ▼
-[Output classifier: Llama Guard 3 / NeMo Guardrails]  ←— block if violation
+[Output classifier: Llama Guard / NeMo Guardrails]  ←— block if violation
     │
     ▼
 [PII scrub: Presidio]
@@ -78,7 +78,7 @@ User response  +  Async audit log (Kafka → monitoring dashboard)
 ```
 
 ### Example / Tradeoff
-**Customer support chatbot (healthcare insurance):** Implemented a 3-layer stack — Llama Guard 3 input classifier (60ms, GPU), system-prompt scope restriction with abstention for medical advice, synchronous Llama Guard 3 output check (55ms). Total guardrail overhead: ~115ms on top of LLM call. False positive rate after threshold tuning: 0.4% of legitimate queries blocked. Bypass rate (measured via weekly automated red-team with PyRIT): < 0.2% on harm taxonomy. Business impact: zero policy violations in 6 months of production; CSAT unaffected (users don't notice 115ms at this level).
+**Customer support chatbot (healthcare insurance):** Implemented a 3-layer stack — Llama Guard input classifier (60ms, GPU), system-prompt scope restriction with abstention for medical advice, synchronous Llama Guard output check (55ms). Total guardrail overhead: ~115ms on top of LLM call. False positive rate after threshold tuning: 0.4% of legitimate queries blocked. Bypass rate (measured via weekly automated red-team with PyRIT): < 0.2% on harm taxonomy. Business impact: zero policy violations in 6 months of production; CSAT unaffected (users don't notice 115ms at this level).
 
 **Key tradeoff:** Synchronous vs async output classifier. Synchronous is safer but adds latency — use it when harm is irreversible (medical advice, financial transactions). Async is faster but some harmful responses slip through momentarily — acceptable for medium-risk consumer apps with human review queues.
 
@@ -92,7 +92,7 @@ User response  +  Async audit log (Kafka → monitoring dashboard)
 **Core explanation (2–3 min):**
 "The first question is *when* to add guardrails. The short answer is: before you ship any user-facing LLM feature. The earlier in the pipeline you place them, the cheaper they are. Blocking at input with a classifier costs one fast model call. Blocking after generation wastes the full LLM call plus the latency.
 
-My standard stack has four layers. First, an **input classifier** — I'd use Llama Guard 3, which is open-source from Meta, runs in under 60ms on a GPU, and classifies inputs against a configurable harm taxonomy. It sits in front of the LLM call and returns a SAFE/UNSAFE decision. If UNSAFE, I return a canned refusal immediately and skip the LLM entirely.
+My standard stack has four layers. First, an **input classifier** — I'd use Llama Guard, which is open-source from Meta, runs in under 60ms on a GPU, and classifies inputs against a configurable harm taxonomy. It sits in front of the LLM call and returns a SAFE/UNSAFE decision. If UNSAFE, I return a canned refusal immediately and skip the LLM entirely.
 
 Second, **prompt-level constraints** in the system prompt — scope restriction, persona anchoring, abstention instructions. This is the cheapest layer, but it's not sufficient alone. Adversarial users can override system prompts through injection, so I treat this as a default behavior baseline, not a hard boundary.
 
@@ -132,4 +132,4 @@ A critical implementation detail: threshold tuning. I start the classifier at a 
 
 ## One-liner recall
 
-> Guardrails are a four-layer stack — input classifier (Llama Guard 3) → system-prompt constraints → synchronous or async output classifier → Presidio PII scrub — with FP rate tuned below 0.5% on real traffic and bypass rate verified via periodic red-team.
+> Guardrails are a four-layer stack — input classifier (Llama Guard) → system-prompt constraints → synchronous or async output classifier → Presidio PII scrub — with FP rate tuned below 0.5% on real traffic and bypass rate verified via periodic red-team.

@@ -71,7 +71,7 @@ User query
   → Hybrid retrieval: dense HNSW + BM25 with ACL filter
       → RRF fusion → top-50
   → Cross-encoder reranker (Cohere Rerank v3 or ms-marco-MiniLM) → top-5
-  → LLM synthesis (GPT-4o-mini or Claude Haiku for cost; GPT-4o for complex)
+  → LLM synthesis (a small fast model for cost; a frontier model for complex)
   → Response with citations + source links + freshness timestamps
 ```
 
@@ -98,7 +98,7 @@ User query
 - Vector store: **Qdrant** self-hosted (ACL metadata filters, payload indexing, open-source) or **Pinecone** serverless for managed
 - BM25: Elasticsearch with per-index ACL field filter
 - Reranker: Cohere Rerank v3 (API) or `cross-encoder/ms-marco-MiniLM-L-12-v2` (self-hosted, ~15ms at top-50)
-- LLM: GPT-4o-mini (85% of queries) + GPT-4o (complex reasoning, triggered by classifier)
+- LLM: a small fast model (85% of queries) + a frontier model (complex reasoning, triggered by classifier)
 - Auth: SAML/OIDC SSO → group membership from IdP (Okta, Azure AD) cached in Redis TTL 60s
 
 **Tradeoff: freshness vs. relevance**
@@ -108,7 +108,7 @@ User query
 **Scale numbers:**
 - 5M docs × 3 chunks/doc avg = 15M vectors at 1536-dim = ~90GB in memory (Qdrant) or ~$450/mo (Pinecone serverless)
 - p95 retrieval: ~120ms (HNSW + filter) + 200ms (rerank) = ~320ms retrieval; LLM adds 500–800ms
-- Cost: $0.004–0.006/query at scale with 4o-mini; semantic caching (GPTCache) cuts ~30% for FAQ-heavy usage
+- Cost: $0.004–0.006/query at scale with a small fast model; semantic caching (GPTCache) cuts ~30% for FAQ-heavy usage
 
 ---
 
@@ -140,7 +140,7 @@ For quality, I'd set up a golden query set — 500 representative queries across
 
 - **Mistake:** Describing the system without mentioning access control — **Better:** "ACL enforcement is the first thing I'd design: every chunk in the vector store carries a list of authorized user/group IDs from the source system, and retrieval filters on that list using the caller's identity — enforced at the DB layer, not just in application code."
 - **Mistake:** Using a single uniform embedding model and chunking strategy for all sources — **Better:** "Slack messages (short, informal) need different chunking than Confluence pages (long, structured with headers). I'd tune chunk size and embedding model per source type, and consider a multilingual model if the org is global."
-- **Mistake:** Saying "I'd just use GPT-4 for everything" without segmenting query types — **Better:** "Navigation queries (30% of volume) get no LLM call — just a direct link. Simple factual queries go to GPT-4o-mini. Only complex synthesis queries (10%) justify GPT-4o, which I'd trigger via an intent classifier."
+- **Mistake:** Saying "I'd just use one big model for everything" without segmenting query types — **Better:** "Navigation queries (30% of volume) get no LLM call — just a direct link. Simple factual queries go to a small fast model. Only complex synthesis queries (10%) justify a frontier model, which I'd trigger via an intent classifier."
 - **Mistake:** No plan for keeping the index fresh for real-time sources like Slack — **Better:** "High-velocity sources need near-real-time event-driven sync with a freshness score boost; I'd separate them from slow-moving docs that can tolerate a nightly crawl."
 
 ---

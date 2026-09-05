@@ -44,7 +44,7 @@ Every agent turn emits a structured log event with:
   "latency_ms": 312,
   "tokens_in": 1840,
   "tokens_out": 112,
-  "model": "gpt-4o-mini",
+  "model": "claude-haiku-4-5",
   "timestamp": "2026-06-16T10:22:31Z"
 }
 ```

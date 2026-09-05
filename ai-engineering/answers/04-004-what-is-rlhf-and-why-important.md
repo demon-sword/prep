@@ -78,7 +78,7 @@ objective = E[r_θ(prompt, response)] - β · KL(π_RL || π_SFT)
 | Quality ceiling | Higher (iterative RM updates possible) | Slightly lower, but often sufficient |
 | When to use | When RM can be iteratively improved; high-stakes alignment | Most production alignment tasks; smaller teams |
 
-DPO (Rafailov et al. 2023) shows that the optimal RLHF policy can be expressed in closed form as a function of the log-probability ratio between the policy and reference model — eliminating the RM and PPO entirely. Llama 2 and Mistral Instruct use DPO or variants.
+DPO (Rafailov et al. 2023) shows that the optimal RLHF policy can be expressed in closed form as a function of the log-probability ratio between the policy and reference model — eliminating the RM and PPO entirely. Llama 2 and Mistral Instruct used DPO or variants.
 
 ---
 
@@ -97,7 +97,7 @@ Third, PPO fine-tuning: use the RM as a reward signal and optimize the SFT polic
 The hard part in practice is that PPO is notoriously unstable, the RM generalizes poorly out-of-distribution, and collecting pairwise human comparisons at scale is expensive. That's why DPO was a big deal: it shows the optimal RLHF policy has a closed-form solution that lets you skip the RM and PPO entirely, training directly on preference pairs with a standard cross-entropy loss. For most production alignment work today I'd reach for DPO first and only go full RLHF if I need iterative RM improvements."
 
 **Tradeoff / production angle (1 min):**
-"The main failure mode I'd flag is reward hacking: the policy finds responses that score high on the RM but aren't actually better — long, verbose, sycophantic answers are a classic symptom. Mitigation is a tighter KL leash, iterative RM retraining on RL-generated samples, and complementing the RM with rule-based guardrails. Also, the annotation budget is real: InstructGPT used ~33K pairwise comparisons; for a smaller team, DPO with synthetic preference pairs from a stronger judge model (GPT-4o) is a viable shortcut."
+"The main failure mode I'd flag is reward hacking: the policy finds responses that score high on the RM but aren't actually better — long, verbose, sycophantic answers are a classic symptom. Mitigation is a tighter KL leash, iterative RM retraining on RL-generated samples, and complementing the RM with rule-based guardrails. Also, the annotation budget is real: InstructGPT used ~33K pairwise comparisons; for a smaller team, DPO with synthetic preference pairs from a stronger judge model (a frontier model) is a viable shortcut."
 
 **Wrap-up (30s):**
 "So RLHF matters because it's the mechanism behind every production-grade assistant today. The three-stage pipeline — SFT, RM, PPO+KL — is the canonical answer, but DPO has largely replaced PPO for practical fine-tuning work. Happy to go deeper on DPO's derivation or reward hacking mitigations."
@@ -107,7 +107,7 @@ The hard part in practice is that PPO is notoriously unstable, the RM generalize
 ## Pitfalls
 
 - **Mistake:** Describing RLHF as just "training with human feedback" without mentioning the reward model and KL penalty — **Better:** Walk through all three stages (SFT → RM → PPO+KL) and explain that the KL divergence leash is what prevents reward hacking; omitting it suggests you've read about RLHF but haven't reasoned about its failure modes
-- **Mistake:** Not knowing DPO or saying "RLHF is the only alignment approach" — **Better:** Proactively mention that DPO (Rafailov et al. 2023) eliminates the RM and PPO by deriving the optimal policy in closed form from preference pairs; note that Llama 2/Mistral Instruct use DPO-style training and it's now the default for most practitioners
+- **Mistake:** Not knowing DPO or saying "RLHF is the only alignment approach" — **Better:** Proactively mention that DPO (Rafailov et al. 2023) eliminates the RM and PPO by deriving the optimal policy in closed form from preference pairs; note that Llama 2/Mistral Instruct popularised DPO-style training and it's now the default for most practitioners
 - **Mistake:** Saying RLHF "makes the model smarter" — **Better:** Clarify that RLHF changes *behavior and alignment* (helpfulness, harmlessness, instruction-following), not factual knowledge; a model can be perfectly RLHF-aligned and still hallucinate if the base pre-training is insufficient
 
 ---

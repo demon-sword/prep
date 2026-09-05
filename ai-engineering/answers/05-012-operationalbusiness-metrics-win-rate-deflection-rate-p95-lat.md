@@ -63,7 +63,7 @@ Operational and business metrics measure the *impact* of an AI system on users a
 A customer support chatbot at a B2B SaaS company tracks:
 - **Deflection rate** = 74% (target: ≥70%) — meaning 74% of tickets never reach a human agent
 - **Cost per deflection** = $0.08 AI cost vs. $8 human agent cost → 100× ROI
-- **p95 latency** = 2.1s (target: <3s) — crossed 3s threshold during GPT-4o outage → auto-fallback to GPT-4o-mini
+- **p95 latency** = 2.1s (target: <3s) — crossed 3s threshold during a frontier model outage → auto-fallback to a small fast model
 - **Win rate** = 61% on A/B test vs. previous prompt version → shipped
 
 **Tradeoff:** Deflection rate and CSAT can conflict — aggressive deflection (never escalate) boosts deflection rate but tanks CSAT when AI answers poorly. Production systems set a confidence threshold: escalate when cosine retrieval score < 0.70 or RAGAS faithfulness < 0.80, accepting lower deflection rate in exchange for higher CSAT.

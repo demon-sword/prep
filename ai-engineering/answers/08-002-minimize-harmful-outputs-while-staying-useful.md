@@ -44,7 +44,7 @@ Minimizing harm while staying useful requires treating the harm-helpfulness trad
 
 1. **Harm taxonomy + classifier threshold tuning**
    - Define a concrete harm taxonomy (e.g. violence, self-harm, illegal activity, PII leakage, brand risk) — not a vague "harmful content" bucket.
-   - Use **Llama Guard 3** or a fine-tuned DistilBERT classifier per category, each with its own threshold.
+   - Use **Llama Guard** or a fine-tuned DistilBERT classifier per category, each with its own threshold.
    - Tune each threshold separately on 1,000+ labeled production queries. Target: FP rate (over-refusal) < 0.5%, recall (catch rate) > 95% for Tier-1 harms (violence, CSAM) and > 85% for Tier-2 (policy violations).
    - Measure separately: over-refusal rate and under-blocking rate are **independent KPIs**, not a single dial.
 

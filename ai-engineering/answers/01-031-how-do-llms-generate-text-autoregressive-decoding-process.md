@@ -43,11 +43,11 @@ LLMs generate text **one token at a time in a left-to-right loop**: at each step
 3. **Append and loop** — the sampled token is appended to the sequence, and the loop repeats until a stop token (`<|endoftext|>`, `<|eot_id|>`) or max-length is reached.
 4. **KV cache** — rather than recomputing K and V matrices for all previous tokens on every decode step, they are cached. Each decode step only computes Q/K/V for the *new* token, reads cached K/V for all prior tokens, and updates the cache. Memory cost: `2 × layers × heads × d_head × seq_len × dtype_bytes` per sequence.
 
-**Token → text:** after generation, the token IDs are decoded back to text using the tokenizer's vocabulary (e.g. tiktoken BPE for GPT-4, SentencePiece for Llama). Partial UTF-8 characters may be buffered until a full codepoint is assembled — relevant for streaming UX.
+**Token → text:** after generation, the token IDs are decoded back to text using the tokenizer's vocabulary (e.g. tiktoken BPE for a frontier model, SentencePiece for Llama). Partial UTF-8 characters may be buffered until a full codepoint is assembled — relevant for streaming UX.
 
 ### Example / Tradeoff
 
-**Production numbers (Llama 3 70B, A100 80 GB, FP16):**
+**Production numbers (a 70B-class open-weight model, A100 80 GB, FP16):**
 - Prefill: ~5,000 tokens/s for a 512-token prompt (compute-bound)
 - Decode: ~20–30 tokens/s (memory-bandwidth-bound — KV cache reads dominate)
 - TTFT (time to first token) ≈ 100–300 ms; heavily influenced by prompt length and batch size
@@ -72,7 +72,7 @@ Then decode begins. Each step: run a forward pass with causal masking (each toke
 
 Stop conditions are: the model emits a special end-of-sequence token like `<|eot_id|>`, you hit a configured stop sequence, or you hit max tokens.
 
-On Llama 3 70B running on an A100, you see prefill at roughly 5,000 tokens per second but decode dropping to 20–30 tokens per second — because decode is memory-bandwidth-bound, reading those growing KV caches on every step. That's why vLLM uses PagedAttention: non-contiguous KV cache blocks that let you pack more sequences per GPU and increase effective throughput."
+On a 70B-class open-weight model running on an A100, you see prefill at roughly 5,000 tokens per second but decode dropping to 20–30 tokens per second — because decode is memory-bandwidth-bound, reading those growing KV caches on every step. That's why vLLM uses PagedAttention: non-contiguous KV cache blocks that let you pack more sequences per GPU and increase effective throughput."
 
 **Tradeoff / production angle (1 min):**
 "The autoregressive nature creates a fundamental cost asymmetry: output tokens cost 3–4× more than input tokens because each one requires a serial decode step. This drives several production decisions — prompt compression to minimize input cost, output length limits to control generation cost, and streaming (SSE) to mask the decode latency with progressive display. For very long outputs, speculative decoding (a smaller draft model proposes multiple tokens; the large model verifies in parallel) can cut wall-clock time by 2–3×."

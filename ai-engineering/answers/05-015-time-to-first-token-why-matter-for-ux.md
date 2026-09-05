@@ -49,7 +49,7 @@ Key drivers of high TTFT:
 
 1. **Prompt compression** — LLMLingua, selective context, or semantic caching reduces prefill length and thus TTFT. Cutting a 4K prompt to 1.5K can halve prefill time.
 2. **Streaming responses** — enable streaming in the API call so the client renders tokens as they arrive; TTFT feels faster even if TTLT is unchanged.
-3. **Model tiering / speculative decoding** — route simple queries to a smaller model (GPT-4o-mini, Llama 3 8B) with faster prefill; use speculative decoding on the large model to parallelise decode.
+3. **Model tiering / speculative decoding** — route simple queries to a smaller model (a small fast model, a small open-weight model (7–8B class)) with faster prefill; use speculative decoding on the large model to parallelise decode.
 4. **Semantic caching** — exact cache hit (GPTCache, Redis) returns the full response in <10 ms, eliminating prefill entirely.
 5. **Continuous batching + priority queues** — vLLM's PagedAttention + continuous batching lets new requests interleave with in-flight decodes rather than waiting for full-batch completion, reducing queue wait.
 6. **Compute-optimised infrastructure** — H100s prefill ~2× faster than A100s for identical models; TPU v5e gives high prefill throughput for long documents.
@@ -59,12 +59,12 @@ At a customer-support chatbot serving 500K queries/day with an average 2.5K-toke
 
 | Configuration | TTFT (p50) | TTFT (p95) | Total latency (p50) |
 |--------------|-----------|-----------|---------------------|
-| GPT-4o, no caching | 1.8 s | 4.2 s | 8.5 s |
-| GPT-4o-mini, no caching | 0.7 s | 1.9 s | 4.2 s |
-| GPT-4o + semantic cache (30% hit) | 0.6 s effective | 1.4 s effective | 3.1 s effective |
-| GPT-4o-mini + LLMLingua (40% compression) | 0.4 s | 1.1 s | 2.8 s |
+| A frontier model, no caching | 1.8 s | 4.2 s | 8.5 s |
+| A small fast model, no caching | 0.7 s | 1.9 s | 4.2 s |
+| A frontier model + semantic cache (30% hit) | 0.6 s effective | 1.4 s effective | 3.1 s effective |
+| A small fast model + LLMLingua (40% compression) | 0.4 s | 1.1 s | 2.8 s |
 
-**Key tradeoff:** Reducing TTFT via model downtiering (GPT-4o → GPT-4o-mini) also reduces cost ~15× but may reduce answer quality. Validate quality regression with RAGAS faithfulness and golden-dataset accuracy before switching. Semantic caching achieves both TTFT reduction and cost savings without quality loss, but only for repeated queries.
+**Key tradeoff:** Reducing TTFT via model downtiering (a frontier model → a small fast model) also reduces cost ~5× but may reduce answer quality. Validate quality regression with RAGAS faithfulness and golden-dataset accuracy before switching. Semantic caching achieves both TTFT reduction and cost savings without quality loss, but only for repeated queries.
 
 **Streaming vs TTLT tradeoff:** Streaming does not reduce TTLT — it only improves perceived latency. For use cases where the full response must be post-processed (e.g., NLI faithfulness check, JSON parsing), you may not be able to stream, and TTFT becomes less important than TTLT.
 
@@ -82,7 +82,7 @@ The biggest enemy of TTFT in production is a long prompt. A 10K-token RAG contex
 
 The second lever is streaming. If I enable token streaming on the API call, the client starts rendering as soon as the first decode token arrives. That doesn't reduce TTFT in the strict sense — prefill still happens before any token is emitted — but it makes the product feel responsive and cuts perceived latency dramatically.
 
-The third lever is model tiering. A 7B or 8B model like GPT-4o-mini or Llama 3 8B has a much smaller prefill footprint than GPT-4 70B for the same prompt, so TTFT is 2–3× faster. The tradeoff is answer quality, which I'd validate with a golden dataset before switching.
+The third lever is model tiering. A small model in the 7–8B class has a much smaller prefill footprint than a 70B-class model for the same prompt, so TTFT is 2–3× faster. The tradeoff is answer quality, which I'd validate with a golden dataset before switching.
 
 And the fourth lever — semantic caching — is the nuclear option: if the query is a near-duplicate of something cached (GPTCache with cosine similarity ≥ 0.93), I return the full response in under 10 ms, bypassing prefill entirely."
 

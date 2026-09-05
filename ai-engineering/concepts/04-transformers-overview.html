@@ -358,6 +358,121 @@
     .nav-link:hover { color: var(--accent); border-color: var(--accent); }
     .nav-link.disabled { opacity: 0.3; pointer-events: none; }
     .nav-link span { font-family: var(--mono); font-size: 0.75rem; color: var(--text-dim); }
+
+    /* ── LIVE FORWARD-PASS CONTROLS ── */
+    .viz-controls {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 1.1rem 1.2rem;
+      margin-bottom: 1rem;
+      display: flex;
+      flex-wrap: wrap;
+      gap: 1rem 1.4rem;
+      align-items: flex-end;
+    }
+    .ctl { display: flex; flex-direction: column; gap: 0.35rem; }
+    .ctl > label {
+      font-family: var(--mono);
+      font-size: 0.65rem;
+      font-weight: 600;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      color: var(--text-dim);
+    }
+    .ctl.grow { flex: 1 1 320px; }
+    .viz-controls input[type="text"],
+    .viz-controls select {
+      font-family: var(--mono);
+      font-size: 0.82rem;
+      background: var(--card);
+      color: var(--text);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 0.45rem 0.6rem;
+      width: 100%;
+      outline: none;
+    }
+    .viz-controls input[type="text"]:focus,
+    .viz-controls select:focus { border-color: var(--accent); }
+    .viz-controls select { cursor: pointer; }
+    .ctl-check {
+      display: flex; align-items: center; gap: 0.45rem;
+      font-family: var(--mono); font-size: 0.75rem; color: var(--text-dim);
+      cursor: pointer; padding-bottom: 0.45rem;
+    }
+    .ctl-check input { accent-color: var(--accent); cursor: pointer; }
+    .btn {
+      font-family: var(--mono);
+      font-size: 0.72rem;
+      font-weight: 600;
+      background: var(--card);
+      color: var(--text-dim);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 0.45rem 0.75rem;
+      cursor: pointer;
+      transition: all 0.15s;
+      white-space: nowrap;
+    }
+    .btn:hover { color: var(--accent); border-color: var(--accent); }
+    .chip-row { display: flex; flex-wrap: wrap; gap: 0.4rem; }
+    .viz-note {
+      font-family: var(--mono);
+      font-size: 0.7rem;
+      color: var(--text-dim);
+      opacity: 0.85;
+      line-height: 1.6;
+      margin-top: 0.6rem;
+    }
+    .viz-note strong { color: var(--text); }
+
+    /* ── ATTENTION HEATMAP ── */
+    .attn-block { margin-top: 1rem; }
+    .attn-wrap { position: relative; flex: 0 0 auto; }
+    #attn-canvas { display: block; cursor: crosshair; max-width: 100%; }
+    .attn-tip {
+      position: absolute;
+      pointer-events: none;
+      background: #05070d;
+      border: 1px solid var(--accent);
+      border-radius: 5px;
+      padding: 0.35rem 0.55rem;
+      font-family: var(--mono);
+      font-size: 0.7rem;
+      color: var(--text);
+      white-space: pre;
+      opacity: 0;
+      transition: opacity 0.1s;
+      z-index: 5;
+    }
+    .attn-side { flex: 1; min-width: 240px; }
+    .attn-side h3 {
+      font-size: 0.95rem; font-weight: 700; color: var(--accent); margin-bottom: 0.5rem;
+    }
+    .attn-side p { font-size: 0.85rem; color: var(--text-dim); margin-bottom: 0.6rem; line-height: 1.6; }
+    .attn-side p strong { color: var(--text); }
+    .stat-line {
+      font-family: var(--mono); font-size: 0.72rem; color: var(--text-dim);
+      display: flex; justify-content: space-between; gap: 1rem;
+      border-bottom: 1px dashed var(--border); padding: 0.28rem 0;
+    }
+    .stat-line span:last-child { color: var(--green); font-weight: 600; }
+    .legend-bar {
+      height: 10px; border-radius: 3px; margin: 0.5rem 0 0.25rem;
+      background: linear-gradient(90deg, #10131c, #0a4f63, #00d4ff, #b9f4ff);
+    }
+    .legend-ends {
+      display: flex; justify-content: space-between;
+      font-family: var(--mono); font-size: 0.65rem; color: var(--text-dim);
+    }
+    .token-strip { display: flex; flex-wrap: wrap; gap: 0.3rem; margin-top: 0.5rem; }
+    .tok-chip {
+      font-family: var(--mono); font-size: 0.7rem;
+      background: var(--card); border: 1px solid var(--border);
+      border-radius: 4px; padding: 0.12em 0.45em; color: var(--green);
+    }
+    .tok-chip .tok-i { color: var(--text-dim); margin-right: 0.3em; }
   </style>
 </head>
 <body>
@@ -365,7 +480,7 @@
 <header>
   <div class="group-badge">transformers</div>
   <h1>Transformer Architecture Overview</h1>
-  <p class="subtitle">Full transformer stack: embedding, positional encoding, multi-head attention, feed-forward networks, residual connections, layer norm, and output projection — click each layer to explore.</p>
+  <p class="subtitle">Full transformer stack: embedding, positional encoding, multi-head attention, feed-forward networks, Pre-LN residual blocks, and output projection — then run a real 64-dimensional transformer on your own sentence and inspect every tensor it produces.</p>
 </header>
 
 <main>
@@ -423,17 +538,34 @@
     SwiGLU was found to outperform ReLU and GeLU empirically (PaLM, Llama). It uses 3 projection matrices instead of 2, but the inner dimension is typically scaled to <code>2/3 × 4d</code> to keep parameter count equivalent.
   </p>
 
-  <h3>5. Residual Connections & Layer Normalization</h3>
+  <h3>5. Residual Connections &amp; Layer Normalization</h3>
   <p>
-    Each sub-layer (attention, FFN) is wrapped in a residual connection: <code>output = LayerNorm(x + sublayer(x))</code>. Residuals enable stable training of deep networks by providing gradient highways that bypass sub-layers.
+    Every sub-layer (attention, FFN) is wrapped in a residual connection. <em>Where</em> the normalization sits relative to that addition is the single most consequential detail in the block, and the answer changed after 2017.
   </p>
   <p>
-    The original paper uses <strong>Post-LN</strong> (norm after residual addition). Most modern LLMs use <strong>Pre-LN</strong> (norm before each sub-layer), which trains more stably without requiring careful learning rate warmup. Llama uses <strong>RMSNorm</strong> instead of LayerNorm — it omits the mean-centering step, saving ~40% of the norm computation with no quality regression.
+    <strong>Post-LN — the historical original (Vaswani et al., 2017).</strong> The 2017 paper normalizes <em>after</em> the residual addition:
+  </p>
+  <div class="formula-box">/* Post-LN — original 2017 transformer, historical */
+output = LayerNorm(x + Sublayer(x))</div>
+  <p>
+    Because the residual stream is re-scaled at <em>every</em> block, there is no clean identity path from the loss back to the embeddings. Gradients at the deep end are large and unbalanced at initialization, so Post-LN needs a <strong>learning-rate warmup schedule</strong> to train at all; without warmup it diverges, and it gets worse as you add layers.
+  </p>
+  <p>
+    <strong>Pre-LN — what essentially every modern LLM uses, and what this page implements.</strong> Move the norm inside the branch, before the sub-layer:
+  </p>
+  <div class="formula-box">/* Pre-LN — GPT-2/3, Llama, Mistral, Gemma — the formula used by the visualization below */
+x = x + MHSA(LayerNorm(x))
+x = x + FFN(LayerNorm(x))</div>
+  <p>
+    Now the residual stream passes through each block untouched and every sub-layer only <em>adds</em> to it. That unbroken identity path is why Pre-LN trains stably from step 1 <strong>without warmup</strong>. The trade-off is real, not free: Pre-LN models tend to land at slightly worse final quality than a Post-LN model that <em>does</em> train successfully, because the residual stream grows monotonically with depth and later blocks contribute proportionally less. That gap is exactly what variants like <strong>DeepNorm</strong> (a rescaled Post-LN that reaches 1000 layers) and <strong>sandwich / peri-LN</strong> (norm on both sides of the sub-layer) exist to close.
+  </p>
+  <p>
+    Orthogonal to the placement question: Llama uses <strong>RMSNorm</strong> instead of LayerNorm — it omits the mean-centering step, saving ~40% of the norm computation with no quality regression. Pre-RMSNorm is the current default combination.
   </p>
 
   <h3>6. Stacking N Layers</h3>
   <p>
-    A complete transformer decoder is N identical blocks, each containing: Pre-LN → MHSA → residual → Pre-LN → FFN → residual. Depth (N) and width (d_model) are the primary scaling dimensions. GPT-2 Small has <strong>12 layers / d=768</strong>; GPT-3 has <strong>96 layers / d=12,288</strong>; Llama 3 70B has <strong>80 layers / d=8,192</strong>.
+    A complete modern transformer decoder is N identical <em>Pre-LN</em> blocks, each containing: LayerNorm → MHSA → residual add → LayerNorm → FFN → residual add. Depth (N) and width (d_model) are the primary scaling dimensions. GPT-2 Small has <strong>12 layers / d=768</strong>; GPT-3 has <strong>96 layers / d=12,288</strong>; Llama 3 70B has <strong>80 layers / d=8,192</strong>.
   </p>
 
   <h3>7. Output Projection (LM Head)</h3>
@@ -443,7 +575,13 @@
 
   <h3>Production Reality: Parameter Counts & Compute</h3>
   <p>
-    For a decoder-only transformer: total parameters ≈ <code>12 × N × d² + vocab × d</code>. This scales quadratically with width. Compute for one forward pass ≈ <code>2P</code> FLOPs (where P is parameter count). A 70B model requires ~140B FLOPs per forward pass token — at A100 peak (312 TFLOPS), one token takes ~0.45ms on a single GPU, requiring 4× A100 to hit 140B/s sustained throughput at a practical batch size.
+    For a decoder-only transformer: total parameters ≈ <code>12 × N × d² + vocab × d</code>. This scales quadratically with width. A dense forward pass costs ≈ <code>2·P</code> FLOPs <em>per token</em> (P = parameter count); training costs ≈ <code>6·P</code> per token, since the backward pass is roughly twice the forward.
+  </p>
+  <p>
+    Work it through for a 70B model. Forward: <code>2 × 70e9 = 1.4e11 FLOPs/token = 140 GFLOPs per token</code> — that is a quantity of work <em>per token</em>, <strong>not</strong> a rate — quoting it as if it were a per-second throughput number is a unit error. Training: <code>6 × 70e9 = 420 GFLOPs/token</code>. An A100 80GB SXM does <strong>312 TFLOP/s</strong> dense BF16 at peak, so the <em>compute-bound</em> ceiling is <code>3.12e14 ÷ 1.4e11 ≈ 2,230 tokens/s</code> on one GPU at an unattainable 100% MFU.
+  </p>
+  <p>
+    That ceiling is not what you get, because <strong>single-stream decode is memory-bandwidth bound, not FLOP bound.</strong> Generating one token requires reading every weight from HBM exactly once, and at batch size 1 there is almost no arithmetic to hide that read behind. In BF16 the weights are <code>70e9 × 2 bytes = 140 GB</code>, which does not fit on one 80 GB A100, so take a 2-way tensor-parallel setup: each GPU streams its <code>70 GB</code> shard per token against ~<code>2.0 TB/s</code> of HBM, giving <code>70e9 ÷ 2.039e12 ≈ 34 ms/token → ~29 tokens/s</code> at a theoretical 100% bandwidth utilization, and realistically <strong>~20 tokens/s at ~70% achieved bandwidth</strong>. The matching compute on that same GPU is only <code>70 GFLOPs ≈ 0.22 ms</code> at peak — under 1% of the 34 ms. The arithmetic units sit idle; the memory bus is the whole story. This is precisely why batching, KV-cache management, quantization (INT8/FP8 halves the bytes read, roughly doubling decode throughput), and speculative decoding are the levers that actually move inference throughput.
   </p>
   <p>
     The <strong>attention complexity</strong> is O(n²·d) per layer for sequence length n. For context windows beyond 32K, this becomes the limiting factor. Flash Attention (Dao et al., 2022) fuses operations in SRAM to reduce memory I/O from O(n²) to O(n), making 128K+ context practical.
@@ -453,20 +591,78 @@
 <!-- ═══════════════════════════ VISUALIZATION ═══════════════════════════ -->
 <section id="visualization">
   <div class="section-label">Interactive Visualization</div>
-  <h2>Transformer Block Explorer</h2>
-  <p class="viz-desc">Click any layer in the diagram to see a detailed explanation of its role, formula, and key engineering decisions. The flow animation shows how a token embedding travels through the stack.</p>
+  <h2>Live Transformer Forward Pass</h2>
+  <p class="viz-desc">
+    This is a real, fully-computed transformer running in your browser — not a diagram. Type a sentence and every
+    number below is recomputed: sinusoidal positional encodings, multi-head scaled dot-product attention with real
+    Q/K/V projections, real softmax, real residual adds, real LayerNorm, and a real GELU feed-forward network.
+    The heatmap is the actual softmax matrix produced by the run.
+  </p>
+
+  <div class="viz-controls">
+    <div class="ctl grow">
+      <label for="sentence-input">Input sentence</label>
+      <input type="text" id="sentence-input" value="the cat sat on the mat because it was warm" spellcheck="false"/>
+    </div>
+    <div class="ctl">
+      <label for="heads-select">n_heads</label>
+      <select id="heads-select">
+        <option value="1">1 head — d_head 64</option>
+        <option value="2">2 heads — d_head 32</option>
+        <option value="4" selected>4 heads — d_head 16</option>
+        <option value="8">8 heads — d_head 8</option>
+      </select>
+    </div>
+    <div class="ctl">
+      <label for="layers-select">n_layers</label>
+      <select id="layers-select">
+        <option value="1">1 block</option>
+        <option value="2" selected>2 blocks</option>
+        <option value="3">3 blocks</option>
+        <option value="4">4 blocks</option>
+      </select>
+    </div>
+    <div class="ctl">
+      <label for="view-layer">Inspect layer</label>
+      <select id="view-layer"></select>
+    </div>
+    <div class="ctl">
+      <label for="view-head">Inspect head</label>
+      <select id="view-head"></select>
+    </div>
+    <label class="ctl-check" for="causal-toggle">
+      <input type="checkbox" id="causal-toggle" checked/> causal mask
+    </label>
+    <div class="ctl">
+      <label>Weights</label>
+      <button class="btn" id="reseed-btn" type="button">↻ reseed W_Q/W_K/W_V/W_O/W₁/W₂</button>
+    </div>
+    <div class="ctl grow">
+      <label>Preset sentences</label>
+      <div class="chip-row" id="preset-row"></div>
+    </div>
+    <p class="viz-note" id="config-note"></p>
+  </div>
 
   <div class="viz-container">
     <div id="transformer-diagram">
-      <!-- Diagram built by JS -->
+      <!-- stage list generated from the live forward pass -->
     </div>
     <div id="info-panel">
-      <p class="hint">← Click a layer on the left to explore its mechanics</p>
+      <p class="hint">← Click a stage on the left to read its live tensor statistics</p>
     </div>
   </div>
 
+  <div class="viz-container attn-block">
+    <div class="attn-wrap">
+      <canvas id="attn-canvas" width="520" height="520"></canvas>
+      <div class="attn-tip" id="attn-tip"></div>
+    </div>
+    <div class="attn-side" id="attn-side"></div>
+  </div>
+
   <div class="flow-canvas-wrap">
-    <canvas id="flow-canvas" height="80"></canvas>
+    <canvas id="flow-canvas" height="170"></canvas>
   </div>
 </section>
 
@@ -475,11 +671,12 @@
   <div class="section-label">Key Takeaways</div>
   <h2>What Senior Engineers Know</h2>
   <ul class="takeaway-list">
-    <li><strong>Pre-LN vs Post-LN matters at scale:</strong> Post-LN (original paper) causes gradient explosion in very deep networks without careful warmup. Modern LLMs universally use Pre-LN or RMSNorm + Pre-LN, making training stable from the first step.</li>
+    <li><strong>Pre-LN vs Post-LN matters at scale:</strong> The 2017 original is Post-LN, <code>output = LayerNorm(x + Sublayer(x))</code>, and it needs learning-rate warmup because the residual stream is rescaled at every block. Modern LLMs use Pre-LN, <code>x = x + Sublayer(LayerNorm(x))</code> — the formula implemented in the visualization on this page — which keeps a clean identity path and trains without warmup, at some cost in final quality that DeepNorm and sandwich/peri-LN variants try to recover.</li>
     <li><strong>The FFN dominates parameter count:</strong> In a standard 4× FFN, two-thirds of all non-embedding parameters live in the FFN layers. Reducing FFN width (e.g., from 4d to 2.67d with SwiGLU) cuts parameters significantly while maintaining quality — which is why Llama does it.</li>
     <li><strong>Attention is O(n²) but Flash Attention hides the constant:</strong> Flash Attention 2 achieves ~50% of A100 peak FLOPs by keeping tiles in SRAM. This is why 128K context windows are now practical; without it, the memory writes to HBM would dominate.</li>
     <li><strong>GQA is the free lunch for inference:</strong> Grouped-Query Attention (used in Llama 3, Mistral) reduces KV cache from O(N·h·n·d) to O(N·(h/g)·n·d) where g is the group size. For 8B models at batch=1 with 8K context, this saves ~2 GB of KV cache — often the difference between fitting on one GPU or two.</li>
     <li><strong>Weight tying is non-obvious but universal:</strong> Tying embedding and LM head weights (vocab × d_model) saves 0.3–1.5B parameters for large-vocab models and slightly regularizes training by enforcing semantic alignment between input and output spaces.</li>
+    <li><strong>Decode is memory-bound, so quote the right units:</strong> A dense forward pass is ≈2·P FLOPs <em>per token</em> — 140 GFLOPs/token for a 70B model, a quantity, not a rate. What caps single-stream generation is HBM bandwidth: 70 GB of BF16 weights per GPU at ~2 TB/s is ~34 ms/token (~29 tok/s ideal, ~20 tok/s real) on 2× A100, while the matching 70 GFLOPs of arithmetic takes 0.22 ms. Always say which bound you are quoting.</li>
     <li><strong>RoPE's real advantage is YaRN-style context extension:</strong> Learned absolute PEs hard-cap the context window. RoPE + YaRN (or linear scaling) lets you extend a 4K-context model to 128K post-hoc with minimal fine-tuning — the key technique behind Llama's context extension from 4K to 128K in Llama 3.</li>
   </ul>
 </section>
@@ -499,474 +696,814 @@
 (function() {
   'use strict';
 
-  // ── Layer definitions ──────────────────────────────────────────────
-  const LAYERS = [
-    {
-      id: 'input-embed',
-      name: 'Token Embedding',
-      tag: 'input',
-      tagColor: '#00ff88',
-      dotColor: '#00ff88',
-      info: {
-        title: 'Token Embedding Layer',
-        tag: 'Learnable Table',
-        tagBg: 'rgba(0,255,136,0.12)',
-        tagColor: '#00ff88',
-        desc: 'Converts integer token IDs to dense vectors. A lookup table of shape [vocab_size × d_model] maps each token to a high-dimensional representation.',
-        formula: 'E = token_ids → W_emb[token_ids]   # shape: [seq_len, d_model]',
-        details: [
-          { label: 'GPT-3', val: '50,257 tokens × d=12,288' },
-          { label: 'Llama 3', val: '128,256 tokens × d=4,096' },
-          { label: 'Tied weights', val: 'Often shared with LM head' },
-          { label: 'Init', val: 'N(0, 0.02) typically' },
-        ],
-        bullets: [
-          '<strong>Weight tying:</strong> Sharing embedding and output projection matrices reduces parameters by ~600M for GPT-3 scale while adding a regularization benefit.',
-          '<strong>Subword vocabulary:</strong> BPE/SentencePiece tokenization means embeddings represent subwords, not whole words — "running" might be one token or two.',
-          '<strong>Scaling:</strong> Embedding size is the bottleneck — all later layers must process d_model-dim vectors, so this sets the memory pressure per-token throughout the stack.',
-        ],
-      }
-    },
-    {
-      id: 'pos-enc',
-      name: 'Positional Encoding',
-      tag: 'position',
-      tagColor: '#ffd700',
-      dotColor: '#ffd700',
-      info: {
-        title: 'Positional Encoding / Embedding',
-        tag: 'Order Injection',
-        tagBg: 'rgba(255,215,0,0.12)',
-        tagColor: '#ffd700',
-        desc: 'Self-attention is permutation-invariant. Positional encodings inject sequence order information so the model can distinguish token positions.',
-        formula: 'x = token_embed + position_embed   # added element-wise',
-        details: [
-          { label: 'Sinusoidal', val: 'Fixed, extrapolates' },
-          { label: 'Learned ABS', val: 'Trainable, no extrapolation' },
-          { label: 'RoPE', val: 'Rotates Q,K — relative pos' },
-          { label: 'ALiBi', val: 'Attention bias, no embed' },
-        ],
-        bullets: [
-          '<strong>RoPE dominates modern LLMs</strong> (Llama, Mistral, GPT-NeoX): it encodes relative position in Q·Kᵀ dot products naturally, enabling YaRN-style context extension post-training.',
-          '<strong>ALiBi</strong> adds a negative linear penalty -(|i−j|·m) to attention logits — simple and effective for moderate length generalization.',
-          '<strong>No PE at all</strong> (NoPE layers): some architectures like StripedHyena mix attention layers with and without PE to force some layers to be position-agnostic.',
-        ],
-      }
-    },
-    {
-      id: 'layer-norm-1',
-      name: 'LayerNorm (Pre)',
-      tag: 'norm',
-      tagColor: '#ff9500',
-      dotColor: '#ff9500',
-      info: {
-        title: 'Pre-Layer Normalization',
-        tag: 'Stabilization',
-        tagBg: 'rgba(255,149,0,0.12)',
-        tagColor: '#ff9500',
-        desc: 'Normalizes each token\'s hidden state independently to zero mean and unit variance, then applies learned scale (γ) and shift (β). Applied BEFORE the attention sub-layer in modern architectures (Pre-LN).',
-        formula: 'LN(x) = γ · (x − μ) / (σ + ε) + β\nRMSNorm(x) = γ · x / RMS(x)',
-        details: [
-          { label: 'Post-LN', val: 'Original paper — unstable deep' },
-          { label: 'Pre-LN', val: 'GPT-2, GPT-3 — stable' },
-          { label: 'RMSNorm', val: 'Llama — no mean centering' },
-          { label: 'ε', val: '1e-5 typically' },
-        ],
-        bullets: [
-          '<strong>Pre-LN vs Post-LN:</strong> Post-LN requires careful warmup and often diverges at 100+ layers. Pre-LN gradients flow stably from day 1.',
-          '<strong>RMSNorm</strong> drops the mean-centering step: since embeddings are centered by default, removing it saves ~40% of LN compute with no measurable quality loss.',
-          '<strong>No LN in attention weights:</strong> LN is applied to the residual stream, not to Q, K, V individually — a subtle but important distinction for implementation.',
-        ],
-      }
-    },
-    {
-      id: 'mhsa',
-      name: 'Multi-Head Self-Attention',
-      tag: 'core',
-      tagColor: '#00d4ff',
-      dotColor: '#00d4ff',
-      info: {
-        title: 'Multi-Head Self-Attention (MHSA)',
-        tag: 'Core Mechanism',
-        tagBg: 'rgba(0,212,255,0.12)',
-        tagColor: '#00d4ff',
-        desc: 'Each token attends to every other token (or past tokens in causal models). Q, K, V projections are split across h heads, enabling parallel extraction of different relational patterns.',
-        formula: 'head_i = Attention(QW_iQ, KW_iK, VW_iV)\nAttn(Q,K,V) = softmax(QKᵀ/√d_k) · V\nMHSA(x) = concat(head_1...head_h) · W_O',
-        details: [
-          { label: 'GPT-3', val: '96 heads, d_head=128' },
-          { label: 'Llama 3 8B', val: '32 Q-heads, 8 KV-heads (GQA)' },
-          { label: 'Complexity', val: 'O(n²·d) per layer' },
-          { label: 'Flash Attn', val: 'O(n) memory via tiling' },
-        ],
-        bullets: [
-          '<strong>GQA reduces KV cache:</strong> Grouped-Query Attention (Llama 3, Mistral) shares K/V across groups of Q-heads. With 4 groups for 32 Q-heads, KV cache shrinks 8× with negligible quality loss.',
-          '<strong>Causal masking:</strong> Upper triangle of QKᵀ is set to -∞ before softmax — ensures autoregressive generation sees no future tokens.',
-          '<strong>Flash Attention</strong> fuses QKᵀ, softmax, and ·V into a single SRAM-resident kernel, reducing HBM reads from O(n²) to O(n). Essential for any sequence > 4K.',
-        ],
-      }
-    },
-    {
-      id: 'residual-1',
-      name: 'Residual Connection',
-      tag: 'residual',
-      tagColor: '#7c3aed',
-      dotColor: '#7c3aed',
-      info: {
-        title: 'Residual / Skip Connection',
-        tag: 'Gradient Highway',
-        tagBg: 'rgba(124,58,237,0.12)',
-        tagColor: '#7c3aed',
-        desc: 'The input to each sub-layer is added directly to the sub-layer\'s output. This creates a residual stream that can be read and written by each layer without being destroyed.',
-        formula: 'x = x + MHSA(LN(x))   # after attention\nx = x + FFN(LN(x))    # after FFN',
-        details: [
-          { label: 'Gradient flow', val: 'Bypasses saturation' },
-          { label: 'Magnitude', val: 'Sub-layers start near-zero' },
-          { label: 'Residual stream', val: 'Persistent across layers' },
-          { label: 'Depth', val: 'Enables 96+ layer training' },
-        ],
-        bullets: [
-          '<strong>The residual stream interpretation:</strong> Think of x as a shared workspace. Each attention/FFN block reads from it, computes a delta, and adds it back. Early layers write syntax; later layers write semantics.',
-          '<strong>Sub-layer output is near-zero at init:</strong> W_O and W₂ are often initialized with smaller std (σ = 0.02/√2N) so that residual identity dominates early training.',
-          '<strong>Without residuals</strong>, gradients through 12+ transformer layers shrink to near-zero in 2 gradient steps (vanishing gradient). Residuals make the effective depth ~1 for gradients.',
-        ],
-      }
-    },
-    {
-      id: 'layer-norm-2',
-      name: 'LayerNorm (Pre)',
-      tag: 'norm',
-      tagColor: '#ff9500',
-      dotColor: '#ff9500',
-      info: {
-        title: 'Pre-LayerNorm Before FFN',
-        tag: 'Stabilization',
-        tagBg: 'rgba(255,149,0,0.12)',
-        tagColor: '#ff9500',
-        desc: 'A second normalization is applied before the feed-forward network. Each token\'s residual stream is normalized independently before entering the FFN.',
-        formula: 'x_norm = RMSNorm(x)\nffn_out = FFN(x_norm)',
-        details: [
-          { label: 'Shared γ,β?', val: 'No — separate LN params' },
-          { label: 'Params', val: '2 × d_model per LN' },
-          { label: 'Runtime', val: '~1% of total compute' },
-          { label: 'Critical', val: 'Prevents FFN input explosion' },
-        ],
-        bullets: [
-          'Two separate LN modules per block (pre-attention, pre-FFN) each have their own learned γ and β parameters — they are NOT shared.',
-          '<strong>Total LN parameters</strong> for a 96-layer GPT-3: 96 layers × 2 LNs × 2 params (γ,β) × 12,288 = ~4.7M — negligible fraction of 175B.',
-          'Some architectures (e.g., Gemma) use a single Pre-LN applied once before the entire block rather than twice — reduces LN overhead but may slightly reduce expressivity.',
-        ],
-      }
-    },
-    {
-      id: 'ffn',
-      name: 'Feed-Forward Network (FFN)',
-      tag: 'core',
-      tagColor: '#00d4ff',
-      dotColor: '#00d4ff',
-      info: {
-        title: 'Position-wise Feed-Forward Network',
-        tag: 'Token-wise MLP',
-        tagBg: 'rgba(0,212,255,0.12)',
-        tagColor: '#00d4ff',
-        desc: 'A 2-layer MLP applied identically to each token position. The hidden dimension is typically 4× d_model. Modern LLMs use SwiGLU activation for better quality.',
-        formula: 'FFN_ReLU(x)   = max(0, xW₁+b₁)·W₂+b₂\nFFN_SwiGLU(x) = (SiLU(xW₁) ⊙ xW₃)·W₂',
-        details: [
-          { label: 'Hidden dim', val: '4 × d_model (standard)' },
-          { label: 'SwiGLU dim', val: '2/3 × 4d ≈ 2.67d' },
-          { label: 'Param share', val: '~66% of non-embed params' },
-          { label: 'Llama 3 70B', val: 'd=8192, FFN_hidden=28672' },
-        ],
-        bullets: [
-          '<strong>FFN as key-value memory:</strong> Geva et al. (2021) showed that FFN neurons act as key-value stores — W₁ rows are "keys" that detect input patterns, W₂ columns are "values" that output factual associations.',
-          '<strong>SwiGLU vs ReLU:</strong> SwiGLU (sigmoid linear unit gated) consistently outperforms ReLU and GeLU by 0.5–1 perplexity point in empirical studies (PaLM ablations). It introduces a multiplicative gate that smooths gradients.',
-          '<strong>Mixture-of-Experts (MoE)</strong> replaces the dense FFN with N expert FFNs and a router that activates K of them per token — Mixtral uses 8 experts, activates 2, giving 12B active params from 46B total.',
-        ],
-      }
-    },
-    {
-      id: 'residual-2',
-      name: 'Residual Connection',
-      tag: 'residual',
-      tagColor: '#7c3aed',
-      dotColor: '#7c3aed',
-      info: {
-        title: 'Residual After FFN',
-        tag: 'Gradient Highway',
-        tagBg: 'rgba(124,58,237,0.12)',
-        tagColor: '#7c3aed',
-        desc: 'The FFN output is added back to the residual stream. After this operation, the block\'s contribution is fully integrated into the shared token representation.',
-        formula: 'x = x + FFN(LN(x))  # x is updated residual stream',
-        details: [
-          { label: 'Stream dim', val: 'd_model (unchanged)' },
-          { label: 'Next layer', val: 'Reads same-dim x' },
-          { label: 'Superposition', val: 'Features encoded linearly' },
-          { label: 'Circuits', val: 'Mechanistic interp target' },
-        ],
-        bullets: [
-          '<strong>Residual stream superposition:</strong> Elhage et al. (2022) showed that transformers store many more features than d_model dimensions via near-orthogonal superposition — the residual stream is richer than it appears.',
-          '<strong>Layer depth vs width:</strong> Depth compounds feature abstraction. Token representations in layer 1 detect syntax; layer 48 detects semantic roles; layer 96 detects factual associations.',
-          '<strong>Probing classifiers</strong> trained on intermediate residual stream activations are how researchers localize factual recall, syntax parsing, and coreference resolution to specific layers.',
-        ],
-      }
-    },
-    {
-      id: 'lm-head',
-      name: 'LM Head (Output Projection)',
-      tag: 'output',
-      tagColor: '#ff4757',
-      dotColor: '#ff4757',
-      info: {
-        title: 'Language Model Head',
-        tag: 'Output',
-        tagBg: 'rgba(255,71,87,0.12)',
-        tagColor: '#ff4757',
-        desc: 'The final hidden state is projected from d_model to vocab_size logits via a linear layer, then softmaxed for probability distribution over the next token.',
-        formula: 'logits = x_final · W_LM_head   # [seq, vocab]\nprobs  = softmax(logits / T)',
-        details: [
-          { label: 'W_LM_head', val: '[d_model × vocab_size]' },
-          { label: 'GPT-3', val: '12,288 × 50,257 ≈ 617M params' },
-          { label: 'Weight tying', val: 'Shares with embedding table' },
-          { label: 'Temperature T', val: 'Applied here before softmax' },
-        ],
-        bullets: [
-          '<strong>Weight tying saves hundreds of millions of parameters</strong> and adds a consistency constraint: the vector space used to read out predictions must match the space used to represent input tokens.',
-          '<strong>Only the LAST position\'s logits matter during generation</strong> — all others are discarded. During training, ALL positions\' logits are used for cross-entropy loss, enabling massively parallel supervision.',
-          '<strong>Logit lens</strong> (early exit analysis): applying the LM head to intermediate layer activations shows how token predictions sharpen with depth — a useful debugging tool for understanding model behavior.',
-        ],
-      }
-    },
-  ];
+  // ═══════════════════════════════════════════════════════════════════
+  //  A REAL (TINY) TRANSFORMER — every number on this page is computed
+  //  here, in this file, from the sentence you type. Nothing is canned.
+  // ═══════════════════════════════════════════════════════════════════
 
-  // ── Build diagram ──────────────────────────────────────────────────
-  const diagramEl = document.getElementById('transformer-diagram');
-  const infoPanel = document.getElementById('info-panel');
+  const D_MODEL   = 64;          // hidden width of the toy model
+  const FFN_MULT  = 4;           // FFN hidden = 4 * d_model = 256
+  const LN_EPS    = 1e-12;       // tiny on purpose so LN output is exactly mean 0 / var 1
+  const MAX_TOKENS = 14;         // keeps the n x n heatmap readable
 
-  // Helper: create a layer row
-  function makeLayerEl(layer, idx) {
-    const div = document.createElement('div');
-    div.className = 'tf-layer';
-    div.dataset.id = layer.id;
-
-    const dot = document.createElement('div');
-    dot.className = 'tf-layer-dot';
-    dot.style.background = layer.dotColor;
-    dot.style.boxShadow = `0 0 6px ${layer.dotColor}66`;
-
-    const name = document.createElement('div');
-    name.className = 'tf-layer-name';
-    name.style.color = layer.tagColor;
-    name.textContent = layer.name;
-
-    const tag = document.createElement('div');
-    tag.className = 'tf-layer-tag';
-    tag.textContent = layer.tag;
-    tag.style.background = `${layer.dotColor}22`;
-    tag.style.color = layer.dotColor;
-    tag.style.border = `1px solid ${layer.dotColor}44`;
-
-    div.appendChild(dot);
-    div.appendChild(name);
-    div.appendChild(tag);
-    div.addEventListener('click', () => showInfo(layer, div));
-    return div;
+  // ── Seeded PRNG: FNV-1a string hash → mulberry32 → Box–Muller gaussian ──
+  function fnv1a(str) {
+    let h = 0x811c9dc5;
+    for (let i = 0; i < str.length; i++) { h ^= str.charCodeAt(i); h = Math.imul(h, 0x01000193); }
+    return h >>> 0;
   }
-
-  function makeArrow() {
-    const d = document.createElement('div');
-    d.className = 'tf-arrow';
-    d.textContent = '↓';
-    return d;
+  function mulberry32(a) {
+    return function () {
+      a = (a + 0x6D2B79F5) | 0;
+      let t = Math.imul(a ^ (a >>> 15), 1 | a);
+      t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+      return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+    };
   }
-
-  // Build the diagram
-  const blockIds = ['layer-norm-1','mhsa','residual-1','layer-norm-2','ffn','residual-2'];
-
-  // Input embed
-  diagramEl.appendChild(makeLayerEl(LAYERS[0])); // token embed
-  diagramEl.appendChild(makeArrow());
-  diagramEl.appendChild(makeLayerEl(LAYERS[1])); // pos enc
-  diagramEl.appendChild(makeArrow());
-
-  // Repeat label
-  const repeatLabel = document.createElement('div');
-  repeatLabel.className = 'tf-repeat-label';
-  repeatLabel.textContent = '× N layers (e.g. N=96 for GPT-3)';
-  repeatLabel.style.color = 'var(--purple)';
-  repeatLabel.style.borderTop = '1px dashed var(--purple)';
-  repeatLabel.style.borderLeft = '1px dashed var(--purple)';
-  repeatLabel.style.paddingTop = '0.3rem';
-  repeatLabel.style.paddingLeft = '0.3rem';
-  repeatLabel.style.marginLeft = '8px';
-  diagramEl.appendChild(repeatLabel);
-
-  // Block layers
-  blockIds.forEach((id, i) => {
-    const layer = LAYERS.find(l => l.id === id);
-    const el = makeLayerEl(layer, i);
-    el.style.marginLeft = '12px';
-    diagramEl.appendChild(el);
-    if (i < blockIds.length - 1) {
-      const arr = makeArrow();
-      arr.style.marginLeft = '12px';
-      diagramEl.appendChild(arr);
+  function gaussian(rand) {
+    let u = 0, v = 0;
+    while (u === 0) u = rand();
+    while (v === 0) v = rand();
+    return Math.sqrt(-2 * Math.log(u)) * Math.cos(2 * Math.PI * v);
+  }
+  function randVec(key, n, std) {
+    const rand = mulberry32(fnv1a(key));
+    const out = new Float64Array(n);
+    for (let i = 0; i < n; i++) out[i] = gaussian(rand) * std;
+    return out;
+  }
+  function randMat(key, rows, cols, std) {
+    const rand = mulberry32(fnv1a(key));
+    const m = new Array(rows);
+    for (let i = 0; i < rows; i++) {
+      const r = new Float64Array(cols);
+      for (let j = 0; j < cols; j++) r[j] = gaussian(rand) * std;
+      m[i] = r;
     }
-  });
+    return m;
+  }
 
-  // Close block border
-  const closeLabel = document.createElement('div');
-  closeLabel.className = 'tf-repeat-label';
-  closeLabel.textContent = '↑ one transformer block ↑';
-  closeLabel.style.color = 'var(--purple)';
-  closeLabel.style.borderBottom = '1px dashed var(--purple)';
-  closeLabel.style.borderLeft = '1px dashed var(--purple)';
-  closeLabel.style.paddingBottom = '0.3rem';
-  closeLabel.style.paddingLeft = '0.3rem';
-  closeLabel.style.marginLeft = '8px';
-  closeLabel.style.marginBottom = '0.5rem';
-  diagramEl.appendChild(closeLabel);
+  // ── Linear algebra (plain JS, no libraries) ──────────────────────────
+  function matmul(A, B) {                    // A:[n][k]  B:[k][m]  →  [n][m]
+    const n = A.length, k = B.length, m = B[0].length, out = new Array(n);
+    for (let i = 0; i < n; i++) {
+      const o = new Float64Array(m), a = A[i];
+      for (let p = 0; p < k; p++) {
+        const av = a[p];
+        if (av === 0) continue;
+        const b = B[p];
+        for (let j = 0; j < m; j++) o[j] += av * b[j];
+      }
+      out[i] = o;
+    }
+    return out;
+  }
+  function addBias(M, b) {
+    return M.map(function (r) {
+      const o = new Float64Array(r.length);
+      for (let j = 0; j < r.length; j++) o[j] = r[j] + b[j];
+      return o;
+    });
+  }
+  function addMat(A, B) {
+    return A.map(function (r, i) {
+      const o = new Float64Array(r.length);
+      for (let j = 0; j < r.length; j++) o[j] = r[j] + B[i][j];
+      return o;
+    });
+  }
+  // LayerNorm with gamma = 1, beta = 0 (this toy model is untrained, so the
+  // affine parameters are the identity). Per-token mean/variance, for real.
+  function layerNorm(M) {
+    return M.map(function (r) {
+      const d = r.length;
+      let mu = 0;
+      for (let j = 0; j < d; j++) mu += r[j];
+      mu /= d;
+      let va = 0;
+      for (let j = 0; j < d; j++) { const c = r[j] - mu; va += c * c; }
+      va /= d;
+      const inv = 1 / Math.sqrt(va + LN_EPS);
+      const o = new Float64Array(d);
+      for (let j = 0; j < d; j++) o[j] = (r[j] - mu) * inv;
+      return o;
+    });
+  }
+  function softmaxRow(scores) {
+    let mx = -Infinity;
+    for (let j = 0; j < scores.length; j++) if (scores[j] > mx) mx = scores[j];
+    const out = new Float64Array(scores.length);
+    let sum = 0;
+    for (let j = 0; j < scores.length; j++) { const e = Math.exp(scores[j] - mx); out[j] = e; sum += e; }
+    for (let j = 0; j < scores.length; j++) out[j] /= sum;
+    return out;
+  }
+  // GELU (tanh approximation, the one used by GPT-2 / BERT)
+  function gelu(x) {
+    return 0.5 * x * (1 + Math.tanh(0.7978845608028654 * (x + 0.044715 * x * x * x)));
+  }
+  // Sinusoidal PE, exactly the closed form from Vaswani et al. 2017:
+  //   PE(pos, 2i)   = sin(pos / 10000^(2i/d))
+  //   PE(pos, 2i+1) = cos(pos / 10000^(2i/d))
+  function positionalEncoding(pos, d) {
+    const v = new Float64Array(d);
+    for (let j = 0; j < d; j++) {
+      const twoI = 2 * Math.floor(j / 2);
+      const angle = pos / Math.pow(10000, twoI / d);
+      v[j] = (j % 2 === 0) ? Math.sin(angle) : Math.cos(angle);
+    }
+    return v;
+  }
 
-  diagramEl.appendChild(makeArrow());
-  diagramEl.appendChild(makeLayerEl(LAYERS[8])); // lm head
+  // ── Tokenizer (honest description: this is NOT BPE) ──────────────────
+  // Lowercase → split on whitespace → punctuation becomes its own token →
+  // any alphanumeric run longer than 7 chars is chopped into 5-char pieces
+  // with a "##" continuation marker. A crude stand-in for real subwording.
+  function tokenize(text) {
+    const raw = String(text).toLowerCase().match(/[a-z0-9]+(?:'[a-z]+)?|[^\sa-z0-9]/g) || [];
+    const out = [];
+    for (let i = 0; i < raw.length; i++) {
+      const w = raw[i];
+      if (w.length > 7 && /^[a-z0-9]+$/.test(w)) {
+        out.push(w.slice(0, 5));
+        let rest = w.slice(5);
+        while (rest.length > 0) { out.push('##' + rest.slice(0, 5)); rest = rest.slice(5); }
+      } else {
+        out.push(w);
+      }
+    }
+    if (out.length === 0) out.push('<pad>');
+    return out.slice(0, MAX_TOKENS);
+  }
 
-  // ── Info panel ──────────────────────────────────────────────────────
-  let activeEl = null;
+  // ── Tensor statistics (used for every description on this page) ──────
+  function stats(M) {
+    let mn = Infinity, mx = -Infinity, sum = 0, sq = 0, cnt = 0, normSum = 0, bad = 0;
+    for (let i = 0; i < M.length; i++) {
+      let rowSq = 0;
+      for (let j = 0; j < M[i].length; j++) {
+        const v = M[i][j];
+        if (!Number.isFinite(v)) bad++;
+        if (v < mn) mn = v;
+        if (v > mx) mx = v;
+        sum += v; sq += v * v; rowSq += v * v; cnt++;
+      }
+      normSum += Math.sqrt(rowSq);
+    }
+    const mean = sum / cnt;
+    return {
+      rows: M.length, cols: M[0].length,
+      min: mn, max: mx, mean: mean,
+      std: Math.sqrt(Math.max(0, sq / cnt - mean * mean)),
+      meanNorm: normSum / M.length,
+      nonFinite: bad
+    };
+  }
 
-  function showInfo(layer, clickedEl) {
-    if (activeEl) activeEl.classList.remove('active');
-    clickedEl.classList.add('active');
-    activeEl = clickedEl;
+  // ═══════════════════════════════════════════════════════════════════
+  //  THE FORWARD PASS — Pre-LN blocks, exactly what the theory above says
+  //     x = x + MHSA(LayerNorm(x))
+  //     x = x + FFN(LayerNorm(x))
+  // ═══════════════════════════════════════════════════════════════════
+  function forward(cfg) {
+    const tokens = cfg.tokens;
+    const n = tokens.length, D = D_MODEL, H = cfg.nHeads, dh = D / H, L = cfg.nLayers;
+    const seed = cfg.seed;
+    const stages = [];
+    const attention = [];   // attention[layer][head] = n x n Float64Array rows
 
-    const d = layer.info;
-    let detailHTML = '';
-    if (d.details && d.details.length) {
-      detailHTML = '<div class="param-grid">' +
-        d.details.map(kv => `<div class="param-chip"><div class="pc-label">${kv.label}</div><div class="pc-val">${kv.val}</div></div>`).join('') +
-        '</div>';
+    function push(name, kind, X, extra) {
+      const s = stats(X);
+      stages.push({
+        name: name, kind: kind, stat: s,
+        deltaNorm: stages.length ? s.meanNorm - stages[stages.length - 1].stat.meanNorm : 0,
+        extra: extra || {}
+      });
     }
 
-    let bulletsHTML = '';
-    if (d.bullets && d.bullets.length) {
-      bulletsHTML = '<ul>' + d.bullets.map(b => `<li>${b}</li>`).join('') + '</ul>';
-    }
+    // 1. token embedding — a real lookup table keyed by the token string
+    let X = tokens.map(function (t) { return randVec('emb|' + seed + '|' + t, D, 1.0); });
+    const embStats = stats(X);
+    push('Token Embedding', 'input', X, { detail: 'lookup: emb[' + tokens.length + ' tokens] from a seeded table' });
 
-    infoPanel.innerHTML = `
-      <h3>${d.title}</h3>
-      <span class="info-tag" style="background:${d.tagBg};color:${d.tagColor};border:1px solid ${d.tagColor}44;">${d.tag}</span>
-      <p>${d.desc}</p>
-      <div class="info-formula">${d.formula}</div>
-      ${detailHTML}
-      ${bulletsHTML ? '<br/>' + bulletsHTML : ''}
-    `;
-  }
-
-  // Click token embedding by default
-  const firstLayerEl = diagramEl.querySelector('.tf-layer');
-  if (firstLayerEl) firstLayerEl.click();
-
-  // ── Flow animation ──────────────────────────────────────────────────
-  const canvas = document.getElementById('flow-canvas');
-  const ctx = canvas.getContext('2d');
-
-  function resizeCanvas() {
-    const rect = canvas.parentElement.getBoundingClientRect();
-    canvas.width = rect.width;
-    canvas.height = 80;
-  }
-  resizeCanvas();
-  window.addEventListener('resize', resizeCanvas);
-
-  const STAGES = [
-    { label: 'Tokens', color: '#00ff88' },
-    { label: 'Embed', color: '#00ff88' },
-    { label: '+PosEnc', color: '#ffd700' },
-    { label: 'LN', color: '#ff9500' },
-    { label: 'MHSA', color: '#00d4ff' },
-    { label: '+Residual', color: '#7c3aed' },
-    { label: 'LN', color: '#ff9500' },
-    { label: 'FFN', color: '#00d4ff' },
-    { label: '+Residual', color: '#7c3aed' },
-    { label: '×N', color: '#7c3aed' },
-    { label: 'LM Head', color: '#ff4757' },
-    { label: 'Logits', color: '#ff4757' },
-  ];
-
-  let t = 0;
-
-  function drawFlow() {
-    const W = canvas.width;
-    const H = canvas.height;
-    ctx.clearRect(0, 0, W, H);
-
-    const n = STAGES.length;
-    const slotW = W / n;
-    const cy = H / 2;
-    const r = Math.min(slotW * 0.3, 22);
-
-    // Draw connecting line
-    ctx.beginPath();
-    ctx.strokeStyle = '#252a3d';
-    ctx.lineWidth = 2;
-    ctx.moveTo(slotW * 0.5, cy);
-    ctx.lineTo(W - slotW * 0.5, cy);
-    ctx.stroke();
-
-    // Active segment highlight
-    const pos = t % 1;
-    const segIdx = Math.floor((t % n));
-    const segFrac = t % 1;
-    const x1 = slotW * (segIdx + 0.5);
-    const x2 = slotW * (segIdx + 1 + 0.5);
-    const gx = x1 + (x2 - x1) * segFrac;
-
-    // Glow along path
-    const grad = ctx.createLinearGradient(x1, cy, gx, cy);
-    const stageColor = STAGES[segIdx]?.color || '#00d4ff';
-    grad.addColorStop(0, 'transparent');
-    grad.addColorStop(1, stageColor + '88');
-    ctx.beginPath();
-    ctx.strokeStyle = grad;
-    ctx.lineWidth = 4;
-    ctx.moveTo(x1, cy);
-    ctx.lineTo(gx, cy);
-    ctx.stroke();
-
-    // Draw moving particle
-    ctx.beginPath();
-    ctx.arc(gx, cy, 7, 0, Math.PI * 2);
-    ctx.fillStyle = stageColor;
-    ctx.shadowColor = stageColor;
-    ctx.shadowBlur = 12;
-    ctx.fill();
-    ctx.shadowBlur = 0;
-
-    // Draw stage nodes
-    STAGES.forEach((stage, i) => {
-      const cx = slotW * (i + 0.5);
-      const active = i === segIdx;
-
-      // Circle
-      ctx.beginPath();
-      ctx.arc(cx, cy, r, 0, Math.PI * 2);
-      ctx.fillStyle = active ? stage.color + '28' : '#1a1e2e';
-      ctx.fill();
-      ctx.strokeStyle = active ? stage.color : '#252a3d';
-      ctx.lineWidth = active ? 2 : 1;
-      ctx.stroke();
-
-      // Label
-      ctx.font = `${active ? '600 ' : ''}${slotW > 60 ? 10 : 8}px 'JetBrains Mono', monospace`;
-      ctx.fillStyle = active ? stage.color : '#8892a4';
-      ctx.textAlign = 'center';
-      ctx.textBaseline = 'middle';
-      ctx.fillText(stage.label, cx, cy);
+    // 2. + sinusoidal positional encoding
+    const PEs = [];
+    for (let p = 0; p < n; p++) PEs.push(positionalEncoding(p, D));
+    X = addMat(X, PEs);
+    push('+ Sinusoidal PE', 'position', X, {
+      detail: 'PE(pos,2i)=sin(pos/10000^(2i/d)), PE(pos,2i+1)=cos(...)',
+      pe0: PEs[0][0], pe1: PEs[Math.min(1, n - 1)][2]
     });
 
-    t += 0.015;
-    requestAnimationFrame(drawFlow);
+    for (let l = 0; l < L; l++) {
+      const tagL = 'L' + l;
+
+      // ── Pre-LN #1 ────────────────────────────────────────────────
+      const xn1 = layerNorm(X);
+      push(tagL + ' · LayerNorm (pre-attn)', 'norm', xn1, { detail: 'per-token mean→0, var→1, then Q/K/V read from here' });
+
+      // ── Multi-head self-attention ────────────────────────────────
+      const Wq = randMat('Wq|' + seed + '|' + l, D, D, 1 / Math.sqrt(D));
+      const Wk = randMat('Wk|' + seed + '|' + l, D, D, 1 / Math.sqrt(D));
+      const Wv = randMat('Wv|' + seed + '|' + l, D, D, 1 / Math.sqrt(D));
+      const Wo = randMat('Wo|' + seed + '|' + l, D, D, 1 / Math.sqrt(D));
+      const Q = matmul(xn1, Wq), K = matmul(xn1, Wk), V = matmul(xn1, Wv);
+
+      const heads = [];
+      const scale = 1 / Math.sqrt(dh);
+      let maxWeight = 0, entropySum = 0;
+      const concat = new Array(n);
+      for (let i = 0; i < n; i++) concat[i] = new Float64Array(D);
+
+      for (let h = 0; h < H; h++) {
+        const off = h * dh;
+        const A = new Array(n);
+        for (let i = 0; i < n; i++) {
+          const raw = new Float64Array(n);
+          for (let j = 0; j < n; j++) {
+            if (cfg.causal && j > i) { raw[j] = -Infinity; continue; }
+            let dot = 0;
+            for (let c = 0; c < dh; c++) dot += Q[i][off + c] * K[j][off + c];
+            raw[j] = dot * scale;
+          }
+          const p = softmaxRow(raw);
+          A[i] = p;
+          let ent = 0;
+          for (let j = 0; j < n; j++) {
+            if (p[j] > maxWeight) maxWeight = p[j];
+            if (p[j] > 1e-12) ent -= p[j] * Math.log(p[j]);
+          }
+          entropySum += ent;
+          // weighted sum of V for this head, written into the concat slot
+          for (let j = 0; j < n; j++) {
+            const w = p[j];
+            if (w === 0) continue;
+            for (let c = 0; c < dh; c++) concat[i][off + c] += w * V[j][off + c];
+          }
+        }
+        heads.push(A);
+      }
+      attention.push(heads);
+
+      const attnOut = matmul(concat, Wo);        // head concat → output projection
+      push(tagL + ' · MHSA (' + H + ' heads)', 'core', attnOut, {
+        detail: 'softmax(QKᵀ/√' + dh + ')·V per head, concat, ·W_O',
+        heads: H, dHead: dh, scale: scale,
+        maxWeight: maxWeight, meanEntropy: entropySum / (H * n),
+        maxEntropy: Math.log(n)
+      });
+
+      X = addMat(X, attnOut);                    // ── residual add #1 ──
+      push(tagL + ' · Residual x + MHSA(LN(x))', 'residual', X, { detail: 'identity path preserved (Pre-LN)' });
+
+      // ── Pre-LN #2 ────────────────────────────────────────────────
+      const xn2 = layerNorm(X);
+      push(tagL + ' · LayerNorm (pre-FFN)', 'norm', xn2, { detail: 'second, separate LN — its own (identity) γ, β' });
+
+      // ── Position-wise FFN with GELU ──────────────────────────────
+      const dff = FFN_MULT * D;
+      const W1 = randMat('W1|' + seed + '|' + l, D, dff, 1 / Math.sqrt(D));
+      const b1 = randVec('b1|' + seed + '|' + l, dff, 0.02);
+      const W2 = randMat('W2|' + seed + '|' + l, dff, D, 1 / Math.sqrt(dff));
+      const b2 = randVec('b2|' + seed + '|' + l, D, 0.02);
+      const hpre = addBias(matmul(xn2, W1), b1);
+      let deadFrac = 0, hcount = 0;
+      const hact = hpre.map(function (r) {
+        const o = new Float64Array(r.length);
+        for (let j = 0; j < r.length; j++) { o[j] = gelu(r[j]); if (r[j] < 0) deadFrac++; hcount++; }
+        return o;
+      });
+      const ffnOut = addBias(matmul(hact, W2), b2);
+      push(tagL + ' · FFN (GELU, d_ff=' + dff + ')', 'core', ffnOut, {
+        detail: 'GELU(x·W₁+b₁)·W₂+b₂, d_ff = ' + FFN_MULT + '×d_model',
+        dff: dff, negFrac: deadFrac / hcount, hiddenStat: stats(hact)
+      });
+
+      X = addMat(X, ffnOut);                     // ── residual add #2 ──
+      push(tagL + ' · Residual x + FFN(LN(x))', 'residual', X, { detail: 'block output — same shape as block input' });
+    }
+
+    // ── Final LN + weight-tied LM head over the sentence's own vocabulary ──
+    const xf = layerNorm(X);
+    push('Final LayerNorm', 'norm', xf, { detail: 'applied once after the last block (GPT-2 style)' });
+
+    const vocab = [];
+    const seen = Object.create(null);
+    for (let i = 0; i < tokens.length; i++) if (!seen[tokens[i]]) { seen[tokens[i]] = 1; vocab.push(tokens[i]); }
+    const Etab = vocab.map(function (t) { return randVec('emb|' + seed + '|' + t, D, 1.0); });
+    const last = xf[n - 1];
+    const logits = new Float64Array(vocab.length);
+    for (let v = 0; v < vocab.length; v++) {
+      let dot = 0;
+      for (let j = 0; j < D; j++) dot += last[j] * Etab[v][j];
+      logits[v] = dot / Math.sqrt(D);
+    }
+    const probs = softmaxRow(logits);
+    const ranked = vocab.map(function (t, v) { return { token: t, logit: logits[v], prob: probs[v] }; })
+                        .sort(function (a, b) { return b.prob - a.prob; });
+    push('LM Head (tied to E, |V|=' + vocab.length + ')', 'output', [logits], {
+      detail: 'logits = LN(x_last)·Eᵀ/√d_model over the sentence vocabulary',
+      ranked: ranked
+    });
+
+    return {
+      tokens: tokens, stages: stages, attention: attention,
+      nHeads: H, nLayers: L, dHead: dh, dModel: D, causal: cfg.causal,
+      embStats: embStats, vocab: vocab, ranked: ranked
+    };
   }
 
-  drawFlow();
+  // ═══════════════════════════════════════════════════════════════════
+  //  UI
+  // ═══════════════════════════════════════════════════════════════════
+  const KIND_COLOR = {
+    input:    '#00ff88',
+    position: '#ffd700',
+    norm:     '#ff9500',
+    core:     '#00d4ff',
+    residual: '#7c3aed',
+    output:   '#ff4757'
+  };
+  const KIND_LABEL = {
+    input: 'input', position: 'position', norm: 'norm',
+    core: 'core', residual: 'residual', output: 'output'
+  };
+  const KIND_BLURB = {
+    input:    'Every token string is hashed into a seeded PRNG and sampled from N(0,1) at d_model. Identical tokens get identical vectors — a real embedding table lookup, just generated instead of trained.',
+    position: 'Self-attention is permutation-invariant, so position is injected additively with the fixed sinusoidal formula. Nothing here is learned.',
+    norm:     'Each token row is independently re-centred and re-scaled: subtract the row mean, divide by the row standard deviation (γ=1, β=0 here, since nothing is trained). In the Pre-LN blocks above, the two per-block norms sit INSIDE the branch — their output feeds the sub-layer, never the residual stream. The last one is the single final norm applied after the stack.',
+    core:     'The sub-layer itself. Its output is a delta that is about to be ADDED to the residual stream, not a replacement for it.',
+    residual: 'x = x + Sublayer(LayerNorm(x)). The residual stream passes through untouched and the sub-layer delta is added on top — the clean identity path that makes Pre-LN trainable without warmup.',
+    output:   'The final hidden state is projected back onto the embedding table (weight tying) to produce logits, then softmaxed.'
+  };
 
+  const PRESETS = [
+    'the cat sat on the mat because it was warm',
+    'the bank of the river flooded the bank downtown',
+    'she poured water into the glass until it was full',
+    'attention is all you need',
+    'a a a a b b b b'
+  ];
+
+  const $ = function (id) { return document.getElementById(id); };
+  const sentenceEl = $('sentence-input');
+  const headsSel   = $('heads-select');
+  const layersSel  = $('layers-select');
+  const viewLayer  = $('view-layer');
+  const viewHead   = $('view-head');
+  const causalEl   = $('causal-toggle');
+  const reseedBtn  = $('reseed-btn');
+  const presetRow  = $('preset-row');
+  const configNote = $('config-note');
+  const diagramEl  = $('transformer-diagram');
+  const infoPanel  = $('info-panel');
+  const attnCanvas = $('attn-canvas');
+  const attnTip    = $('attn-tip');
+  const attnSide   = $('attn-side');
+  const flowCanvas = $('flow-canvas');
+
+  let seed = 'v1';
+  let model = null;
+  let selectedStage = 0;
+  let pinnedCell = null;
+  let grid = null;   // heatmap hit-test geometry
+
+  const fmt = function (x, p) { return Number(x).toFixed(p === undefined ? 3 : p); };
+
+  // ── Preset buttons ───────────────────────────────────────────────────
+  PRESETS.forEach(function (s) {
+    const b = document.createElement('button');
+    b.type = 'button';
+    b.className = 'btn';
+    b.textContent = '"' + (s.length > 26 ? s.slice(0, 26) + '…' : s) + '"';
+    b.addEventListener('click', function () { sentenceEl.value = s; recompute(true); });
+    presetRow.appendChild(b);
+  });
+
+  reseedBtn.addEventListener('click', function () {
+    seed = 'v' + ((fnv1a(seed + '!') % 100000));
+    recompute(false);
+  });
+
+  sentenceEl.addEventListener('input', function () { recompute(true); });
+  sentenceEl.addEventListener('change', function () { recompute(true); });
+  headsSel.addEventListener('change', function () { recompute(false); });
+  layersSel.addEventListener('change', function () { recompute(false); });
+  causalEl.addEventListener('change', function () { recompute(false); });
+  viewLayer.addEventListener('change', function () { pinnedCell = null; drawAttention(); renderAttnSide(); });
+  viewHead.addEventListener('change', function () { pinnedCell = null; drawAttention(); renderAttnSide(); });
+
+  function syncViewSelects() {
+    const L = model.nLayers, H = model.nHeads;
+    const prevL = Math.min(parseInt(viewLayer.value || '0', 10) || 0, L - 1);
+    const prevH = Math.min(parseInt(viewHead.value || '0', 10) || 0, H - 1);
+    if (viewLayer.options.length !== L) {
+      viewLayer.innerHTML = '';
+      for (let l = 0; l < L; l++) {
+        const o = document.createElement('option');
+        o.value = String(l); o.textContent = 'layer ' + l;
+        viewLayer.appendChild(o);
+      }
+    }
+    if (viewHead.options.length !== H) {
+      viewHead.innerHTML = '';
+      for (let h = 0; h < H; h++) {
+        const o = document.createElement('option');
+        o.value = String(h); o.textContent = 'head ' + h;
+        viewHead.appendChild(o);
+      }
+    }
+    viewLayer.value = String(prevL);
+    viewHead.value = String(prevH);
+  }
+
+  function currentLayer() { return Math.min(parseInt(viewLayer.value, 10) || 0, model.nLayers - 1); }
+  function currentHead()  { return Math.min(parseInt(viewHead.value, 10) || 0, model.nHeads - 1); }
+
+  // ── Recompute everything from the controls ───────────────────────────
+  function recompute(keepSelection) {
+    const tokens = tokenize(sentenceEl.value);
+    model = forward({
+      tokens: tokens,
+      nHeads: parseInt(headsSel.value, 10) || 4,
+      nLayers: parseInt(layersSel.value, 10) || 2,
+      causal: !!causalEl.checked,
+      seed: seed
+    });
+    if (!keepSelection || selectedStage >= model.stages.length) selectedStage = 0;
+    pinnedCell = null;
+    syncViewSelects();
+    renderConfigNote();
+    renderDiagram();
+    renderInfo();
+    drawAttention();
+    renderAttnSide();
+    drawFlow();
+  }
+
+  function renderConfigNote() {
+    const st = model.stages;
+    configNote.innerHTML =
+      '<strong>Tokenizer:</strong> lowercase + whitespace/punctuation split, with alphanumeric runs longer than 7 characters chopped into 5-character pieces marked <code>##</code>. ' +
+      'This is a toy splitter, <strong>not BPE or SentencePiece</strong>. ' +
+      '<strong>Model:</strong> d_model = ' + model.dModel + ', d_head = ' + model.dHead + ', d_ff = ' + (FFN_MULT * model.dModel) + ', activation = <strong>GELU</strong> (tanh approximation), ' +
+      'norm = <strong>Pre-LN</strong> with γ=1, β=0, ε=' + LN_EPS + '. ' +
+      'Weights are untrained: sampled from N(0, 1/√fan_in) via a seeded PRNG (seed <code>' + seed + '</code>), so runs are reproducible but the model has learned nothing. ' +
+      '<strong>Run:</strong> ' + model.tokens.length + ' tokens × ' + model.nLayers + ' block(s) × ' + model.nHeads + ' head(s) = ' + st.length + ' tensor stages, ' +
+      (model.nLayers * model.nHeads) + ' attention matrices of shape [' + model.tokens.length + '×' + model.tokens.length + '].';
+  }
+
+  // ── Stage list (generated from the run — no canned HTML) ─────────────
+  function renderDiagram() {
+    diagramEl.innerHTML = '';
+    model.stages.forEach(function (st, i) {
+      if (i > 0) {
+        const a = document.createElement('div');
+        a.className = 'tf-arrow';
+        a.textContent = '↓';
+        diagramEl.appendChild(a);
+      }
+      const color = KIND_COLOR[st.kind] || '#8892a4';
+      const div = document.createElement('div');
+      div.className = 'tf-layer' + (i === selectedStage ? ' active' : '');
+      div.dataset.idx = String(i);
+
+      const dot = document.createElement('div');
+      dot.className = 'tf-layer-dot';
+      dot.style.background = color;
+      dot.style.boxShadow = '0 0 6px ' + color + '66';
+
+      const name = document.createElement('div');
+      name.className = 'tf-layer-name';
+      name.style.color = color;
+      name.textContent = st.name;
+
+      const tag = document.createElement('div');
+      tag.className = 'tf-layer-tag';
+      tag.textContent = '‖x‖ ' + fmt(st.stat.meanNorm, 2);
+      tag.style.background = color + '22';
+      tag.style.color = color;
+      tag.style.border = '1px solid ' + color + '44';
+
+      div.appendChild(dot); div.appendChild(name); div.appendChild(tag);
+      div.addEventListener('click', function () { selectedStage = i; renderDiagram(); renderInfo(); drawFlow(); });
+      diagramEl.appendChild(div);
+    });
+  }
+
+  // ── Info panel (every number below comes from the run) ───────────────
+  function renderInfo() {
+    const st = model.stages[selectedStage];
+    const s = st.stat;
+    const color = KIND_COLOR[st.kind] || '#8892a4';
+    const chips = [
+      ['shape', '[' + s.rows + ' × ' + s.cols + ']'],
+      ['mean ‖row‖₂', fmt(s.meanNorm, 3)],
+      ['Δ‖row‖₂ vs prev', (st.deltaNorm >= 0 ? '+' : '') + fmt(st.deltaNorm, 3)],
+      ['value range', '[' + fmt(s.min, 2) + ', ' + fmt(s.max, 2) + ']'],
+      ['mean', fmt(s.mean, 4)],
+      ['std', fmt(s.std, 4)],
+      ['non-finite', String(s.nonFinite)]
+    ];
+
+    const extras = [];
+    if (st.kind === 'norm') {
+      extras.push('Measured per-token mean is <strong>' + fmt(s.mean, 6) + '</strong> and measured std is <strong>' + fmt(s.std, 6) + '</strong> — that is the LayerNorm doing its job on this exact tensor.');
+    }
+    if (st.extra.heads !== undefined) {
+      extras.push('Scaling factor 1/√d_k = <strong>' + fmt(st.extra.scale, 4) + '</strong> with d_k = ' + st.extra.dHead + '. Largest single attention weight anywhere in this layer: <strong>' + fmt(st.extra.maxWeight, 4) + '</strong>. Mean row entropy <strong>' + fmt(st.extra.meanEntropy, 3) + '</strong> nats against a uniform ceiling of ln(' + model.tokens.length + ') = <strong>' + fmt(st.extra.maxEntropy, 3) + '</strong>.');
+    }
+    if (st.extra.dff !== undefined) {
+      extras.push('Hidden layer is [' + s.rows + ' × ' + st.extra.dff + ']; <strong>' + fmt(100 * st.extra.negFrac, 1) + '%</strong> of pre-activations were negative (GELU squashes but does not zero them), hidden range [' + fmt(st.extra.hiddenStat.min, 2) + ', ' + fmt(st.extra.hiddenStat.max, 2) + '].');
+    }
+    if (st.extra.pe0 !== undefined) {
+      extras.push('Spot check: PE(0,0) = sin(0) = <strong>' + fmt(st.extra.pe0, 4) + '</strong>.');
+    }
+    if (st.extra.ranked) {
+      const top = st.extra.ranked.slice(0, 5).map(function (r) {
+        return '<li><code>' + escapeHtml(r.token) + '</code> — logit ' + fmt(r.logit, 3) + ', p = ' + fmt(r.prob, 4) + '</li>';
+      }).join('');
+      extras.push('Top next-token candidates over the sentence\'s own ' + model.vocab.length + '-token vocabulary (the weights are random, so these predictions are meaningless — they just show the tied head actually computing):<ul>' + top + '</ul>');
+    }
+
+    infoPanel.innerHTML =
+      '<h3>' + escapeHtml(st.name) + '</h3>' +
+      '<span class="info-tag" style="background:' + color + '1f;color:' + color + ';border:1px solid ' + color + '44;">' + KIND_LABEL[st.kind] + ' · stage ' + (selectedStage + 1) + '/' + model.stages.length + '</span>' +
+      '<p>' + KIND_BLURB[st.kind] + '</p>' +
+      '<div class="info-formula">' + escapeHtml(st.extra.detail || '') + '</div>' +
+      '<div class="param-grid">' + chips.map(function (kv) {
+        return '<div class="param-chip"><div class="pc-label">' + kv[0] + '</div><div class="pc-val">' + kv[1] + '</div></div>';
+      }).join('') + '</div>' +
+      (extras.length ? '<br/><ul>' + extras.map(function (e) { return '<li>' + e + '</li>'; }).join('') + '</ul>' : '');
+  }
+
+  function escapeHtml(s) {
+    return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  }
+
+  // ── Attention heatmap (the actual softmax output) ────────────────────
+  function heatColor(w, wmax) {
+    const t = wmax > 0 ? Math.pow(w / wmax, 0.6) : 0;   // gamma for visibility
+    const r = Math.round(16 + t * (185 - 16));
+    const g = Math.round(19 + t * (244 - 19));
+    const b = Math.round(28 + t * (255 - 28));
+    return 'rgb(' + r + ',' + g + ',' + b + ')';
+  }
+
+  function drawAttention() {
+    const l = currentLayer(), h = currentHead();
+    const A = model.attention[l] && model.attention[l][h];
+    const n = model.tokens.length;
+    const padL = 96, padT = 84, padR = 12, padB = 12;
+    const cell = Math.max(14, Math.min(32, Math.floor((520 - padL - padR) / n)));
+    const W = padL + cell * n + padR, H2 = padT + cell * n + padB;
+    attnCanvas.width = W;
+    attnCanvas.height = H2;
+    const ctx = attnCanvas.getContext('2d');
+    ctx.clearRect(0, 0, W, H2);
+    if (!A) return;
+
+    let wmax = 0;
+    for (let i = 0; i < n; i++) for (let j = 0; j < n; j++) if (A[i][j] > wmax) wmax = A[i][j];
+
+    grid = { x0: padL, y0: padT, cell: cell, n: n, A: A, wmax: wmax };
+
+    // cells
+    for (let i = 0; i < n; i++) {
+      for (let j = 0; j < n; j++) {
+        ctx.fillStyle = heatColor(A[i][j], wmax);
+        ctx.fillRect(padL + j * cell, padT + i * cell, cell - 1, cell - 1);
+      }
+    }
+    // pinned / hovered outline
+    if (pinnedCell && pinnedCell.i < n && pinnedCell.j < n) {
+      ctx.strokeStyle = '#ffd700';
+      ctx.lineWidth = 2;
+      ctx.strokeRect(padL + pinnedCell.j * cell - 1, padT + pinnedCell.i * cell - 1, cell + 1, cell + 1);
+    }
+
+    // labels
+    ctx.font = "10px 'JetBrains Mono', monospace";
+    ctx.fillStyle = '#8892a4';
+    ctx.textAlign = 'right';
+    ctx.textBaseline = 'middle';
+    for (let i = 0; i < n; i++) {
+      ctx.fillText(i + ' ' + model.tokens[i], padL - 6, padT + i * cell + cell / 2);
+    }
+    ctx.save();
+    ctx.textAlign = 'left';
+    ctx.textBaseline = 'middle';
+    for (let j = 0; j < n; j++) {
+      ctx.save();
+      ctx.translate(padL + j * cell + cell / 2, padT - 6);
+      ctx.rotate(-Math.PI / 2);
+      ctx.fillText(model.tokens[j], 0, 0);
+      ctx.restore();
+    }
+    ctx.restore();
+
+    // axis captions
+    ctx.font = "600 10px 'JetBrains Mono', monospace";
+    ctx.fillStyle = '#00d4ff';
+    ctx.textAlign = 'left';
+    ctx.fillText('key j →', padL, 12);
+    ctx.save();
+    ctx.translate(12, padT + cell * n / 2);
+    ctx.rotate(-Math.PI / 2);
+    ctx.textAlign = 'center';
+    ctx.fillText('← query i', 0, 0);
+    ctx.restore();
+  }
+
+  function cellAt(ev) {
+    if (!grid) return null;
+    const r = attnCanvas.getBoundingClientRect();
+    const sx = attnCanvas.width / r.width, sy = attnCanvas.height / r.height;
+    const x = (ev.clientX - r.left) * sx, y = (ev.clientY - r.top) * sy;
+    const j = Math.floor((x - grid.x0) / grid.cell);
+    const i = Math.floor((y - grid.y0) / grid.cell);
+    if (i < 0 || j < 0 || i >= grid.n || j >= grid.n) return null;
+    return { i: i, j: j };
+  }
+
+  attnCanvas.addEventListener('mousemove', function (ev) {
+    const c = cellAt(ev);
+    if (!c) { attnTip.style.opacity = '0'; return; }
+    const w = grid.A[c.i][c.j];
+    attnTip.textContent =
+      'query ' + c.i + ' "' + model.tokens[c.i] + '"\n' +
+      'key   ' + c.j + ' "' + model.tokens[c.j] + '"\n' +
+      'weight = ' + w.toFixed(6) +
+      (w === 0 ? '  (masked)' : '');
+    const r = attnCanvas.getBoundingClientRect();
+    attnTip.style.left = (ev.clientX - r.left + 14) + 'px';
+    attnTip.style.top = (ev.clientY - r.top + 14) + 'px';
+    attnTip.style.opacity = '1';
+  });
+  attnCanvas.addEventListener('mouseleave', function () { attnTip.style.opacity = '0'; });
+  attnCanvas.addEventListener('click', function (ev) {
+    const c = cellAt(ev);
+    pinnedCell = c;
+    drawAttention();
+    renderAttnSide();
+  });
+
+  // ── Side panel for the heatmap ───────────────────────────────────────
+  function renderAttnSide() {
+    const l = currentLayer(), h = currentHead();
+    const A = model.attention[l] && model.attention[l][h];
+    const n = model.tokens.length;
+    if (!A) { attnSide.innerHTML = ''; return; }
+
+    // real row sums (proof the softmax is real), real diagonal mass, real entropy
+    let worstRowSumErr = 0, diagMass = 0, entropy = 0, offDiagMax = 0;
+    for (let i = 0; i < n; i++) {
+      let s = 0;
+      for (let j = 0; j < n; j++) {
+        s += A[i][j];
+        if (A[i][j] > 1e-12) entropy -= A[i][j] * Math.log(A[i][j]);
+        if (i !== j && A[i][j] > offDiagMax) offDiagMax = A[i][j];
+      }
+      diagMass += A[i][i];
+      worstRowSumErr = Math.max(worstRowSumErr, Math.abs(s - 1));
+    }
+    entropy /= n;
+    diagMass /= n;
+
+    // how different is this head from head 0 of the same layer?
+    let headDiff = 0;
+    const A0 = model.attention[l][0];
+    for (let i = 0; i < n; i++) for (let j = 0; j < n; j++) headDiff += Math.abs(A[i][j] - A0[i][j]);
+    headDiff /= (n * n);
+
+    let pinHtml = '<p>Hover any cell for its exact weight; click to pin it.</p>';
+    if (pinnedCell && pinnedCell.i < n && pinnedCell.j < n) {
+      const w = A[pinnedCell.i][pinnedCell.j];
+      let rank = 1;
+      for (let j = 0; j < n; j++) if (A[pinnedCell.i][j] > w) rank++;
+      pinHtml = '<p><strong>Pinned:</strong> query ' + pinnedCell.i + ' <code>' + escapeHtml(model.tokens[pinnedCell.i]) +
+        '</code> → key ' + pinnedCell.j + ' <code>' + escapeHtml(model.tokens[pinnedCell.j]) + '</code><br/>' +
+        'attention weight = <strong>' + w.toFixed(8) + '</strong> (rank ' + rank + ' of ' + n + ' in that row)</p>';
+    }
+
+    attnSide.innerHTML =
+      '<h3>Attention — layer ' + l + ', head ' + h + '</h3>' +
+      '<p>This is <strong>softmax(QKᵀ/√' + model.dHead + ')</strong> as literally computed a few milliseconds ago from the sentence in the box. ' +
+      (model.causal ? 'The causal mask sets j &gt; i to −∞ before softmax, which is why the upper triangle is exactly zero.'
+                    : 'The causal mask is OFF, so every query sees every key (encoder-style, bidirectional).') + '</p>' +
+      pinHtml +
+      '<div class="stat-line"><span>max |Σⱼ A[i][j] − 1|</span><span>' + worstRowSumErr.toExponential(2) + '</span></div>' +
+      '<div class="stat-line"><span>max weight in matrix</span><span>' + fmt(grid ? grid.wmax : 0, 4) + '</span></div>' +
+      '<div class="stat-line"><span>max off-diagonal weight</span><span>' + fmt(offDiagMax, 4) + '</span></div>' +
+      '<div class="stat-line"><span>mean self-attention A[i][i]</span><span>' + fmt(diagMass, 4) + '</span></div>' +
+      '<div class="stat-line"><span>mean row entropy (nats)</span><span>' + fmt(entropy, 3) + ' / ' + fmt(Math.log(n), 3) + '</span></div>' +
+      '<div class="stat-line"><span>mean |A − A(head 0)|</span><span>' + fmt(headDiff, 5) + '</span></div>' +
+      '<div class="legend-bar"></div>' +
+      '<div class="legend-ends"><span>0.000</span><span>weight</span><span>' + fmt(grid ? grid.wmax : 1, 3) + '</span></div>' +
+      '<div class="token-strip">' + model.tokens.map(function (t, i) {
+        return '<span class="tok-chip"><span class="tok-i">' + i + '</span>' + escapeHtml(t) + '</span>';
+      }).join('') + '</div>';
+  }
+
+  // ── Residual-stream magnitude chart (real ‖x‖ per stage) ─────────────
+  function drawFlow() {
+    const wrap = flowCanvas.parentElement;
+    const W = Math.max(320, Math.floor(wrap.getBoundingClientRect().width || 900));
+    const H = 170;
+    flowCanvas.width = W;
+    flowCanvas.height = H;
+    const ctx = flowCanvas.getContext('2d');
+    ctx.clearRect(0, 0, W, H);
+
+    const st = model.stages;
+    const padT = 26, padB = 46;
+    const plotH = H - padT - padB;
+    let maxN = 0;
+    st.forEach(function (s) { if (s.stat.meanNorm > maxN) maxN = s.stat.meanNorm; });
+    if (maxN <= 0) maxN = 1;
+
+    const slot = W / st.length;
+    const bw = Math.max(3, Math.min(slot * 0.62, 30));
+
+    // baseline
+    ctx.strokeStyle = '#252a3d';
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(0, padT + plotH + 0.5);
+    ctx.lineTo(W, padT + plotH + 0.5);
+    ctx.stroke();
+
+    ctx.font = "600 10px 'JetBrains Mono', monospace";
+    ctx.fillStyle = '#8892a4';
+    ctx.textAlign = 'left';
+    ctx.textBaseline = 'top';
+    ctx.fillText('mean ‖row‖₂ of the tensor at each stage — max ' + fmt(maxN, 2), 4, 4);
+
+    st.forEach(function (s, i) {
+      const cx = slot * (i + 0.5);
+      const hh = (s.stat.meanNorm / maxN) * plotH;
+      const color = KIND_COLOR[s.kind] || '#8892a4';
+      const active = i === selectedStage;
+      ctx.fillStyle = active ? color : color + '55';
+      ctx.fillRect(cx - bw / 2, padT + plotH - hh, bw, hh);
+      if (active) {
+        ctx.strokeStyle = color;
+        ctx.lineWidth = 1.5;
+        ctx.strokeRect(cx - bw / 2 - 1.5, padT + plotH - hh - 1.5, bw + 3, hh + 3);
+      }
+      // value on top
+      if (slot > 26) {
+        ctx.font = "9px 'JetBrains Mono', monospace";
+        ctx.fillStyle = active ? color : '#8892a4';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'bottom';
+        ctx.fillText(fmt(s.stat.meanNorm, 1), cx, padT + plotH - hh - 4);
+      }
+      // short label under the axis, rotated
+      ctx.save();
+      ctx.translate(cx, padT + plotH + 5);
+      ctx.rotate(Math.PI / 4);
+      ctx.font = "9px 'JetBrains Mono', monospace";
+      ctx.fillStyle = active ? color : '#5c6478';
+      ctx.textAlign = 'left';
+      ctx.textBaseline = 'middle';
+      ctx.fillText(shortLabel(s.name), 0, 0);
+      ctx.restore();
+    });
+
+    // connecting polyline through bar tops
+    ctx.beginPath();
+    ctx.strokeStyle = 'rgba(0,212,255,0.45)';
+    ctx.lineWidth = 1.25;
+    st.forEach(function (s, i) {
+      const cx = slot * (i + 0.5);
+      const y = padT + plotH - (s.stat.meanNorm / maxN) * plotH;
+      if (i === 0) ctx.moveTo(cx, y); else ctx.lineTo(cx, y);
+    });
+    ctx.stroke();
+  }
+
+  function shortLabel(name) {
+    return name
+      .replace('Token Embedding', 'embed')
+      .replace('+ Sinusoidal PE', '+PE')
+      .replace(/ · LayerNorm \(pre-attn\)/, ' LN₁')
+      .replace(/ · LayerNorm \(pre-FFN\)/, ' LN₂')
+      .replace(/ · MHSA.*/, ' MHSA')
+      .replace(/ · Residual x \+ MHSA.*/, ' +res')
+      .replace(/ · Residual x \+ FFN.*/, ' +res')
+      .replace(/ · FFN.*/, ' FFN')
+      .replace('Final LayerNorm', 'final LN')
+      .replace(/LM Head.*/, 'LM head');
+  }
+
+  let resizeTimer = null;
+  window.addEventListener('resize', function () {
+    if (resizeTimer) clearTimeout(resizeTimer);
+    resizeTimer = setTimeout(function () { if (model) drawFlow(); }, 120);
+  });
+
+  recompute(false);
 })();
 </script>
 </body>

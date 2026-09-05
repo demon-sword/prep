@@ -36,7 +36,7 @@ Policy violation and offensive-content detection is a **classification problem a
 [User input]
     │
     ├─► [Tier 1 — Pre-LLM input scan, synchronous]
-    │       Fast safety classifier (Llama Guard 3, <50ms GPU)
+    │       Fast safety classifier (Llama Guard, <50ms GPU)
     │       Rules: blocklist keywords / regex for known patterns (URLs, phone #s, account numbers)
     │       Block → return canned refusal, skip LLM call, log event
     │
@@ -44,7 +44,7 @@ Policy violation and offensive-content detection is a **classification problem a
 [LLM call + RAG retrieval]
     │
     ├─► [Tier 2 — Output scan, synchronous or async]
-    │       Safety classifier (Llama Guard 3 rerun on output)
+    │       Safety classifier (Llama Guard rerun on output)
     │       Domain policy classifier (fine-tuned DistilBERT on company taxonomy)
     │       Synchronous: high-stakes domains (healthcare, finance) — block before delivery
     │       Async: medium-risk consumer apps — deliver + flag for human review queue
@@ -62,7 +62,7 @@ Policy violation and offensive-content detection is a **classification problem a
    - **Tier-3 quality issues** (off-topic, factually wrong, tone violations): async only, human review queue.
 
 2. **Classifier selection per tier:**
-   - **Llama Guard 3** (Meta, open-weight, ~7B params): multi-label harm classifier trained on MLCommons taxonomy. Runs in <60ms on a GPU inference server. Out-of-the-box for Tier-1 harms.
+   - **Llama Guard** (Meta, open-weight, ~7B params): multi-label harm classifier trained on MLCommons taxonomy. Runs in <60ms on a GPU inference server. Out-of-the-box for Tier-1 harms.
    - **Perspective API** (Google): specialised for toxicity, identity attack, insult, profanity. Good for consumer-facing comment/chat moderation.
    - **Fine-tuned DistilBERT or DeBERTa**: required for company-specific Tier-2 policies (industry jargon, custom prohibited topics, regulatory constraints). Train on 1,000–5,000 labeled examples per category.
    - **Rules and blocklists**: fast exact-match layer for known patterns (profanity lists, PII regex for SSNs/credit cards, competitor product names). Zero latency, zero false negatives for exact matches — run before the ML classifier.
@@ -81,9 +81,9 @@ Policy violation and offensive-content detection is a **classification problem a
 ### Example / Tradeoff
 
 **E-commerce customer support bot (1.2M queries/day):** Deployed a 3-tier stack:
-1. Synchronous input: regex blocklist (PII patterns) + Llama Guard 3 for Tier-1 harms (< 60ms GPU).
+1. Synchronous input: regex blocklist (PII patterns) + Llama Guard for Tier-1 harms (< 60ms GPU).
 2. Synchronous output: fine-tuned DistilBERT for Tier-2 violations (competitor mentions, refund abuse language) at 45ms — synchronous because incorrect refund info is a financial liability.
-3. Async audit: Kafka stream → 5% sample to GPT-4o-mini LLM judge → human review queue for edge cases → weekly label collection.
+3. Async audit: Kafka stream → 5% sample to a small fast model LLM judge → human review queue for edge cases → weekly label collection.
 
 Results after calibration: Tier-1 recall 99.3%, FP 1.1%. Tier-2 recall 88%, FP 0.4%. Over-refusal rate (legitimate queries blocked): 0.38% — within the 0.5% SLO. Monthly classifier updates closed the gap on seasonal vocabulary shifts (new product names, promotions).
 
@@ -99,7 +99,7 @@ Results after calibration: Tier-1 recall 99.3%, FP 1.1%. Tier-2 recall 88%, FP 0
 **Core explanation (2–3 min):**
 "I start by defining the harm taxonomy before touching any tooling. I split violations into three tiers. Tier-1 harms — CSAM, self-harm, imminent violence, explicit illegal instructions — need synchronous blocking with recall above 99%; I'll accept a higher false positive rate there. Tier-2 policy violations — competitor mentions, medical advice solicitation, PII extraction, regulatory non-compliance — need a lower false positive rate, under 0.5%, because over-blocking legitimate queries damages the product.
 
-For the actual detection tooling: I'd use **Llama Guard 3** from Meta for Tier-1 — it's open-weight, runs under 60ms on a GPU, and covers the MLCommons harm taxonomy out of the box. For company-specific Tier-2 policies, I'd fine-tune a **DistilBERT or DeBERTa** classifier on 2,000–5,000 labeled examples from our own policy taxonomy. I'd also add a fast regex/blocklist layer in front of both classifiers — exact-match PII patterns, known profanity, competitor product names — because that catches known violations at zero latency.
+For the actual detection tooling: I'd use **Llama Guard** from Meta for Tier-1 — it's open-weight, runs under 60ms on a GPU, and covers the MLCommons harm taxonomy out of the box. For company-specific Tier-2 policies, I'd fine-tune a **DistilBERT or DeBERTa** classifier on 2,000–5,000 labeled examples from our own policy taxonomy. I'd also add a fast regex/blocklist layer in front of both classifiers — exact-match PII patterns, known profanity, competitor product names — because that catches known violations at zero latency.
 
 The detection runs at two boundaries. On the input side, synchronous: if the user message triggers Tier-1 or Tier-2, I block before calling the LLM at all — saves cost and latency. On the output side, it depends on the risk level. For high-stakes domains like healthcare or financial advice, I run the classifier synchronously on the generated response and block before delivery. For medium-risk consumer apps with tight latency budgets, I deliver the response and fan it out asynchronously to a Kafka queue, where it gets scored, flagged, and routed to a human review queue.
 
@@ -109,7 +109,7 @@ Threshold calibration is the part most candidates skip. I hold out 1,000 represe
 "The main tension is synchronous vs async for Tier-2 violations. Synchronous adds 50–150ms per query — at 1M queries/day, that's a real cost and latency hit. Async is faster, but a small fraction of policy-violating responses reach users before being caught. Whether that's acceptable depends entirely on the regulatory and liability context. For a healthcare chatbot, it's not acceptable. For a general-purpose writing assistant, it often is. I'd also call out that multi-language content is much harder — classifiers trained on English often miss policy violations in code-switching or non-Latin-script text, so for global products I'd need multilingual models or language-specific classifiers."
 
 **Wrap-up (30s):**
-"So the detection pipeline is: define harm taxonomy → fast rules/blocklist → Llama Guard 3 for Tier-1 → fine-tuned DistilBERT for Tier-2 policy violations → synchronous at input, synchronous or async at output depending on liability — all feeding an async audit loop that labels edge cases and re-trains classifiers monthly. Happy to go deeper on calibration or the async pipeline architecture."
+"So the detection pipeline is: define harm taxonomy → fast rules/blocklist → Llama Guard for Tier-1 → fine-tuned DistilBERT for Tier-2 policy violations → synchronous at input, synchronous or async at output depending on liability — all feeding an async audit loop that labels edge cases and re-trains classifiers monthly. Happy to go deeper on calibration or the async pipeline architecture."
 
 ---
 
@@ -135,4 +135,4 @@ Threshold calibration is the part most candidates skip. I hold out 1,000 represe
 
 ## One-liner recall
 
-> Detect policy violations with a two-boundary, three-tier pipeline: fast regex/blocklist + Llama Guard 3 (Tier-1, synchronous) at input; fine-tuned DistilBERT for company-specific Tier-2 violations (synchronous for high-liability domains, async for medium-risk) at output — with separate precision-recall calibration per harm category and a monthly retraining loop fed by human-reviewed flagged samples.
+> Detect policy violations with a two-boundary, three-tier pipeline: fast regex/blocklist + Llama Guard (Tier-1, synchronous) at input; fine-tuned DistilBERT for company-specific Tier-2 violations (synchronous for high-liability domains, async for medium-risk) at output — with separate precision-recall calibration per harm category and a monthly retraining loop fed by human-reviewed flagged samples.

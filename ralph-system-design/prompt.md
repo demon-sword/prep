@@ -53,3 +53,29 @@ After substantive edits, run narrowest check:
 One commit per plan item: `feat({{TOPIC}}): <short description>`
 
 Do not push unless asked.
+
+## Fact-check gate (runs after you finish — you cannot bypass it)
+
+Once you finish, a **separate agent** is given your finished file and nothing
+else. It is told it did not write the file, and asked to find any incorrect
+formula, wrong mechanism description, or false factual claim. Its verdict is
+required before this item is accepted, and it does not see your reasoning — so a
+claim that only looks right in context will be caught.
+
+Write for that reviewer:
+
+- Every formula must be correct as written, including scaling factors,
+  normalisation terms and exponents. If you write softmax(QKᵀ/√d_k)V, the √d_k
+  must be there and must be in the denominator.
+- Every number must be real. Do not invent benchmark figures, parameter counts,
+  latencies or costs to make a sentence land. If you are not sure of a number,
+  describe the magnitude qualitatively instead.
+- Attribute papers, tools and techniques correctly, or not at all.
+- Do not pad to hit a word count with claims you cannot stand behind. A shorter
+  section that is true beats a longer one that is not — the word floor is a
+  minimum for *real* content, not a licence to speculate.
+- Keep the visualization's numbers consistent with the prose. If the text says
+  the ring has 128 virtual nodes, the JS must not use 64.
+
+If this item comes back rejected, you will be shown the exact FAIL lines. Fix the
+underlying fact — do not reword around it.

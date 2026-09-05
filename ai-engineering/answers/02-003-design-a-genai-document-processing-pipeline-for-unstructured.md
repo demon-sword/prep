@@ -43,7 +43,7 @@ A GenAI document-processing pipeline transforms raw unstructured documents (PDFs
 | Emails | Python `email`/`mailparser` — strip boilerplate signatures, parse HTML body |
 | HTML / web | BeautifulSoup + readability-lxml to extract article body |
 | Tables | Textract AnalyzeDocument API or Camelot for structured table extraction → Markdown table strings |
-| Charts/graphs | GPT-4o vision or Claude claude-opus-4 with image captioning → caption stored as metadata |
+| Charts/graphs | A frontier vision-capable model with image captioning → caption stored as metadata |
 
 **Stage 3 — Clean & normalize**
 - Strip headers/footers (detected by repeated string matching across pages).
@@ -91,7 +91,7 @@ For chunking, I'd use structure-aware recursive splitting — never cut mid-sent
 
 Then I embed with text-embedding-3-large or bge-m3 for multilingual, index in Pinecone with rich metadata — source type, page number, section heading, date — and build a parallel BM25 index in Elasticsearch for keyword matches.
 
-For multi-modal: charts and graphs I handle with GPT-4o vision to generate a caption, stored as metadata alongside the image reference. This lets the LLM cite 'Figure 2: revenue trend' even though it can't embed the pixel data."
+For multi-modal: charts and graphs I handle with a frontier vision-capable model to generate a caption, stored as metadata alongside the image reference. This lets the LLM cite 'Figure 2: revenue trend' even though it can't embed the pixel data."
 
 **Tradeoff / production angle (1 min):**
 "The big tradeoff is accuracy vs cost on OCR. Textract gives 95%+ word accuracy but costs ~$0.015/page. For a legal firm with 50K contracts that's a meaningful bill. So I route: if the PDF has a native text layer, use PyMuPDF for free; only send to Textract if text extraction returns fewer than 50 characters per page. I also cache extracted text in S3 so re-indexing on document updates doesn't re-run OCR. The other failure mode is embedding drift — if you swap embedding models, you must re-embed everything, so I version the embedding model alongside the index."

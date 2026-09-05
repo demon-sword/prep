@@ -1,0 +1,387 @@
+[
+  {
+    "id": "01-feed-ranking-system",
+    "title": "Design a Feed Ranking System",
+    "slug": "feed-ranking-system",
+    "group": "ranking",
+    "description": "The home feed of a social product: every pull returns a ranked page of posts drawn from follows, groups, and recommended sources. Candidate generation must cut 500M items to ~500 in under 20ms while the ranker's per-item feature fetch — not the model forward pass — is what actually consumes the 150ms p99 budget.",
+    "depth": "intro",
+    "has_code": true,
+    "scale": {
+      "dau": "300M",
+      "feed_requests_per_user_per_day": "20",
+      "items_in_corpus": "500M",
+      "candidates_after_retrieval": "500",
+      "features_per_candidate": "200",
+      "bytes_per_feature": "8",
+      "p99_latency_budget_ms": "150",
+      "retention_days": "90"
+    },
+    "capacity_anchors": [
+      "DAU to QPS derivation",
+      "peak-to-average ratio",
+      "latency budget decomposition",
+      "GPU/replica sizing",
+      "cache hit-rate and memory"
+    ],
+    "viz": "sliders for DAU, feed requests per user per day, candidates per request, and the p99 budget drive a live readout that recomputes average QPS, peak QPS at the chosen peak-to-average multiplier, item-scores per second, ranker replicas needed at a fixed per-replica throughput, feature bytes fetched per second, and the milliseconds of budget left after retrieval and feature fetch are subtracted."
+  },
+  {
+    "id": "02-model-serving-platform",
+    "title": "Design a Model Serving Platform",
+    "slug": "model-serving-platform",
+    "group": "platform",
+    "description": "A shared inference platform that hosts hundreds of teams' models behind one gRPC endpoint with per-model autoscaling, versioning, and shadow traffic. The tension is that batching is the only way to reach acceptable GPU utilization, yet every millisecond spent waiting to fill a batch is subtracted from a 50ms p99 budget that also has to cover queueing and network hops.",
+    "depth": "core",
+    "has_code": true,
+    "scale": {
+      "dau": "150M",
+      "inference_calls_per_user_per_day": "40",
+      "models_hosted": "400",
+      "avg_model_size_gb": "4",
+      "gpu_memory_gb": "80",
+      "per_replica_throughput_qps": "600",
+      "batch_window_ms": "10",
+      "p99_latency_budget_ms": "50"
+    },
+    "capacity_anchors": [
+      "DAU to QPS derivation",
+      "peak-to-average ratio",
+      "GPU/replica sizing",
+      "latency budget decomposition",
+      "cost per 1000 requests"
+    ],
+    "viz": "drag DAU, calls per user per day, batch window, and per-replica throughput; the panel recomputes average and peak QPS, the batch size the window actually fills at that arrival rate, GPU replicas needed with headroom, how many models fit per GPU at the chosen model size, queueing delay versus the remaining latency budget, and dollars per 1000 requests at a configurable GPU hourly rate."
+  },
+  {
+    "id": "03-feature-store",
+    "title": "Design a Feature Store",
+    "slug": "feature-store",
+    "group": "platform",
+    "description": "A central store that serves precomputed entity features online at request time and materializes the same definitions offline for training. The hard part is numeric: one ranking request fans out to hundreds of online key lookups, while the offline side must hold years of point-in-time-correct history whose row count and bytes-per-row decide whether backfills cost thousands or millions.",
+    "depth": "core",
+    "has_code": true,
+    "scale": {
+      "dau": "200M",
+      "requests_per_user_per_day": "25",
+      "online_feature_reads_per_request": "300",
+      "entities_in_online_store": "1B",
+      "features_per_entity": "800",
+      "bytes_per_feature": "8",
+      "daily_feature_writes": "50B",
+      "offline_retention_days": "730"
+    },
+    "capacity_anchors": [
+      "DAU to QPS derivation",
+      "storage math with bytes-per-row",
+      "cache hit-rate and memory",
+      "bandwidth",
+      "training data volume and retrain cost"
+    ],
+    "viz": "sliders for DAU, feature reads per request, features per entity, and bytes per feature recompute online read QPS after multi-get batching, the raw key-lookup rate without batching, online store memory in terabytes from entities times features times bytes, the RAM saved at a given cache hit rate, network bytes per second on the feature path, and offline table size across the chosen retention window."
+  },
+  {
+    "id": "04-search-ranking-system",
+    "title": "Design a Search Ranking System",
+    "slug": "search-ranking-system",
+    "group": "ranking",
+    "description": "Web-scale or in-app search where a typed query must return relevance-ordered results from a twenty-billion-document index. Retrieval breadth and ranking quality pull against each other inside one budget: widening the L1 candidate set improves recall but multiplies the L2 reranker's per-query cost, and the index's shard count sets a fan-out floor on tail latency.",
+    "depth": "core",
+    "has_code": false,
+    "scale": {
+      "dau": "500M",
+      "searches_per_user_per_day": "10",
+      "documents_in_index": "20B",
+      "avg_indexed_terms_per_doc": "600",
+      "bytes_per_posting_entry": "8",
+      "l1_candidates_per_query": "10000",
+      "l2_reranked_docs_per_query": "200",
+      "p99_latency_budget_ms": "200"
+    },
+    "capacity_anchors": [
+      "DAU to QPS derivation",
+      "index size and shard count",
+      "latency budget decomposition",
+      "peak-to-average ratio",
+      "cache hit-rate and memory"
+    ],
+    "viz": "drag DAU, searches per user per day, corpus size, and terms per document to recompute query QPS and peak QPS, total inverted-index bytes, shard count at a fixed per-node index capacity, the scatter-gather fan-out per query, expected tail latency as the max over shards, reranker documents scored per second, and how much QPS a query-result cache at an adjustable hit rate removes from the index tier."
+  },
+  {
+    "id": "05-embedding-retrieval-system",
+    "title": "Design an Embedding Retrieval System",
+    "slug": "embedding-retrieval-system",
+    "group": "retrieval",
+    "description": "A vector retrieval service that answers approximate nearest-neighbour queries over a billion item embeddings for recommendation and semantic search callers. Recall, memory, and latency are one joint constraint: raw float32 vectors will not fit in RAM at this corpus size, so quantization and graph parameters must be chosen against an explicit index-bytes and shard-count budget rather than by feel.",
+    "depth": "core",
+    "has_code": true,
+    "scale": {
+      "dau": "250M",
+      "retrieval_calls_per_user_per_day": "30",
+      "items_in_corpus": "1B",
+      "embedding_dim": "768",
+      "bytes_per_dim_float32": "4",
+      "hnsw_graph_degree": "32",
+      "recall_at_100_target": "0.95",
+      "p99_latency_budget_ms": "30"
+    },
+    "capacity_anchors": [
+      "DAU to QPS derivation",
+      "index size and shard count",
+      "storage math with bytes-per-row",
+      "latency budget decomposition",
+      "cost per 1000 requests"
+    ],
+    "viz": "sliders for corpus size, embedding dimension, quantization bytes per dimension, graph degree, and DAU recompute retrieval QPS, raw vector bytes versus quantized bytes, graph overhead, total index size, shards needed at a chosen per-node RAM limit, replicas needed to serve peak QPS at a fixed per-shard QPS ceiling, and the resulting cost per 1000 retrieval calls."
+  },
+  {
+    "id": "06-ads-ctr-prediction-system",
+    "title": "Design an Ads CTR Prediction System",
+    "slug": "ads-ctr-prediction-system",
+    "group": "ranking",
+    "description": "The auction path of an ad server, where predicted click-through rate multiplied by bid decides which of thousands of eligible ads wins each impression. Predictions must be calibrated in absolute probability rather than merely well-ordered, because revenue is priced off the number — and the training pipeline that produces that number ingests tens of billions of heavily imbalanced impression rows per day under an 80ms serving budget.",
+    "depth": "core",
+    "has_code": true,
+    "scale": {
+      "dau": "400M",
+      "ad_requests_per_user_per_day": "50",
+      "candidate_ads_per_request": "2000",
+      "scored_ads_per_request": "500",
+      "positive_click_rate": "0.02",
+      "bytes_per_impression_row": "400",
+      "training_window_days": "30",
+      "p99_latency_budget_ms": "80"
+    },
+    "capacity_anchors": [
+      "DAU to QPS derivation",
+      "peak-to-average ratio",
+      "latency budget decomposition",
+      "training data volume and retrain cost",
+      "storage math with bytes-per-row",
+      "cost per 1000 requests"
+    ],
+    "viz": "drag DAU, ad requests per user per day, ads scored per request, negative downsampling rate, and training window; the readout recomputes ad-request QPS and peak QPS, model scores per second, impression rows per day and their bytes over the training window, the row count surviving downsampling, retrain hours at a configurable throughput per GPU-hour, and the calibration multiplier needed to undo the downsampling bias."
+  },
+  {
+    "id": "07-real-time-personalization-system",
+    "title": "Design a Real-Time Personalization System",
+    "slug": "real-time-personalization-system",
+    "group": "realtime",
+    "description": "A system that folds a user's last few minutes of behaviour — taps, dwells, skips, searches — into the very next ranking call, so a session visibly adapts as it happens. Freshness is the whole product, so the design has to hold a live per-session state in memory for every concurrent user and update it within seconds of each event, while the event stream itself arrives at an order of magnitude higher rate than the serving traffic.",
+    "depth": "advanced",
+    "has_code": true,
+    "scale": {
+      "dau": "180M",
+      "events_per_user_per_day": "120",
+      "personalization_requests_per_user_per_day": "25",
+      "peak_concurrent_sessions": "12M",
+      "session_state_bytes": "2048",
+      "event_bytes": "300",
+      "freshness_target_seconds": "5",
+      "p99_latency_budget_ms": "100"
+    },
+    "capacity_anchors": [
+      "DAU to QPS derivation",
+      "peak-to-average ratio",
+      "cache hit-rate and memory",
+      "latency budget decomposition",
+      "bandwidth"
+    ],
+    "viz": "sliders for DAU, events per user per day, concurrent sessions, and session-state size recompute the event ingest rate and its peak, serving QPS, stream bytes per second, session-store memory as concurrency times state size, the fraction of state evictable at a chosen TTL and hit rate, consumer partitions needed at a fixed per-partition throughput, and the staleness implied when consumer lag exceeds the freshness target."
+  },
+  {
+    "id": "08-fraud-detection-pipeline",
+    "title": "Design a Fraud Detection Pipeline",
+    "slug": "fraud-detection-pipeline",
+    "group": "realtime",
+    "description": "An inline risk decision on every payment authorization: approve, challenge, or decline before the transaction completes. The load-bearing features are velocity counters over 1-minute to 30-day windows that must be read and updated synchronously inside a 250ms budget, while a fraud base rate near 0.1% and a chargeback label lag of weeks decide how much data a retrain actually has to learn from.",
+    "depth": "advanced",
+    "has_code": true,
+    "scale": {
+      "dau": "80M",
+      "transactions_per_user_per_day": "7.5",
+      "peak_to_average_ratio": "4",
+      "velocity_windows": "1m/5m/1h/24h/30d",
+      "bytes_per_transaction_row": "1200",
+      "fraud_base_rate": "0.001",
+      "label_lag_days": "45",
+      "decision_latency_budget_ms": "250",
+      "retention_days": "400"
+    },
+    "capacity_anchors": [
+      "DAU to QPS derivation",
+      "peak-to-average ratio",
+      "latency budget decomposition",
+      "storage math with bytes-per-row",
+      "training data volume and retrain cost"
+    ],
+    "viz": "drag DAU, transactions per user per day, the peak multiplier, the number of velocity windows, and retention to recompute average and peak transaction TPS, counter reads and writes per second as TPS times windows times entity keys, counter-store memory, the milliseconds left for the model after counter I/O, retained row bytes over the window, and the count of confirmed fraud labels available once the label lag is applied."
+  },
+  {
+    "id": "09-push-notification-ranking-system",
+    "title": "Design a Push Notification Ranking System",
+    "slug": "push-notification-ranking-system",
+    "group": "ranking",
+    "description": "A daily pipeline that scores every candidate notification for every user and sends only the few worth interrupting them for, subject to per-user frequency caps and quiet hours. The interesting constraint is a batch one: tens of billions of user-candidate pairs must be scored inside a fixed nightly window, and the send-versus-suppress threshold is an economic decision about long-run engagement rather than a per-item probability.",
+    "depth": "core",
+    "has_code": false,
+    "scale": {
+      "dau": "250M",
+      "registered_devices": "600M",
+      "candidates_per_user_per_day": "40",
+      "target_sends_per_user_per_day": "3",
+      "scoring_window_hours": "4",
+      "bytes_per_scored_row": "120",
+      "p99_delivery_latency_budget_ms": "500",
+      "retention_days": "180"
+    },
+    "capacity_anchors": [
+      "DAU to QPS derivation",
+      "peak-to-average ratio",
+      "GPU/replica sizing",
+      "storage math with bytes-per-row",
+      "cost per 1000 requests"
+    ],
+    "viz": "sliders for DAU, candidates per user, scoring window length, and send cap recompute total user-candidate pairs per day, the sustained scoring throughput the window demands, scoring replicas needed at a fixed per-replica rate, the delivery-fanout QPS to push gateways at peak, stored scored-row bytes over retention, and cost per 1000 sends against a configurable gateway and compute rate."
+  },
+  {
+    "id": "10-eta-prediction-system",
+    "title": "Design an ETA Prediction System",
+    "slug": "eta-prediction-system",
+    "group": "realtime",
+    "description": "The arrival-time estimate shown in a ride-hailing or delivery app, recomputed continuously as a trip progresses and as traffic changes underneath it. Millions of GPS pings per second must be aggregated into fresh per-road-segment speed features and joined to a route of hundreds of segments inside a 120ms budget, so the geospatial feature fan-out — not the model — is what dominates both latency and storage.",
+    "depth": "advanced",
+    "has_code": false,
+    "scale": {
+      "dau": "40M",
+      "trips_per_user_per_day": "1.2",
+      "eta_queries_per_trip": "8",
+      "road_segments": "60M",
+      "segments_per_route": "300",
+      "telemetry_pings_per_second": "2M",
+      "bytes_per_ping": "80",
+      "p99_latency_budget_ms": "120",
+      "retention_days": "365"
+    },
+    "capacity_anchors": [
+      "DAU to QPS derivation",
+      "peak-to-average ratio",
+      "bandwidth",
+      "storage math with bytes-per-row",
+      "latency budget decomposition"
+    ],
+    "viz": "drag DAU, trips per user, ETA queries per trip, segments per route, and ping rate to recompute ETA QPS and peak QPS, segment-feature lookups per second as QPS times route length, ingest bandwidth in megabytes per second from pings times bytes, the segment speed table's memory footprint, a year of retained telemetry in terabytes, and the latency left for inference once the segment join is charged."
+  },
+  {
+    "id": "11-content-moderation-pipeline",
+    "title": "Design a Content Moderation Pipeline",
+    "slug": "content-moderation-pipeline",
+    "group": "platform",
+    "description": "A pipeline that screens hundreds of millions of daily uploads — text, images, video — for policy violations, blocking the clearest cases inline and routing the uncertain ones to human reviewers. The economics are a cascade problem: an expensive multimodal model cannot run on every upload, so cheap high-recall filters must set thresholds that keep the human review queue inside the reviewer headcount the business can actually staff.",
+    "depth": "core",
+    "has_code": false,
+    "scale": {
+      "dau": "700M",
+      "uploads_per_user_per_day": "0.7",
+      "avg_media_bytes_mb": "1.8",
+      "tier1_auto_clear_rate": "0.98",
+      "human_review_rate": "0.005",
+      "reviewer_items_per_hour": "120",
+      "p99_inline_latency_budget_ms": "300",
+      "retention_days": "180"
+    },
+    "capacity_anchors": [
+      "DAU to QPS derivation",
+      "peak-to-average ratio",
+      "GPU/replica sizing",
+      "bandwidth",
+      "cost per 1000 requests"
+    ],
+    "viz": "sliders for DAU, uploads per user, tier-1 pass rate, human review rate, and reviewer throughput recompute uploads per second and peak, ingest bandwidth from upload rate times media size, how many items survive each cascade stage, GPU replicas needed for the expensive tier at its reduced volume, reviewer headcount required for the resulting queue, and blended cost per 1000 uploads as the thresholds move."
+  },
+  {
+    "id": "12-experimentation-platform",
+    "title": "Design an Experimentation Platform",
+    "slug": "experimentation-platform",
+    "group": "experimentation",
+    "description": "The A/B infrastructure every model launch has to pass through: deterministic variant assignment, exposure logging, and a metrics pipeline that reports lift with confidence intervals. Assignment must be a sub-millisecond local computation at full request QPS while exposure logs — one row per user per experiment per session — become the largest table in the company, and sample-size math decides whether an experiment can even detect the effect it was designed for.",
+    "depth": "advanced",
+    "has_code": true,
+    "scale": {
+      "dau": "300M",
+      "assignment_calls_per_user_per_day": "60",
+      "concurrent_experiments": "1200",
+      "exposure_event_bytes": "180",
+      "metrics_tracked": "800",
+      "baseline_conversion_rate": "0.04",
+      "min_detectable_effect": "0.005",
+      "retention_days": "180"
+    },
+    "capacity_anchors": [
+      "DAU to QPS derivation",
+      "peak-to-average ratio",
+      "storage math with bytes-per-row",
+      "bandwidth",
+      "cache hit-rate and memory"
+    ],
+    "viz": "drag DAU, assignment calls per user, concurrent experiments, exposure row size, baseline rate, and minimum detectable effect; the panel recomputes assignment QPS and peak, exposure events per second and their bytes per second, daily and retained log volume, config-cache memory for all experiment definitions, the per-arm sample size the power formula demands, and the days of traffic needed to reach it at the current allocation."
+  },
+  {
+    "id": "13-near-duplicate-detection-system",
+    "title": "Design a Near-Duplicate Detection System",
+    "slug": "near-duplicate-detection-system",
+    "group": "retrieval",
+    "description": "A service that decides, at upload time, whether a new item is a near-copy of something already in an eight-billion-item corpus — for reposts, plagiarism, or spam clustering. Exact pairwise comparison is quadratic and impossible at this size, so the whole design rests on signature-based bucketing whose band and permutation counts trade recall against index bytes and candidate-set size in a way you must actually compute.",
+    "depth": "advanced",
+    "has_code": true,
+    "scale": {
+      "dau": "600M",
+      "uploads_per_user_per_day": "0.7",
+      "corpus_items": "8B",
+      "minhash_permutations": "128",
+      "lsh_bands": "16",
+      "bytes_per_signature": "512",
+      "similarity_threshold": "0.8",
+      "p99_latency_budget_ms": "40",
+      "retention_days": "1095"
+    },
+    "capacity_anchors": [
+      "DAU to QPS derivation",
+      "index size and shard count",
+      "storage math with bytes-per-row",
+      "cache hit-rate and memory",
+      "cost per 1000 requests"
+    ],
+    "viz": "sliders for corpus size, upload rate, permutations, bands, and similarity threshold recompute lookup QPS and peak, signature bytes per item, total signature and band-table index size, shard count at a chosen per-node capacity, expected candidates per band lookup, the detection probability curve implied by the banding formula at the chosen threshold, and cost per 1000 uploads."
+  },
+  {
+    "id": "14-llm-inference-serving-platform",
+    "title": "Design an LLM Inference Serving Platform",
+    "slug": "llm-inference-serving-platform",
+    "group": "platform",
+    "description": "A hosted platform serving a 70B-parameter model to chat and API clients with streamed tokens, continuous batching, and tenant-level quotas. Capacity here is set by KV-cache memory rather than compute: model weights plus per-token cache determine how many concurrent sequences fit on a GPU, and that concurrency number is what fixes time-to-first-token, tokens per second per user, and cost per thousand requests.",
+    "depth": "advanced",
+    "has_code": true,
+    "scale": {
+      "dau": "20M",
+      "requests_per_user_per_day": "15",
+      "avg_prompt_tokens": "1200",
+      "avg_output_tokens": "400",
+      "model_params_billions": "70",
+      "bytes_per_param": "2",
+      "kv_cache_bytes_per_token": "320KB",
+      "gpu_memory_gb": "80",
+      "p99_ttft_budget_ms": "800",
+      "target_output_tokens_per_second_per_user": "30"
+    },
+    "capacity_anchors": [
+      "DAU to QPS derivation",
+      "GPU/replica sizing",
+      "cache hit-rate and memory",
+      "latency budget decomposition",
+      "peak-to-average ratio",
+      "cost per 1000 requests"
+    ],
+    "viz": "drag DAU, requests per user per day, prompt and output token lengths, model size, and GPU memory to recompute request QPS and peak, prefill and decode tokens per second, weight bytes per GPU, KV-cache bytes left after weights and the concurrent sequences that buys, GPUs needed at the target per-user token rate, prefix-cache savings at an adjustable hit rate, and dollars per 1000 requests at a configurable GPU hourly price."
+  }
+]

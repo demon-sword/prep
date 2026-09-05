@@ -38,7 +38,7 @@ AI systems consume three fundamentally different data classes — **structured**
 
 **2. Unstructured data (documents, PDFs, images, audio)**
 - Source: S3, SharePoint, Google Drive, email, web crawl.
-- Extract: **PyMuPDF** / **pdfplumber** for native PDFs; **AWS Textract** / **Azure Form Recognizer** for scanned docs (OCR confidence threshold ≥ 0.85); **Whisper** for audio transcription; **GPT-4o vision** for charts/figures.
+- Extract: **PyMuPDF** / **pdfplumber** for native PDFs; **AWS Textract** / **Azure Form Recognizer** for scanned docs (OCR confidence threshold ≥ 0.85); **Whisper** for audio transcription; **A frontier model vision** for charts/figures.
 - Transform: structure-aware chunking (parent-child: 1024-token parent, 256-token child); strip boilerplate; add metadata (source, doc_id, page, timestamp).
 - Route: embed via **text-embedding-3-large** or **BGE-M3**; index in **Pinecone/Qdrant** for semantic search; store raw in S3.
 - Key concern: document heterogeneity — tables need row-to-Markdown conversion; headers/footers must be stripped.

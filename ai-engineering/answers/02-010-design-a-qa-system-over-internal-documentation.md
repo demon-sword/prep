@@ -68,7 +68,7 @@ Each connector extracts: raw text, `doc_id`, `space_id` (for ACL), `author`, `la
 **6. Generation**
 - System prompt: "Answer using only the provided context. If the answer is not in the context, say 'I don't have that information.' Cite sources with [doc title](url)."
 - Temperature: 0 for factual grounding.
-- Model: GPT-4o-mini for standard queries (~$0.15/1M input tokens); escalate to GPT-4o for complex multi-part questions (routed on query complexity score).
+- Model: a small fast model for standard queries (~$0.20/1M input tokens); escalate to a frontier model for complex multi-part questions (routed on query complexity score).
 - Response includes inline citations with source URL and last-modified date.
 
 **7. Evaluation**
@@ -91,7 +91,7 @@ A concrete stack for a 500-person engineering org with ~30K Confluence pages:
 | Vector DB | Qdrant (self-hosted) | Cost control at 30K docs, Okta group payload filters |
 | Keyword index | Elasticsearch 8.x | BM25 for function names, error codes, acronyms |
 | Reranker | Cohere Rerank API | 10ms p99 add, +15% answer accuracy vs no rerank |
-| Generator | GPT-4o-mini (default) / GPT-4o (escalated) | Cost: ~$40/day at 5K queries/day |
+| Generator | Small fast model (default) / frontier model (escalated) | Cost: ~$10/day at 5K queries/day |
 | Delivery | Slack `/ask` command + web UI | Meets users where they work |
 
 **Key tradeoff — freshness vs cost:** Webhook-driven ingestion keeps docs current but adds connector complexity. For a first version, nightly batch re-index is simpler but risks stale answers. Use webhooks only for high-churn spaces (e.g., engineering runbooks) and batch for archival content.
@@ -112,7 +112,7 @@ The index is dual: a vector store — I'd use Qdrant or Pinecone — namespaced 
 
 ACL enforcement happens at the retrieval layer: I extract the user's Okta groups, pass them as a metadata filter to Qdrant, and the BM25 query also filters by `acl_group_ids`. Never do post-retrieval ACL filtering — you risk leaking document titles or snippets from unauthorized sources.
 
-At generation, I use GPT-4o-mini with temperature=0 and a grounding prompt that instructs the model to cite sources with URL and last-modified date. If the retrieved context doesn't contain the answer, the model says so explicitly rather than hallucinating."
+At generation, I use a small fast model with temperature=0 and a grounding prompt that instructs the model to cite sources with URL and last-modified date. If the retrieved context doesn't contain the answer, the model says so explicitly rather than hallucinating."
 
 **Tradeoff / production angle (1 min):**
 "The big tension I've seen in practice is freshness vs. simplicity. Webhooks give you near-real-time updates but each connector is a failure surface. For v1, I'd do nightly batch re-ingestion for stable docs and webhooks only for the highest-churn spaces. The second tension is retrieval coverage vs. noise — bigger top-k catches more relevant docs but pollutes the context window and inflates cost. A cross-encoder reranker lets you cast a wide net at retrieval (top-40) then narrow to top-5, keeping answer quality high without ballooning prompt size."

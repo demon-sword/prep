@@ -20,7 +20,7 @@ Self-attention is permutation-invariant — the same set of tokens produces the 
 - "How do LLMs handle position when the context window grows?"
 
 ### What it tests
-Understanding that self-attention is order-agnostic and that positional information must be explicitly injected — plus awareness of the evolution from sinusoidal (original paper) to learned (BERT/GPT) to rotary (Llama, Mistral, GPT-4) encodings and why each exists.
+Understanding that self-attention is order-agnostic and that positional information must be explicitly injected — plus awareness of the evolution from sinusoidal (original paper) to learned (BERT/GPT) to rotary (Llama, Mistral, a frontier model) encodings and why each exists.
 
 ---
 
@@ -43,7 +43,7 @@ Added directly to token embeddings before the first layer. Fixed, deterministic,
 Replace the formula with a trainable embedding table `E[p]` of shape `[max_seq_len, d_model]`. More expressive but hard-limited to the training context window — position 1025 is undefined for a 1024-trained model.
 
 **3. Rotary Position Embeddings (RoPE) — current dominant approach**
-Used by Llama 2/3, Mistral, GPT-4, Gemini. Instead of adding position to the embedding, RoPE *rotates* the Q and K vectors by a position-dependent angle before computing attention:
+Used by Llama 2/3, Mistral, a frontier model, Gemini. Instead of adding position to the embedding, RoPE *rotates* the Q and K vectors by a position-dependent angle before computing attention:
 ```
 q_m · k_n  ∝  Re[q_m · k_n* · e^(i(m-n)θ)]
 ```
@@ -61,7 +61,7 @@ Adds a fixed negative bias proportional to distance directly to the attention lo
 |--------|---------|----------|----------|
 | Sinusoidal (fixed) | Original Transformer | No parameters, deterministic | Degrades at lengths > training max |
 | Learned absolute | BERT, GPT-2 | Expressive within window | Hard cap at `max_position_embeddings` |
-| RoPE | Llama 2/3, Mistral, GPT-4 | Relative distances, extendable | Requires careful scaling for long ctx |
+| RoPE | Llama 2/3, Mistral, a frontier model | Relative distances, extendable | Requires careful scaling for long ctx |
 | ALiBi | MPT-7B | Simple, extrapolates | Less expressive, slower adoption |
 
 **Concrete production impact:** Llama 2 was trained with 4K context. Meta extended Llama 2 70B to 100K context using RoPE scaling (adjusting the `θ` base from 10,000 to 500,000) — zero new parameters, just a changed hyperparameter. This is only possible because RoPE encodes *relative* distance. Learned absolute encodings cannot be extended this way.
@@ -78,7 +78,7 @@ Adds a fixed negative bias proportional to distance directly to the attention lo
 
 BERT and GPT-2 switched to learned absolute embeddings — a simple embedding table indexed by position. More flexible, but now you have a hard ceiling: if the table only has 1024 rows, position 1025 doesn't exist.
 
-The current dominant approach is RoPE — rotary positional embeddings, used in Llama 2, Llama 3, Mistral, and GPT-4. Instead of adding position to the embedding, RoPE rotates the query and key vectors by a position-dependent angle before computing `QK^T`. The critical insight is that the dot product then depends only on the *relative distance* between tokens, not their absolute positions. That makes it more generalizable and — crucially — extendable. Meta took Llama 2 from 4K to 100K context by just changing a single RoPE scaling parameter, with no architecture changes."
+The current dominant approach is RoPE — rotary positional embeddings, used in Llama 2, a modern open-weight model, Mistral, and a frontier model. Instead of adding position to the embedding, RoPE rotates the query and key vectors by a position-dependent angle before computing `QK^T`. The critical insight is that the dot product then depends only on the *relative distance* between tokens, not their absolute positions. That makes it more generalizable and — crucially — extendable. Meta took Llama 2 from 4K to 100K context by just changing a single RoPE scaling parameter, with no architecture changes."
 
 **Tradeoff / production angle (1 min):**
 "The main challenge with all positional encodings is out-of-distribution lengths. Sinusoidal degrades; learned absolute encoding fails hard; RoPE needs careful scaling (YaRN, linear interpolation of θ). In production, if you need very long contexts — 128K+ tokens — you want RoPE with a tuned base frequency and ideally some fine-tuning on long-context examples. Anthropic's Claude, for instance, uses positional encoding designed to handle long contexts reliably. Another production gotcha: if you're fine-tuning a model on shorter sequences, the model may never learn to attend over long distances even if the architecture theoretically supports it."
@@ -91,7 +91,7 @@ The current dominant approach is RoPE — rotary positional embeddings, used in 
 ## Pitfalls
 
 - **Mistake:** Saying "positional encoding just tells the model the position of each token" without explaining *why* that's necessary (i.e., that attention is permutation-invariant) — **Better:** Lead with the permutation-invariance property of self-attention as the root cause, then explain positional encoding as the solution.
-- **Mistake:** Only knowing sinusoidal encoding and not being aware of RoPE or learned embeddings — in 2025–2026, every major model (Llama, Mistral, GPT-4) uses RoPE. Stopping at the 2017 answer signals textbook knowledge, not production awareness — **Better:** Describe the evolution sinusoidal → learned → RoPE, and name real models using each.
+- **Mistake:** Only knowing sinusoidal encoding and not being aware of RoPE or learned embeddings — in 2025–2026, every major model (Llama, Mistral, a frontier model) uses RoPE. Stopping at the 2017 answer signals textbook knowledge, not production awareness — **Better:** Describe the evolution sinusoidal → learned → RoPE, and name real models using each.
 - **Mistake:** Confusing positional *encoding* (added to embeddings before attention) with positional *bias* (added to attention logits, like ALiBi) — **Better:** Distinguish the two approaches: encoding modifies inputs, bias modifies attention scores. Both solve the same problem differently.
 
 ---
@@ -108,4 +108,4 @@ The current dominant approach is RoPE — rotary positional embeddings, used in 
 
 ## One-liner recall
 
-> Self-attention is permutation-invariant so transformers inject order via positional encoding — evolved from fixed sinusoidal (2017) to learned absolute (BERT/GPT-2) to RoPE (Llama/Mistral/GPT-4), where rotating Q/K vectors by position encodes relative distance and enables context-window extension.
+> Self-attention is permutation-invariant so transformers inject order via positional encoding — evolved from fixed sinusoidal (2017) to learned absolute (BERT/GPT-2) to RoPE (Llama/Mistral/a frontier model), where rotating Q/K vectors by position encodes relative distance and enables context-window extension.

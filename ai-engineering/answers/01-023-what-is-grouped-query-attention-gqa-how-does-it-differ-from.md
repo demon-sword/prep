@@ -14,7 +14,7 @@
 This question probes whether you understand the memory bottleneck in LLM inference and know the architectural innovations used to address it in production models. Interviewers at companies running inference at scale (Anthropic, OpenAI, Google, any team deploying Llama/Mistral) want to see that you can reason about GPU memory bandwidth, KV cache footprint, and throughput — not just explain attention conceptually.
 
 ### Trigger phrases
-- "How does Llama 3 / Mistral / Gemma differ from GPT architectures?"
+- "How does a modern open-weight model / Mistral / Gemma differ from GPT architectures?"
 - "What is GQA and why do modern models use it?"
 - "How do you reduce KV cache memory without sacrificing quality?"
 - "Walk me through multi-head vs multi-query vs grouped-query attention."
@@ -58,10 +58,10 @@ Each query head selects its group's K and V tensors. The attention computation i
 **Why it matters for throughput:** LLM decoding is memory-bandwidth-bound (not compute-bound). Each decode step loads all KV tensors from HBM. Fewer K/V heads = fewer bytes read = faster decode = higher tokens/sec.
 
 ### Example / Tradeoff
-- **Llama 3 (8B, 70B):** GQA with 8 KV heads (vs 32 or 64 query heads).
-- **Mistral 7B:** GQA with 8 KV heads — fits on a single 24 GB GPU for long contexts.
+- **A modern open-weight model (8B, 70B):** GQA with 8 KV heads (vs 32 or 64 query heads).
+- **A small open-weight model (7–8B class):** GQA with 8 KV heads — fits on a single 24 GB GPU for long contexts.
 - **Gemma 2:** Uses GQA across all sizes.
-- **GPT-4 / earlier GPT-3:** MHA (pre-GQA era).
+- **A frontier model / earlier GPT-3:** MHA (pre-GQA era).
 
 **Quality tradeoff:** Ainslie et al. (2023, Google Research) showed GQA with G=H/4 to H/8 matches MHA perplexity within ~0.1–0.3 PPL on language modeling tasks, while MQA (G=1) degrades 0.5–2 PPL depending on task. GQA is the dominant choice in models released 2023–2026.
 
@@ -83,15 +83,15 @@ Each query head selects its group's K and V tensors. The attention computation i
 **Core explanation (2–3 min):**
 "Let me put it on a spectrum. In full MHA, every query head has its own K and V — so if you have 32 query heads, you have 32 K heads and 32 V heads in the cache. In Multi-Query Attention, the extreme version, all 32 query heads share a single K and single V. That's memory-efficient but hurts quality on complex tasks. GQA splits the difference: 32 query heads are organized into, say, 8 groups, and each group shares one K and one V. So the KV cache is 8× smaller than MHA while quality stays within ~0.1–0.3 perplexity points.
 
-The reason this matters at inference time is that LLM decoding is memory-bandwidth-bound, not compute-bound. Each decode step doesn't do matrix multiplications — it loads K and V from HBM for each token generated. Fewer K/V heads means fewer bytes transferred per decode step, which translates directly to higher tokens-per-second. In practice, Mistral 7B with GQA on a 24 GB GPU can serve much longer contexts at higher throughput than an equivalent MHA model.
+The reason this matters at inference time is that LLM decoding is memory-bandwidth-bound, not compute-bound. Each decode step doesn't do matrix multiplications — it loads K and V from HBM for each token generated. Fewer K/V heads means fewer bytes transferred per decode step, which translates directly to higher tokens-per-second. In practice, a small open-weight model (7–8B class) with GQA on a 24 GB GPU can serve much longer contexts at higher throughput than an equivalent MHA model.
 
-A concrete example: Llama 3 uses GQA across all sizes — 8B has 8 KV heads vs 32 query heads, and 70B has 8 KV heads vs 64 query heads. The KV cache savings are what allow Llama 3 70B to be deployed on 2–4 A100s rather than requiring 8."
+A concrete example: a modern open-weight model uses GQA across all sizes — 8B has 8 KV heads vs 32 query heads, and 70B has 8 KV heads vs 64 query heads. The KV cache savings are what allow a 70B-class open-weight model to be deployed on 2–4 A100s rather than requiring 8."
 
 **Tradeoff / production angle (1 min):**
 "The main tradeoff is quality vs memory. GQA is essentially a free lunch at G=H/4 to H/8 — quality loss is negligible. The only case where MHA still dominates is very small models with few heads to begin with, where the grouping doesn't make architectural sense. In production with vLLM, GQA is handled natively — PagedAttention is aware of head grouping, so you get both memory efficiency and good batch scheduling out of the box."
 
 **Wrap-up (30s):**
-"So in summary: GQA reduces KV cache footprint by sharing K/V projections across groups of query heads. It's the reason modern frontier models — Llama 3, Mistral, Gemma — can run longer contexts at higher throughput without quality loss. It's become the default architectural choice for any model you'd deploy in production today."
+"So in summary: GQA reduces KV cache footprint by sharing K/V projections across groups of query heads. It's the reason modern frontier models — a modern open-weight model, Mistral, Gemma — can run longer contexts at higher throughput without quality loss. It's become the default architectural choice for any model you'd deploy in production today."
 
 ---
 
@@ -99,7 +99,7 @@ A concrete example: Llama 3 uses GQA across all sizes — 8B has 8 KV heads vs 3
 
 - **Mistake:** Confusing GQA with MQA — saying "GQA means all heads share one K/V" — **Better:** Clarify the spectrum: MHA (each head independent) → GQA (grouped sharing) → MQA (single shared K/V). GQA is the middle ground with G groups.
 - **Mistake:** Describing GQA as a pure training optimization rather than an inference optimization — **Better:** Emphasize that KV cache is the key bottleneck at inference time; GQA reduces bytes loaded from HBM per decode step, which is why it improves throughput and enables longer contexts on fixed VRAM.
-- **Mistake:** Not knowing which production models use GQA — **Better:** Cite Llama 3, Mistral 7B, Gemma 2, and mention that vLLM and TGI both support GQA natively; this shows production familiarity beyond textbook knowledge.
+- **Mistake:** Not knowing which production models use GQA — **Better:** Cite a modern open-weight model, a small open-weight model (7–8B class), Gemma 2, and mention that vLLM and TGI both support GQA natively; this shows production familiarity beyond textbook knowledge.
 
 ---
 
@@ -115,4 +115,4 @@ A concrete example: Llama 3 uses GQA across all sizes — 8B has 8 KV heads vs 3
 
 ## One-liner recall
 
-> GQA groups the H query heads into G clusters (G < H) that share a single K/V projection each, shrinking the KV cache by H/G× and boosting decode throughput without meaningfully degrading quality — the default attention variant in Llama 3, Mistral, and Gemma.
+> GQA groups the H query heads into G clusters (G < H) that share a single K/V projection each, shrinking the KV cache by H/G× and boosting decode throughput without meaningfully degrading quality — the default attention variant in a modern open-weight model, Mistral, and Gemma.

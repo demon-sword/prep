@@ -59,7 +59,7 @@ Quantization reduces the numerical precision of model weights (and optionally ac
 
 ### Example / Tradeoff
 
-**Llama 3 70B on 2×A100 80GB:**
+**A 70B-class open-weight model on 2×A100 80GB:**
 - BF16: 140 GB VRAM — doesn't fit on 2×A100.
 - INT8: 70 GB VRAM — fits on 1×A100 with ~1.5% perplexity increase.
 - AWQ W4A16: 35 GB VRAM — fits easily, ~3–4% perplexity increase, 1.6× decode throughput gain vs BF16 due to lower memory bandwidth pressure.
@@ -89,7 +89,7 @@ Quantization reduces the numerical precision of model weights (and optionally ac
 
 For post-training quantization — which is what you'd use in production when you don't want to retrain — GPTQ and AWQ are the go-to algorithms. AWQ is often better because it's activation-aware: it identifies the ~1% of weights that correspond to outlier activations and protects them at higher precision. GPTQ does layer-by-layer Hessian-minimization. Both are supported in vLLM and AutoGPTQ.
 
-A concrete example: Llama 3 70B in BF16 needs 140GB VRAM — that's 2 A100s with no room for the KV cache. AWQ W4A16 brings it down to ~35GB, so it runs on a single A100 with headroom for batching, and you get about a 1.6× decode throughput boost because you're under less memory-bandwidth pressure — which is the actual bottleneck at decode time.
+A concrete example: a 70B-class open-weight model in BF16 needs 140GB VRAM — that's 2 A100s with no room for the KV cache. AWQ W4A16 brings it down to ~35GB, so it runs on a single A100 with headroom for batching, and you get about a 1.6× decode throughput boost because you're under less memory-bandwidth pressure — which is the actual bottleneck at decode time.
 
 The critical point people miss is that accuracy loss is task-dependent. For RAG-based QA at temperature=0 with a grounding prompt, 4-bit is often indistinguishable in practice because retrieval quality dominates. But for math reasoning or code generation, especially on models under 13B, 4-bit can cost you meaningful points on GSM8K."
 

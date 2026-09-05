@@ -149,7 +149,12 @@
     <h1>🎯 Recrew Interview Prep</h1>
     <p class="subtitle">Senior Frontend · React Native · InterviewVector · 20 June 2026, 7:30 PM IST</p>
     
-    <div class="progress-text">Prep Progress: <span id="progressPercent">0%</span></div>
+    <div class="progress-text">Prep Progress: <span id="progressPercent">0%</span>
+      <span style="float:right;font-size:11px;">saved in this browser ·
+        <a href="#" onclick="resetProgress();return false;" style="color:var(--muted);">reset</a> ·
+        spaced repetition lives in <a href="../study/PROGRESS.md" style="color:var(--muted);">study/</a>
+      </span>
+    </div>
     <div class="progress-bar"><div class="progress-fill" id="progressBar"></div></div>
 
     <div class="warning-box">
@@ -629,6 +634,44 @@ setCount(prev => prev + <span class="number">1</span>);</div>
     }
 
     // Initialize
+    // --- persistence -------------------------------------------------------
+    // This bar used to recompute from checkboxes and then reset to 0% on every
+    // reload, because nothing was ever stored. Checkbox state is page-local
+    // reading progress for this cheat-sheet; spaced-repetition study state for
+    // the tracked corpus lives in study/state.json (see ../study/README.md).
+    const STORE_KEY = 'recrew-prep-checks-v1';
+
+    function boxes() {
+      return Array.from(document.querySelectorAll('input[type="checkbox"]'));
+    }
+
+    function saveProgress() {
+      try {
+        const on = boxes().map((b, i) => (b.checked ? i : -1)).filter(i => i >= 0);
+        localStorage.setItem(STORE_KEY, JSON.stringify(on));
+      } catch (e) { /* private mode / blocked storage — bar still works in-session */ }
+    }
+
+    function restoreProgress() {
+      try {
+        const raw = localStorage.getItem(STORE_KEY);
+        if (!raw) return;
+        const on = new Set(JSON.parse(raw));
+        boxes().forEach((b, i) => { if (on.has(i)) b.checked = true; });
+      } catch (e) { /* ignore malformed or unavailable storage */ }
+    }
+
+    function resetProgress() {
+      boxes().forEach(b => { b.checked = false; });
+      try { localStorage.removeItem(STORE_KEY); } catch (e) {}
+      updateProgress();
+    }
+
+    // every checkbox already calls updateProgress(); chain the save onto it
+    const _updateProgress = updateProgress;
+    updateProgress = function () { _updateProgress(); saveProgress(); };
+
+    restoreProgress();
     updateProgress();
   </script>
 </body>

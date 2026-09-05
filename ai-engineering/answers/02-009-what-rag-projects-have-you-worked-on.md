@@ -39,7 +39,7 @@ Use the **STAR + Tradeoffs** structure for the walkthrough:
 5. **What you'd do differently** — demonstrates mature engineering judgment
 
 Then layer in the tradeoffs you navigated:
-- **Cost vs quality** — smaller embedding model or GPT-4o-mini vs GPT-4o for generation
+- **Cost vs quality** — smaller embedding model, or a small fast model vs a frontier model for generation
 - **Latency vs recall** — adding a cross-encoder reranker improved precision but added 150ms
 - **Freshness vs complexity** — real-time CDC-driven index updates vs nightly batch reindex
 
@@ -53,7 +53,7 @@ Then layer in the tradeoffs you navigated:
 | Vector DB | Pinecone serverless | No ops, metadata filtering for product-tier ACL |
 | Retrieval | Hybrid BM25 + dense (RRF fusion) | Dense missed exact product codes; BM25 gap-filled |
 | Reranking | Cohere Rerank (cross-encoder) | Lifted RAGAS context_precision from 0.71 → 0.84 |
-| Generation | GPT-4o-mini, T=0, citations required | Deterministic, auditable, 60% cost reduction vs GPT-4o |
+| Generation | Small fast model, T=0, citations required | Deterministic, auditable, order-of-magnitude cost reduction vs a frontier model |
 
 **Failure arc:** After launch, deflection rate dropped 3 weeks in. Investigation showed embedding model had been frozen but doc corpus had added new product terminology. Fixed by adding nightly RAGAS golden-set regression run + model refresh trigger when context_recall < 0.75.
 
@@ -71,7 +71,7 @@ Then layer in the tradeoffs you navigated:
 
 For storage, we used Pinecone serverless — straightforward ops, metadata filters for customer-tier access control. Retrieval was hybrid: BM25 via Elasticsearch for exact product codes and model numbers, dense vector search for semantic intent, fused with Reciprocal Rank Fusion. Then a Cohere Rerank cross-encoder on the top 20 chunks down to the top 5.
 
-Generation was GPT-4o-mini at temperature 0 with a strict grounding prompt: 'Answer only using the provided context. If you cannot answer, say so.' Citations were required — every claim had to reference a source document."
+Generation was a small fast model at temperature 0 with a strict grounding prompt: 'Answer only using the provided context. If you cannot answer, say so.' Citations were required — every claim had to reference a source document."
 
 **Tradeoff / production angle (1 min):**
 "The first real failure was three weeks post-launch: deflection rate dropped from 62% to 48%. RAGAS showed context_recall collapsing — we'd added 400 new articles covering a product relaunch but hadn't re-evaluated embedding quality for that new vocabulary. We added a nightly regression run against our 150-question golden set, with an automatic Slack alert if context_recall fell below 0.75. That caught the next corpus update before it hit users.
@@ -79,7 +79,7 @@ Generation was GPT-4o-mini at temperature 0 with a strict grounding prompt: 'Ans
 The latency tradeoff was interesting — the Cohere reranker added about 150ms at p95, taking us from 1.2s to 1.4s. We accepted it because context_precision improved from 0.71 to 0.84 and the quality uplift reduced escalations by ~30%."
 
 **Wrap-up (30s):**
-"So to summarize: parent-child chunking, hybrid retrieval with RRF, cross-encoder reranking, GPT-4o-mini with strict grounding, and a continuous RAGAS eval loop. The biggest lesson was that retrieval quality degrades silently as your corpus changes — you need automated regression gating, not one-time evals. Happy to go deeper on any part of that."
+"So to summarize: parent-child chunking, hybrid retrieval with RRF, cross-encoder reranking, a small fast model with strict grounding, and a continuous RAGAS eval loop. The biggest lesson was that retrieval quality degrades silently as your corpus changes — you need automated regression gating, not one-time evals. Happy to go deeper on any part of that."
 
 ---
 

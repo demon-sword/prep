@@ -51,7 +51,7 @@ Liu et al. showed performance on multi-document QA drops from ~70% (relevant doc
 | **Placement heuristic** | Put highest-scored chunks at start/end of context | Easy to implement; doesn't fix the root cause |
 | **Cross-encoder reranking** | MiniLM/Cohere Rerank selects truly relevant chunk, place it first | +150–200ms latency; requires a reranker |
 | **Reverse ordering** | Place lowest-scored chunks first, highest-scored last | Recency bias helps; counterintuitive to most implementations |
-| **Long-context models** | Gemini 1.5 Pro 1M / Claude 3.5 with improved positional training | More expensive per call; not fully solved at 100K+ tokens |
+| **Long-context models** | a frontier model 1M / a frontier model with improved positional training | More expensive per call; not fully solved at 100K+ tokens |
 | **Contextual compression** | LLMLingua or Recomp strips irrelevant sentences before insertion | Reduces noise; adds latency and a compression failure mode |
 
 **RAGAS diagnostic:** If `context_recall` is high (retrieved chunks contain the answer) but `faithfulness` is low (model's answer isn't grounded in those chunks), lost-in-the-middle is a top suspect. Instrument by varying chunk placement order and re-running evals.
@@ -71,7 +71,7 @@ In a RAG pipeline, this manifests when you retrieve K=10 chunks and the truly re
 The diagnostic signal is a gap between RAGAS `context_recall` (which measures whether the answer is somewhere in your retrieved context) and `faithfulness` (which measures whether the model's actual answer is grounded in what it retrieved). High recall, low faithfulness → the info is there but the model isn't using it."
 
 **Tradeoff / production angle (1 min):**
-"The practical mitigations I'd reach for in order are: First, reduce K — fewer chunks means the relevant one is more likely to be at the start or end. Second, use a cross-encoder reranker like Cohere Rerank or a MiniLM model to promote the most relevant chunk to position 1 in the prompt. Third, apply contextual compression — LLMLingua can strip irrelevant sentences before insertion, reducing prompt length and positional noise. The tradeoff with compression is it adds latency and can occasionally remove context you actually needed. Long-context models like Gemini 1.5 Pro partially mitigate this but don't fully solve it at 100K+ tokens and are more expensive."
+"The practical mitigations I'd reach for in order are: First, reduce K — fewer chunks means the relevant one is more likely to be at the start or end. Second, use a cross-encoder reranker like Cohere Rerank or a MiniLM model to promote the most relevant chunk to position 1 in the prompt. Third, apply contextual compression — LLMLingua can strip irrelevant sentences before insertion, reducing prompt length and positional noise. The tradeoff with compression is it adds latency and can occasionally remove context you actually needed. Long-context models like a frontier model partially mitigate this but don't fully solve it at 100K+ tokens and are more expensive."
 
 **Wrap-up (30s):**
 "So the key insight is: retrieval and placement are both critical. Getting the right chunk retrieved (recall) is necessary but not sufficient — you also need to place it where the model will actually attend to it. Happy to go deeper on reranking architectures or how you'd set up a golden dataset to measure this in production."

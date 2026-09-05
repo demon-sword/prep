@@ -14,7 +14,7 @@
 The interviewer is probing architectural intuition — whether you understand the practical and empirical reasons the field converged on decoder-only Transformers (GPT-style) even for tasks like classification, summarization, and embedding that were historically encoder or encoder-decoder territory. It tests depth beyond "GPT generates, BERT classifies."
 
 ### Trigger phrases
-- "Why do we use GPT-4 for classification instead of BERT?"
+- "Why do we use a frontier model for classification instead of BERT?"
 - "Why are decoder-only models dominant even for non-generation tasks?"
 - "What's the architectural advantage of causal models over bidirectional models at scale?"
 
@@ -44,10 +44,10 @@ Four compounding reasons explain the dominance:
 **For embeddings:** Decoder-only models produce strong embeddings by mean-pooling the last hidden states or using a `<EOS>` token representation. Models like `text-embedding-3-large` (OpenAI) and `Mistral-Embed` are decoder-only and top MTEB leaderboards, disproving the assumption that bidirectional attention is required for embedding quality.
 
 ### Example / Tradeoff
-**Llama 3 70B for classification vs fine-tuned BERT-large:**
-- Llama 3 zero-shot via prompt: ~85% accuracy on SST-2
+**A 70B-class open-weight model for classification vs fine-tuned BERT-large:**
+- A modern open-weight model zero-shot via prompt: ~85% accuracy on SST-2
 - BERT-large fine-tuned: ~93% accuracy, but requires labeled data and a classification head
-- Llama 3 fine-tuned with LoRA: ≥95%, same task, and the same model handles generation tasks without duplication
+- A modern open-weight model fine-tuned with LoRA: ≥95%, same task, and the same model handles generation tasks without duplication
 
 **The remaining case for encoder-only:** Cross-encoder reranking in RAG pipelines still uses BERT-style models (e.g., `ms-marco-MiniLM`) because they process query+document jointly and are 10–50× cheaper to run than a 70B decoder at inference. For reranking on top-100 candidates this specialized use case still wins on latency and cost.
 

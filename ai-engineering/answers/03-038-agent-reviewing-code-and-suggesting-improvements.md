@@ -61,8 +61,8 @@ All tool calls are sandboxed: linters run in a Docker container with `--network=
 The LLM is only reasoning; it cannot push commits. The GitHub post is a single write call, gated after synthesis.
 
 **Model tiering**
-- Linter/SAST violations: GPT-4o-mini (low cost, format is structured)
-- Architectural / design feedback: GPT-4o or Claude 3.5 Sonnet (nuanced reasoning)
+- Linter/SAST violations: a small fast model (low cost, format is structured)
+- Architectural / design feedback: a frontier model (nuanced reasoning)
 - Token budget: diff chunked to ≤4K tokens per file; larger files use sliding window with overlap
 
 **Output format**
@@ -89,7 +89,7 @@ CodeRabbit and similar tools use a pipeline close to this: diff → file context
 |------|-------------|------------|
 | Scope | Changed files only | Full repo context |
 | LLM call count | 1 call per file | N calls per hunk |
-| Cost/PR | $0.05–$0.15 | $1–$5+ |
+| Cost/PR | $0.10–$0.35 | $2–$10+ |
 | False positive rate | Higher (no full-context) | Lower |
 | Latency | <60s | 2–5min |
 
@@ -116,7 +116,7 @@ CodeRabbit and similar tools use a pipeline close to this: diff → file context
 
 The LLM loop works per file: fetch the file, run linter and SAST in parallel, then ask the LLM to synthesize structured comment objects — file, line, severity, category, message, suggestion. I'd enforce JSON schema output so the downstream GitHub posting tool can parse reliably without fragile string parsing.
 
-For model tiering: I'd use GPT-4o-mini for reformatting linter output, and GPT-4o or Claude 3.5 Sonnet only for architectural or design-level feedback that requires real reasoning. That keeps cost in the $0.05–$0.15/PR range."
+For model tiering: I'd use a small fast model for reformatting linter output, and a frontier model only for architectural or design-level feedback that requires real reasoning. That keeps cost in the $0.05–$0.15/PR range."
 
 **Tradeoff / production angle (1 min):**
 "The main tradeoffs are scope versus cost. If I only review changed files, I miss cross-file issues — a function signature change that breaks callers elsewhere. If I load full repo context, costs spike to $1–5/PR and latency blows out. The pragmatic middle is changed files plus their direct imports. I'd also add an auto-suppress rule: if the agent generates more than 20 comments, collapse them into a summary rather than flooding the PR thread — that's a real developer experience failure I've seen with noisy tools.

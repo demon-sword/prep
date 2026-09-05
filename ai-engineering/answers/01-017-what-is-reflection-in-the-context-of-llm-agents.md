@@ -45,7 +45,7 @@ This loop can repeat for N iterations or until a stopping criterion is met (e.g.
 ### Example / Tradeoff
 **Code generation agent (LangChain / LangGraph):** A coding agent generates a Python function, runs unit tests via a tool call, and receives a test failure message. It appends the failure + traceback to the conversation context and regenerates, fixing the bug. This is reflection driven by external tool feedback rather than a purely introspective critique.
 
-**GPT-4 benchmark:** On HumanEval (code generation), a simple Reflexion loop (generate → critique → revise, up to 3 iterations) improved pass@1 from ~67% to ~88%, demonstrating that reflection can substitute for a larger model in some tasks.
+**A frontier model benchmark:** On HumanEval (code generation), a simple Reflexion loop (generate → critique → revise, up to 3 iterations) improved pass@1 from ~67% to ~88%, demonstrating that reflection can substitute for a larger model in some tasks.
 
 **Tradeoff:** Each reflection iteration adds 1–3 LLM calls and 2–5× the token cost of a single pass. For cheap, fast tasks (simple Q&A, classification), reflection is overkill — better to use temperature=0 and accept the first output. For high-stakes, multi-step tasks (code, research synthesis, long-form writing), reflection can reduce error rates significantly. A common production pattern is *conditional reflection*: trigger the critic only when confidence is low (low log-probability of the output) or when an external tool returns an error signal.
 
@@ -59,7 +59,7 @@ This loop can repeat for N iterations or until a stopping criterion is met (e.g.
 **Core explanation (2–3 min):**
 "The basic loop is three steps: generate, critique, revise. The agent first produces an initial response. A critic — which can be the same model with a different system prompt, or a separate cheaper model — evaluates it against a rubric: is the reasoning sound? did it use the right tools? does it meet the task requirements? That critique is natural-language text, and it's appended to the context for the next generation.
 
-The key paper here is Reflexion by Shinn et al. in 2023. They added one important upgrade: the agent stores critiques in an episodic memory buffer, so it doesn't just improve within a single run — it learns from failure across multiple task attempts. On HumanEval, a 3-iteration Reflexion loop pushed GPT-3.5 pass@1 from ~48% to ~68%, which is otherwise only achievable by jumping to a much larger model.
+The key paper here is Reflexion by Shinn et al. in 2023. They added one important upgrade: the agent stores critiques in an episodic memory buffer, so it doesn't just improve within a single run — it learns from failure across multiple task attempts. On HumanEval, a 3-iteration Reflexion loop pushed a small fast model pass@1 from ~48% to ~68%, which is otherwise only achievable by jumping to a much larger model.
 
 In production, I've seen two common variants: *introspective reflection*, where the model critiques its own reasoning — useful for research agents and long-form writing — and *tool-feedback reflection*, where the critique comes from an external signal like a test suite, a search result that contradicts the claim, or a downstream validator. The tool-feedback variant is more reliable because the critique is grounded in objective evidence rather than the model's potentially flawed self-assessment."
 
