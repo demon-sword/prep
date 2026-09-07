@@ -2,15 +2,15 @@
 
 ## Meta
 total_problems: 32
-done: 0
-remaining: 32
+done: 1
+remaining: 31
 created: 2026-08-30
 
 ## Done
 - [x] scaffold — plan created
+- [x] 01-train-test-split — Implement a Seeded Train-Test Split
 
 ## Next
-- [ ] 01-train-test-split — Implement a Seeded Train-Test Split
 - [ ] 02-minibatch-loader — Implement a Shuffling Mini-Batch Data Loader
 - [ ] 03-stratified-kfold — Implement Stratified K-Fold Cross-Validation Splits
 - [ ] 04-smote — Implement SMOTE Minority Oversampling

@@ -1,0 +1,1231 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1.0"/>
+  <title>Spectrograms and the Mel Scale — TTS &amp; Voice AI Concepts</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com"/>
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet"/>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg:        #0d0f17;
+      --surface:   #141720;
+      --card:      #1a1e2e;
+      --border:    #252a3d;
+      --accent:    #00d4ff;
+      --purple:    #7c3aed;
+      --green:     #00ff88;
+      --yellow:    #ffd700;
+      --red:       #ff4757;
+      --orange:    #ff9500;
+      --text:      #e2e8f0;
+      --text-dim:  #8892a4;
+      --mono:      'JetBrains Mono', monospace;
+      --sans:      'Inter', system-ui, sans-serif;
+    }
+
+    html { scroll-behavior: smooth; }
+
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: var(--sans);
+      font-size: 16px;
+      line-height: 1.7;
+      min-height: 100vh;
+    }
+
+    header {
+      background: var(--surface);
+      border-bottom: 1px solid var(--border);
+      padding: 2rem 2rem 1.5rem;
+      max-width: 1100px;
+      margin: 0 auto;
+    }
+
+    .group-badge {
+      display: inline-block;
+      font-family: var(--mono);
+      font-size: 0.7rem;
+      font-weight: 700;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      color: var(--accent);
+      background: rgba(0, 212, 255, 0.1);
+      border: 1px solid rgba(0, 212, 255, 0.3);
+      padding: 0.2em 0.7em;
+      border-radius: 4px;
+      margin-bottom: 0.75rem;
+    }
+    .depth-badge {
+      display: inline-block;
+      font-family: var(--mono);
+      font-size: 0.7rem;
+      font-weight: 700;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      color: var(--purple);
+      background: rgba(124, 58, 237, 0.12);
+      border: 1px solid rgba(124, 58, 237, 0.4);
+      padding: 0.2em 0.7em;
+      border-radius: 4px;
+      margin-bottom: 0.75rem;
+      margin-left: 0.4rem;
+    }
+
+    header h1 {
+      font-size: clamp(1.6rem, 4vw, 2.4rem);
+      font-weight: 700;
+      line-height: 1.2;
+      margin-bottom: 0.5rem;
+    }
+
+    header h1 span.id {
+      color: var(--text-dim);
+      font-size: 0.55em;
+      font-family: var(--mono);
+      margin-right: 0.5rem;
+      vertical-align: middle;
+    }
+
+    header p.desc { color: var(--text-dim); font-size: 1.05rem; max-width: 780px; }
+
+    main { max-width: 1100px; margin: 0 auto; padding: 0 2rem 4rem; }
+
+    section { margin-top: 3rem; }
+
+    section > h2 {
+      font-size: 1.4rem;
+      font-weight: 700;
+      color: var(--accent);
+      border-bottom: 1px solid var(--border);
+      padding-bottom: 0.5rem;
+      margin-bottom: 1.5rem;
+    }
+
+    h3 { font-size: 1.1rem; font-weight: 600; color: var(--yellow); margin: 1.6rem 0 0.6rem; }
+
+    p { margin-bottom: 1rem; }
+    ul, ol { padding-left: 1.5rem; margin-bottom: 1rem; }
+    li { margin-bottom: 0.4rem; }
+
+    code {
+      font-family: var(--mono);
+      font-size: 0.85em;
+      background: rgba(0, 212, 255, 0.08);
+      color: var(--accent);
+      padding: 0.1em 0.35em;
+      border-radius: 3px;
+    }
+
+    pre {
+      font-family: var(--mono);
+      font-size: 0.8rem;
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 1rem 1.2rem;
+      overflow-x: auto;
+      margin-bottom: 1rem;
+      color: var(--green);
+      line-height: 1.6;
+      white-space: pre;
+    }
+    pre .cm { color: var(--text-dim); }
+
+    .formula-block {
+      background: var(--card);
+      border-left: 3px solid var(--purple);
+      border-radius: 0 8px 8px 0;
+      padding: 0.8rem 1.2rem;
+      margin: 1rem 0;
+      font-family: var(--mono);
+      font-size: 0.88rem;
+    }
+
+    .callout {
+      background: rgba(255, 149, 0, 0.07);
+      border: 1px solid rgba(255, 149, 0, 0.3);
+      border-radius: 8px;
+      padding: 1rem 1.2rem;
+      margin: 1.2rem 0;
+    }
+    .callout strong { color: var(--orange); }
+
+    .viz-card {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 1.5rem;
+    }
+    .viz-title { font-weight: 600; font-size: 1rem; margin-bottom: 0.3rem; }
+    .viz-desc { font-size: 0.88rem; color: var(--text-dim); margin-bottom: 1.2rem; }
+
+    .preset-row { display: flex; flex-wrap: wrap; gap: 0.5rem; margin-bottom: 1.2rem; align-items: center; }
+
+    .ctrl-btn {
+      font-family: var(--mono);
+      font-size: 0.75rem;
+      padding: 0.45em 0.9em;
+      border-radius: 6px;
+      border: 1px solid var(--border);
+      background: var(--surface);
+      color: var(--text-dim);
+      cursor: pointer;
+      transition: all 0.18s;
+    }
+    .ctrl-btn:hover { border-color: var(--accent); color: var(--accent); }
+    .ctrl-btn.primary { border-color: var(--accent); color: var(--accent); background: rgba(0,212,255,0.08); }
+
+    .slider-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(230px, 1fr));
+      gap: 1rem 1.6rem;
+      margin-bottom: 1.2rem;
+    }
+    .slider-row label {
+      display: flex;
+      justify-content: space-between;
+      font-size: 0.8rem;
+      color: var(--text-dim);
+      margin-bottom: 0.25rem;
+      gap: 0.5rem;
+    }
+    .slider-row .val { font-family: var(--mono); color: var(--accent); }
+    .slider-row input[type=range] { width: 100%; accent-color: var(--purple); }
+    .slider-row select {
+      width: 100%; background: var(--surface); color: var(--text);
+      border: 1px solid var(--border); border-radius: 6px;
+      font-family: var(--mono); font-size: 0.78rem; padding: 0.35em 0.5em;
+    }
+
+    .toggle-row {
+      display: flex; align-items: center; gap: 0.55rem;
+      font-size: 0.82rem; color: var(--text-dim);
+      margin-bottom: 1.2rem;
+    }
+    .toggle-row input { accent-color: var(--orange); width: 16px; height: 16px; }
+
+    .verdict {
+      border-radius: 8px;
+      padding: 0.85rem 1.1rem;
+      font-family: var(--mono);
+      font-size: 0.85rem;
+      margin-bottom: 1.2rem;
+      border: 1px solid var(--border);
+      line-height: 1.55;
+    }
+    .verdict.pass  { border-color: rgba(0,255,136,0.45); background: rgba(0,255,136,0.07); color: var(--green); }
+    .verdict.warn  { border-color: rgba(255,215,0,0.45); background: rgba(255,215,0,0.07); color: var(--yellow); }
+    .verdict.fail  { border-color: rgba(255,71,87,0.45);  background: rgba(255,71,87,0.07);  color: var(--red); }
+    .verdict .sub { display: block; color: var(--text-dim); font-size: 0.78rem; margin-top: 0.3rem; }
+
+    .stat-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+      gap: 0.7rem;
+      margin-bottom: 1.2rem;
+    }
+    .stat {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 0.6rem 0.8rem;
+    }
+    .stat .k { font-size: 0.62rem; letter-spacing: 0.07em; text-transform: uppercase; color: var(--text-dim); font-family: var(--mono); }
+    .stat .v { font-family: var(--mono); font-size: 1rem; color: var(--text); }
+
+    .panes { display: grid; grid-template-columns: 1.35fr 1fr; gap: 1.5rem; }
+    @media (max-width: 860px) { .panes { grid-template-columns: 1fr; } }
+
+    canvas { display: block; width: 100%; height: auto; border-radius: 6px; background: #0a0c13; }
+    #specCv { cursor: col-resize; }
+    .cv-label { font-size: 0.72rem; color: var(--text-dim); font-family: var(--mono); margin: 0.9rem 0 0.35rem; }
+    .legend { display: flex; flex-wrap: wrap; gap: 0.9rem; font-size: 0.7rem; color: var(--text-dim); font-family: var(--mono); margin-top: 0.5rem; }
+    .legend span::before {
+      content: ''; display: inline-block; width: 9px; height: 9px;
+      border-radius: 2px; margin-right: 5px; background: currentColor;
+    }
+    .lg-true { color: var(--green); }
+    .lg-samp { color: var(--red); }
+    .lg-nyq  { color: var(--yellow); }
+    .lg-mel  { color: var(--purple); }
+
+    table.exp { width: 100%; border-collapse: collapse; font-family: var(--mono); font-size: 0.74rem; }
+    table.exp th {
+      text-align: left; color: var(--text-dim); font-weight: 500;
+      border-bottom: 1px solid var(--border); padding: 0.4rem;
+      text-transform: uppercase; letter-spacing: 0.05em; font-size: 0.65rem;
+    }
+    table.exp td { padding: 0.5rem 0.4rem; border-bottom: 1px solid var(--border); vertical-align: top; }
+    table.exp td.num { color: var(--accent); white-space: nowrap; }
+
+    #interview-line .quote {
+      background: linear-gradient(180deg, rgba(124,58,237,0.12), rgba(124,58,237,0.04));
+      border: 1px solid rgba(124,58,237,0.45);
+      border-left: 4px solid var(--purple);
+      border-radius: 0 10px 10px 0;
+      padding: 1.3rem 1.5rem;
+      font-size: 1.02rem;
+      line-height: 1.75;
+    }
+    #interview-line .quote p:last-child { margin-bottom: 0; }
+    #interview-line .quote em { color: var(--yellow); font-style: normal; font-weight: 600; }
+
+    #takeaways li strong { color: var(--accent); }
+
+    .concept-nav {
+      max-width: 1100px;
+      margin: 0 auto;
+      padding: 1.5rem 2rem 3rem;
+      display: flex;
+      justify-content: space-between;
+      gap: 1rem;
+      border-top: 1px solid var(--border);
+    }
+    .nav-link {
+      display: flex; flex-direction: column; gap: 0.2rem;
+      text-decoration: none; padding: 0.6rem 1rem;
+      border-radius: 8px; border: 1px solid var(--border);
+      background: var(--surface); max-width: 260px; transition: all 0.2s;
+    }
+    .nav-link:hover:not(.disabled) { border-color: var(--accent); }
+    .nav-link.disabled { opacity: 0.35; pointer-events: none; }
+    .nav-dir { font-family: var(--mono); font-size: 0.7rem; color: var(--text-dim); }
+    .nav-title { font-size: 0.9rem; color: var(--text); font-weight: 500; }
+
+    @media (max-width: 640px) {
+      header, main { padding-left: 1rem; padding-right: 1rem; }
+      .concept-nav { padding-left: 1rem; padding-right: 1rem; flex-direction: column; }
+      .nav-link { max-width: 100%; }
+    }
+  </style>
+</head>
+<body>
+
+<header>
+  <div class="group-badge">Audio</div><div class="depth-badge">Core</div>
+  <h1><span class="id">02</span>Spectrograms and the Mel Scale</h1>
+  <p class="desc">The STFT as the bridge from waveform to image — window length trading time resolution against frequency resolution, hop length setting the frame rate every downstream model inherits, and mel filterbanks compressing linear frequency onto a perceptual scale so 80 bins carry what 513 FFT bins did.</p>
+</header>
+
+<main>
+
+  <!-- ── THEORY ── -->
+  <section id="theory">
+    <h2>Theory</h2>
+
+    <h3>The STFT is three parameters and one compromise</h3>
+    <p>
+      A waveform is a one-dimensional list of samples; almost every speech model wants a
+      two-dimensional time-frequency image. The short-time Fourier transform gets you there
+      by chopping the signal into overlapping frames, multiplying each frame by a window
+      function, and taking a DFT of each. Three parameters define it:
+      <strong>win_length</strong> (how many samples per frame), <strong>hop_length</strong>
+      (how far you advance between frames) and <strong>n_fft</strong> (the DFT size, which
+      must be at least <code>win_length</code> and is normally the next power of two, with
+      the difference zero-padded).
+    </p>
+    <p>
+      The compromise is forced by mathematics, not by implementation, and it is worth being
+      precise about which quantity is which. The <em>bin spacing</em> is
+      <code>fs / n_fft</code>, but the <em>resolution</em> — the smallest frequency
+      separation at which two tones stay distinguishable — is set by how long you actually
+      observed the signal, <code>fs / win_length</code>. Zero-padding to a larger
+      <code>n_fft</code> packs the bins closer together and makes the plot smoother; it
+      interpolates, it does not resolve. Time resolution is roughly the window duration.
+      Multiply the two real quantities and the window length cancels: you cannot shrink both.
+    </p>
+    <div class="formula-block">
+      bin spacing = fs / n_fft &nbsp;&nbsp;(interpolation)<br/>
+      Δf ≈ fs / win_length &nbsp;·&nbsp; Δt ≈ win_length / fs &nbsp;→&nbsp; Δf · Δt ≈ 1
+    </div>
+    <p>
+      In speech this shows up as the classic pair. A <strong>narrowband</strong> spectrogram
+      uses a window covering several pitch periods — at a 118&nbsp;Hz F0 the period is
+      8.5&nbsp;ms, so a 25&nbsp;ms window spans about three of them — and it resolves the
+      individual harmonics of the voice as horizontal stripes. A <strong>wideband</strong>
+      spectrogram uses a window shorter than one pitch period, say 5&nbsp;ms, which smears
+      the harmonics into a single broad formant band but resolves each glottal pulse as a
+      vertical striation. Formant tracking wants wideband; pitch and harmonic structure want
+      narrowband. Feature front ends for ASR and TTS sit deliberately in between, around
+      20–50&nbsp;ms.
+    </p>
+    <p>
+      The window function itself matters. A rectangular window truncates the signal
+      mid-cycle, and that discontinuity leaks energy across the whole spectrum, burying weak
+      formants under the skirt of a strong one. Hann is the default because it tapers to
+      zero at both ends and, at 50% or 75% overlap, satisfies the constant-overlap-add
+      condition — the overlapped windows sum to a constant, so a resynthesis path can
+      reconstruct without amplitude ripple. That property is what makes overlap-add work in
+      <a href="./16-griffin-lim.html">Griffin-Lim</a> and in streaming vocoders.
+    </p>
+
+    <h3>Hop length is the frame rate everything else inherits</h3>
+    <p>
+      Hop length is the parameter with the longest reach, because <code>fs / hop_length</code>
+      is the frame rate of every tensor downstream: the duration predictor's units, the
+      vocoder's upsampling factor, the alignment resolution of a forced aligner. Whisper's
+      front end is 16&nbsp;kHz, <code>n_fft = 400</code> (25&nbsp;ms), <code>hop = 160</code>
+      (10&nbsp;ms), 80 mel bins — so 100 frames per second, 201 FFT bins per frame, and a
+      30-second window is exactly 480000 / 160 = 3000 frames. Tacotron 2 on LJSpeech is
+      22.05&nbsp;kHz with <code>n_fft = 1024</code> and <code>hop = 256</code>, which is
+      11.61&nbsp;ms per frame and 86.13 frames per second; a decoder emitting 24 mel frames
+      has produced 279&nbsp;ms of audio. Get that number wrong and every duration in your
+      dataset is scaled by a constant nobody notices until the speech is uniformly too fast.
+    </p>
+
+    <h3>Mel: 513 bins down to 80</h3>
+    <p>
+      A 1024-point FFT gives <code>n_fft/2 + 1 = 513</code> non-redundant magnitude bins,
+      evenly spaced 21.5&nbsp;Hz apart at 22.05&nbsp;kHz. That is the wrong basis for speech
+      twice over: it is far more resolution than the ear has above 1&nbsp;kHz, and it is
+      correlated in a way that wastes model capacity. The mel scale is a monotonic warp,
+      roughly linear below 1&nbsp;kHz and logarithmic above it, that makes equal steps
+      correspond to roughly equal perceived pitch distance.
+    </p>
+    <div class="formula-block">
+      HTK: m = 2595 · log₁₀(1 + f / 700) &nbsp;&nbsp; f = 700 · (10<sup>m/2595</sup> − 1)
+    </div>
+    <p>
+      There are two formulas in daily use and they disagree. The HTK form above is what
+      <code>librosa</code> gives you with <code>htk=True</code>; the default,
+      <code>htk=False</code>, is the Slaney form, linear at 200/3 Hz per mel below
+      1&nbsp;kHz and logarithmic above. They produce different filter centre frequencies, so
+      a mel computed one way is not the mel another model was trained on.
+    </p>
+    <p>
+      Building the bank is mechanical: pick <code>n_mels</code>, <code>fmin</code> and
+      <code>fmax</code>; place <code>n_mels + 2</code> points equally spaced <em>in mel</em>;
+      map them back to Hz; and make filter <em>i</em> a triangle rising from point
+      <em>i</em> to <em>i+1</em> and falling to <em>i+2</em>. The result is a
+      <code>(n_mels, n_bins)</code> matrix you multiply the power spectrum by. Two details
+      bite. Slaney normalisation scales each triangle by <code>2/(hi − lo)</code> so filters
+      have equal area rather than equal peak, which changes the numeric range your model
+      sees. And whenever the lowest triangles get narrower than the FFT bin spacing, those
+      filters contain no bin at all and emit a hard <code>log(1e-5) = −11.5</code> forever.
+      The two ways to get there are a short window — a 5&nbsp;ms window at 16&nbsp;kHz gives
+      <code>n_fft = 128</code> and 125&nbsp;Hz bins, far wider than the bottom triangles —
+      and simply asking for too many bins: 128 mels over 0–4&nbsp;kHz on an 8&nbsp;kHz leg
+      puts the first triangle's whole span below 21&nbsp;Hz. At the usual 80 mels with a
+      25&nbsp;ms window there are none, which is why it goes unnoticed until someone changes
+      one of those two numbers. The visualization counts them live.
+    </p>
+    <p>
+      Finally the magnitudes are log-compressed, typically
+      <code>log(clamp(mel, min=1e-5))</code>, because speech energy spans orders of
+      magnitude and an L1 or L2 loss on linear power would be dominated entirely by the
+      loudest vowels.
+    </p>
+
+    <h3>What it costs, and how it breaks</h3>
+    <p>
+      The latency is small but real. To emit the frame covering the first 25&nbsp;ms you
+      must have all 25&nbsp;ms of it, so a streaming front end buffers one window —
+      25&nbsp;ms, or 12.5&nbsp;ms of lookahead relative to the frame's centre. Against an
+      800&nbsp;ms conversational budget that is under 4%, and it is not where you optimise:
+      endpointing hangover, at 200–700&nbsp;ms, costs 8× to 28× as much — roughly an order of
+      magnitude, and the actual place the budget goes. Worth knowing so you can say so
+      rather than guess.
+    </p>
+    <p>
+      The characteristic failure is <strong>mel mismatch</strong>. An acoustic model and a
+      vocoder trained on different front ends — HTK versus Slaney, <code>fmax</code> 8000
+      versus <code>fs/2</code>, natural log versus log₁₀, Slaney-normalised versus not —
+      compose into a system where the vocoder receives mel it has never seen. It does not
+      error; it produces a hoarse, buzzy, metallic voice that is recognisably the right
+      words in the wrong throat. On a telephony leg there is a second version: a bank built
+      for <code>fmax = 8000</code> applied to 8&nbsp;kHz audio upsampled to 16&nbsp;kHz has a
+      block of its top filters sitting over a band the network already deleted, and the
+      model reads that silence as a feature. Be precise about how big that block is, because
+      the mel scale is compressive and the intuition from linear frequency overshoots badly:
+      4–8&nbsp;kHz is half the linear axis but only <strong>24%</strong> of the mel axis, so
+      of 80 triangles <strong>18</strong> sit entirely above 4&nbsp;kHz and 2 more straddle
+      it. That is a real waste of about a fifth of the representation, and a real band of
+      constant <code>log(1e-5)</code> input the vocoder never saw in training — but it is a
+      fifth, not a half.
+    </p>
+    <div class="callout">
+      <strong>PHI note.</strong> A mel spectrogram is not de-identified audio. 80 bins at
+      100&nbsp;fps is 32&nbsp;kB/s in float32 — bit for bit the same rate as 16-bit PCM at
+      16&nbsp;kHz — it retains speaker identity well enough that x-vector systems are
+      trained directly on it, and any vocoder inverts it back to intelligible speech. A
+      "features only, we don't keep the audio" retention policy is not a de-identification
+      control, and in a healthcare deployment the mel store inherits the same retention,
+      access-log and BAA obligations as the recordings.
+    </div>
+
+    <h3>The arithmetic, written out</h3>
+    <pre><span class="cm">import numpy as np
+
+# ─── mel scale (HTK). librosa's htk=True; htk=False is the Slaney variant. ───</span>
+def hz_to_mel(f): return 2595.0 * np.log10(1.0 + f / 700.0)
+def mel_to_hz(m): return 700.0 * (10.0 ** (m / 2595.0) - 1.0)
+
+def mel_filterbank(sr, n_fft, n_mels, fmin=0.0, fmax=None, norm="slaney"):
+    fmax   = fmax or sr / 2
+    n_bins = n_fft // 2 + 1
+    fft_hz = np.linspace(0.0, sr / 2, n_bins)          <span class="cm"># rfft bin centres</span>
+
+    <span class="cm"># n_mels + 2 points equally spaced IN MEL, mapped back to Hz</span>
+    m_pts  = np.linspace(hz_to_mel(fmin), hz_to_mel(fmax), n_mels + 2)
+    hz_pts = mel_to_hz(m_pts)
+
+    fb = np.zeros((n_mels, n_bins))
+    for i in range(n_mels):
+        lo, mid, hi = hz_pts[i], hz_pts[i + 1], hz_pts[i + 2]
+        rise = (fft_hz - lo) / (mid - lo)
+        fall = (hi - fft_hz) / (hi - mid)
+        fb[i] = np.maximum(0.0, np.minimum(rise, fall))
+        if norm == "slaney":
+            fb[i] *= 2.0 / (hi - lo)                   <span class="cm"># equal area, not equal peak</span>
+    return fb
+
+<span class="cm"># ─── Whisper's front end, exactly ───────────────────────────────────────────</span>
+sr, n_fft, hop, n_mels = 16000, 400, 160, 80
+fb = mel_filterbank(sr, n_fft, n_mels, fmin=0.0, fmax=8000.0)
+
+print(fb.shape)                      <span class="cm"># (80, 201)      201 = 400 // 2 + 1</span>
+print(sr / n_fft)                    <span class="cm"># 40.0    Hz per FFT bin</span>
+print(sr / hop)                      <span class="cm"># 100.0   frames per second</span>
+print((30 * sr) // hop)              <span class="cm"># 3000    frames in a 30 s window</span>
+print((fb.sum(axis=1) == 0).sum())   <span class="cm"># 0       empty filters — check this, it bites at 8 kHz</span>
+
+<span class="cm"># ─── mel spectrogram + Tacotron-style dynamic range compression ─────────────</span>
+power  = np.abs(stft) ** 2           <span class="cm"># (201, T)  |STFT|^2</span>
+mel    = fb @ power                  <span class="cm"># (80,  T)  513->80 is a matmul, nothing more</span>
+logmel = np.log(np.clip(mel, 1e-5, None))</pre>
+  </section>
+
+  <!-- ── VISUALIZATION ── -->
+  <section id="visualization">
+    <h2>Visualization</h2>
+    <div class="viz-card">
+      <div class="viz-title">Live STFT — window, hop and the mel bank</div>
+      <div class="viz-desc">
+        A synthetic utterance (three voiced segments with moving formants, an
+        <code>/s/</code> fricative burst and a pause) is analysed live. Drag the
+        <em>window</em> slider to watch horizontal harmonic stripes collapse into vertical
+        glottal striations, drag <em>hop</em> to change the frame rate every downstream model
+        inherits, and toggle the filterbank to see 80 triangles fold the linear spectrum onto
+        the mel scale. <strong>Drag on the spectrogram</strong> to move the frame cursor and
+        inspect that frame's spectrum, filters and mel vector.
+      </div>
+
+      <div class="preset-row">
+        <button class="ctrl-btn primary" data-preset="whisper">Whisper 16 kHz / 25 / 10 ms</button>
+        <button class="ctrl-btn" data-preset="taco">Tacotron 2 22.05 kHz / 46.4 / 11.6 ms</button>
+        <button class="ctrl-btn" data-preset="pstn">PSTN 8 kHz narrowband</button>
+        <button class="ctrl-btn" data-preset="wide">Wideband 5 ms window</button>
+        <button class="ctrl-btn" data-preset="narrow">Narrowband 64 ms window</button>
+      </div>
+
+      <div class="slider-grid">
+        <div class="slider-row">
+          <label><span>Sample rate f<sub>s</sub></span><span class="val" id="fsVal">16000 Hz</span></label>
+          <select id="fsSel">
+            <option value="8000">8000 Hz (PSTN)</option>
+            <option value="16000" selected>16000 Hz (ASR)</option>
+            <option value="22050">22050 Hz (LJSpeech)</option>
+            <option value="24000">24000 Hz (TTS)</option>
+          </select>
+        </div>
+        <div class="slider-row">
+          <label><span>Window length</span><span class="val" id="winVal">25.0 ms</span></label>
+          <input type="range" id="winSlider" min="2" max="64" step="0.5" value="25"/>
+        </div>
+        <div class="slider-row">
+          <label><span>Hop length</span><span class="val" id="hopVal">10.0 ms</span></label>
+          <input type="range" id="hopSlider" min="2" max="30" step="0.5" value="10"/>
+        </div>
+        <div class="slider-row">
+          <label><span>Mel bins n_mels</span><span class="val" id="melVal">80</span></label>
+          <input type="range" id="melSlider" min="16" max="128" step="1" value="80"/>
+        </div>
+        <div class="slider-row">
+          <label><span>Mel f<sub>max</sub></span><span class="val" id="fmaxVal">8000 Hz</span></label>
+          <input type="range" id="fmaxSlider" min="2000" max="12000" step="250" value="8000"/>
+        </div>
+        <div class="slider-row">
+          <label><span>Mel scale formula</span><span class="val" id="scaleVal">HTK</span></label>
+          <select id="scaleSel">
+            <option value="htk" selected>HTK — 2595 log10(1+f/700)</option>
+            <option value="slaney">Slaney — librosa default</option>
+          </select>
+        </div>
+      </div>
+
+      <div class="toggle-row">
+        <input type="checkbox" id="fbChk" checked/>
+        <label for="fbChk">Overlay the mel filterbank triangles on the frame's linear spectrum</label>
+      </div>
+
+      <div class="verdict pass" id="verdict">—</div>
+
+      <div class="stat-grid">
+        <div class="stat"><div class="k">n_fft</div><div class="v" id="stNfft">512</div></div>
+        <div class="stat"><div class="k">FFT bins</div><div class="v" id="stBins">257</div></div>
+        <div class="stat"><div class="k">Bin spacing fs/n_fft</div><div class="v" id="stDf">31.3 Hz</div></div>
+        <div class="stat"><div class="k">Resolution fs/win</div><div class="v" id="stRes">40.0 Hz</div></div>
+        <div class="stat"><div class="k">Frame rate</div><div class="v" id="stFps">100.0 fps</div></div>
+        <div class="stat"><div class="k">Overlap</div><div class="v" id="stOv">60%</div></div>
+        <div class="stat"><div class="k">Buffering latency</div><div class="v" id="stLat">25.0 ms</div></div>
+        <div class="stat"><div class="k">Mel float32 rate</div><div class="v" id="stRate">32.0 kB/s</div></div>
+        <div class="stat"><div class="k">Empty mel filters</div><div class="v" id="stEmpty">0</div></div>
+      </div>
+
+      <div class="panes">
+        <div>
+          <div class="cv-label" id="specLabel">Linear spectrogram — |STFT| in dB, 0 to f<sub>s</sub>/2 (drag to move the cursor)</div>
+          <canvas id="specCv" width="760" height="250"></canvas>
+          <div class="legend">
+            <span class="lg-true">/a/ voiced</span>
+            <span class="lg-samp">/s/ fricative</span>
+            <span class="lg-nyq">frame cursor</span>
+          </div>
+
+          <div class="cv-label" id="melLabel">Mel spectrogram — 80 bins, log-compressed</div>
+          <canvas id="melCv" width="760" height="180"></canvas>
+          <div class="legend">
+            <span class="lg-mel">low mel bin = low frequency (bottom row)</span>
+          </div>
+        </div>
+
+        <div>
+          <div class="cv-label" id="sliceLabel">Frame at t = 0.00 s — linear spectrum + mel triangles</div>
+          <canvas id="sliceCv" width="380" height="200"></canvas>
+          <div class="legend">
+            <span class="lg-true">|X(f)| dB</span>
+            <span class="lg-mel">mel filters</span>
+          </div>
+
+          <div class="cv-label">The same frame after the filterbank — n_mels values</div>
+          <canvas id="barsCv" width="380" height="130"></canvas>
+
+          <div class="cv-label">Resolution accounting</div>
+          <table class="exp">
+            <thead><tr><th>Quantity</th><th>Value</th></tr></thead>
+            <tbody>
+              <tr><td>win_length (samples)</td><td class="num" id="rWin">400</td></tr>
+              <tr><td>hop_length (samples)</td><td class="num" id="rHop">160</td></tr>
+              <tr><td>Frames in this 1.10 s clip</td><td class="num" id="rFrames">—</td></tr>
+              <tr><td>Pitch periods per window (F0 ≈ 115 Hz)</td><td class="num" id="rPer">—</td></tr>
+              <tr><td>Compression
+                  n_bins → n_mels</td><td class="num" id="rComp">—</td></tr>
+              <tr><td>Mel filter width at 300 Hz</td><td class="num" id="rW300">—</td></tr>
+              <tr><td>Mel filter width at 3400 Hz</td><td class="num" id="rW3400">—</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ── INTERVIEW LINE ── -->
+  <section id="interview-line">
+    <h2>The line I'd actually say</h2>
+    <div class="quote">
+      <p>
+        "The STFT gives me a time-frequency picture, and the only real knob is the window:
+        <em>long window, sharp frequency, blurry time</em>, and the reverse. Around 25&nbsp;ms
+        I resolve a 118&nbsp;Hz talker's harmonics; at 5&nbsp;ms I lose the harmonics and
+        start seeing individual glottal pulses instead. Hop is the parameter I'd actually
+        argue about, because <em>fs over hop is the frame rate every downstream model
+        inherits</em> — 10&nbsp;ms hop is 100&nbsp;fps, and that's the unit my durations, my
+        alignments and my vocoder's upsampling factor are all denominated in."
+      </p>
+      <p>
+        "The mel bank is then just a matmul: 80 triangles equally spaced in mel, so about
+        513 linear bins collapse to 80 perceptually-spaced ones. The thing I'd check first
+        in a broken pipeline is that the acoustic model and the vocoder agree on
+        <em>exactly</em> the same front end — HTK versus Slaney mel, the same
+        <code>fmax</code>, the same log — because a mismatch doesn't throw, it just makes
+        the voice buzz. And on an 8&nbsp;kHz phone leg I'd check <code>fmax</code> against
+        Nyquist and count the dead filters; a bank built for <code>fmax</code>&nbsp;=&nbsp;8000
+        on a narrowband call has 18 of its 80 triangles sitting entirely over a band the
+        network already threw away — not half, because mel is compressive and 4–8&nbsp;kHz is
+        only about a quarter of the mel axis."
+      </p>
+    </div>
+  </section>
+
+  <!-- ── TAKEAWAYS ── -->
+  <section id="takeaways">
+    <h2>Takeaways</h2>
+    <ul>
+      <li><strong>Δf ≈ fs/win_length, Δt ≈ win_length/fs, and you cannot shrink both.</strong> Resolution is set by the window, not the DFT size — <code>fs/n_fft</code> is only bin spacing, and zero-padding shrinks it for free without resolving anything. A window spanning several pitch periods resolves harmonics (narrowband); one shorter than a pitch period resolves glottal pulses (wideband). Speech front ends sit at 20–50&nbsp;ms deliberately.</li>
+      <li><strong>Hop length is the frame rate everything inherits.</strong> 16&nbsp;kHz / hop 160 = 100&nbsp;fps and 3000 frames per 30&nbsp;s Whisper window; 22.05&nbsp;kHz / hop 256 = 86.13&nbsp;fps and 11.61&nbsp;ms per Tacotron&nbsp;2 mel frame. Durations, alignments and vocoder upsampling are all denominated in it.</li>
+      <li><strong>The mel bank is a <code>(n_mels, n_bins)</code> matmul.</strong> Points equally spaced in mel, mapped back to Hz, triangles between them — a few lines of numpy or PyTorch, and the same matrix must be baked identically into whatever runs at serve time, whether that is an ONNX graph or a Triton ensemble's preprocessing step.</li>
+      <li><strong>Mel mismatch is the characteristic failure and it is silent.</strong> HTK vs Slaney, different <code>fmax</code>, natural log vs log₁₀, Slaney normalisation on or off — the vocoder gets out-of-domain mel and produces a hoarse, buzzy voice rather than an exception. Pin the front end in one place and assert on it in CI.</li>
+      <li><strong>At 8&nbsp;kHz, check <code>fmax</code> and count dead filters.</strong> Nyquist is 4&nbsp;kHz, so a bank built for <code>fmax</code>&nbsp;=&nbsp;8000 strands 18 of its 80 triangles entirely above it — about a fifth, not half, because 4–8&nbsp;kHz is only 24% of the mel axis. Separately, narrow low-frequency triangles can contain zero FFT bins and emit a hard zero.</li>
+      <li><strong>Mel is not de-identification.</strong> 80 bins × 100&nbsp;fps × float32 is 32&nbsp;kB/s — the same rate as the 16-bit PCM it came from — it carries speaker identity, and any vocoder inverts it to intelligible speech. In healthcare the feature store is PHI too.</li>
+    </ul>
+  </section>
+
+</main>
+
+<nav class="concept-nav">
+  <a class="nav-link" href="./01-audio-representation.html">
+    <span class="nav-dir">← Previous</span>
+    <span class="nav-title">Digital Audio Representation</span>
+  </a>
+  <a class="nav-link" href="./03-telephony-audio.html">
+    <span class="nav-dir">Next →</span>
+    <span class="nav-title">Telephony Audio Constraints</span>
+  </a>
+</nav>
+
+<script>
+// ─── State ──────────────────────────────────────────────────────────────────
+const S = {
+  fs: 16000, winMs: 25, hopMs: 10, nMels: 80, fmax: 8000,
+  scale: 'htk', showFb: true, cursor: 0.18
+};
+
+const DUR    = 1.10;    // synthetic utterance length, seconds
+const F0_REF = 115;     // mean F0 of the synthetic talker, Hz — used for the period count
+const MAX_FRAMES = 900; // render cap, keeps a 2 ms hop from melting the main thread
+
+const $ = id => document.getElementById(id);
+
+// ─── Radix-2 FFT, in place on (re, im) ──────────────────────────────────────
+function fft(re, im) {
+  const n = re.length;
+  for (let i = 1, j = 0; i < n; i++) {
+    let bit = n >> 1;
+    for (; j & bit; bit >>= 1) j ^= bit;
+    j ^= bit;
+    if (i < j) {
+      let t = re[i]; re[i] = re[j]; re[j] = t;
+      t = im[i]; im[i] = im[j]; im[j] = t;
+    }
+  }
+  for (let len = 2; len <= n; len <<= 1) {
+    const ang = -2 * Math.PI / len;
+    const wr = Math.cos(ang), wi = Math.sin(ang);
+    const half = len >> 1;
+    for (let i = 0; i < n; i += len) {
+      let cr = 1, ci = 0;
+      for (let k = 0; k < half; k++) {
+        const ur = re[i + k],        ui = im[i + k];
+        const xr = re[i + k + half], xi = im[i + k + half];
+        const vr = xr * cr - xi * ci;
+        const vi = xr * ci + xi * cr;
+        re[i + k] = ur + vr; im[i + k] = ui + vi;
+        re[i + k + half] = ur - vr; im[i + k + half] = ui - vi;
+        const ncr = cr * wr - ci * wi;
+        ci = cr * wi + ci * wr; cr = ncr;
+      }
+    }
+  }
+}
+
+function hann(n) {
+  const w = new Float32Array(n);
+  for (let i = 0; i < n; i++) w[i] = 0.5 - 0.5 * Math.cos(2 * Math.PI * i / n);
+  return w;
+}
+
+// ─── Synthetic utterance ────────────────────────────────────────────────────
+// Voiced segments: harmonics of a moving F0, shaped by Lorentzian formant
+// resonances. Fricative: white noise through a bandpass biquad. Both get a
+// 6 ms raised-cosine fade so segment edges do not smear broadband clicks
+// across the spectrogram and get mistaken for the analysis window's doing.
+const SEG = [
+  { t0: 0.00, t1: 0.30, kind: 'v', f0: [120, 134], F: [[730, 90], [1090, 110], [2440, 150]], g: 1.00 },
+  { t0: 0.30, t1: 0.41, kind: 'f', bp: 5400, q: 1.1,                                          g: 0.30 },
+  { t0: 0.41, t1: 0.72, kind: 'v', f0: [142, 112], F: [[300, 60], [2300, 120], [3000, 170]],  g: 0.95 },
+  { t0: 0.72, t1: 0.80, kind: 's' },
+  { t0: 0.80, t1: 1.10, kind: 'v', f0: [108,  94], F: [[570, 90], [ 840, 110], [2410, 150]],  g: 0.90 }
+];
+
+function formantEnv(f, F) {
+  let a = 0;
+  for (const [fc, bw] of F) a += 1 / (1 + Math.pow((f - fc) / bw, 2));
+  return a;
+}
+
+let sig = null;
+
+function genSignal(fs) {
+  const N = Math.round(DUR * fs);
+  const x = new Float32Array(N);
+  const nyq = fs / 2;
+
+  for (const s of SEG) {
+    const i0 = Math.round(s.t0 * fs), i1 = Math.min(N, Math.round(s.t1 * fs));
+    const len = i1 - i0;
+    if (len <= 0 || s.kind === 's') continue;
+    const buf = new Float32Array(len);
+
+    if (s.kind === 'v') {
+      let phase = 0;
+      for (let n = 0; n < len; n++) {
+        const u  = n / len;
+        const f0 = s.f0[0] + (s.f0[1] - s.f0[0]) * u;
+        phase += 2 * Math.PI * f0 / fs;
+        let v = 0;
+        for (let k = 1; k * f0 < nyq * 0.97; k++) {
+          v += (formantEnv(k * f0, s.F) / k) * Math.sin(k * phase);
+        }
+        buf[n] = s.g * v;
+      }
+    } else {                                   // bandpass-filtered noise (RBJ biquad)
+      const w0 = 2 * Math.PI * Math.min(s.bp, nyq * 0.92) / fs;
+      const alpha = Math.sin(w0) / (2 * s.q);
+      const a0 = 1 + alpha;
+      const b0 =  alpha / a0, b2 = -alpha / a0;
+      const a1 = -2 * Math.cos(w0) / a0, a2 = (1 - alpha) / a0;
+      let x1 = 0, x2 = 0, y1 = 0, y2 = 0;
+      for (let n = 0; n < len; n++) {
+        const xn = Math.random() * 2 - 1;
+        const yn = b0 * xn + b2 * x2 - a1 * y1 - a2 * y2;
+        x2 = x1; x1 = xn; y2 = y1; y1 = yn;
+        buf[n] = s.g * yn * 8;
+      }
+    }
+
+    const fade = Math.min(Math.round(0.006 * fs), Math.floor(len / 2));
+    for (let n = 0; n < fade; n++) {
+      const r = 0.5 - 0.5 * Math.cos(Math.PI * n / fade);
+      buf[n] *= r; buf[len - 1 - n] *= r;
+    }
+    for (let n = 0; n < len; n++) x[i0 + n] += buf[n];
+  }
+
+  let peak = 0;
+  for (let n = 0; n < N; n++) peak = Math.max(peak, Math.abs(x[n]));
+  if (peak > 0) for (let n = 0; n < N; n++) x[n] *= 0.9 / peak;
+  return x;
+}
+
+// ─── Mel scale: both formulas, because they disagree and that is the point ──
+function hzToMel(f) {
+  if (S.scale === 'htk') return 2595 * Math.log10(1 + f / 700);
+  const fSp = 200 / 3, minLogHz = 1000, minLogMel = minLogHz / fSp;
+  const logStep = Math.log(6.4) / 27;
+  return f < minLogHz ? f / fSp : minLogMel + Math.log(f / minLogHz) / logStep;
+}
+function melToHz(m) {
+  if (S.scale === 'htk') return 700 * (Math.pow(10, m / 2595) - 1);
+  const fSp = 200 / 3, minLogHz = 1000, minLogMel = minLogHz / fSp;
+  const logStep = Math.log(6.4) / 27;
+  return m < minLogMel ? m * fSp : minLogHz * Math.exp(logStep * (m - minLogMel));
+}
+
+// Triangles equally spaced in mel, Slaney area normalisation — the JS twin of
+// the numpy in the theory section.
+function melFilterbank(fs, nFft, nMels, fmin, fmax) {
+  const nBins = nFft / 2 + 1;
+  const fbHz = new Float64Array(nBins);
+  for (let b = 0; b < nBins; b++) fbHz[b] = b * fs / nFft;
+
+  const mLo = hzToMel(fmin), mHi = hzToMel(fmax);
+  const hzPts = new Float64Array(nMels + 2);
+  for (let i = 0; i < nMels + 2; i++) hzPts[i] = melToHz(mLo + (mHi - mLo) * i / (nMels + 1));
+
+  const fb = [], span = [];
+  let empty = 0;
+  for (let i = 0; i < nMels; i++) {
+    const lo = hzPts[i], mid = hzPts[i + 1], hi = hzPts[i + 2];
+    const row = new Float32Array(nBins);
+    let sum = 0;
+    const enorm = 2 / Math.max(hi - lo, 1e-9);
+    // Only bins strictly inside (lo, hi) can be non-zero, so walk that range
+    // instead of all nBins — the difference is 2 bins vs 1025 per filter.
+    const b0 = Math.max(0, Math.ceil(lo * nFft / fs));
+    const b1 = Math.min(nBins - 1, Math.floor(hi * nFft / fs));
+    for (let b = b0; b <= b1; b++) {
+      const rise = (fbHz[b] - lo) / Math.max(mid - lo, 1e-9);
+      const fall = (hi - fbHz[b]) / Math.max(hi - mid, 1e-9);
+      const w = Math.max(0, Math.min(rise, fall));
+      row[b] = w * enorm;
+      sum += w;
+    }
+    if (sum === 0) empty++;
+    fb.push(row);
+    span.push([b0, b1]);
+  }
+  return { fb, span, hzPts, empty };
+}
+
+// ─── STFT ───────────────────────────────────────────────────────────────────
+let A = null;   // last analysis result
+
+function analyse() {
+  const fs  = S.fs;
+  const win = Math.max(8, Math.round(S.winMs * fs / 1000));
+  const hop = Math.max(1, Math.round(S.hopMs * fs / 1000));
+  let nFft = 1; while (nFft < win) nFft *= 2;
+  nFft = Math.min(nFft, 4096);
+  const nBins = nFft / 2 + 1;
+  const w = hann(win);
+
+  let nFrames = Math.floor((sig.length - win) / hop) + 1;
+  nFrames = Math.max(1, Math.min(nFrames, MAX_FRAMES));
+
+  const re = new Float64Array(nFft), im = new Float64Array(nFft);
+  const spec = [];
+  for (let t = 0; t < nFrames; t++) {
+    re.fill(0); im.fill(0);
+    const start = t * hop;
+    for (let n = 0; n < win && start + n < sig.length; n++) re[n] = sig[start + n] * w[n];
+    fft(re, im);
+    const mag = new Float32Array(nBins);
+    for (let b = 0; b < nBins; b++) mag[b] = Math.hypot(re[b], im[b]);
+    spec.push(mag);
+  }
+
+  const fmax = Math.min(S.fmax, fs / 2);
+  const { fb, span, hzPts, empty } = melFilterbank(fs, nFft, S.nMels, 0, fmax);
+
+  const mel = [];
+  for (let t = 0; t < nFrames; t++) {
+    const m = new Float32Array(S.nMels);
+    const p = spec[t];
+    for (let i = 0; i < S.nMels; i++) {
+      const row = fb[i], b0 = span[i][0], b1 = span[i][1];
+      let acc = 0;
+      for (let b = b0; b <= b1; b++) acc += row[b] * p[b] * p[b];    // power, not magnitude
+      m[i] = Math.log(Math.max(acc, 1e-5));
+    }
+    mel.push(m);
+  }
+
+  A = { fs, win, hop, nFft, nBins, nFrames, spec, mel, fb, span, hzPts, empty, fmax };
+  return A;
+}
+
+// ─── Rendering ──────────────────────────────────────────────────────────────
+function heat(v) {                       // v in [0,1] -> magma-ish ramp
+  const t = Math.max(0, Math.min(1, v));
+  const r = Math.round(255 * Math.min(1, Math.max(0, 1.65 * t - 0.15)));
+  const g = Math.round(255 * Math.min(1, Math.max(0, 1.55 * t - 0.55)));
+  const b = Math.round(255 * (t < 0.5 ? 0.55 * t * 2 : 0.55 + 0.45 * (t - 0.5) * 2 * 0.7));
+  return [r, g, b];
+}
+
+const off = document.createElement('canvas');
+
+function drawGrid(ctx, W, H, fs) {
+  ctx.strokeStyle = 'rgba(226,232,240,0.13)';
+  ctx.fillStyle = '#8892a4';
+  ctx.font = '10px monospace';
+  ctx.lineWidth = 1;
+  const step = fs / 2 > 9000 ? 4000 : 2000;
+  for (let f = step; f < fs / 2; f += step) {
+    const y = H - (f / (fs / 2)) * H;
+    ctx.beginPath(); ctx.moveTo(0, y + 0.5); ctx.lineTo(W, y + 0.5); ctx.stroke();
+    ctx.fillText((f / 1000) + 'k', 3, y - 3);
+  }
+}
+
+function renderSpectrogram() {
+  const cv = $('specCv'), ctx = cv.getContext('2d');
+  const W = cv.width, H = cv.height;
+  const ROWS = 240;
+  off.width = A.nFrames; off.height = ROWS;
+  const octx = off.getContext('2d');
+  const img = octx.createImageData(A.nFrames, ROWS);
+
+  let dbMax = -200;
+  for (let t = 0; t < A.nFrames; t++)
+    for (let b = 0; b < A.nBins; b++)
+      dbMax = Math.max(dbMax, 20 * Math.log10(A.spec[t][b] + 1e-10));
+  const dbMin = dbMax - 75;
+
+  for (let t = 0; t < A.nFrames; t++) {
+    for (let y = 0; y < ROWS; y++) {
+      const bIdx = Math.round((1 - y / (ROWS - 1)) * (A.nBins - 1));
+      const db = 20 * Math.log10(A.spec[t][bIdx] + 1e-10);
+      const [r, g, b] = heat((db - dbMin) / (dbMax - dbMin));
+      const o = 4 * (y * A.nFrames + t);
+      img.data[o] = r; img.data[o + 1] = g; img.data[o + 2] = b; img.data[o + 3] = 255;
+    }
+  }
+  octx.putImageData(img, 0, 0);
+  ctx.clearRect(0, 0, W, H);
+  ctx.drawImage(off, 0, 0, W, H);
+  drawGrid(ctx, W, H, A.fs);
+
+  const cx = Math.round(S.cursor * W);
+  ctx.strokeStyle = '#ffd700'; ctx.lineWidth = 1.5;
+  ctx.beginPath(); ctx.moveTo(cx + 0.5, 0); ctx.lineTo(cx + 0.5, H); ctx.stroke();
+}
+
+function renderMel() {
+  const cv = $('melCv'), ctx = cv.getContext('2d');
+  const W = cv.width, H = cv.height;
+  off.width = A.nFrames; off.height = S.nMels;
+  const octx = off.getContext('2d');
+  const img = octx.createImageData(A.nFrames, S.nMels);
+
+  let hi = -1e9, lo = 1e9;
+  for (let t = 0; t < A.nFrames; t++)
+    for (let i = 0; i < S.nMels; i++) { hi = Math.max(hi, A.mel[t][i]); lo = Math.min(lo, A.mel[t][i]); }
+  lo = Math.max(lo, hi - 16);
+
+  for (let t = 0; t < A.nFrames; t++) {
+    for (let i = 0; i < S.nMels; i++) {
+      const [r, g, b] = heat((A.mel[t][i] - lo) / Math.max(hi - lo, 1e-9));
+      const o = 4 * ((S.nMels - 1 - i) * A.nFrames + t);
+      img.data[o] = r; img.data[o + 1] = g; img.data[o + 2] = b; img.data[o + 3] = 255;
+    }
+  }
+  octx.putImageData(img, 0, 0);
+  ctx.clearRect(0, 0, W, H);
+  ctx.drawImage(off, 0, 0, W, H);
+
+  const cx = Math.round(S.cursor * W);
+  ctx.strokeStyle = '#ffd700'; ctx.lineWidth = 1.5;
+  ctx.beginPath(); ctx.moveTo(cx + 0.5, 0); ctx.lineTo(cx + 0.5, H); ctx.stroke();
+}
+
+function cursorFrame() {
+  return Math.max(0, Math.min(A.nFrames - 1, Math.round(S.cursor * (A.nFrames - 1))));
+}
+
+function renderSlice() {
+  const cv = $('sliceCv'), ctx = cv.getContext('2d');
+  const W = cv.width, H = cv.height, PAD = 18;
+  ctx.clearRect(0, 0, W, H);
+  const t = cursorFrame();
+  const p = A.spec[t];
+
+  let dbMax = -200;
+  for (let b = 0; b < A.nBins; b++) dbMax = Math.max(dbMax, 20 * Math.log10(p[b] + 1e-10));
+  const dbMin = dbMax - 75;
+
+  // mel triangles first, underneath the spectrum
+  if (S.showFb) {
+    ctx.lineWidth = 1;
+    for (let i = 0; i < S.nMels; i++) {
+      const lo = A.hzPts[i], mid = A.hzPts[i + 1], hi = A.hzPts[i + 2];
+      const xs = f => PAD + (f / (A.fs / 2)) * (W - PAD - 4);
+      ctx.strokeStyle = i % 2 ? 'rgba(124,58,237,0.75)' : 'rgba(0,212,255,0.5)';
+      ctx.beginPath();
+      ctx.moveTo(xs(lo), H - PAD);
+      ctx.lineTo(xs(mid), H - PAD - (H - 2 * PAD) * 0.42);
+      ctx.lineTo(xs(hi), H - PAD);
+      ctx.stroke();
+    }
+  }
+
+  ctx.strokeStyle = '#00ff88'; ctx.lineWidth = 1.4;
+  ctx.beginPath();
+  for (let b = 0; b < A.nBins; b++) {
+    const db = 20 * Math.log10(p[b] + 1e-10);
+    const x = PAD + (b / (A.nBins - 1)) * (W - PAD - 4);
+    const y = H - PAD - ((db - dbMin) / (dbMax - dbMin)) * (H - 2 * PAD);
+    b === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
+  }
+  ctx.stroke();
+
+  // fmax marker — everything right of this line is discarded by the bank
+  const xf = PAD + (A.fmax / (A.fs / 2)) * (W - PAD - 4);
+  ctx.strokeStyle = '#ff4757'; ctx.setLineDash([4, 3]);
+  ctx.beginPath(); ctx.moveTo(xf, 4); ctx.lineTo(xf, H - PAD); ctx.stroke();
+  ctx.setLineDash([]);
+  ctx.fillStyle = '#ff4757'; ctx.font = '10px monospace';
+  ctx.fillText('fmax', Math.min(xf + 3, W - 32), 12);
+
+  ctx.strokeStyle = 'rgba(226,232,240,0.2)';
+  ctx.beginPath(); ctx.moveTo(PAD, H - PAD); ctx.lineTo(W - 4, H - PAD); ctx.stroke();
+  ctx.fillStyle = '#8892a4';
+  ctx.fillText('0', PAD, H - 5);
+  ctx.fillText((A.fs / 2000).toFixed(1) + ' kHz', W - 58, H - 5);
+}
+
+function renderBars() {
+  const cv = $('barsCv'), ctx = cv.getContext('2d');
+  const W = cv.width, H = cv.height, PAD = 14;
+  ctx.clearRect(0, 0, W, H);
+  const m = A.mel[cursorFrame()];
+  let hi = -1e9, lo = 1e9;
+  for (let i = 0; i < S.nMels; i++) { hi = Math.max(hi, m[i]); lo = Math.min(lo, m[i]); }
+  lo = Math.max(lo, hi - 16);
+  const bw = (W - PAD - 4) / S.nMels;
+  for (let i = 0; i < S.nMels; i++) {
+    const h = ((m[i] - lo) / Math.max(hi - lo, 1e-9)) * (H - PAD - 6);
+    const [r, g, b] = heat((m[i] - lo) / Math.max(hi - lo, 1e-9));
+    ctx.fillStyle = 'rgb(' + r + ',' + g + ',' + b + ')';
+    ctx.fillRect(PAD + i * bw, H - PAD - h, Math.max(1, bw - 0.6), h);
+  }
+  ctx.strokeStyle = 'rgba(226,232,240,0.2)';
+  ctx.beginPath(); ctx.moveTo(PAD, H - PAD + 0.5); ctx.lineTo(W - 4, H - PAD + 0.5); ctx.stroke();
+  ctx.fillStyle = '#8892a4'; ctx.font = '10px monospace';
+  ctx.fillText('mel 0', PAD, H - 3);
+  ctx.fillText('mel ' + (S.nMels - 1), W - 60, H - 3);
+}
+
+// ─── Readouts ───────────────────────────────────────────────────────────────
+function filterWidthAt(hz) {
+  for (let i = 0; i < S.nMels; i++) {
+    if (A.hzPts[i + 1] >= hz) return A.hzPts[i + 2] - A.hzPts[i];
+  }
+  return A.hzPts[S.nMels + 1] - A.hzPts[S.nMels - 1];
+}
+
+function updateReadouts() {
+  const fps     = A.fs / A.hop;
+  const overlap = Math.max(0, 1 - A.hop / A.win);
+  const period  = 1000 / F0_REF;
+  const periods = S.winMs / period;
+  const rateKB  = S.nMels * fps * 4 / 1000;
+
+  $('stNfft').textContent  = A.nFft;
+  $('stBins').textContent  = A.nBins;
+  $('stDf').textContent    = (A.fs / A.nFft).toFixed(1) + ' Hz';
+  $('stRes').textContent   = (A.fs / A.win).toFixed(1) + ' Hz';
+  $('stFps').textContent   = fps.toFixed(1) + ' fps';
+  $('stOv').textContent    = (overlap * 100).toFixed(0) + '%';
+  $('stLat').textContent   = (A.win / A.fs * 1000).toFixed(1) + ' ms';
+  $('stRate').textContent  = rateKB.toFixed(1) + ' kB/s';
+  $('stEmpty').textContent = A.empty;
+
+  $('rWin').textContent    = A.win;
+  $('rHop').textContent    = A.hop;
+  $('rFrames').textContent = A.nFrames + (A.nFrames >= MAX_FRAMES ? ' (capped)' : '');
+  $('rPer').textContent    = periods.toFixed(2);
+  $('rComp').textContent   = A.nBins + ' → ' + S.nMels + '  (' + (A.nBins / S.nMels).toFixed(1) + '×)';
+  $('rW300').textContent   = filterWidthAt(300).toFixed(0) + ' Hz';
+  $('rW3400').textContent  = filterWidthAt(3400).toFixed(0) + ' Hz';
+
+  $('sliceLabel').innerHTML = 'Frame ' + cursorFrame() + ' at t = ' +
+    (cursorFrame() * A.hop / A.fs).toFixed(3) + ' s — linear spectrum + mel triangles';
+  $('melLabel').innerHTML = 'Mel spectrogram — ' + S.nMels + ' bins, log-compressed, f<sub>max</sub> ' +
+    A.fmax + ' Hz';
+
+  const v = $('verdict');
+  let cls = 'pass', txt, sub;
+  if (A.empty > 0) {
+    cls = 'fail';
+    txt = A.empty + ' of ' + S.nMels + ' mel filters are EMPTY — no FFT bin falls inside them.';
+    sub = 'Bin spacing is ' + (A.fs / A.nFft).toFixed(1) + ' Hz but the narrow low-frequency triangles are thinner than that. ' +
+          'Those rows emit log(1e-5) = -11.5 for every frame — a constant the model learns to ignore, and capacity you paid for. ' +
+          'Fix: fewer mel bins, a longer window, or a higher fmin.';
+  } else if (S.fmax > A.fs / 2 + 1) {
+    cls = 'warn';
+    txt = 'fmax ' + S.fmax + ' Hz exceeds Nyquist ' + (A.fs / 2) + ' Hz — clamped to ' + A.fmax + ' Hz.';
+    sub = 'On a real pipeline nothing clamps for you: the top triangles sit over a band that does not exist and read as silence.';
+  } else if (periods < 1.0) {
+    cls = 'warn';
+    txt = 'WIDEBAND: window = ' + S.winMs.toFixed(1) + ' ms ≈ ' + periods.toFixed(2) +
+          ' pitch periods at ' + F0_REF + ' Hz.';
+    sub = 'Shorter than one glottal cycle, so harmonics are smeared into broad formant bands and each pulse shows as a vertical striation. ' +
+          'Resolution fs/win = ' + (A.fs / A.win).toFixed(0) + ' Hz is wider than the ' + F0_REF + ' Hz harmonic spacing, so no amount of ' +
+          'zero-padding to n_fft = ' + A.nFft + ' brings the harmonics back. Good for formants, useless for pitch.';
+  } else if (periods > 2.5) {
+    cls = 'pass';
+    txt = 'NARROWBAND: window = ' + S.winMs.toFixed(1) + ' ms ≈ ' + periods.toFixed(2) +
+          ' pitch periods at ' + F0_REF + ' Hz.';
+    sub = 'Resolution fs/win = ' + (A.fs / A.win).toFixed(0) + ' Hz is well inside the ' + F0_REF + ' Hz harmonic spacing — horizontal stripes. ' +
+          'The cost is time: the ' + S.winMs.toFixed(0) + ' ms window smears the /s/ onset and adds ' + S.winMs.toFixed(0) + ' ms of streaming buffer.';
+  } else {
+    cls = 'pass';
+    txt = 'MIXED: window = ' + S.winMs.toFixed(1) + ' ms ≈ ' + periods.toFixed(2) +
+          ' pitch periods — the ASR/TTS operating point.';
+    sub = 'Harmonics partly resolved, onsets still reasonably sharp. This is why 20–50 ms is the convention rather than an extreme. ' +
+          'Frame rate ' + fps.toFixed(1) + ' fps; ' + rateKB.toFixed(1) + ' kB/s of float32 mel against ' +
+          (A.fs * 2 / 1000).toFixed(1) + ' kB/s of 16-bit PCM.';
+  }
+  v.className = 'verdict ' + cls;
+  v.innerHTML = txt + '<span class="sub">' + sub + '</span>';
+}
+
+// ─── Redraw pipeline ────────────────────────────────────────────────────────
+let queued = false;
+function redraw(regen) {
+  if (regen) sig = genSignal(S.fs);
+  if (queued) return;
+  queued = true;
+  requestAnimationFrame(() => {
+    queued = false;
+    analyse();
+    renderSpectrogram();
+    renderMel();
+    renderSlice();
+    renderBars();
+    updateReadouts();
+  });
+}
+
+function syncLabels() {
+  $('fsVal').textContent   = S.fs + ' Hz';
+  $('winVal').textContent  = S.winMs.toFixed(1) + ' ms';
+  $('hopVal').textContent  = S.hopMs.toFixed(1) + ' ms';
+  $('melVal').textContent  = S.nMels;
+  $('fmaxVal').textContent = S.fmax + ' Hz';
+  $('scaleVal').textContent = S.scale === 'htk' ? 'HTK' : 'Slaney';
+  $('specLabel').innerHTML = 'Linear spectrogram — |STFT| in dB, 0 to ' +
+    (S.fs / 2000).toFixed(2) + ' kHz (drag to move the cursor)';
+}
+
+// ─── Controls ───────────────────────────────────────────────────────────────
+$('fsSel').addEventListener('change', e => {
+  S.fs = +e.target.value;
+  syncLabels(); redraw(true);
+});
+$('winSlider').addEventListener('input', e => {
+  S.winMs = +e.target.value;
+  if (S.hopMs > S.winMs) { S.hopMs = S.winMs; $('hopSlider').value = S.hopMs; }
+  syncLabels(); redraw(false);
+});
+$('hopSlider').addEventListener('input', e => {
+  S.hopMs = Math.min(+e.target.value, S.winMs);
+  $('hopSlider').value = S.hopMs;
+  syncLabels(); redraw(false);
+});
+$('melSlider').addEventListener('input', e => { S.nMels = +e.target.value; syncLabels(); redraw(false); });
+$('fmaxSlider').addEventListener('input', e => { S.fmax = +e.target.value; syncLabels(); redraw(false); });
+$('scaleSel').addEventListener('change', e => { S.scale = e.target.value; syncLabels(); redraw(false); });
+$('fbChk').addEventListener('change', e => { S.showFb = e.target.checked; redraw(false); });
+
+const PRESETS = {
+  whisper: { fs: 16000, winMs: 25,   hopMs: 10,   nMels: 80, fmax: 8000 },
+  taco:    { fs: 22050, winMs: 46.5, hopMs: 11.5, nMels: 80, fmax: 8000 },
+  pstn:    { fs:  8000, winMs: 25,   hopMs: 10,   nMels: 80, fmax: 4000 },
+  wide:    { fs: 16000, winMs: 5,    hopMs: 2.5,  nMels: 80, fmax: 8000 },
+  narrow:  { fs: 16000, winMs: 64,   hopMs: 10,   nMels: 80, fmax: 8000 }
+};
+
+document.querySelectorAll('[data-preset]').forEach(btn => {
+  btn.addEventListener('click', () => {
+    const p = PRESETS[btn.dataset.preset];
+    Object.assign(S, p);
+    $('fsSel').value = S.fs;
+    $('winSlider').value = S.winMs;
+    $('hopSlider').value = S.hopMs;
+    $('melSlider').value = S.nMels;
+    $('fmaxSlider').value = S.fmax;
+    document.querySelectorAll('[data-preset]').forEach(b => b.classList.remove('primary'));
+    btn.classList.add('primary');
+    syncLabels(); redraw(true);
+  });
+});
+
+// Drag the frame cursor across either spectrogram.
+let dragging = false;
+function setCursorFromEvent(cv, e) {
+  const r = cv.getBoundingClientRect();
+  S.cursor = Math.max(0, Math.min(1, (e.clientX - r.left) / r.width));
+  redraw(false);
+}
+['specCv', 'melCv'].forEach(id => {
+  const cv = $(id);
+  cv.addEventListener('pointerdown', e => { dragging = true; cv.setPointerCapture(e.pointerId); setCursorFromEvent(cv, e); });
+  cv.addEventListener('pointermove', e => { if (dragging) setCursorFromEvent(cv, e); });
+  cv.addEventListener('pointerup',   () => { dragging = false; });
+  cv.addEventListener('pointercancel', () => { dragging = false; });
+});
+
+// ─── Boot ───────────────────────────────────────────────────────────────────
+syncLabels();
+redraw(true);
+</script>
+
+</body>
+</html>

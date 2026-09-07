@@ -9,7 +9,7 @@ set -euo pipefail
 # because every check was scoped to a single file.
 #
 # Tracks: ai-engineering  concepts  machine-learning  backend  dsa  system-design
-#         mlops  ml-system-design  ml-coding  data-drills
+#         mlops  ml-system-design  ml-coding  data-drills  tts
 # With no argument, every track is checked.
 #
 # --final / RALPH_CORPUS_FINAL=1   Completeness gate, off by default. Without
@@ -75,7 +75,7 @@ if [[ "${RALPH_CORPUS_FINAL:-0}" == "1" ]]; then
 fi
 
 if [[ ${#TRACKS[@]} -eq 0 ]]; then
-  TRACKS=(ai-engineering concepts machine-learning backend dsa system-design mlops ml-system-design ml-coding data-drills)
+  TRACKS=(ai-engineering concepts machine-learning backend dsa system-design mlops ml-system-design ml-coding data-drills tts)
 fi
 
 python3 - "$SCRIPT_DIR" "$THRESHOLD" "$COSINE" "$MIN_SHINGLES" "$STRICT" "$FINAL" "${TRACKS[@]}" <<'PY'
@@ -106,6 +106,7 @@ TRACKS = {
     "dsa":              ("dsa/problems/[0-9]*.md",             "md_section"),
     "system-design":    ("system-design/*/answers/[0-9]*.md",  "md_section"),
     "mlops":            ("mlops/concepts/*.html",              "html_theory"),
+    "tts":              ("tts/concepts/*.html",                "html_theory"),
     "ml-system-design": ("ml-system-design/*.html",            "mlsd_body"),
     "ml-coding":        ("ml-coding/[0-9]*.md",                "mlcoding_body"),
     # ids are "sql-001" / "stat-001" (letters, not digits, unlike dsa/
@@ -133,6 +134,7 @@ QUEUE_FILES = {
     "machine-learning": "ralph-machine-learning/concepts.json",
     "backend":          "ralph-backend/concepts.json",
     "mlops":            "ralph-mlops/concepts.json",
+    "tts":              "ralph-tts/concepts.json",
     "ml-system-design": "ralph-ml-system-design/topics.json",
     "ml-coding":        "ralph-ml-coding/problems.json",
 }
