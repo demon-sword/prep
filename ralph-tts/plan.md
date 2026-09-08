@@ -2,8 +2,8 @@
 
 ## Meta
 total_concepts: 32
-done: 31
-remaining: 1
+done: 32
+remaining: 0
 created: 2026-09-06
 
 ## Done
@@ -41,4 +41,4 @@ created: 2026-09-06
 - [x] 29-mos-subjective — MOS, CMOS and Subjective Evaluation
 - [x] 30-objective-metrics — Objective Metrics for TTS
 - [x] 31-serving-economics — Serving Cost Economics for TTS
-- [ ] 32-voice-agent-regression — Regression Testing a Voice Agent
+- [x] 32-voice-agent-regression — Regression Testing a Voice Agent
