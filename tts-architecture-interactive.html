@@ -133,6 +133,7 @@ pre code { background: none; padding: 0; }
 .stage-icon { font-size: 1.5rem; line-height: 1; }
 .stage-title { font-weight: 700; font-size: 0.95rem; }
 .stage-concepts { font-size: 0.7rem; color: var(--fg-muted); font-family: var(--font-mono); }
+.stage-description { font-size: 0.7rem; color: var(--fg-muted); max-width: 500px; line-height: 1.4; margin-top: 0.25rem; }
 .stage-arrow { font-size: 1.5rem; color: var(--fg-muted); margin: 0.25rem 0; }
 .stage-arrow.animated { animation: pulse 2s ease-in-out infinite; }
 @keyframes pulse { 0%, 100% { opacity: 0.5; transform: scale(1); } 50% { opacity: 1; transform: scale(1.1); } }
@@ -382,104 +383,112 @@ const pipelineStages = [
   {
     id: 'audio-in',
     icon: '🎙️',
-    title: 'Audio Input & Fundamentals',
+    title: '1. Audio Input & Fundamentals',
+    shortTitle: 'Audio Input',
+    description: 'Convert raw sound into clean digital audio the system can work with. We pick the right sample rate (16kHz for understanding speech, 24kHz for generating it), safely resample without adding noise, and prepare audio for phone lines which cut off high frequencies.',
     concepts: 'Concepts 01–04',
     color: 'primary',
     phase: 0,
     details: {
-      title: 'Phase 0: Audio Fundamentals',
+      title: 'Step 1: Audio Fundamentals',
       best: '16 kHz ASR / 24 kHz TTS · Anti-alias Resample · HTK Mel (80 bins) · WebRTC NetEq + Opus FEC/DRED',
       reasons: [
-        'Sample rates answer different questions',
-        'Naive slicing folds sibilants → buzz',
-        'Pin front end in CI — mismatch is silent',
-        'Telephony is the constraint, not model'
+        'Sample rates answer different questions: 16kHz for understanding, 24kHz for quality',
+        'Naive resampling folds high sounds into noise — must use proper filters',
+        'Pin the audio frontend in CI — mismatches cause silent buzz/hoarseness',
+        'Phone lines cut off above 3.4kHz — model improvements above that are wasted'
       ],
       table: [
-        ['Sample Rates', '16 kHz ASR / 24 kHz TTS', '16 kHz ceiling = 8 kHz (formants + fricatives); 24 kHz ceiling = 12 kHz (preserves /s/)'],
-        ['Resampling', 'scipy.signal.resample_poly / torchaudio.Resample', 'Built-in anti-alias FIR; slicing folds 6 kHz → 2 kHz buzz in vowel band'],
-        ['STFT', '25 ms window / 10 ms hop (Whisper) or 46 ms / 11.6 ms (Tacotron)', 'Window spans ~3 pitch periods; hop sets frame rate for ALL downstream models'],
-        ['Mel Filterbank', 'HTK mel, 80 bins, fmax=8000/12000, Slaney norm, log(clamp(·,1e-5))', 'Pin exact front end in ONE place, assert in CI — mismatch = hoarseness/buzz silently'],
-        ['Telephony Path', 'Filter→Decimate→Bandpass(300–3400 Hz)→μ-law', 'Order is critical; μ-law gives flat 38 dB SNR across levels'],
-        ['Jitter/PLC', 'WebRTC NetEq adaptive + Opus FEC/DRED', 'NetEq converts latency→lower loss; FEC recovers isolated loss at 20 ms cost; DRED stretches past 60 ms G.711 limit']
+        ['Sample Rates', '16 kHz for ASR / 24 kHz for TTS', '16kHz captures vowels + consonants for recognition; 24kHz keeps "s" sounds crisp for listeners'],
+        ['Resampling', 'scipy.signal.resample_poly / torchaudio.Resample', 'Built-in anti-aliasing filters; naive slicing creates fake 2kHz tones from real 6kHz sounds'],
+        ['STFT (Frequency Analysis)', '25ms window / 10ms hop (Whisper) or 46ms / 11.6ms (Tacotron)', 'Window spans ~3 vocal cord cycles; hop sets the frame rate EVERY downstream model uses'],
+        ['Mel Filterbank', 'HTK mel, 80 bins, fmax=8000/12000, Slaney norm, log(clamp(·,1e-5))', 'Pin the EXACT formula in one place, assert in CI — mismatch = hoarseness/buzz silently'],
+        ['Phone Line Prep', 'Filter→Decimate→Bandpass(300–3400 Hz)→μ-law', 'Order is critical; μ-law gives consistent 38dB quality across loud/quiet sounds'],
+        ['Jitter & Loss Handling', 'WebRTC NetEq adaptive + Opus FEC/DRED', 'NetEq trades latency for fewer drops; FEC recovers lost packets at 20ms cost; DRED handles longer gaps']
       ]
     }
   },
   {
     id: 'frontend',
     icon: '📝',
-    title: 'Text Frontend Pipeline',
+    title: '2. Text Processing & Prosody',
+    shortTitle: 'Text Frontend',
+    description: 'Turn raw text into pronunciation-ready symbols with natural rhythm and intonation. We detect when the user stops talking, normalize numbers/dates safely, convert words to phonemes, and predict how each sound should be pronounced (duration, pitch, energy) so the speech sounds natural, not robotic.',
     concepts: 'Concepts 05–09',
     color: 'primary',
     phase: 1,
     details: {
-      title: 'Phase 1: Text Frontend',
+      title: 'Step 2: Text Frontend',
       best: 'Silero VAD + WFST Normalize + Lexicon-first G2P + FS2 Variance Adaptor + MFA + QA Gate',
       reasons: [
-        'Hangover = 47% of turn budget — semantic buys it back',
-        'WFST verbalizers cannot hallucinate numbers',
-        'Model WER on unseen words is high — pay only for OOV slice',
-        'Explicit prosody predictors = serving-time control knobs'
+        'Waiting for user to finish = 47% of response time — smart detection buys it back',
+        'WFST rules cannot hallucinate wrong numbers — safe for medical/financial',
+        'Only use ML for words not in dictionary — dictionary is more accurate',
+        'Explicit prosody controls = adjustable speaking rate, emphasis, pitch at runtime'
       ],
       table: [
-        ['Endpointing', 'Semantic adaptive: wait(p) = clamp(t_min + (t_max-t_min)(1-p)) + hard cap', 'Fixed timeout cannot separate mid-utterance pauses (600–900 ms) from final; hangover is serial dead time'],
-        ['VAD', 'Silero neural VAD (ONNX, 32 ms frames, in-process)', 'Beats energy+ZCR on babble/hold music; energy fails on unvoiced fricatives (quiet) and clinic noise (loud)'],
-        ['Normalization', 'WFST verbalizers (Kestrel/NeMo) + neural semiotic classifier', 'WFST auditable, cannot hallucinate; neural classifier handles context; verbalizers deterministic'],
-        ['G2P', 'Lexicon-first dispatcher: homograph→overlay→CMUdict→model→cache', 'Model WER on unseen words high; pay only on slice nothing else answers; overlay = tenant names'],
-        ['Prosody', 'FastSpeech 2 Variance Adaptor (explicit duration/pitch/energy)', 'Gives serving-time knobs: rate, emphasis, pitch; AR buries prosody in attention/latent'],
-        ['Prosody Collapse Fix', 'Stochastic duration predictor (VITS flow) or diffusion prosody head', 'One-to-many target: deterministic head averages readings → flat; stochastic samples valid rise OR fall'],
-        ['Forced Alignment', 'MFA (Kaldi) + QA gate (mean log-likelihood + free-decode cross-check)', 'MFA battle-tested; gate catches mismatched transcripts BEFORE they poison duration labels']
+        ['Endpointing (When to Reply)', 'Semantic adaptive wait + hard cap', 'Fixed timeout fails — mid-sentence pauses (600-900ms) look like end of turn. Smart detection uses partial transcript meaning.'],
+        ['Voice Activity Detection', 'Silero neural VAD (ONNX, 32ms frames)', 'Beats simple energy detection on background noise; energy fails on quiet consonants and loud rooms'],
+        ['Text Normalization', 'WFST verbalizers + neural classifier', 'WFST = auditable rules, cannot invent wrong numbers. Neural classifier handles context (date vs money).'],
+        ['Grapheme-to-Phoneme', 'Lexicon-first: custom words → dictionary → ML model → cache', 'ML model is last resort (high error on rare words). Custom dictionary for names/terms.'],
+        ['Prosody Prediction', 'FastSpeech 2 Variance Adaptor (duration/pitch/energy)', 'Gives runtime knobs: speaking rate, emphasis, pitch. Old models buried this in attention.'],
+        ['Fixing Flat Prosody', 'Stochastic duration (VITS flow) or diffusion head', 'One text → many valid readings. Deterministic models average them → flat. Stochastic picks one natural reading.'],
+        ['Forced Alignment', 'MFA (Kaldi) + quality gate (likelihood + cross-check)', 'MFA is battle-tested. Gate catches transcript mismatches BEFORE they corrupt training data.']
       ]
     }
   },
   {
     id: 'acoustic',
     icon: '🧠',
-    title: 'Acoustic Model',
+    title: '3. Acoustic Model (Text → Speech Features)',
+    shortTitle: 'Acoustic Model',
+    description: 'The core model that converts processed text into speech features (mel spectrograms). We use VITS — an end-to-end model that skips the intermediate mel handoff, uses monotonic alignment search (no attention failures), and generates natural prosody through stochastic duration prediction. For long responses, we stream in clauses.',
     concepts: 'Concepts 10–14, 19',
     color: 'green',
     phase: 2,
     details: {
-      title: 'Phase 2: Acoustic Model',
+      title: 'Step 3: Acoustic Model',
       best: 'VITS (End-to-End Conditional VAE) + Clause Chunking + Narrowband ONNX Export',
       reasons: [
-        'Deletes mel handoff → no train/serve mismatch',
-        'MAS replaces attention + external aligner (hard monotonic constraint)',
-        'Duration flow = human prosodic variety (not conditional mean)',
-        'HiFi-GAN decoder integrated; clause chunking for TTFA budget'
+        'Deletes mel handoff — no train/serve mismatch (biggest source of buzz)',
+        'Monotonic Alignment Search = hard constraint, no attention jumps/repeats',
+        'Duration flow = human-like rhythm variety, not averaged robotic timing',
+        'Clause chunking fits the ~100ms time-to-first-audio budget for phone calls'
       ],
       table: [
-        ['Core Architecture', 'VITS (Conditional VAE)', 'SOTA quality (4.43 MOS) in one model; no mel interface; MAS + duration flow + HiFi-GAN decoder'],
-        ['Attention Fix', 'Monotonic Alignment Search (MAS) — VITS/Glow-TTS', 'Deletes failures by construction: hard monotonic constraint via DP; no external aligner; alignment re-estimated each step'],
-        ['AR vs NAR', 'NAR (VITS/FS2) for telephony; Streaming AR + clause-chunked NAR for long-form', 'NAR: deterministic compute, zero tail risk, p99 guarantee. AR: flat TTFA wins on long utterances.'],
-        ['Vocoder', 'HiFi-GAN V1/V2/V3 (fine-tuned on predicted mel)', 'One parallel pass; MPD aliased decimation = cheap long-range periodicity; λ=45 mel L1 + adversarial texture'],
-        ['Neural Codec', 'RVQ + Dead-Code Restart + Quantizer Dropout + Per-Stage Perplexity Alarms', 'Only tractable 80-bit quantization; restart+dropout maintains utilization; perplexity catches collapse early'],
-        ['Streaming TTS', 'Mel-frame AR streaming (L ≥ ½ receptive field) + 300–500 ms chunks + cross-fade', 'Bilateral context kills seams; preserves prosody; RTF_eff stays low for concurrency']
+        ['Core Architecture', 'VITS (Conditional VAE)', 'State-of-the-art quality (4.43 MOS) in ONE model. No mel interface = no mismatch. Built-in alignment + prosody + vocoder.'],
+        ['Attention Failures Fixed', 'Monotonic Alignment Search (MAS) — VITS/Glow-TTS', 'Deletes failures by construction: hard monotonic constraint via dynamic programming. No external aligner needed.'],
+        ['AR vs NAR Choice', 'NAR (VITS/FastSpeech2) for phone; Hybrid for long-form', 'NAR: deterministic compute, zero tail risk, guaranteed latency. AR: flat latency for long text.'],
+        ['Vocoder Integration', 'HiFi-GAN V1/V2/V3 (fine-tuned on predicted mel)', 'One parallel pass. MPD discriminator catches periodicity cheaply. Fine-tune on PREDICTED mel fixes train/serve gap.'],
+        ['Neural Audio Codec', 'RVQ + Dead-Code Restart + Quantizer Dropout + Perplexity Alarms', 'Only practical way to compress 80 bits/frame. Restart+dropout keeps codebooks used. Perplexity catches collapse early.'],
+        ['Streaming', 'Mel-frame AR streaming (context ≥½ receptive field) + 300-500ms chunks', 'Both-side context kills seams. Keeps prosody. Low effective RTF for high concurrency.']
       ]
     }
   },
   {
     id: 'vocoder-out',
     icon: '🔊',
-    title: 'Vocoder & Audio Out',
+    title: '4. Vocoder & Phone Line Output',
+    shortTitle: 'Vocoder & Output',
+    description: 'Convert speech features to actual audio waveforms and prepare for phone lines. HiFi-GAN vocoder runs in one parallel pass (fast, deterministic). We resample with proper filters, apply μ-law encoding for phone lines, packetize at 20ms intervals with pacing to avoid network bursts, and handle jitter/loss with adaptive buffers and forward error correction.',
     concepts: 'Concepts 15–18, 24',
     color: 'amber',
     phase: 3,
     details: {
-      title: 'Phase 3: Vocoder & Audio Out',
+      title: 'Step 4: Vocoder & Audio Out',
       best: 'HiFi-GAN (ONNX/Triton) → Resample (anti-alias) → μ-law → RTP (paced) → NetEq + Opus FEC/DRED',
       reasons: [
         'Parallel pass = deterministic latency; fine-tune on predicted mel fixes mismatch',
-        'Erlang-C sizing on peak, ρ=0.7, batch window cap, deadline-miss alarms',
-        'Narrowband decoder export avoids 2.76× wasted compute on PSTN'
+        'Size GPUs for peak load at 70% utilization — queueing kills latency at higher loads',
+        'Export narrowband decoder — don\'t waste 2.76× compute on frequencies phone lines discard'
       ],
       table: [
-        ['Vocoder', 'HiFi-GAN V2 (export ONNX, serve Triton)', '168× real-time on V100; parallel pass = deterministic; fine-tune on acoustic model\'s predicted mel'],
-        ['GPU Sizing', 'Erlang-C on peak load, batch window cap (Triton max_queue_delay), ρ=0.7, alarm on chunk deadline misses', 'Concurrent calls ≠ streams (agent speaks 35%); batching floor at β=0.15; failure = dead air not 503'],
-        ['Resample', 'Anti-alias FIR (24→16→8 kHz)', 'Order matters: filter before decimate; 3.4 kHz passband = hard constraint'],
-        ['μ-law / RTP', 'G.711 μ-law + 20 ms paced packetization', 'Pacing prevents burst tail-drop; μ-law = flat 38 dB SNR on phone line'],
-        ['Jitter/PLC', 'Adaptive NetEq + Opus FEC/DRED', 'NetEq converts latency→lower effective loss; FEC at 20 ms cost; DRED recovers past 60 ms gap'],
-        ['Export Shape', 'Narrowband decoder (8/16 kHz) via ONNX to Triton', 'Don\'t serve 22 kHz to 8 kHz leg — wastes 2.76× compute on frequencies PSTN discards']
+        ['Vocoder', 'HiFi-GAN V2 (export ONNX, serve Triton)', '168× real-time on V100. Parallel = deterministic. Fine-tune on model\'s OWN predicted mel fixes buzz.'],
+        ['GPU Sizing', 'Erlang-C on peak, ρ=0.7, batch window cap, deadline alarms', 'Agent speaks 35% of time, not 100%. Batching has floor. Failure = dead air, not 503 error. Watch p95 chunk delay.'],
+        ['Resample', 'Anti-alias FIR (24→16→8 kHz)', 'Filter BEFORE decimating. 3.4kHz phone passband = hard limit. Wrong order = aliasing noise.'],
+        ['Phone Encoding', 'G.711 μ-law + 20ms paced packets', 'Pacing prevents burst tail-drop. μ-law = flat 38dB SNR across volumes.'],
+        ['Network Resilience', 'Adaptive NetEq + Opus FEC/DRED', 'NetEq trades latency for fewer drops. FEC recovers single losses at 20ms. DRED handles 60ms+ gaps.'],
+        ['Right-Sized Export', 'Narrowband decoder (8/16 kHz) via ONNX to Triton', 'Don\'t serve 22kHz to 8kHz leg — wastes 2.76× compute on discarded frequencies.']
       ]
     }
   }
@@ -599,6 +608,7 @@ function renderPipeline() {
         <div class="stage-icon">${stage.icon}</div>
         <div class="stage-title">${stage.title}</div>
         <div class="stage-concepts">${stage.concepts}</div>
+        <div class="stage-description">${stage.description}</div>
       </div>
       ${i < pipelineStages.length - 1 ? '<div class="stage-arrow animated">▼</div>' : ''}
     </div>
@@ -678,6 +688,8 @@ function openDetail(stageId) {
   document.getElementById('detailTitle').textContent = d.title;
   document.getElementById('detailContent').innerHTML = `
     <div class="detail-section">
+      <h4>What This Step Does</h4>
+      <p style="color: var(--fg-muted); margin-bottom: 1rem; line-height: 1.6;">${stage.description}</p>
       <h4>Best Algorithm</h4>
       <p style="font-weight: 600; margin-bottom: 1rem;">${d.best}</p>
       <h4>Why This Wins</h4>
