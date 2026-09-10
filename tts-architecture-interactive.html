@@ -1,0 +1,759 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>TTS Architecture — Interactive Pipeline</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&family=Space+Grotesk:wght@400;500;700&display=swap" rel="stylesheet">
+<style>
+:root {
+  --bg: #0d1117;
+  --bg-elev: #161b22;
+  --bg-card: #21262d;
+  --border: #30363d;
+  --fg: #e6edf3;
+  --fg-muted: #8b949e;
+  --accent: #58a6ff;
+  --accent-dim: #1f6feb;
+  --green: #3fb950;
+  --green-dim: #238636;
+  --amber: #d29922;
+  --amber-dim: #9e6a03;
+  --red: #f85149;
+  --red-dim: #da3633;
+  --purple: #a371f7;
+  --purple-dim: #8957e5;
+  --orange: #f0883e;
+  --orange-dim: #bc6a2e;
+  --font-mono: 'JetBrains Mono', monospace;
+  --font-ui: 'Space Grotesk', sans-serif;
+  --radius: 8px;
+  --transition: 150ms ease;
+}
+* { box-sizing: border-box; margin: 0; padding: 0; }
+html { scroll-behavior: smooth; }
+body {
+  font-family: var(--font-ui);
+  background: var(--bg);
+  color: var(--fg);
+  line-height: 1.6;
+  min-height: 100vh;
+}
+a { color: var(--accent); text-decoration: none; }
+a:hover { text-decoration: underline; }
+code { font-family: var(--font-mono); font-size: 0.9em; background: var(--bg-elev); padding: 0.1em 0.4em; border-radius: 4px; }
+pre { font-family: var(--font-mono); font-size: 0.85em; background: #010409; border: 1px solid var(--border); border-radius: var(--radius); padding: 1rem; overflow-x: auto; line-height: 1.5; }
+pre code { background: none; padding: 0; }
+.kbd { font-family: var(--font-mono); background: var(--bg-elev); border: 1px solid var(--border); border-radius: 4px; padding: 0.1em 0.5em; font-size: 0.85em; }
+
+/* Layout */
+.app { max-width: 1400px; margin: 0 auto; padding: 2rem 1.5rem; }
+
+/* Header */
+.header {
+  text-align: center;
+  margin-bottom: 2.5rem;
+  padding-bottom: 1.5rem;
+  border-bottom: 1px solid var(--border);
+}
+.header h1 { font-size: clamp(1.8rem, 4vw, 2.5rem); font-weight: 700; letter-spacing: -0.02em; margin-bottom: 0.5rem; }
+.header .subtitle { color: var(--fg-muted); font-size: 1.1rem; max-width: 700px; margin: 0 auto; }
+.header .tags { display: flex; flex-wrap: wrap; gap: 0.5rem; justify-content: center; margin-top: 1rem; }
+.tag { font-size: 0.75rem; font-weight: 500; padding: 0.25rem 0.75rem; border-radius: 999px; background: var(--bg-elev); border: 1px solid var(--border); color: var(--fg-muted); }
+.tag.primary { background: rgba(88, 166, 255, 0.15); border-color: var(--accent); color: var(--accent); }
+.tag.green { background: rgba(63, 185, 80, 0.15); border-color: var(--green); color: var(--green); }
+.tag.amber { background: rgba(210, 153, 34, 0.15); border-color: var(--amber); color: var(--amber); }
+.tag.purple { background: rgba(163, 113, 247, 0.15); border-color: var(--purple); color: var(--purple); }
+
+/* Pipeline Overview */
+.pipeline-overview {
+  margin-bottom: 2.5rem;
+}
+.section-title {
+  display: flex; align-items: center; gap: 0.75rem;
+  font-size: 1.25rem; font-weight: 700; margin-bottom: 1.5rem;
+}
+.section-title::before { content: ''; width: 4px; height: 1.25rem; background: var(--accent); border-radius: 2px; }
+.section-title.green::before { background: var(--green); }
+.section-title.amber::before { background: var(--amber); }
+.section-title.purple::before { background: var(--purple); }
+.section-title.red::before { background: var(--red); }
+
+/* Pipeline Canvas */
+.pipeline-canvas {
+  position: relative;
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 2rem;
+  min-height: 400px;
+  overflow: hidden;
+}
+.pipeline-flow {
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+  align-items: center;
+  position: relative;
+  z-index: 2;
+}
+.pipeline-stage {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.5rem;
+  position: relative;
+  transition: transform var(--transition);
+}
+.pipeline-stage:hover { transform: translateY(-2px); }
+.stage-node {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 1rem 1.5rem;
+  background: var(--bg-elev);
+  border: 2px solid var(--border);
+  border-radius: var(--radius);
+  cursor: pointer;
+  transition: all var(--transition);
+  min-width: 280px;
+  text-align: center;
+}
+.stage-node:hover {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 1px var(--accent), 0 8px 24px rgba(88, 166, 255, 0.15);
+}
+.stage-node.active {
+  border-color: var(--green);
+  box-shadow: 0 0 0 1px var(--green), 0 8px 24px rgba(63, 185, 80, 0.2);
+}
+.stage-icon { font-size: 1.5rem; line-height: 1; }
+.stage-title { font-weight: 700; font-size: 0.95rem; }
+.stage-concepts { font-size: 0.7rem; color: var(--fg-muted); font-family: var(--font-mono); }
+.stage-arrow { font-size: 1.5rem; color: var(--fg-muted); margin: 0.25rem 0; }
+.stage-arrow.animated { animation: pulse 2s ease-in-out infinite; }
+@keyframes pulse { 0%, 100% { opacity: 0.5; transform: scale(1); } 50% { opacity: 1; transform: scale(1.1); } }
+
+/* Control Plane */
+.control-plane {
+  margin-top: 1.5rem;
+  padding-top: 1.5rem;
+  border-top: 2px dashed var(--border);
+  width: 100%;
+  max-width: 800px;
+}
+.control-plane-header {
+  display: flex; align-items: center; gap: 0.5rem;
+  font-size: 0.85rem; font-weight: 700; color: var(--purple);
+  margin-bottom: 1rem; font-family: var(--font-mono);
+}
+.control-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 0.75rem;
+}
+.control-item {
+  padding: 0.75rem 1rem;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  cursor: pointer;
+  transition: all var(--transition);
+}
+.control-item:hover {
+  border-color: var(--purple);
+  background: rgba(163, 113, 247, 0.08);
+}
+.control-label { font-weight: 600; font-size: 0.8rem; color: var(--purple); }
+.control-desc { font-size: 0.7rem; color: var(--fg-muted); margin-top: 0.25rem; font-family: var(--font-mono); }
+
+/* Phase Detail Panel */
+.detail-panel {
+  position: fixed;
+  top: 0; right: 0; bottom: 0;
+  width: 480px;
+  max-width: 100vw;
+  background: var(--bg-card);
+  border-left: 1px solid var(--border);
+  z-index: 100;
+  transform: translateX(100%);
+  transition: transform 0.3s ease;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+}
+.detail-panel.open { transform: translateX(0); }
+.detail-header {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 1rem 1.25rem;
+  border-bottom: 1px solid var(--border);
+  background: var(--bg-elev);
+  position: sticky; top: 0; z-index: 10;
+}
+.detail-header h3 { font-size: 1rem; font-weight: 700; }
+.detail-close { background: none; border: none; color: var(--fg-muted); font-size: 1.5rem; cursor: pointer; padding: 0.25rem; line-height: 1; }
+.detail-close:hover { color: var(--fg); }
+.detail-content { flex: 1; padding: 1.25rem; }
+.detail-section { margin-bottom: 1.5rem; }
+.detail-section h4 { font-size: 0.85rem; font-weight: 700; color: var(--accent); margin-bottom: 0.75rem; text-transform: uppercase; letter-spacing: 0.05em; }
+.detail-table { width: 100%; border-collapse: collapse; font-size: 0.75rem; }
+.detail-table th, .detail-table td { padding: 0.5rem; text-align: left; border-bottom: 1px solid var(--border); }
+.detail-table th { color: var(--fg-muted); font-weight: 500; font-size: 0.7rem; text-transform: uppercase; }
+.detail-table td { color: var(--fg); }
+.detail-table tr:hover td { background: var(--bg-elev); }
+.badge { display: inline-block; font-size: 0.65rem; font-weight: 600; padding: 0.15rem 0.5rem; border-radius: 999px; font-family: var(--font-mono); }
+.badge.best { background: rgba(63, 185, 80, 0.2); color: var(--green); border: 1px solid var(--green); }
+.badge.why { background: rgba(88, 166, 255, 0.15); color: var(--accent); border: 1px solid var(--accent); }
+.badge.warn { background: rgba(248, 81, 73, 0.15); color: var(--red); border: 1px solid var(--red); }
+
+/* Phase Cards */
+.phases-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+  gap: 1.25rem;
+  margin-bottom: 2.5rem;
+}
+.phase-card {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 1.5rem;
+  transition: all var(--transition);
+}
+.phase-card:hover {
+  border-color: var(--accent);
+  box-shadow: 0 4px 16px rgba(88, 166, 255, 0.1);
+}
+.phase-header {
+  display: flex; align-items: flex-start; gap: 1rem; margin-bottom: 1rem;
+}
+.phase-number {
+  width: 40px; height: 40px;
+  display: flex; align-items: center; justify-content: center;
+  background: var(--accent); color: var(--bg); font-weight: 700; font-size: 1.1rem;
+  border-radius: var(--radius); flex-shrink: 0;
+}
+.phase-card.green .phase-number { background: var(--green); }
+.phase-card.amber .phase-number { background: var(--amber); }
+.phase-card.purple .phase-number { background: var(--purple); }
+.phase-card.red .phase-number { background: var(--red); }
+.phase-info h3 { font-size: 1rem; font-weight: 700; margin-bottom: 0.25rem; }
+.phase-info .concepts { font-size: 0.75rem; color: var(--fg-muted); font-family: var(--font-mono); }
+.phase-best { background: var(--bg); border: 1px solid var(--border); border-radius: var(--radius); padding: 1rem; margin-bottom: 1rem; }
+.phase-best-label { font-size: 0.7rem; font-weight: 700; color: var(--green); text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 0.5rem; font-family: var(--font-mono); }
+.phase-best-title { font-weight: 600; font-size: 0.9rem; margin-bottom: 0.5rem; }
+.phase-best-reasons { display: flex; flex-wrap: wrap; gap: 0.35rem; }
+.reason-tag { font-size: 0.65rem; padding: 0.2rem 0.5rem; background: var(--bg-elev); border: 1px solid var(--border); border-radius: 4px; color: var(--fg-muted); font-family: var(--font-mono); }
+.phase-table { width: 100%; font-size: 0.75rem; border-collapse: collapse; }
+.phase-table th, .phase-table td { padding: 0.4rem 0.5rem; text-align: left; border-bottom: 1px solid var(--border); }
+.phase-table th { color: var(--fg-muted); font-weight: 500; font-size: 0.65rem; text-transform: uppercase; }
+.phase-table td { color: var(--fg); }
+.phase-table code { font-size: 0.85em; }
+
+/* Principles */
+.principles-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 1rem;
+  margin-bottom: 2.5rem;
+}
+.principle-card {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 1.25rem;
+  transition: all var(--transition);
+}
+.principle-card:hover { border-color: var(--accent); }
+.principle-number { font-size: 0.7rem; font-weight: 700; color: var(--accent); font-family: var(--font-mono); margin-bottom: 0.5rem; }
+.principle-title { font-weight: 700; font-size: 0.95rem; margin-bottom: 0.5rem; }
+.principle-desc { font-size: 0.8rem; color: var(--fg-muted); line-height: 1.5; }
+
+/* Stack Table */
+.stack-section { margin-bottom: 2.5rem; }
+.stack-table { width: 100%; border-collapse: collapse; font-size: 0.8rem; }
+.stack-table th, .stack-table td { padding: 0.75rem 1rem; text-align: left; border-bottom: 1px solid var(--border); }
+.stack-table th { background: var(--bg-elev); color: var(--fg-muted); font-weight: 500; font-size: 0.7rem; text-transform: uppercase; position: sticky; top: 0; }
+.stack-table td { color: var(--fg); }
+.stack-table tr:hover { background: var(--bg-elev); }
+.stack-table code { background: var(--bg); }
+
+/* Footer */
+.footer {
+  text-align: center; padding: 2rem; color: var(--fg-muted); font-size: 0.85rem; border-top: 1px solid var(--border);
+}
+.footer a { color: var(--accent); }
+
+/* Overlay */
+.overlay {
+  position: fixed; top: 0; left: 0; right: 0; bottom: 0;
+  background: rgba(0,0,0,0.6); z-index: 99;
+  opacity: 0; visibility: hidden; transition: all 0.3s ease;
+}
+.overlay.open { opacity: 1; visibility: visible; }
+
+/* Responsive */
+@media (max-width: 768px) {
+  .pipeline-canvas { padding: 1rem; }
+  .stage-node { min-width: 100%; padding: 0.75rem 1rem; }
+  .detail-panel { width: 100vw; }
+  .control-grid { grid-template-columns: 1fr; }
+}
+</style>
+</head>
+<body>
+<div class="app">
+  <header class="header">
+    <h1>TTS Architecture — Interactive Pipeline</h1>
+    <p class="subtitle">Complete voice agent TTS pipeline synthesized from 31 concepts. Click any stage to explore details.</p>
+    <div class="tags">
+      <span class="tag primary">31 Concepts</span>
+      <span class="tag green">4 Phases</span>
+      <span class="tag amber">Control Plane</span>
+      <span class="tag purple">Production Ready</span>
+      <span class="tag">Self-Contained</span>
+    </div>
+  </header>
+
+  <!-- Pipeline Overview -->
+  <section class="pipeline-overview">
+    <h2 class="section-title">Complete Pipeline</h2>
+    <div class="pipeline-canvas" id="pipelineCanvas">
+      <div class="pipeline-flow" id="pipelineFlow">
+        <!-- Stages rendered by JS -->
+      </div>
+      <div class="control-plane">
+        <div class="control-plane-header">
+          <span>◆</span> CONTROL PLANE (Concepts 21–31)
+        </div>
+        <div class="control-grid" id="controlGrid"></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Phase Details -->
+  <section class="phases-grid" id="phasesGrid"></section>
+
+  <!-- Principles -->
+  <section>
+    <h2 class="section-title green">Cross-Cutting Principles</h2>
+    <div class="principles-grid" id="principlesGrid"></div>
+  </section>
+
+  <!-- Production Stack -->
+  <section class="stack-section">
+    <h2 class="section-title amber">Recommended Production Stack</h2>
+    <table class="stack-table">
+      <thead>
+        <tr>
+          <th>Layer</th>
+          <th>Technology</th>
+          <th>Key Config</th>
+          <th>Why</th>
+        </tr>
+      </thead>
+      <tbody id="stackTableBody"></tbody>
+    </table>
+  </section>
+
+  <footer class="footer">
+    Synthesized from <code>tts/concepts/01–31.html</code> · 
+    <a href="https://github.com/demon-sword/prep" target="_blank">prep repo</a> · 
+    Dark terminal theme · Vanilla JS · No dependencies
+  </footer>
+</div>
+
+<!-- Detail Panel -->
+<div class="detail-panel" id="detailPanel">
+  <div class="detail-header">
+    <h3 id="detailTitle">Stage Details</h3>
+    <button class="detail-close" onclick="closeDetail()">×</button>
+  </div>
+  <div class="detail-content" id="detailContent"></div>
+</div>
+<div class="overlay" id="overlay" onclick="closeDetail()"></div>
+
+<script>
+// ============ DATA ============
+const pipelineStages = [
+  {
+    id: 'audio-in',
+    icon: '🎙️',
+    title: 'Audio Input & Fundamentals',
+    concepts: 'Concepts 01–04',
+    color: 'primary',
+    phase: 0,
+    details: {
+      title: 'Phase 0: Audio Fundamentals',
+      best: '16 kHz ASR / 24 kHz TTS · Anti-alias Resample · HTK Mel (80 bins) · WebRTC NetEq + Opus FEC/DRED',
+      reasons: [
+        'Sample rates answer different questions',
+        'Naive slicing folds sibilants → buzz',
+        'Pin front end in CI — mismatch is silent',
+        'Telephony is the constraint, not model'
+      ],
+      table: [
+        ['Sample Rates', '16 kHz ASR / 24 kHz TTS', '16 kHz ceiling = 8 kHz (formants + fricatives); 24 kHz ceiling = 12 kHz (preserves /s/)'],
+        ['Resampling', 'scipy.signal.resample_poly / torchaudio.Resample', 'Built-in anti-alias FIR; slicing folds 6 kHz → 2 kHz buzz in vowel band'],
+        ['STFT', '25 ms window / 10 ms hop (Whisper) or 46 ms / 11.6 ms (Tacotron)', 'Window spans ~3 pitch periods; hop sets frame rate for ALL downstream models'],
+        ['Mel Filterbank', 'HTK mel, 80 bins, fmax=8000/12000, Slaney norm, log(clamp(·,1e-5))', 'Pin exact front end in ONE place, assert in CI — mismatch = hoarseness/buzz silently'],
+        ['Telephony Path', 'Filter→Decimate→Bandpass(300–3400 Hz)→μ-law', 'Order is critical; μ-law gives flat 38 dB SNR across levels'],
+        ['Jitter/PLC', 'WebRTC NetEq adaptive + Opus FEC/DRED', 'NetEq converts latency→lower loss; FEC recovers isolated loss at 20 ms cost; DRED stretches past 60 ms G.711 limit']
+      ]
+    }
+  },
+  {
+    id: 'frontend',
+    icon: '📝',
+    title: 'Text Frontend Pipeline',
+    concepts: 'Concepts 05–09',
+    color: 'primary',
+    phase: 1,
+    details: {
+      title: 'Phase 1: Text Frontend',
+      best: 'Silero VAD + WFST Normalize + Lexicon-first G2P + FS2 Variance Adaptor + MFA + QA Gate',
+      reasons: [
+        'Hangover = 47% of turn budget — semantic buys it back',
+        'WFST verbalizers cannot hallucinate numbers',
+        'Model WER on unseen words is high — pay only for OOV slice',
+        'Explicit prosody predictors = serving-time control knobs'
+      ],
+      table: [
+        ['Endpointing', 'Semantic adaptive: wait(p) = clamp(t_min + (t_max-t_min)(1-p)) + hard cap', 'Fixed timeout cannot separate mid-utterance pauses (600–900 ms) from final; hangover is serial dead time'],
+        ['VAD', 'Silero neural VAD (ONNX, 32 ms frames, in-process)', 'Beats energy+ZCR on babble/hold music; energy fails on unvoiced fricatives (quiet) and clinic noise (loud)'],
+        ['Normalization', 'WFST verbalizers (Kestrel/NeMo) + neural semiotic classifier', 'WFST auditable, cannot hallucinate; neural classifier handles context; verbalizers deterministic'],
+        ['G2P', 'Lexicon-first dispatcher: homograph→overlay→CMUdict→model→cache', 'Model WER on unseen words high; pay only on slice nothing else answers; overlay = tenant names'],
+        ['Prosody', 'FastSpeech 2 Variance Adaptor (explicit duration/pitch/energy)', 'Gives serving-time knobs: rate, emphasis, pitch; AR buries prosody in attention/latent'],
+        ['Prosody Collapse Fix', 'Stochastic duration predictor (VITS flow) or diffusion prosody head', 'One-to-many target: deterministic head averages readings → flat; stochastic samples valid rise OR fall'],
+        ['Forced Alignment', 'MFA (Kaldi) + QA gate (mean log-likelihood + free-decode cross-check)', 'MFA battle-tested; gate catches mismatched transcripts BEFORE they poison duration labels']
+      ]
+    }
+  },
+  {
+    id: 'acoustic',
+    icon: '🧠',
+    title: 'Acoustic Model',
+    concepts: 'Concepts 10–14, 19',
+    color: 'green',
+    phase: 2,
+    details: {
+      title: 'Phase 2: Acoustic Model',
+      best: 'VITS (End-to-End Conditional VAE) + Clause Chunking + Narrowband ONNX Export',
+      reasons: [
+        'Deletes mel handoff → no train/serve mismatch',
+        'MAS replaces attention + external aligner (hard monotonic constraint)',
+        'Duration flow = human prosodic variety (not conditional mean)',
+        'HiFi-GAN decoder integrated; clause chunking for TTFA budget'
+      ],
+      table: [
+        ['Core Architecture', 'VITS (Conditional VAE)', 'SOTA quality (4.43 MOS) in one model; no mel interface; MAS + duration flow + HiFi-GAN decoder'],
+        ['Attention Fix', 'Monotonic Alignment Search (MAS) — VITS/Glow-TTS', 'Deletes failures by construction: hard monotonic constraint via DP; no external aligner; alignment re-estimated each step'],
+        ['AR vs NAR', 'NAR (VITS/FS2) for telephony; Streaming AR + clause-chunked NAR for long-form', 'NAR: deterministic compute, zero tail risk, p99 guarantee. AR: flat TTFA wins on long utterances.'],
+        ['Vocoder', 'HiFi-GAN V1/V2/V3 (fine-tuned on predicted mel)', 'One parallel pass; MPD aliased decimation = cheap long-range periodicity; λ=45 mel L1 + adversarial texture'],
+        ['Neural Codec', 'RVQ + Dead-Code Restart + Quantizer Dropout + Per-Stage Perplexity Alarms', 'Only tractable 80-bit quantization; restart+dropout maintains utilization; perplexity catches collapse early'],
+        ['Streaming TTS', 'Mel-frame AR streaming (L ≥ ½ receptive field) + 300–500 ms chunks + cross-fade', 'Bilateral context kills seams; preserves prosody; RTF_eff stays low for concurrency']
+      ]
+    }
+  },
+  {
+    id: 'vocoder-out',
+    icon: '🔊',
+    title: 'Vocoder & Audio Out',
+    concepts: 'Concepts 15–18, 24',
+    color: 'amber',
+    phase: 3,
+    details: {
+      title: 'Phase 3: Vocoder & Audio Out',
+      best: 'HiFi-GAN (ONNX/Triton) → Resample (anti-alias) → μ-law → RTP (paced) → NetEq + Opus FEC/DRED',
+      reasons: [
+        'Parallel pass = deterministic latency; fine-tune on predicted mel fixes mismatch',
+        'Erlang-C sizing on peak, ρ=0.7, batch window cap, deadline-miss alarms',
+        'Narrowband decoder export avoids 2.76× wasted compute on PSTN'
+      ],
+      table: [
+        ['Vocoder', 'HiFi-GAN V2 (export ONNX, serve Triton)', '168× real-time on V100; parallel pass = deterministic; fine-tune on acoustic model\'s predicted mel'],
+        ['GPU Sizing', 'Erlang-C on peak load, batch window cap (Triton max_queue_delay), ρ=0.7, alarm on chunk deadline misses', 'Concurrent calls ≠ streams (agent speaks 35%); batching floor at β=0.15; failure = dead air not 503'],
+        ['Resample', 'Anti-alias FIR (24→16→8 kHz)', 'Order matters: filter before decimate; 3.4 kHz passband = hard constraint'],
+        ['μ-law / RTP', 'G.711 μ-law + 20 ms paced packetization', 'Pacing prevents burst tail-drop; μ-law = flat 38 dB SNR on phone line'],
+        ['Jitter/PLC', 'Adaptive NetEq + Opus FEC/DRED', 'NetEq converts latency→lower effective loss; FEC at 20 ms cost; DRED recovers past 60 ms gap'],
+        ['Export Shape', 'Narrowband decoder (8/16 kHz) via ONNX to Triton', 'Don\'t serve 22 kHz to 8 kHz leg — wastes 2.76× compute on frequencies PSTN discards']
+      ]
+    }
+  }
+];
+
+const controlPlaneItems = [
+  { id: 'barge-in', label: 'Barge-In', desc: 'Two-stage: VAD duck @ 60ms → ASR partial confirm @ 280ms → flush playout → truncate to heard (err short)', phase: 21 },
+  { id: 'turn-taking', label: 'Turn-Taking', desc: 'Completeness-driven adaptive endpointing wait(p) = clamp(t_min + (t_max-t_min)(1-p)) + hard cap, ONNX on media node', phase: 22 },
+  { id: 's2s', label: 'S2S Models', desc: 'Hybrid: full-duplex shell + cascade for transactions (4 commits → 1, but text = control surface)', phase: 23 },
+  { id: 'sizing', label: 'RTF/GPU Sizing', desc: 'Erlang-C on peak, ρ=0.7, batch window cap, alarm on chunk deadline misses (dead air ≠ 503)', phase: 24 },
+  { id: 'embeddings', label: 'Speaker Emb', desc: 'ECAPA-TDNN + attentive pooling + angular margin; cache per session; cross-encoder eval', phase: 25 },
+  { id: 'cloning', label: 'Voice Cloning', desc: 'DON\'T ship zero-shot — use one consented fine-tuned agent voice (channel, failures, compliance)', phase: 26 },
+  { id: 'style', label: 'Style Control', desc: 'GST + entanglement measurement + simplex-constrained inference; narrowband eats style space', phase: 27 },
+  { id: 'watermark', label: 'Watermarking', desc: 'In-band narrowband + consent as droppable adapter + pre-rendered disclosure + hard-coded bot answer', phase: 28 },
+  { id: 'eval', label: 'Evaluation', desc: 'Triad: ΔWER gate + MCD/cosine screen + periodic CMOS; MCD rewards hedging; all blind to latency', phase: 29 },
+  { id: 'econ', label: 'Serving Econ', desc: 'Size on peak wall-clock + engineering carry ($9k/mo) + PHI check first; marginal compute misleading', phase: 31 }
+];
+
+const phasesData = [
+  {
+    id: 0, color: 'primary',
+    title: 'Audio Fundamentals',
+    concepts: 'Concepts 01–04',
+    best: '16 kHz ASR / 24 kHz TTS · Anti-alias Resample · HTK Mel (80 bins, pinned in CI) · WebRTC NetEq + Opus FEC/DRED',
+    reasons: ['Sample rates answer different questions', 'Naive slicing folds sibilants → buzz', 'Pin front end in CI — mismatch is silent', 'Telephony is the constraint, not model'],
+    table: [
+      ['Sample Rates', '16 kHz ASR / 24 kHz TTS', 'Different questions: formants+fricatives vs /s/ quality'],
+      ['Resampling', 'resample_poly / torchaudio.Resample', 'Built-in anti-alias FIR; slicing folds energy'],
+      ['STFT', '25 ms / 10 ms hop (Whisper)', 'Window = ~3 pitch periods; hop = frame rate for ALL downstream'],
+      ['Mel', 'HTK, 80 bins, Slaney norm, log(clamp)', 'Pin in ONE place, assert in CI — silent but audible'],
+      ['Telephony', 'Filter→Decimate→Bandpass→μ-law', 'Order critical; 3.4 kHz passband = hard constraint'],
+      ['Jitter/PLC', 'NetEq adaptive + Opus FEC/DRED', 'Latency→lower loss; FEC at 20ms; DRED past 60ms']
+    ]
+  },
+  {
+    id: 1, color: 'primary',
+    title: 'Text Frontend',
+    concepts: 'Concepts 05–09',
+    best: 'Silero VAD + WFST Normalize + Lexicon-first G2P + FS2 Variance Adaptor + MFA + QA Gate',
+    reasons: ['Hangover = 47% of budget — semantic buys back', 'WFST cannot hallucinate numbers', 'Model WER high — pay only for OOV slice', 'Explicit prosody = serving-time knobs'],
+    table: [
+      ['Endpointing', 'Semantic adaptive + hard cap', 'Fixed timeout fails on mid-utterance pauses'],
+      ['VAD', 'Silero ONNX (32ms, in-process)', 'Beats energy+ZCR on babble; energy fails on fricatives'],
+      ['Normalization', 'WFST verbalizers + neural classifier', 'WFST auditable; neural handles context'],
+      ['G2P', 'Lexicon-first: homograph→overlay→CMUdict→model', 'Model WER high on unseen; overlay = tenant names'],
+      ['Prosody', 'FS2 Variance Adaptor (explicit predictors)', 'Knobs: rate, emphasis, pitch; AR buries prosody'],
+      ['Alignment', 'MFA + QA gate (log-likelihood + cross-check)', 'Gate catches mismatched transcripts pre-training']
+    ]
+  },
+  {
+    id: 2, color: 'green',
+    title: 'Acoustic Model',
+    concepts: 'Concepts 10–14, 19',
+    best: 'VITS (End-to-End VAE) + Clause Chunking + Narrowband ONNX Export',
+    reasons: ['Deletes mel handoff — no train/serve mismatch', 'MAS = hard monotonic constraint via DP', 'Duration flow = human prosody (not mean)', 'Clause chunking fits TTFA budget'],
+    table: [
+      ['Core', 'VITS (Conditional VAE)', '4.43 MOS in one model; no mel interface; MAS + flow + HiFi-GAN'],
+      ['Attention', 'MAS (VITS/Glow-TTS)', 'Deletes failures by construction; hard monotonic DP'],
+      ['AR vs NAR', 'NAR for telephony; Hybrid for long-form', 'NAR: deterministic, zero tail. AR: flat TTFA wins long'],
+      ['Vocoder', 'HiFi-GAN V2 (fine-tuned on predicted mel)', 'Parallel pass; MPD aliased decimation = cheap periodicity'],
+      ['Codec', 'RVQ + Restart + Dropout + Perplexity Alarms', 'Only tractable 80-bit; restart maintains utilization'],
+      ['Streaming', 'Mel-frame AR (L≥½ RF) + 300-500ms chunks', 'Bilateral context kills seams; RTF_eff stays low']
+    ]
+  },
+  {
+    id: 3, color: 'amber',
+    title: 'Vocoder & Audio Out',
+    concepts: 'Concepts 15–18, 24',
+    best: 'HiFi-GAN (ONNX/Triton) → Resample → μ-law → RTP (paced) → NetEq + Opus FEC/DRED',
+    reasons: ['Parallel = deterministic; fine-tune fixes mismatch', 'Erlang-C sizing on peak, ρ=0.7, deadline alarms', 'Narrowband export avoids wasted compute'],
+    table: [
+      ['Vocoder', 'HiFi-GAN V2 (ONNX/Triton)', '168× real-time; parallel; fine-tune on predicted mel'],
+      ['Sizing', 'Erlang-C peak, ρ=0.7, batch cap, deadline alarms', 'Calls≠streams (35% duty); batching floor β=0.15'],
+      ['Resample', 'Anti-alias FIR 24→16→8 kHz', 'Filter before decimate; 3.4 kHz passband = hard'],
+      ['μ-law/RTP', 'G.711 + 20ms paced packets', 'Pacing prevents burst tail-drop; flat 38 dB SNR'],
+      ['Jitter/PLC', 'NetEq + Opus FEC/DRED', 'Latency→loss; FEC 20ms; DRED past 60ms'],
+      ['Export', 'Narrowband decoder ONNX to Triton', 'Don\'t serve 22kHz to 8kHz leg (2.76× waste)']
+    ]
+  }
+];
+
+const principlesData = [
+  { num: '01', title: 'Pin the Front End in CI', desc: 'Mel mismatch, sample rate drift, normalization differences are silent failures that reach caller as buzz/hoarseness without throwing.' },
+  { num: '02', title: 'Tune on Asymmetric Cost', desc: 'Hangover, stop token threshold, alignment gate: cost of false positive (cut caller, truncate, babble) ≫ false negative (extra latency).' },
+  { num: '03', title: 'PHI Flows Through Every Stage', desc: 'Normalized text, alignments, pronunciation, F0, mel, cached audio all inherit retention/BAA. Hash or redact before leaving the box.' },
+  { num: '04', title: 'Telephony Is the Constraint', desc: '3.4 kHz passband drops fricatives; μ-law companding adds grain; jitter buffer eats budget. Model improvements above 3.4 kHz are wasted on PSTN.' },
+  { num: '05', title: 'Observability > Debugging', desc: 'Export OOV rate, alignment scores, stop-token steps/char, endpointing latency, mel mismatch, focus rate, codebook perplexity, RTF_eff to Prometheus.' },
+  { num: '06', title: 'Determinism > Speed', desc: 'On 800 ms turn, p99 and zero-tail matter more than p50. NAR and VITS win by making T known.' },
+  { num: '07', title: 'Goodhart\'s Law Applies', desc: 'Metrics optimised become targets and stop being measures. Periodic listening tests, correlation monitoring, asymmetric cost functions essential.' },
+  { num: '08', title: 'Operations = Engineering', desc: 'Warm headroom beats autoscaling; compliance decides architecture before economics; runbooks must cover dead-air failure mode.' },
+  { num: '09', title: 'Measure on Your Data', desc: 'Baselines (chance cosine, EER, RTF, MOS variance) are population statistics; your fleet/audio/caller population determines real operating points.' }
+];
+
+const stackData = [
+  ['Frontend', 'Silero VAD + WFST (NeMo) + MFA', 'ONNX on media node', 'Deterministic, auditable, no hallucination'],
+  ['Acoustic', 'VITS (fine-tuned per voice)', 'Clause chunking, ONNX narrowband export', 'Deletes mel mismatch; MAS + duration flow = human prosody'],
+  ['Vocoder', 'HiFi-GAN V2', 'Fine-tuned on predicted mel, ONNX/Triton', 'Parallel pass; MPD aliased decimation; fixes train/serve gap'],
+  ['Streaming', 'Mel-frame AR streaming', 'L=8 frames context, chunk 300-500ms, cross-fade', 'Bilateral context kills seams; preserves prosody; low RTF_eff'],
+  ['Barge-in', 'Two-stage (VAD duck → ASR confirm)', 'Playout flush, history truncate to heard (err short)', 'Reversible ducking buys time; clinical safety = err short'],
+  ['Turn-taking', 'Completeness-driven adaptive endpointing', 'Hard cap, classifier ONNX on media node', 'Fixed timeout fails; endpointing = serial dead time'],
+  ['S2S', 'Hybrid: full-duplex shell + cascade', '4 commits → 1, text boundary = control surface', 'S2S for conversation; cascade for transactions (biasing, redaction)'],
+  ['Sizing', 'Erlang-C on peak, ρ=0.7', 'Triton dynamic batching, max_queue_delay = TTFA budget', 'Failure = dead air not 503; warm headroom > autoscaling'],
+  ['Embeddings', 'ECAPA-TDNN (cached/session)', 'Angular margin, cross-encoder eval', 'Embedding carries channel; vector = PHI not rotatable'],
+  ['Cloning', 'One consented fine-tuned agent voice', 'NO zero-shot in production', 'Channel transfers; discrete failures; HIPAA/BIPA/TCPA'],
+  ['Style', 'GST + entanglement measurement', 'Simplex-constrained inference; drive from call type', 'Reference encoder carries speaker+room; narrowband eats style'],
+  ['Watermark', 'In-band narrowband + droppable adapter', 'Pre-rendered disclosure + hard-coded bot answer', 'Watermark = provenance not detection; phone deletes high-band'],
+  ['Evaluation', 'Triad: ΔWER gate + MCD/cosine screen + CMOS', 'Consented scripted corpus, 8 kHz path', 'MCD rewards hedging; ΔWER catches skips; all blind to latency'],
+  ['Economics', 'Size peak wall-clock + carry ($9k/mo)', 'PHI check first; cache invariant phrases', 'Marginal compute misleading; carry moves crossover 7×']
+];
+
+// ============ RENDER ============
+function renderPipeline() {
+  const flow = document.getElementById('pipelineFlow');
+  flow.innerHTML = pipelineStages.map((stage, i) => `
+    <div class="pipeline-stage" data-stage="${stage.id}">
+      <div class="stage-node" onclick="openDetail('${stage.id}')" data-stage="${stage.id}">
+        <div class="stage-icon">${stage.icon}</div>
+        <div class="stage-title">${stage.title}</div>
+        <div class="stage-concepts">${stage.concepts}</div>
+      </div>
+      ${i < pipelineStages.length - 1 ? '<div class="stage-arrow animated">▼</div>' : ''}
+    </div>
+  `).join('');
+
+  const controlGrid = document.getElementById('controlGrid');
+  controlGrid.innerHTML = controlPlaneItems.map(item => `
+    <div class="control-item" onclick="openControlDetail('${item.id}')">
+      <div class="control-label">Concept ${item.phase}: ${item.label}</div>
+      <div class="control-desc">${item.desc}</div>
+    </div>
+  `).join('');
+}
+
+function renderPhases() {
+  const grid = document.getElementById('phasesGrid');
+  grid.innerHTML = phasesData.map(phase => `
+    <article class="phase-card ${phase.color}">
+      <div class="phase-header">
+        <div class="phase-number">${phase.id === 0 ? '0' : phase.id}</div>
+        <div class="phase-info">
+          <h3>${phase.title}</h3>
+          <div class="concepts">${phase.concepts}</div>
+        </div>
+      </div>
+      <div class="phase-best">
+        <div class="phase-best-label">Best Approach</div>
+        <div class="phase-best-title">${phase.best}</div>
+        <div class="phase-best-reasons">
+          ${phase.reasons.map(r => `<span class="reason-tag">${r}</span>`).join('')}
+        </div>
+      </div>
+      <table class="phase-table">
+        <thead>
+          <tr><th>Problem</th><th>Best Algorithm</th><th>Why It Wins</th></tr>
+        </thead>
+        <tbody>
+          ${phase.table.map(row => `<tr><td><code>${row[0]}</code></td><td>${row[1]}</td><td>${row[2]}</td></tr>`).join('')}
+        </tbody>
+      </table>
+    </article>
+  `).join('');
+}
+
+function renderPrinciples() {
+  const grid = document.getElementById('principlesGrid');
+  grid.innerHTML = principlesData.map(p => `
+    <article class="principle-card">
+      <div class="principle-number">${p.num}</div>
+      <div class="principle-title">${p.title}</div>
+      <div class="principle-desc">${p.desc}</div>
+    </article>
+  `).join('');
+}
+
+function renderStack() {
+  const tbody = document.getElementById('stackTableBody');
+  tbody.innerHTML = stackData.map(row => `
+    <tr>
+      <td><strong>${row[0]}</strong></td>
+      <td><code>${row[1]}</code></td>
+      <td>${row[2]}</td>
+      <td>${row[3]}</td>
+    </tr>
+  `).join('');
+}
+
+// ============ DETAIL PANEL ============
+function openDetail(stageId) {
+  const stage = pipelineStages.find(s => s.id === stageId);
+  if (!stage) return;
+  
+  document.querySelectorAll('.stage-node').forEach(n => n.classList.remove('active'));
+  document.querySelector(`.stage-node[data-stage="${stageId}"]`)?.classList.add('active');
+  
+  const d = stage.details;
+  document.getElementById('detailTitle').textContent = d.title;
+  document.getElementById('detailContent').innerHTML = `
+    <div class="detail-section">
+      <h4>Best Algorithm</h4>
+      <p style="font-weight: 600; margin-bottom: 1rem;">${d.best}</p>
+      <h4>Why This Wins</h4>
+      <div style="display: flex; flex-wrap: wrap; gap: 0.35rem;">
+        ${d.reasons.map(r => `<span class="badge why">${r}</span>`).join('')}
+      </div>
+    </div>
+    <div class="detail-section">
+      <h4>Phase Breakdown</h4>
+      <table class="detail-table">
+        <thead><tr><th>Problem</th><th>Best Approach</th><th>Why</th></tr></thead>
+        <tbody>
+          ${d.table.map(row => `<tr><td><code>${row[0]}</code></td><td>${row[1]}</td><td>${row[2]}</td></tr>`).join('')}
+        </tbody>
+      </table>
+    </div>
+  `;
+  
+  document.getElementById('detailPanel').classList.add('open');
+  document.getElementById('overlay').classList.add('open');
+  document.body.style.overflow = 'hidden';
+}
+
+function openControlDetail(itemId) {
+  const item = controlPlaneItems.find(i => i.id === itemId);
+  if (!item) return;
+  
+  document.getElementById('detailTitle').textContent = `Concept ${item.phase}: ${item.label}`;
+  document.getElementById('detailContent').innerHTML = `
+    <div class="detail-section">
+      <h4>Best Approach</h4>
+      <p style="margin-bottom: 1rem; line-height: 1.6;">${item.desc}</p>
+      <h4>Key Insight</h4>
+      <p style="color: var(--fg-muted); font-size: 0.85rem;">This control plane component operates across the full pipeline — it's not a sequential stage but a cross-cutting concern that shapes how the pipeline behaves in production.</p>
+    </div>
+  `;
+  
+  document.getElementById('detailPanel').classList.add('open');
+  document.getElementById('overlay').classList.add('open');
+  document.body.style.overflow = 'hidden';
+}
+
+function closeDetail() {
+  document.getElementById('detailPanel').classList.remove('open');
+  document.getElementById('overlay').classList.remove('open');
+  document.body.style.overflow = '';
+  document.querySelectorAll('.stage-node').forEach(n => n.classList.remove('active'));
+}
+
+// Keyboard support
+document.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape') closeDetail();
+});
+
+// Init
+renderPipeline();
+renderPhases();
+renderPrinciples();
+renderStack();
+
+// Intersection observer for scroll animations
+const observer = new IntersectionObserver((entries) => {
+  entries.forEach(entry => {
+    if (entry.isIntersecting) {
+      entry.target.style.opacity = '1';
+      entry.target.style.transform = 'translateY(0)';
+    }
+  });
+}, { threshold: 0.1 });
+
+document.querySelectorAll('.phase-card, .principle-card').forEach(el => {
+  el.style.opacity = '0';
+  el.style.transform = 'translateY(20px)';
+  el.style.transition = 'opacity 0.5s ease, transform 0.5s ease';
+  observer.observe(el);
+});
+</script>
+</body>
+</html>
