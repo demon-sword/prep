@@ -321,6 +321,26 @@
       font-size: 0.8rem;
       color: var(--text-dim);
     }
+    /* ── Calculator ── */
+    #calculator { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 2rem; }
+    #calculator .section-title { color: var(--green); border-color: var(--green); }
+    #calculator pre.formula { text-align: left; white-space: pre-wrap; color: var(--text); }
+    .calc-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 0.8rem; margin: 1.2rem 0; }
+    .calc-field { background: var(--card); border: 1px solid var(--border); border-radius: 8px; padding: 0.7rem 0.8rem; }
+    .calc-field label { display: block; font-family: var(--mono); font-size: 0.72rem; color: var(--text-dim); margin-bottom: 0.35rem; }
+    .calc-field input, .calc-field select { width: 100%; background: var(--bg); color: var(--text); border: 1px solid var(--border); border-radius: 6px; padding: 0.4rem 0.5rem; font-family: var(--mono); font-size: 0.9rem; }
+    .calc-field input:disabled, .calc-field select:disabled { opacity: 0.35; }
+    .calc-presets { display: flex; flex-wrap: wrap; gap: 0.6rem; margin-bottom: 0.4rem; }
+    .calc-out { font-family: var(--mono); background: rgba(0,255,136,0.07); border: 1px solid rgba(0,255,136,0.25); border-radius: 8px; padding: 1rem 1.3rem; margin: 1rem 0; font-size: 0.88rem; line-height: 2; }
+    .calc-out .k { color: var(--text-dim); }
+    .calc-out .v { color: var(--green); font-weight: 700; }
+    .calc-note { color: var(--text-dim); font-size: 0.88rem; }
+    /* ── Cross-engine reuse ── */
+    #cross-engine-cache { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 2rem 2rem 2.5rem; }
+    #cross-engine-cache .section-title { color: var(--yellow); border-color: var(--yellow); }
+    #cross-engine-cache p { margin-bottom: 0.9rem; font-size: 0.975rem; }
+    #cross-engine-cache ul { margin: 0.4rem 0 1rem 1.3rem; }
+    #cross-engine-cache li { margin-bottom: 0.45rem; font-size: 0.95rem; }
   </style>
 </head>
 <body>
@@ -407,6 +427,7 @@
   <ul>
     <li><strong>vLLM's Automatic Prefix Caching (APC)</strong> hashes KV cache pages by their content. When a new request shares a prefix, vLLM detects the hash match and reuses the cached pages — no recomputation, no duplicate storage.</li>
     <li><strong>Anthropic's Prompt Caching</strong> exposes this as a pricing mechanism: cache writes cost 10% of the full price, cache hits cost only 1%. This frames prompt caching as an economic optimization — you pay dramatically less for tokens already cached.</li>
+    <li><strong>Cross-engine reuse:</strong> APC shares prefixes within one engine — <a href="#cross-engine-cache" style="color:var(--accent);">LMCache and Mooncake</a> share them across engines and nodes via CPU-DRAM KV stores (see below).</li>
     <li><strong>Efficiency impact:</strong> A 10K-token system prompt shared across 100 concurrent requests requires only one copy of the KV cache (10K tokens' worth) instead of 100 copies. That's a 99% reduction in KV cache memory for the prefix portion and near-zero prefill compute for cached tokens.</li>
   </ul>
 
@@ -517,6 +538,82 @@
     </div>
   </div>
 </section>
+<!-- ── CALCULATOR ── -->
+<section id="calculator">
+  <h2 class="section-title">KV Cache Size Calculator</h2>
+  <p class="viz-desc">
+    Every KV-cache decision is this formula. Dial in a model shape and watch the bytes —
+    including the exact sequence length where one request's cache outgrows the model weights.
+  </p>
+  <div class="formula">
+    bytes = 2 &times; L &times; Hkv &times; d &times; n &times; B &times; bytes_per_elem
+  </div>
+  <pre class="formula" style="text-align:left; white-space:pre-wrap;">GQA 70B-class (L=80, Hkv=8, d=128, fp16, n=4096, B=16):
+  per token    = 2 × 80 × 8 × 128 × 2 B = 327,680 B ≈ 320 KB
+  per request  = 320 KB × 4096 ≈ 1.3 GB
+  fleet (B=16) = 1.3 GB × 16 ≈ 20 GB   ← about a quarter of one 80 GB HBM
+  crossover    = 140 GB weights ÷ 320 KB/token ≈ 427K tokens</pre>
+  <div class="calc-presets">
+    <button class="ctrl-btn" data-preset="mha70">MHA 70B</button>
+    <button class="ctrl-btn" data-preset="gqa70">GQA 70B</button>
+    <button class="ctrl-btn" data-preset="gqa8">GQA 8B</button>
+    <button class="ctrl-btn" data-preset="mlaV3">MLA DeepSeek-V3</button>
+  </div>
+  <div class="calc-grid">
+    <div class="calc-field"><label>L · layers</label><input type="number" id="calc-L" value="80" min="1" max="256"></div>
+    <div class="calc-field"><label>Hq · query heads</label><input type="number" id="calc-Hq" value="64" min="1" max="256"></div>
+    <div class="calc-field"><label>Hkv · KV heads</label><input type="number" id="calc-Hkv" value="8" min="1" max="256"></div>
+    <div class="calc-field"><label>d · head dim</label><input type="number" id="calc-d" value="128" min="8" max="512"></div>
+    <div class="calc-field"><label>n · seq len</label><input type="number" id="calc-n" value="4096" min="1" max="10000000"></div>
+    <div class="calc-field"><label>B · batch</label><input type="number" id="calc-B" value="16" min="1" max="4096"></div>
+    <div class="calc-field"><label>dtype</label><select id="calc-dtype"><option value="4">fp32 · 4 B</option><option value="2" selected>fp16/bf16 · 2 B</option><option value="1">fp8/int8 · 1 B</option></select></div>
+    <div class="calc-field"><label>W · weights (GB)</label><input type="number" id="calc-W" value="140" min="1" max="4000"></div>
+    <div class="calc-field"><label>MLA latent</label><select id="calc-mla"><option value="off" selected>off — 2·Hkv·d formula</option><option value="on">on — 576 els/token/layer</option></select></div>
+  </div>
+  <div class="calc-out">
+    <div><span class="k">GQA sharing factor .... </span><span class="v" id="calc-divisor">8.00× (Hq/Hkv)</span></div>
+    <div><span class="k">per token ............. </span><span class="v" id="calc-per-tok">—</span></div>
+    <div><span class="k">per request (×n) ...... </span><span class="v" id="calc-per-req">—</span></div>
+    <div><span class="k">fleet total (×n×B) .... </span><span class="v" id="calc-fleet">—</span></div>
+    <div><span class="k">cache = weights at .... </span><span class="v" id="calc-crossover">—</span></div>
+    <div><span class="k">paged waste bound ..... </span><span class="v" id="calc-waste">—</span></div>
+  </div>
+  <p class="calc-note">
+    The GQA divisor shows up twice: Hkv shrinks the per-token bytes <em>and</em> pushes the crossover
+    length out by the same factor. PagedAttention's block table (16-token pages) bounds allocation waste
+    to one partial page per request — the number in the last row. MLA mode replaces the head math with
+    DeepSeek's fixed 576-element latent plus shared rotary key per token per layer.
+  </p>
+</section>
+
+<!-- ── CROSS-ENGINE KV REUSE ── -->
+<section id="cross-engine-cache">
+  <h2 class="section-title">Cross-Engine KV Reuse: LMCache &amp; Mooncake</h2>
+  <p>
+    Prefix caching (§6) stops at the process boundary: one engine reuses its own pages, but every
+    replica still recomputes the same long system prompt and pins its own copy in scarce GPU HBM.
+    <strong>LMCache</strong> and <strong>Mooncake</strong> lift the KV cache one level up — into plentiful
+    CPU DRAM shared across engines and nodes — so a prefix computed once serves every replica, and
+    prefill instances hand finished KV pages directly to decode instances instead of recomputing them.
+  </p>
+  <ul>
+    <li><strong>LMCache (open-source, LMCache Lab):</strong> a hierarchical KV store — GPU HBM → local CPU DRAM → remote storage — pluggable into vLLM and SGLang. Engines publish prefix KV once; later requests hit it from CPU memory instead of re-running prefill, and disaggregated prefill/decode pairs exchange KV peer-to-peer (NIXL-backed transfer) rather than recomputing the prompt.</li>
+    <li><strong>Mooncake (Moonshot AI, 2024):</strong> a KVCache-centric disaggregated serving architecture — a global CPU-DRAM <em>Mooncake Store</em>, separate prefill and decode pools, paged KV transfer over RDMA, and overload-oriented scheduling that rejects early instead of queueing past the SLO. The scheduler reasons about TTFT/TPOT against KV residency, not just GPU occupancy.</li>
+    <li><strong>When it pays:</strong> long prompts shared across many replicas (one copy in DRAM instead of N copies in HBM), prefill–decode disaggregation (KV shipped once, decoded many times), and elastic capacity where new replicas warm from the shared store instead of cold prefill.</li>
+    <li><strong>Cost-model shift:</strong> §6 prefix caching saves <em>compute</em> within an engine; cross-engine reuse saves <em>HBM capacity</em> across the fleet — the scarce resource from the calculator above. The tradeoff is transfer latency (RDMA / CPU–GPU bandwidth) versus recompute, which favors reuse for long shared prefixes over short ones.</li>
+  </ul>
+  <div class="card-grid">
+    <div class="info-card">
+      <h4>LMCache</h4>
+      <p>CPU-resident shared KV across vLLM/SGLang engines; peer-to-peer prefill→decode transfer; open-source drop-in for existing serving stacks.</p>
+    </div>
+    <div class="info-card">
+      <h4>Mooncake</h4>
+      <p>Global DRAM KV store plus RDMA transfer plus SLO-aware scheduling — the production pattern for disaggregated serving at scale.</p>
+    </div>
+  </div>
+</section>
+
 
 <!-- ── TAKEAWAYS ── -->
 <section id="takeaways">
@@ -1035,6 +1132,93 @@ initializeDemo();
 
 // Start animation
 animationId = requestAnimationFrame(tick);
+// ─────────────────────────────────────────────────────
+// KV Cache Size Calculator
+// ─────────────────────────────────────────────────────
+const CALC_PRESETS = {
+  mha70: { mla: false, L: 80, Hq: 64, Hkv: 64, d: 128, dtype: '2', W: 140 },
+  gqa70: { mla: false, L: 80, Hq: 64, Hkv: 8,  d: 128, dtype: '2', W: 140 },
+  gqa8:  { mla: false, L: 32, Hq: 32, Hkv: 8,  d: 128, dtype: '2', W: 16 },
+  mlaV3: { mla: true,  L: 61, dtype: '2', W: 140 },
+};
+
+function calcNum(id) {
+  const v = parseFloat(document.getElementById(id).value);
+  return Number.isFinite(v) && v >= 0 ? v : 0;
+}
+
+function fmtBytes(b) {
+  if (!Number.isFinite(b) || b < 0) return '—';
+  const units = ['B', 'KB', 'MB', 'GB', 'TB', 'PB'];
+  let i = 0;
+  while (b >= 1024 && i < units.length - 1) { b /= 1024; i++; }
+  return (b >= 100 || i === 0 ? b.toFixed(0) : b.toFixed(2)) + ' ' + units[i];
+}
+
+function fmtInt(n) {
+  if (!Number.isFinite(n)) return '—';
+  return Math.round(n).toLocaleString('en-US');
+}
+
+function updateCalc() {
+  const mla = document.getElementById('calc-mla').value === 'on';
+  const L = calcNum('calc-L');
+  const Hq = calcNum('calc-Hq');
+  const Hkv = calcNum('calc-Hkv');
+  const d = calcNum('calc-d');
+  const n = calcNum('calc-n');
+  const B = calcNum('calc-B');
+  const bytes = parseFloat(document.getElementById('calc-dtype').value) || 0;
+  const Wgb = calcNum('calc-W');
+
+  // MLA caches a fixed 576-element latent + rotary key per token per layer —
+  // head counts and head dim do not apply, so grey those inputs out.
+  for (const id of ['calc-Hq', 'calc-Hkv', 'calc-d']) {
+    document.getElementById(id).disabled = mla;
+  }
+
+  const elsPerTokLayer = mla ? 576 : 2 * Hkv * d;
+  const perTok = elsPerTokLayer * L * bytes;
+  const perReq = perTok * n;
+  const fleet = perReq * B;
+  const crossover = perTok > 0 && Wgb > 0 ? (Wgb * 1000 * 1000 * 1000) / perTok : NaN;
+  const wasteBound = 15 * perTok; // PagedAttention: ≤ one partial 16-token page per request
+
+  document.getElementById('calc-divisor').textContent =
+    mla ? '— (MLA: no head sharing, 576 els/token/layer)' : (Hkv > 0 ? (Hq / Hkv).toFixed(2) + '× (Hq/Hkv)' : '—');
+  document.getElementById('calc-per-tok').textContent = fmtBytes(perTok);
+  document.getElementById('calc-per-req').textContent = fmtBytes(perReq);
+  document.getElementById('calc-fleet').textContent = fmtBytes(fleet);
+  document.getElementById('calc-crossover').textContent = fmtInt(crossover) + ' tokens';
+  document.getElementById('calc-waste').textContent = '≤ ' + fmtBytes(wasteBound) + ' per request';
+}
+
+for (const id of ['calc-L', 'calc-Hq', 'calc-Hkv', 'calc-d', 'calc-n', 'calc-B', 'calc-W']) {
+  document.getElementById(id).addEventListener('input', updateCalc);
+}
+document.getElementById('calc-dtype').addEventListener('change', updateCalc);
+document.getElementById('calc-mla').addEventListener('change', updateCalc);
+
+document.querySelectorAll('[data-preset]').forEach((btn) => {
+  btn.addEventListener('click', () => {
+    const p = CALC_PRESETS[btn.getAttribute('data-preset')];
+    if (!p) return;
+    document.getElementById('calc-mla').value = p.mla ? 'on' : 'off';
+    document.getElementById('calc-L').value = p.L;
+    document.getElementById('calc-dtype').value = p.dtype;
+    document.getElementById('calc-W').value = p.W;
+    if (!p.mla) {
+      document.getElementById('calc-Hq').value = p.Hq;
+      document.getElementById('calc-Hkv').value = p.Hkv;
+      document.getElementById('calc-d').value = p.d;
+    }
+    document.querySelectorAll('[data-preset]').forEach((b) => b.classList.remove('active'));
+    btn.classList.add('active');
+    updateCalc();
+  });
+});
+
+updateCalc();
 
 </script>
 </body>
