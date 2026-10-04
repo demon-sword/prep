@@ -1,7 +1,7 @@
 # How do you generate long-form grounded documents (reports, papers) with an LLM?
 
 **Category:** 01-llm-fundamentals
-**Question #:** 049
+**Question #:** 052
 **Source section:** §1 in interview-questions.md
 **Status:** `review`
 **Generated:** ralph-ai-engineering
