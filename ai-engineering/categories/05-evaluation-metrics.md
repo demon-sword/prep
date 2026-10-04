@@ -57,6 +57,13 @@ Strong candidates understand that evaluation is not a one-time checkpoint but a 
 - [Q22: Two models, same accuracy, different confidence — which choose? Calibration?](../answers/05-022-two-models-same-accuracy-different-confidence-which-choose-c.md)
 - [Q18: Feedback and reinforcement loops — system gets better over time?](../answers/05-018-feedback-and-reinforcement-loops-system-gets-better-over-tim.md)
 
+### 5. Paper & Research-Artefact Review
+**When:** "how do you verify a paper's results before building on them?" / "how would you use an LLM to peer-review?"
+**What:** Published claims need checking against public code (claim inventory, tiered verification, severity-graded verdict), and review itself needs a calibrated instrument (anchored dimensions, evidence-gated scores, measured human agreement).
+**Key questions:**
+- [Q26: How do you audit a paper's code for reproducibility?](../answers/05-026-paper-code-audit-reproducibility-check.md)
+- [Q27: How do you design an LLM-as-reviewer rubric for papers?](../answers/05-027-llm-paper-reviewer-rubric.md)
+
 ---
 
 ## Decision framework
@@ -138,6 +145,8 @@ Are you comparing two models or prompt variants?
 | 21 | Test new model before full deployment — canary, interleaved, shadow? | S | `todo` |
 | 22 | Two models, same accuracy, different confidence — which choose? Calibration? | S | `todo` |
 | 23 | Chatbot accuracy dropped 95% → 80% in six weeks — diagnose before retraining? | S | `todo` |
+| 26 | How do you audit a paper's code for reproducibility? | S | `todo` |
+| 27 | How do you design an LLM-as-reviewer rubric for papers? | S | `todo` |
 
 ---
 
