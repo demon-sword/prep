@@ -123,6 +123,7 @@ Step 3 — Inference budget?
 | 10 | Speculative decoding — speed up inference? | M | `todo` |
 | 11 | Convert implicit user behavior (edits, acceptance) into training signals? | S | `todo` |
 | 12 | Quantization — tradeoffs between size, speed, accuracy? | M | `todo` |
+| 14 | Replication plan for a published result? | S | `todo` |
 
 ---
 
