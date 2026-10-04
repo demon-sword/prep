@@ -37,8 +37,9 @@ LLM benchmarking operates across three distinct layers: **academic benchmarks** 
 | MMLU | 57-subject factual MC (undergrad–grad level) | a frontier model class models hit 85–90%; nearly saturated |
 | HumanEval / MBPP | Python function synthesis, pass@1 | Increasingly saturated on frontier models |
 | BIG-Bench Hard | 23 hard reasoning tasks | More headroom; harder to game |
-| MATH / GSM8K | Mathematical reasoning, chain-of-thought | MATH still discriminates at frontier |
 | MT-Bench | Multi-turn chat quality via a frontier model judge | Good for instruction-following; judge model bias |
+
+Benchmarks shortlist, execution accuracy gates: for a worked example of selecting on sandbox-executed result-set match rather than headline scores, see [Q28: MMLU, BigBench, HumanEval — what does each measure?](01-028-mmlu-bigbench-humaneval-what-does-each-measure-limitations.md).
 
 **Layer 2 — Task-specific offline metrics**
 

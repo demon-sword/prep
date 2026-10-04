@@ -39,6 +39,7 @@ Chatbot evaluation requires three distinct layers: *offline accuracy* (does it g
 
 **Layer 2 — Automated LLM-judge eval**
 - Use a frontier model as a judge on 3–5% of live traffic (or a larger offline sample): score helpfulness, groundedness, tone, and refusal appropriateness on a 1–5 scale.
+- **Validate the judge before trusting it (judge-trust protocol):** measure judge-vs-human agreement on a labeled sample — Spearman correlation ≥ 0.7 before the judge gates any deploy. Log the judge-vs-human disagreement rate continuously; a rising rate means the judge or the data drifted. Disagree path: any verdict the human sample overturns, plus all low-margin and high-stakes verdicts, escalates to human review instead of auto-accepting the judge's call.
 - Track **conversation coherence**: does each turn logically follow from prior context? (judge scoring or turn-level perplexity on the multi-turn history)
 - For multi-turn flows: measure **conversation depth** (turns to resolution) and **clarification rate** (how often the bot asks a clarifying question vs. guesses).
 
@@ -94,6 +95,7 @@ The key tradeoff: LLM-judge eval is expensive at scale but catches nuanced conve
 ## Pitfalls
 
 - **Mistake:** Citing only CSAT or thumbs-up rate as the primary eval signal — **Better:** Explain that CSAT is a lagging, selection-biased signal (escalated users skip the rating); pair it with a RAGAS golden-dataset gate and LLM-judge scoring to catch failures before users notice them.
+- **Mistake:** Trusting an LLM judge that was never validated against human judgment — **Better:** Gate the judge on measured agreement first (Spearman ≥ 0.7 vs. human labels on a held-out sample), log the disagreement rate in production, and escalate overturned or low-margin verdicts to human review; an unvalidated judge gives false confidence and masks regressions.
 - **Mistake:** Using BLEU or ROUGE for chatbot evaluation — **Better:** BLEU/ROUGE measure n-gram overlap against a reference string, which is meaningless for conversational output where many valid phrasings exist; use RAGAS Faithfulness + Answer Relevancy + production deflection rate instead.
 - **Mistake:** Treating chatbot eval as a single-number metric — **Better:** Layer offline accuracy (RAGAS), conversation quality (LLM judge / coherence), and business outcomes (deflection rate, CSAT, latency) and set separate SLO thresholds for each; a single composite score hides which layer is failing.
 
