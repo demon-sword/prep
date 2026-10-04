@@ -162,7 +162,7 @@ If seq2seq (translation, summarization with fixed input → output):
 | 46 | Bias-variance tradeoff? | E | `todo` |
 | 47 | Overfitting — how prevent it? | E | `todo` |
 | 48 | Imbalanced datasets — how handle? | E | `todo` |
-| 49 | Long-form grounded generation (reports, papers)? | M | `todo` |
+| 52 | Long-form grounded generation (reports, papers)? | M | `todo` |
 
 ---
 
