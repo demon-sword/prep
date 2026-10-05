@@ -1,0 +1,276 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1.0"/>
+  <title>CUDA Programming Model — AI Engineering Concepts</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com"/>
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&amp;family=JetBrains+Mono:wght@400;500&amp;display=swap" rel="stylesheet"/>
+  <style>
+    :root {
+      --bg: #0d0f17;
+      --surface: #141720;
+      --card: #1a1e2e;
+      --border: #252a3d;
+      --accent: #00d4ff;
+      --purple: #7c3aed;
+      --green: #00ff88;
+      --yellow: #ffd700;
+      --red: #ff4757;
+      --orange: #ff9500;
+      --text: #e2e8f0;
+      --text-dim: #8892a4;
+      --mono: 'JetBrains Mono', monospace;
+      --sans: 'Inter', system-ui, sans-serif;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { background: var(--bg); color: var(--text); font-family: var(--sans); line-height: 1.7; }
+    header { max-width: 1100px; margin: 0 auto; padding: 3rem 2rem 2rem; }
+    .group-badge { display: inline-block; font-size: 0.75rem; font-weight: 600; letter-spacing: 0.12em; text-transform: uppercase; color: var(--accent); border: 1px solid rgba(0,212,255,0.4); border-radius: 999px; padding: 0.25rem 0.9rem; margin-bottom: 1rem; }
+    header h1 { font-size: 2.4rem; line-height: 1.15; font-weight: 700; }
+    header h1 span { color: var(--accent); }
+    .tagline { color: var(--text-dim); font-size: 1.05rem; margin-top: 0.9rem; max-width: 70ch; }
+    main { max-width: 1100px; margin: 0 auto; padding: 0 2rem 2rem; }
+    section { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 2rem; margin-bottom: 1.5rem; }
+    section h2 { font-size: 1.5rem; margin-bottom: 1.2rem; color: var(--accent); font-family: var(--mono); }
+    section h3 { font-size: 1.15rem; margin: 1.8rem 0 0.7rem; color: var(--text); }
+    section p { margin-bottom: 0.9rem; color: var(--text); }
+    section ul, section ol { margin: 0.6rem 0 1rem 1.4rem; }
+    section li { margin-bottom: 0.45rem; }
+    code { font-family: var(--mono); font-size: 0.88em; background: rgba(0,212,255,0.08); color: var(--accent); padding: 0.1em 0.4em; border-radius: 4px; }
+    pre { font-family: var(--mono); font-size: 0.82rem; background: #0a0c12; border: 1px solid var(--border); border-radius: 8px; padding: 1.1rem 1.3rem; overflow-x: auto; margin: 1rem 0; line-height: 1.6; color: #c9d4e8; }
+    .card-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 1rem; margin: 1.2rem 0; }
+    .card { background: var(--card); border: 1px solid var(--border); border-radius: 8px; padding: 1.1rem 1.2rem; }
+    .card h4 { font-size: 0.95rem; margin-bottom: 0.5rem; color: var(--yellow); }
+    .card p { font-size: 0.9rem; color: var(--text-dim); margin: 0; }
+    .formula-box { font-family: var(--mono); font-size: 0.85rem; background: rgba(124,58,237,0.1); border: 1px solid rgba(124,58,237,0.5); border-radius: 8px; padding: 1.1rem 1.3rem; margin: 1rem 0; white-space: pre-wrap; line-height: 1.7; }
+    .viz-desc { color: var(--text-dim); margin-bottom: 1.2rem; }
+    .controls { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 1rem; margin-bottom: 1.2rem; }
+    .control { background: var(--card); border: 1px solid var(--border); border-radius: 8px; padding: 0.9rem 1rem; }
+    .control label { display: block; font-size: 0.82rem; color: var(--text-dim); margin-bottom: 0.4rem; font-family: var(--mono); }
+    .control label b { color: var(--accent); font-size: 0.95rem; }
+    .control input[type="range"] { width: 100%; accent-color: var(--accent); }
+    .btn-row { display: flex; flex-wrap: wrap; gap: 0.6rem; margin-bottom: 1.2rem; }
+    button { font-family: var(--mono); font-size: 0.82rem; background: rgba(0,212,255,0.1); color: var(--accent); border: 1px solid rgba(0,212,255,0.4); border-radius: 6px; padding: 0.5rem 1rem; cursor: pointer; transition: background 0.15s; }
+    button:hover { background: rgba(0,212,255,0.22); }
+    button.active { background: rgba(0,255,136,0.15); color: var(--green); border-color: rgba(0,255,136,0.5); }
+    canvas { width: 100%; border: 1px solid var(--border); border-radius: 8px; background: #0a0c12; display: block; }
+    .readout { font-family: var(--mono); font-size: 0.88rem; background: #0a0c12; border: 1px solid var(--border); border-radius: 8px; padding: 1rem 1.2rem; margin-top: 1rem; line-height: 1.8; }
+    .readout .good { color: var(--green); }
+    .readout .warn { color: var(--yellow); }
+    .readout .bad { color: var(--red); }
+    #takeaways ul { list-style: none; margin-left: 0; }
+    #takeaways li { background: var(--card); border: 1px solid var(--border); border-left: 3px solid var(--accent); border-radius: 0 8px 8px 0; padding: 0.8rem 1.1rem; margin-bottom: 0.7rem; }
+    .concept-nav { max-width: 1100px; margin: 0 auto; padding: 1.2rem 2rem 3rem; display: flex; justify-content: space-between; align-items: center; gap: 0.8rem; }
+    .nav-link { color: var(--accent); text-decoration: none; font-size: 0.9rem; border: 1px solid rgba(0,212,255,0.3); border-radius: 6px; padding: 0.5rem 1rem; display: inline-block; max-width: 42%; }
+    .nav-link:hover { background: rgba(0,212,255,0.1); }
+    .nav-dir { display: block; font-size: 0.75rem; color: var(--text-dim); }
+    .nav-center { font-size: 0.8rem; color: var(--text-dim); text-align: center; }
+    @media (max-width: 700px) {
+      header h1 { font-size: 1.7rem; }
+      section { padding: 1.3rem; }
+      .concept-nav { flex-direction: column; }
+      .nav-link { max-width: 100%; width: 100%; text-align: center; }
+      .nav-center { order: -1; }
+    }
+  </style>
+</head>
+<body>
+
+<header>
+  <div class="group-badge">Inference</div>
+  <h1>CUDA <span>Programming Model</span></h1>
+  <p class="tagline">How GPU code is really organized — grids of thread blocks running on streaming multiprocessors, the NVCC to PTX to SASS compilation pipeline, and the occupancy and memory rules that decide whether your LLM kernel flies or stalls.</p>
+</header>
+
+<main>
+
+  <section id="theory">
+    <h2>Theory</h2>
+
+    <h3>The Execution Hierarchy: Grid, Block, Warp, Thread</h3>
+    <p>Every CUDA kernel launch creates a <strong>grid</strong> of <strong>thread blocks</strong>. A block is the unit of scheduling: it lands on one <strong>streaming multiprocessor (SM)</strong> and stays there until all its threads finish, because threads inside a block can cooperate through fast on-chip <strong>shared memory</strong> and the <code>__syncthreads()</code> barrier. Threads in different blocks cannot synchronize — if your algorithm needs global sync, you end the kernel and launch another one.</p>
+    <p>Inside a block, hardware groups threads into <strong>warps of 32 threads</strong> that execute in lockstep (SIMT — single instruction, multiple threads). The warp is the real scheduling quantum: an SM hides memory latency by keeping many warps resident and swapping between them every cycle at zero cost. An A100 SM holds up to 64 resident warps (2048 threads); a dead cycle only happens when <em>no</em> resident warp has an instruction ready. Everything about CUDA performance is keeping that warp pool full.</p>
+    <div class="card-grid">
+      <div class="card">
+        <h4>Thread</h4>
+        <p>One lane of execution. Has private registers and a unique <code>threadIdx</code>. Cheapest thing on the GPU — launch millions.</p>
+      </div>
+      <div class="card">
+        <h4>Warp (32 threads)</h4>
+        <p>Executes in lockstep. Branch divergence inside a warp serializes both paths. Think in warps, not threads.</p>
+      </div>
+      <div class="card">
+        <h4>Block (≤1024 threads)</h4>
+        <p>Runs on exactly one SM. Threads share fast shared memory and <code>__syncthreads()</code>. The scheduling unit.</p>
+      </div>
+      <div class="card">
+        <h4>Grid</h4>
+        <p>All blocks of a kernel launch, spread across every SM. No cross-block sync. Scale by launching more blocks.</p>
+      </div>
+    </div>
+
+    <h3>The Memory Hierarchy (and Why Order Matters)</h3>
+    <p>CUDA exposes the memory hierarchy explicitly, and picking the wrong level is the most common performance bug in custom kernels. From fastest to slowest: <strong>registers</strong> (per-thread, ~1 cycle), <strong>shared memory</strong> (per-block, on-chip SRAM, ~20–30 cycles), <strong>L1/L2 caches</strong>, then <strong>global memory</strong> (HBM, hundreds of cycles). A100 numbers make the stakes concrete: 19 TB/s of on-chip SRAM bandwidth versus 2 TB/s of HBM — nearly a 10&times; gap. FlashAttention exists because someone refused to pay the HBM price for the N&times;N attention matrix and tiled the whole computation into shared memory instead.</p>
+    <p>Global accesses have one more rule: <strong>coalescing</strong>. When the 32 threads of a warp touch contiguous 4-byte floats, hardware merges them into a few 128-byte cache-line transactions. Strided or scattered access by the same 32 threads can cost 32&times; the bandwidth for the same bytes. LLM kernels live or die here: a reduction over the hidden dimension with contiguous access saturates HBM; a gather over random token indices does not.</p>
+
+    <h3>NVCC to PTX to SASS: The Compilation Pipeline</h3>
+    <p><code>nvcc</code> compiles <code>.cu</code> files in two stages. First, device code lowers to <strong>PTX</strong> — a virtual, forward-compatible assembly (e.g. <code>sm_80</code> target emits PTX that any Ampere-or-newer driver accepts). At install or load time the driver JIT-compiles PTX to <strong>SASS</strong>, the real machine code for the specific chip. You can also ship precompiled SASS inside a <code>fatbin</code> to skip JIT warmup — the first-token latency spike on a cold server is often PTX JIT, and shipping <code>-gencode arch=compute_90,code=sm_90</code> for exactly your fleet's GPUs removes it.</p>
+    <p>This two-stage design is why one PyTorch wheel runs on many GPU generations but never quite as fast as a build pinned to your architecture, and why operators like FlashAttention ship hand-tuned SASS-adjacent schedules via CUTLASS templates rather than naive CUDA C++.</p>
+<pre>// A complete CUDA kernel: vector add, the "hello world" that shows the model.
+// kernel&lt;&lt;&lt;gridDim, blockDim&gt;&gt;&gt; — grid of blocks, each block of threads.
+__global__ void vecAdd(const float* a, const float* b, float* c, int n) {
+  int i = blockIdx.x * blockDim.x + threadIdx.x;  // global thread id
+  if (i &lt; n) c[i] = a[i] + b[i];                 // one output per thread
+}
+
+int main() {
+  const int N = 1 &lt;&lt; 20, B = 256;
+  // ... cudaMalloc + cudaMemcpy host -&gt; device omitted ...
+  vecAdd&lt;&lt;&lt;(N + B - 1) / B, B&gt;&gt;&gt;(d_a, d_b, d_c, N);  // ceil(N/B) blocks
+  cudaDeviceSynchronize();  // wait for the grid to finish
+}</pre>
+
+    <h3>Occupancy: Keeping the SM Fed</h3>
+    <p><strong>Occupancy</strong> is resident warps divided by the hardware maximum (64 per SM on A100/H100). Three resources cap it: threads per block, registers per thread, and shared memory per block. A kernel using 64 registers per thread can fit at most 1024 threads per SM (65536 registers ÷ 64) — 50% occupancy before shared memory even enters the picture. The compiler flag <code>--maxrregcount</code> and the <code>__launch_bounds__(maxThreadsPerBlock, minBlocksPerSM)</code> attribute trade registers for occupancy by forcing spills to local memory, which is a real tradeoff to measure, not a free win.</p>
+    <div class="formula-box">A100 SM limits: 2048 threads · 64K registers · 164 KB shared · 32 blocks
+Max blocks from each limiter = floor(limit ÷ per-block use)
+Occupancy = min over limiters (blocks × warpsPerBlock ÷ 64)</div>
+    <p>High occupancy is not the goal — hiding latency is. A kernel with 25% occupancy but perfect coalescing and no divergence can still saturate HBM. But low occupancy <em>caused by</em> register pressure or oversized shared-memory tiles is usually a bug, and the occupancy calculator (below) tells you which limiter is biting before you touch Nsight Compute.</p>
+
+    <h3>Streams, Events, and Overlapping Everything</h3>
+    <p>Kernels and copies in the same <strong>stream</strong> run in order; work in different streams can overlap. The standard inference pattern is double-buffering: while stream 0 runs the matmul on batch N, stream 1 copies batch N+1 host-to-device, synchronized with <strong>events</strong> (<code>cudaEventRecord</code> / <code>cudaStreamWaitEvent</code>). <strong>CUDA graphs</strong> go further by capturing a whole launch sequence once and replaying it with a single launch — removing microseconds of per-kernel CPU launch overhead that dominate small-batch decode steps. vLLM and TensorRT-LLM both lean on graphs for exactly this reason.</p>
+
+    <h3>Production Reality: The Five Rules</h3>
+    <p>In production LLM serving, nearly every custom-kernel win traces back to five rules. One: launch enough blocks to cover all SMs — an H100 has 144 SMs, so a grid of 32 blocks leaves three-quarters of the chip idle. Two: keep warp occupancy high enough to hide HBM latency, but measure achieved (not theoretical) occupancy in Nsight Compute. Three: coalesce global access and stage reuse in shared memory — tiling is the whole game for attention, softmax, and reductions. Four: avoid warp divergence on data-dependent branches; restructure (predication, branchless selects) when profiles show it. Five: overlap copies with compute via streams, and collapse launch overhead with CUDA graphs. When a kernel still will not move, the answer is usually not more CUDA — it is Triton, CUTLASS, or an existing fused kernel from vLLM or FlashAttention that already encodes these rules.</p>
+  </section>
+
+  <section id="visualization">
+    <h2>Visualization</h2>
+    <p class="viz-desc">Occupancy explorer for one A100 SM (2048 threads · 64K registers · 164 KB shared · 32 blocks max). Move the sliders — the canvas shows resident warps filling up (or failing to), and the readout names the binding limiter. Try the presets: a lean elementwise kernel vs a shared-memory-hungry tiled kernel.</p>
+    <div class="controls">
+      <div class="control">
+        <label>Threads per block: <b id="v-threads">256</b></label>
+        <input id="in-threads" type="range" min="32" max="1024" step="32" value="256"/>
+      </div>
+      <div class="control">
+        <label>Registers per thread: <b id="v-regs">32</b></label>
+        <input id="in-regs" type="range" min="8" max="128" step="4" value="32"/>
+      </div>
+      <div class="control">
+        <label>Shared memory per block (KB): <b id="v-shmem">16</b></label>
+        <input id="in-shmem" type="range" min="0" max="164" step="4" value="16"/>
+      </div>
+    </div>
+    <div class="btn-row">
+      <button id="btn-lean">Preset: lean elementwise</button>
+      <button id="btn-tiled">Preset: tiled matmul</button>
+      <button id="btn-hog">Preset: register hog</button>
+    </div>
+    <canvas id="occ-canvas" width="900" height="260"></canvas>
+    <div class="readout" id="occ-readout"></div>
+  </section>
+
+  <section id="takeaways">
+    <h2>Key Takeaways</h2>
+    <ul>
+      <li>Think in warps of 32 lockstep threads: a block is the scheduling unit that must fill SMs, and a grid needs at least as many blocks as SMs (144 on H100) or silicon idles — Nsight Compute reports the achieved numbers when theory and silicon disagree.</li>
+      <li>Occupancy is a means, not a target: it is capped by threads, registers (64K/SM), and shared memory (164 KB/SM on A100) per block, and spilling registers to raise it can lose — always re-profile instead of assuming.</li>
+      <li>Coalesce global accesses into 128-byte transactions and stage reuse in shared memory; every fused kernel in vLLM, TensorRT-LLM, and FlashAttention is this rule compounded, and HBM bandwidth (2 TB/s on A100) is the ceiling you measure against.</li>
+      <li>Ship SASS for your fleet's exact architecture (<code>-gencode arch=compute_90,code=sm_90</code>) to skip PTX JIT warmup on cold starts, and collapse small-batch launch overhead with CUDA graphs — decode steps are launch-bound long before they are compute-bound.</li>
+      <li>Overlap with streams and events (copy batch N+1 while computing batch N), and reach for Triton or CUTLASS before hand-rolling SASS-level schedules — NCCL collectives and existing fused kernels already encode the hard-won lessons.</li>
+    </ul>
+  </section>
+
+</main>
+
+<nav class="concept-nav">
+  <a href="41-flash-attention.html" class="nav-link prev">
+    <span class="nav-dir">&#8592; Previous</span>
+    <span class="nav-title">Flash Attention</span>
+  </a>
+  <div class="nav-center">52 &middot; CUDA Programming Model</div>
+  <a href="53-gpu-profiling-nsight.html" class="nav-link next">
+    <span class="nav-dir">Next &#8594;</span>
+    <span class="nav-title">GPU Profiling with Nsight</span>
+  </a>
+</nav>
+
+<script>
+// Occupancy explorer — one A100 SM.
+const SM_THREADS = 2048, SM_REGS = 65536, SM_SHMEM_KB = 164, SM_BLOCKS = 32, MAX_WARPS = 64;
+const $ = (id) => document.getElementById(id);
+const canvas = $('occ-canvas'), ctx = canvas.getContext('2d');
+
+function compute() {
+  const t = +$('in-threads').value, r = +$('in-regs').value, s = +$('in-shmem').value;
+  $('v-threads').textContent = t;
+  $('v-regs').textContent = r;
+  $('v-shmem').textContent = s;
+  const warpsPerBlock = t / 32;
+  const byThreads = Math.floor(SM_THREADS / t);
+  const byRegs = r > 0 ? Math.floor(SM_REGS / (r * t)) : SM_BLOCKS;
+  const byShmem = s > 0 ? Math.floor(SM_SHMEM_KB / s) : SM_BLOCKS;
+  const blocks = Math.max(0, Math.min(SM_BLOCKS, byThreads, byRegs, byShmem));
+  const warps = Math.min(MAX_WARPS, blocks * warpsPerBlock);
+  const occ = Math.round((warps / MAX_WARPS) * 100);
+  const limits = [['threads', byThreads], ['registers', byRegs], ['shared-mem', byShmem], ['block-slots', SM_BLOCKS]];
+  limits.sort((a, b) => a[1] - b[1]);
+  return { t, r, s, blocks, warps, occ, limiter: limits[0][0], warpsPerBlock };
+}
+
+function draw(st) {
+  const W = canvas.width, H = canvas.height;
+  ctx.clearRect(0, 0, W, H);
+  const cols = 16, rows = 4, pad = 14, top = 30;
+  const cw = (W - pad * 2) / cols, ch = (H - top - pad) / rows;
+  ctx.font = '12px JetBrains Mono, monospace';
+  ctx.fillStyle = '#8892a4';
+  ctx.fillText('One A100 SM — 64 warp slots (green = resident, dim = idle)', pad, 18);
+  let n = 0;
+  for (let row = 0; row < rows; row++) {
+    for (let col = 0; col < cols; col++) {
+      const x = pad + col * cw + 3, y = top + row * ch + 3, w = cw - 6, h = ch - 6;
+      const resident = n < st.warps;
+      ctx.fillStyle = resident ? 'rgba(0,255,136,0.75)' : 'rgba(37,42,61,0.9)';
+      ctx.strokeStyle = resident ? '#00ff88' : '#252a3d';
+      ctx.beginPath();
+      if (ctx.roundRect) ctx.roundRect(x, y, w, h, 4); else ctx.rect(x, y, w, h);
+      ctx.fill(); ctx.stroke();
+      n++;
+    }
+  }
+}
+
+function render() {
+  const st = compute();
+  draw(st);
+  const cls = st.occ >= 75 ? 'good' : (st.occ >= 40 ? 'warn' : 'bad');
+  $('occ-readout').innerHTML =
+    'Resident blocks/SM: <b>' + st.blocks + '</b> &nbsp;·&nbsp; Resident warps: <b>' + st.warps + ' / 64</b> &nbsp;·&nbsp; ' +
+    'Occupancy: <b class="' + cls + '">' + st.occ + '%</b><br/>' +
+    'Binding limiter: <b>' + st.limiter + '</b> &nbsp;·&nbsp; Config: ' + st.t + ' threads/block, ' +
+    st.r + ' regs/thread, ' + st.s + ' KB shared/block';
+}
+
+function preset(t, r, s, btn) {
+  $('in-threads').value = t; $('in-regs').value = r; $('in-shmem').value = s;
+  document.querySelectorAll('.btn-row button').forEach((b) => b.classList.remove('active'));
+  if (btn) btn.classList.add('active');
+  render();
+}
+
+['in-threads', 'in-regs', 'in-shmem'].forEach((id) => {
+  $(id).addEventListener('input', () => {
+    document.querySelectorAll('.btn-row button').forEach((b) => b.classList.remove('active'));
+    render();
+  });
+});
+$('btn-lean').addEventListener('click', (e) => preset(256, 24, 0, e.target));
+$('btn-tiled').addEventListener('click', (e) => preset(256, 40, 48, e.target));
+$('btn-hog').addEventListener('click', (e) => preset(1024, 64, 8, e.target));
+render();
+</script>
+</body>
+</html>
