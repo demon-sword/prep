@@ -405,7 +405,7 @@
     <p>Training follows the LLaVA two-stage recipe that nearly every open VLM still copies. <strong>Stage one</strong> freezes both the encoder and the LLM and trains only the projector on image-caption pairs, aligning the two embedding spaces. <strong>Stage two</strong> unfreezes the LLM (and sometimes the encoder) and instruction-tunes on multimodal conversations. Skipping stage one and training everything jointly from scratch sounds simpler, but in practice the unaligned projector injects noise gradients into the LLM and collapses its language ability early — alignment first, instruction-following second.</p>
 
     <h3>The adapter taxonomy: four ways to cross the modality gap</h3>
-    <p>Adapters fall on a spectrum from "keep every pixel" to "compress to agist". Each point on it is a real system, and each makes a different token-budget tradeoff.</p>
+    <p>Adapters fall on a spectrum from "keep every pixel" to "compress to a gist". Each point on it is a real system, and each makes a different token-budget tradeoff.</p>
     <div class="card-grid">
       <div class="card">
         <h4>MLP projector (LLaVA)</h4>
@@ -421,7 +421,7 @@
       </div>
       <div class="card">
         <h4>Cross-attention adapters (LLaMA-3.2) → early fusion (LLaMA-4)</h4>
-        <p>LLaMA-3.2 keeps the encoder but weaves cross-attention adapter layers into the LLM backbone at every fourth block, so vision conditions generation deep inside the network rather than only as a prefix. LLaMA-4 goes one step further and drops the separate encoder entirely: <strong>native early fusion</strong>, where image patches are tokenized and fed to a single unified transformer from the first layer.</p>
+        <p>LLaMA-3.2 keeps the encoder but weaves cross-attention adapter layers into the LLM backbone at every fourth block, so vision conditions generation deep inside the network rather than only as a prefix. LLaMA-4 moves to <strong>native early fusion</strong>: it keeps the vision encoder but fuses its features into the unified backbone from layer one, so text and vision are processed jointly through the whole network instead of vision arriving only as a prefix.</p>
       </div>
     </div>
     <p>The interview-level summary: prefix adapters (MLP, Q-Former) spend context positions; cross-attention adapters (Flamingo, LLaMA-3.2) spend parameters and per-layer FLOPs instead; early fusion (LLaMA-4, Chameleon below) spends pretraining compute by forcing one backbone to learn both modalities from scratch.</p>
@@ -431,7 +431,7 @@
     <p>NaViT attacked the two inefficiencies hiding inside tiling. First, <strong>square-padding waste</strong>: padding a 16:9 photo up to a square throws away 1 − 9/16 ≈ 44% of the encoded positions on padding. Second, <strong>batch rigidity</strong>: fixed resolutions force every image in a batch through the same grid. NaViT packs images at their native aspect ratios into one sequence (sequence packing, like document packing for text) and uses factorized position embeddings so each patch still knows where it sits. Qwen2-VL adopted exactly this dynamic-resolution scheme with M-RoPE positions, which is how open models read arbitrarily shaped screenshots without the padding tax. Toggle the NaViT mode below to see the saved tokens.</p>
 
     <h3>The token budget: images eat contexts</h3>
-    <p>In document-heavy workloads the image tokens dominate everything else. One 448px tile at full MLP projection costs 1,024 tokens — roughly five times the ~200 text tokens that a page of OCR-extracted text would cost. A ten-page PDF at two tiles per page is ~20,000 image tokens before a single word of instructions. This is the economic force behind the whole adapter taxonomy: Q-Former-style 32-token compression turns that 20k into ~640, at the price of fine print the queries chose not to keep. Retrieval-heavy applications over slides and screenshots live or die on this tradeoff, which is why production systems (Qwen-VL, DeepSeek-VL, Kimi-VL) all ship learned resamplers rather than raw patch projection.</p>
+    <p>In document-heavy workloads the image tokens dominate everything else. One 448px tile at full MLP projection costs 1,024 tokens — roughly five times the ~200 text tokens that a page of OCR-extracted text would cost. A ten-page PDF at two tiles per page is ~20,000 image tokens before a single word of instructions. This is the economic force behind the whole adapter taxonomy: Q-Former-style 32-token compression turns that 20k into ~640, at the price of fine print the queries chose not to keep. Retrieval-heavy applications over slides and screenshots live or die on this tradeoff, which is why production systems (Qwen-VL, DeepSeek-VL) all ship learned resamplers rather than raw patch projection.</p>
     <div class="formula-box">
 tokens(image) = tiles × (tile_px / patch_px)² × adapter_keep_rate
 MLP: keep = 1.0 → 1,024 tokens per 448px tile

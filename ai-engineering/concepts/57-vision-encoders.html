@@ -394,13 +394,13 @@
     <p>CLIP (OpenAI, 2021) trains an image encoder and a text encoder jointly with the InfoNCE contrastive loss: within a batch of N image-text pairs, each image must pick its own caption out of all N captions, and vice versa. The loss is a softmax over the batch, with a learned temperature sharpening the distribution:</p>
     <div class="formula-box">
 CLIP InfoNCE:  L = -log( exp(sim(i,t+)/tau) / sum_j exp(sim(i,t_j)/tau) )
-SigLIP:        L = -sum_{pairs} log sigmoid( z * (sim(i,t) - b) ),  z = +1 matched / -1 else
+SigLIP:        L = -sum_{pairs} log sigmoid( z * (t*sim(i,t) - b) ),  z = +1 matched / -1 else, t = learned temperature
     </div>
     <p>Three consequences shaped everything after. First, the softmax couples every pair to every other pair in the batch, so CLIP needs enormous batches (32,768) for stable gradients — small-batch CLIP underperforms badly. Second, the global normalization makes distributed training communication-heavy: every worker needs every other worker's embeddings. Third, contrastive training is superb at <strong>retrieval-shaped</strong> understanding (which caption goes with which image) and weak at fine detail: the loss only asks "is this the right pair," never "describe what is in it," so encoders learn bag-of-words-ish representations that confuse counts, positions, and small text. Nearly every VLM failure at reading tiny chart labels traces back to this property of its CLIP encoder.</p>
 
     <h3>SigLIP: the sigmoid fix</h3>
     <p>SigLIP (Google, 2023) keeps the data and the two-tower setup but replaces the batch-softmax with an independent <strong>pairwise sigmoid loss</strong>: every image-text pair is its own binary decision — matched or not — with no normalization across the batch. Two engineering details make it work. The <strong>bias term b, initialized to −10</strong>, absorbs the massive matched-vs-mismatched imbalance (in a batch of N there are N matches against N²−N mismatches); without it, early training drowns in negatives. And because pairs decouple, the loss <strong>chunks over the batch</strong>: each worker computes its local pairs and the memory cost drops from quadratic in batch size to linear, which is also why SigLIP stays strong at small batch sizes where CLIP collapses.</p>
-    <p>The practical upshot: SigLIP-trained encoders (the So400m shape is the community default) match or beat CLIP at the same compute, train on multilingual data without batch-composition headaches, and dominate open-VLM encoder slots — Qwen-VL, PaliGemma, and most LLaVA variants ship a SigLIP encoder rather than the original CLIP. When someone says "just use SigLIP," they mean this specific combination: sigmoid loss, learned bias, chunked large-effective-batch training.</p>
+    <p>The practical upshot: SigLIP-trained encoders (the So400m shape is the community default) match or beat CLIP at the same compute, train on multilingual data without batch-composition headaches, and dominate open-VLM encoder slots — Qwen-VL, PaliGemma, and LLaVA-OneVision onward ship a SigLIP encoder rather than the original CLIP. When someone says "just use SigLIP," they mean this specific combination: sigmoid loss, learned temperature and bias, chunked large-effective-batch training.</p>
 
     <h3>CapPa: captioning as pretraining</h3>
     <p>CapPa asks a heretical question: what if the encoder is trained by <strong>captioning</strong> — predicting the caption tokens from the image — instead of contrasting? The setup trains the vision encoder together with a text decoder from scratch, mixing two decoding modes: <strong>parallel prediction</strong> (all caption tokens at once, ~75% of training) for speed and <strong>autoregressive decoding</strong> (~25%) to keep generation coherent. Parallel prediction is the key efficiency move: it turns captioning from a slow sequential objective into one cheap enough to serve as pretraining.</p>
@@ -499,9 +499,9 @@ SigLIP:        L = -sum_{pairs} log sigmoid( z * (sim(i,t) - b) ),  z = +1 match
 </main>
 
 <nav class="concept-nav">
-  <a href="56-haiku-manifold.html" class="nav-link prev">
+  <a href="51-agent-evaluation.html" class="nav-link prev">
     <span class="nav-dir">&#8592; Previous</span>
-    <span class="nav-title">Haiku Manifold</span>
+    <span class="nav-title">Agent Evaluation Methodology</span>
   </a>
   <div class="nav-center">57 of 57 &middot; Vision Encoders for VLMs</div>
   <span class="nav-link next disabled">
