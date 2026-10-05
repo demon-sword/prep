@@ -901,17 +901,14 @@ Questions on managing context windows, long-document handling, memory strategies
 - How do you avoid context pollution when retrieved chunks are irrelevant?
 - Describe a production incident caused by poor context management and how you'd prevent it.
 
-## 23. Multimodal / VLM (answers category 12)
+## 23. Multimodal & VLMs
 
-Questions for the new `12-multimodal-vlm` answers category (vision-language models). The matching `12-0xx` recipe notes are owned by the category lane; these stems define the interview surface.
+Questions on vision-language models: adapters that connect images and video to frozen LLMs, multi-stage training recipes, visual token budgets, and video frame sampling.
 
-- What is the difference between an LLM, a VLM, and a multimodal LLM?
-- How do vision-language models connect an image encoder to a language model?
-- Compare contrastive (CLIP/SigLIP), captioning (CapPa), and joint (CoCa) vision-encoder pretraining.
-- How do VLMs handle high-resolution images without exploding the token budget?
-- What do the LLaVA and Qwen-VL training recipes teach about building a VLM on a budget?
-- How do video-language models tokenize video, and what does it cost?
-- Which open VLMs would you shortlist for a production assistant, and on what criteria?
+- LLaVA two-stage recipe, synthetic captions
+- Qwen-VL scale recipe, DPO, long context
+- DeepSeek-VL, Kimi-VL, MoonViT joint training
+- Video token budget: frame sampling, compression
 
 ---
 
@@ -928,18 +925,5 @@ Demand sample, not a question set: skill names volunteered by 100+ commenters on
 | Multi-cloud LLM APIs | `system-design/claude/answers/09-api-design-provider-abstraction.md` | Provider abstraction and failover; expect "how do you avoid single-vendor lock-in" |
 
 Reading guide: if a signal above maps to a bank section you have not studied, treat that section as prioritized — the market is telling you what production interviews probe.
-
----
-
-## 23. Multimodal & VLMs
-
-Questions on vision-language models: adapters that connect images and video to frozen LLMs, multi-stage training recipes, visual token budgets, and video frame sampling.
-
-- LLaVA two-stage recipe, synthetic captions
-- Qwen-VL scale recipe, DPO, long context
-- DeepSeek-VL, Kimi-VL, MoonViT joint training
-- Video token budget: frame sampling, compression
-
----
 
 *Last updated: June 2026. Sources linked in [README](./README.md).*
