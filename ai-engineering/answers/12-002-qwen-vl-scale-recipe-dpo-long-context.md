@@ -2,7 +2,7 @@
 
 **Category:** 12-multimodal-vlm
 **Question #:** 002
-**Source section:** §TBD (multimodal stems land with File AU)
+**Source section:** §TBD — no VLM bank section in interview-questions.md yet; stems land with File AU (C21)
 **Status:** `review`
 **Generated:** paper-build-vlm-cat
 
@@ -26,12 +26,12 @@ Reasoning about stage-wise data scaling (volume down, quality up), dynamic-resol
 ## Answer
 
 ### Concept
-**Qwen-VL** scales the LLaVA template to three stages — massive pretraining (~5B image-text pairs), multitask pretraining (~76.8M higher-quality samples), and instruction tuning (~350K samples) — with a **dynamic-resolution vision encoder** (position-aware adapters, up to ~1024 visual queries at 448px) instead of a fixed-resize encoder. **Qwen2.5-VL** extends the recipe with long-context training for documents/video and a **DPO stage** that aligns vision-grounded responses to human preference.
+**Qwen-VL** scales the LLaVA template to three stages — massive pretraining (on the order of billions of image-text pairs; the tech reports cite ~5B), multitask pretraining (tens of millions of higher-quality samples; reported as ~76.8M), and instruction tuning (hundreds of thousands; reported as ~350K) — with a **dynamic-resolution vision encoder** (position-aware adapters, up to ~1024 visual queries at 448px per the reports) instead of a fixed-resize encoder. **Qwen2.5-VL** extends the recipe with long-context training for documents/video and a **DPO stage** that aligns vision-grounded responses to human preference. (Exact tallies are report-version-specific — quote them as "as reported in the Qwen-VL/Qwen2-VL tech reports," not as constants.)
 
 ### Mechanism
 
-**Stage 1 — large-scale pretraining (~5B pairs):**
-- Train the adapter (and progressively the encoder) on ~5 billion noisy web image-text pairs. Objective is generative captioning / prefix-LM over the text conditioned on visual features — not contrastive. Goal: broad visual coverage, same role as LLaVA's stage 1 but two orders of magnitude larger.
+**Stage 1 — large-scale pretraining (~5B pairs as reported):**
+- Train the adapter (and progressively the encoder) on billions of noisy web image-text pairs. Objective is next-token prediction on the caption conditioned on the projected visual features — generative captioning, not contrastive. Goal: broad visual coverage, same role as LLaVA's stage 1 but two orders of magnitude larger.
 - Text-only data stays in the mix from the start so the LLM backbone does not lose language ability while absorbing vision.
 
 **Stage 2 — multitask pretraining (~76.8M samples):**

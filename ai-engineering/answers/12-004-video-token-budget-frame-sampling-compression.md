@@ -2,7 +2,7 @@
 
 **Category:** 12-multimodal-vlm
 **Question #:** 004
-**Source section:** §TBD (multimodal stems land with File AU)
+**Source section:** §TBD — no VLM bank section in interview-questions.md yet; stems land with File AU (C21)
 **Status:** `review`
 **Generated:** paper-build-vlm-cat
 
@@ -31,8 +31,8 @@ Quantitative visual-token budgeting: per-image query counts, frame-sampling arit
 ### Mechanism
 
 **Per-image math (the unit cost):**
-- A fixed 224px ViT/16 encoder emits 196 tokens; 336px emits 576. Dynamic-resolution designs (NaViT tiling, Qwen-style) emit 256 for small images up to ~1024 visual queries at 448px for detail-heavy inputs.
-- Under standard attention, 1024 visual tokens cost the same as 1024 text tokens *plus* their quadratic interaction with the rest of the context: attention FLOPs scale with (visual + text)², so a 1K-token image inside a 4K context roughly quadruples attention work versus text alone.
+- A fixed 224px ViT/16 encoder emits 196 tokens; 336px emits 441. Dynamic-resolution designs (NaViT tiling, Qwen-style) emit 256 for small images up to ~1024 visual queries at 448px for detail-heavy inputs.
+- Under standard attention, 1024 visual tokens cost the same as 1024 text tokens *plus* their quadratic interaction with the rest of the context: attention FLOPs scale with (visual + text)², so a 1K-token image inside a 4K context roughly doubles attention work versus the 3K text tokens alone.
 
 **Naive video math (why it breaks):**
 - Frame concatenation at 30 FPS × 60 seconds = 1800 frames. Even at a lean 256 tokens/frame that is ~460K tokens — before any text, and far past most context windows. At 1024 queries/frame it exceeds 1.8M tokens. Naive concatenation is never the design.
@@ -57,7 +57,7 @@ Quantitative visual-token budgeting: per-image query counts, frame-sampling arit
 "I'd start with the unit cost: one detail-heavy image is up to about a thousand visual tokens, and video multiplies that by frame count — so naive concatenation of a minute of video is half a million tokens. Budgeting means three levers."
 
 **Core explanation (2–3 min):**
-"First lever is temporal sampling: 1 frame per second takes 1800 frames down to 60 for a minute. Second is spatial: 3D-conv tubelets or a perceiver-style resampler cut each frame from hundreds of tokens to tens. Third is temporal compression: run-length tokenization collapses static spans into one span plus a duration. Worked out, 60 seconds goes from ~460K tokens naive to roughly 2–4K — fits in a normal context window. And the per-image math matters too: dynamic resolution means a document screenshot can legitimately cost 1024 queries at 448px, which quadruples attention work inside a 4K context."
+"First lever is temporal sampling: 1 frame per second takes 1800 frames down to 60 for a minute. Second is spatial: 3D-conv tubelets or a perceiver-style resampler cut each frame from hundreds of tokens to tens. Third is temporal compression: run-length tokenization collapses static spans into one span plus a duration. Worked out, 60 seconds goes from ~460K tokens naive to roughly 2–4K — fits in a normal context window. And the per-image math matters too: dynamic resolution means a document screenshot can legitimately cost 1024 queries at 448px, roughly doubling attention work inside a 4K context."
 
 **Tradeoff / production angle (1 min):**
 "Lever choice follows the task: OCR-over-video keeps spatial resolution and compresses time; action detection keeps frame rate and compresses space. And adaptive sampling gives variable token counts, so I'd plan the batching and KV-cache padding story before promising it."
@@ -70,7 +70,7 @@ Quantitative visual-token budgeting: per-image query counts, frame-sampling arit
 ## Pitfalls
 
 - **Mistake:** "Feed all frames through the encoder and concatenate" — **Better:** "30 FPS × 60s × 256 tokens is ~460K tokens before any text. Sample at ~1 FPS, then spatial and run-length compression — show the budget first."
-- **Mistake:** Treating visual tokens as cheaper than text tokens in attention math — **Better:** "Attention is quadratic in total sequence length; 1K visual tokens inside a 4K context roughly quadruples attention FLOPs versus text alone. Resolution is a cost decision."
+- **Mistake:** Treating visual tokens as cheaper than text tokens in attention math — **Better:** "Attention is quadratic in total sequence length; 1K visual tokens inside a 4K context roughly doubles attention FLOPs versus the 3K text tokens alone. Resolution is a cost decision."
 - **Mistake:** "Compress everything uniformly" — **Better:** "Match the lever to the information: keep spatial detail for OCR-over-video, keep frame rate for action detection. Uniform compression destroys exactly what the task needs."
 
 ---

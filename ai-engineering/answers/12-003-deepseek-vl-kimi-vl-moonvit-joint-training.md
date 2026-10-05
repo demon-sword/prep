@@ -2,7 +2,7 @@
 
 **Category:** 12-multimodal-vlm
 **Question #:** 003
-**Source section:** §TBD (multimodal stems land with File AU)
+**Source section:** §TBD — no VLM bank section in interview-questions.md yet; stems land with File AU (C21)
 **Status:** `review`
 **Generated:** paper-build-vlm-cat
 
@@ -26,7 +26,7 @@ Articulating the frozen-encoder ceiling, the cost/quality tradeoff of joint trai
 ## Answer
 
 ### Concept
-**DeepSeek-VL and Kimi-VL** train vision encoder, adapter, and LLM **jointly (all parameters unfrozen)** through the alignment stages instead of freezing the encoder LLaVA-style, letting visual features co-adapt with the language model. Their encoders follow the **MoonViT pattern**: a SigLIP-style pairwise-sigmoid contrastive objective **combined with captioning pretraining**, so one encoder carries both discriminative (retrieval/zero-shot) and generative (dense description) strengths into the joint recipe.
+**DeepSeek-VL and Kimi-VL** train vision encoder, adapter, and LLM **jointly (all parameters unfrozen)** through the alignment stages instead of freezing the encoder LLaVA-style, letting visual features co-adapt with the language model. Their encoders follow the hybrid pattern the Kimi-VL report calls **MoonViT**: a SigLIP-style pairwise-sigmoid contrastive objective **combined with captioning pretraining**, so one encoder carries both discriminative (retrieval/zero-shot) and generative (dense description) strengths into the joint recipe. (Architecture details below are as described in the DeepSeek-VL/Kimi-VL reports — cite them, don't present them as settled constants.)
 
 ### Mechanism
 
@@ -41,11 +41,11 @@ Articulating the frozen-encoder ceiling, the cost/quality tradeoff of joint trai
 
 **All-params joint training (how it differs operationally):**
 - Optimizer states cover the full stack (no frozen-parameter memory savings), so batch sizes shrink or parallelism (FSDP/pipeline) grows versus LLaVA-style stages.
-- Learning-rate discipline matters: the encoder typically trains at a fraction of the LLM/adapter rate (e.g. 0.1–0.2×) to avoid destroying pretrained visual geometry in the first epochs — unfreezing without LR stratification causes the "vision collapse" where zero-shot accuracy craters before recovering.
+- Learning-rate discipline matters: the encoder typically trains at a fraction of the LLM/adapter rate (illustratively ~0.1–0.2×) to avoid destroying pretrained visual geometry in the first epochs — unfreezing without LR stratification causes the "vision collapse" where zero-shot accuracy craters before recovering.
 - Text-only data must stay in every stage's mix; with the encoder moving, the forgetting pressure on language ability is strictly stronger than in frozen-encoder recipes.
 
 ### Example / Tradeoff
-- **Concrete comparison:** LLaVA-1.5 aligns in ~1 day on 8×A100 with the encoder frozen; a DeepSeek-VL/Kimi-VL-style joint recipe needs the full pretraining-scale cluster for the alignment stages too — roughly an order of magnitude more encoder-side compute — in exchange for state-of-the-art document/chart grounding the frozen recipe cannot reach.
+- **Concrete comparison:** LLaVA-1.5 aligns in ~1 day on 8×A100 with the encoder frozen; a DeepSeek-VL/Kimi-VL-style joint recipe needs the full pretraining-scale cluster for the alignment stages too — roughly an order of magnitude more encoder-side compute — in exchange for state-of-the-art document/chart grounding the frozen recipe cannot reach. (Treat both compute figures as order-of-magnitude, not measured constants.)
 - **Tradeoff — when frozen wins:** Tight budget, standard natural-image QA, or a strong off-the-shelf encoder already matched to your domain → freeze (LLaVA-style). Unfreezing buys little when the encoder's pretraining distribution already covers your inputs.
 - **Tradeoff — when joint wins:** OCR-heavy documents, screenshots, charts, fine-grained grounding — any domain where the generic encoder's pretraining never saw your visual distribution. That is exactly the Kimi-VL long-document and DeepSeek-VL chart/document strength story.
 
@@ -87,4 +87,4 @@ Articulating the frozen-encoder ceiling, the cost/quality tradeoff of joint trai
 
 ## One-liner recall
 
-> DeepSeek-VL/Kimi-VL = unfreeze everything (all-params joint training with stratified LRs) on MoonViT-style hybrid encoders (SigLIP sigmoid + captioning) — removes LLaVA's frozen-encoder ceiling at ~10× the alignment compute, worth it for documents/charts/grounding.
+> DeepSeek-VL/Kimi-VL = unfreeze everything (all-params joint training with stratified LRs) on MoonViT-style hybrid encoders (SigLIP sigmoid + captioning, per the Kimi-VL report) — removes LLaVA's frozen-encoder ceiling at roughly an order of magnitude more alignment compute, worth it for documents/charts/grounding.

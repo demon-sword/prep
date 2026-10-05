@@ -37,6 +37,10 @@ NAME_BY_SLUG: dict[str, str] = {
     "10-behavioral":           "Behavioral",
 }
 
+# NOTE (paper-build-vlm-cat): category "12-multimodal-vlm" exists on disk
+# (categories/12-multimodal-vlm.md + answers/12-0xx) but is NOT wired here yet:
+# SECTION_BY_SLUG needs a source section number in interview-questions.md and no
+# VLM bank section exists — VLM stems land with File AU (C21). Wire it then.
 # Canonical ordering — cat_num (1-based) is the position in this list.
 # This drives the NN- file prefix, independent of source section number.
 SLUGS_IN_ORDER = list(SECTION_BY_SLUG.keys())

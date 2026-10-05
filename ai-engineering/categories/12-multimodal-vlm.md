@@ -34,7 +34,7 @@ Strong candidates treat a VLM as three separable decisions — **encoder** (what
 
 ### 2. Multi-stage training recipes and alignment
 **When:** "How was this VLM actually trained?" or "why does vision tuning hurt text ability?"
-**What:** The align → multitask → SFT/DPO stage progression with less-data/higher-quality data at each step, all-parameters joint training vs frozen-encoder variants, and text-ability preservation via mixed text data — instantiated concretely by LLaVA (595K instruction samples on CC3M-pretrained projection with GPT-4-from-caption synthetic data), Qwen-VL (5B pretraining pairs → 76.8M multitask → 350K instructions, Qwen2.5 long-context plus DPO), and DeepSeek-VL / Kimi-VL / MoonViT (SigLIP plus captioning pretraining, joint all-params training).
+**What:** The align → multitask → SFT/DPO stage progression with less-data/higher-quality data at each step, all-parameters joint training vs frozen-encoder variants, and text-ability preservation via mixed text data — instantiated concretely by LLaVA (558K-pair projector pretraining, then 158K v1 / ~665K 1.5 instruction samples incl. GPT-4-from-caption synthetic data), Qwen-VL (5B pretraining pairs → 76.8M multitask → 350K instructions, Qwen2.5 long-context plus DPO), and DeepSeek-VL / Kimi-VL / MoonViT (SigLIP plus captioning pretraining, joint all-params training).
 **Key questions:**
 - [Q1: Walk me through the LLaVA training recipe?](../answers/12-001-llava-two-stage-recipe-synthetic-captions.md)
 - [Q2: Walk me through the Qwen-VL training recipe?](../answers/12-002-qwen-vl-scale-recipe-dpo-long-context.md)
@@ -70,8 +70,8 @@ Choosing a VLM adapter:
 
 Choosing a training recipe:
   If starting from scratch with a modest budget:
-    → LLaVA-style two-stage (projector pretrain on CC3M-scale pairs, then joint
-       instruction finetune on ~595K samples incl. GPT-4-from-caption synthetic)
+    → LLaVA-style two-stage (projector pretrain on 558K LCS pairs, then joint
+       instruction finetune — 158K v1 samples incl. GPT-4-from-caption synthetic, ~665K mix in 1.5)
   If operating at frontier scale with long documents/video:
     → Qwen-VL-style three-stage (5B-pair pretrain → 76.8M multitask → 350K
        instructions) plus long-context extension and DPO on top
@@ -117,7 +117,7 @@ Budgeting visual tokens:
 ## One-page summary
 
 - **Three decisions**: encoder (CLIP contrastive / SigLIP sigmoid / captioning-pretrained) → adapter (MLP early fusion / Q-Former queries / gated cross-attention mid-fusion / Chameleon discrete tokens) → staged recipe (align → multitask → SFT/DPO, shrinking data volume and rising quality per stage).
-- **LLaVA numbers**: projector pretrain on CC3M-scale pairs, then joint instruction finetune on ~595K samples including GPT-4-from-caption synthetic data.
+- **LLaVA numbers**: projector pretrain on 558K LCS pairs, then joint instruction finetune — 158K GPT-4-from-caption synthetic samples in v1, ~665K-sample mix in LLaVA-1.5.
 - **Qwen-VL numbers**: 5B pretraining pairs → 76.8M multitask → 350K instructions; Qwen2.5 adds long-context extension plus DPO.
 - **Joint-training variant**: DeepSeek-VL / Kimi-VL / MoonViT unfreeze everything (all-params joint training) on SigLIP-plus-captioning encoders instead of freezing the encoder.
 - **Token budget**: dynamic resolution up to ~1024 queries per image at 448px; video sampled at ~1 FPS with spatial compression, because frame concatenation multiplies cost per frame under quadratic attention.
