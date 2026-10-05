@@ -111,6 +111,8 @@ model = get_peft_model(base_model, lora_config)
 
 **Key tradeoff:** LoRA rank controls quality ceiling. A rank-8 adapter is fast and cheap to train but may underfit complex tasks. Rank-64 approaches full fine-tune quality but training memory and time grow proportionally. In practice, rank 16–32 hits the sweet spot for most NLP tasks.
 
+**Inference-time adapter scaling (diagnostic knob):** The served weight is `W + s·(B·A)` with `s = α/r` at training time, but nothing forces you to serve at full training strength — most stacks (PEFT `set_scale`, vLLM/dynamic adapter loading) let you dial `s` down at inference. Reducing `s` toward 0 continuously blends adapted behavior back toward the base model. That makes it a useful diagnostic (if a pathology such as repetition loops fades at `s = 0.5`, the adapter caused it) and a cheap guardrail (serve an over-sharpened SFT adapter at reduced strength instead of retraining). The price is proportional — less adapter influence means less task adaptation — so treat `s` as a blending slider, not a free fix.
+
 ---
 
 ## Verbal script
@@ -142,6 +144,7 @@ If I'm memory-constrained further — say a consumer GPU with 24 GB — I'd use 
 - **Mistake:** Describing LoRA as "just adding layers" without explaining the frozen base weights and the low-rank math — **Better:** Explain that LoRA keeps W_frozen unchanged and trains only B×A (d×r×r×d matrices), which is why gradient memory is negligible and catastrophic forgetting is reduced; the constraint is rank r, not architectural depth
 - **Mistake:** Saying "LoRA trains 1% of the model" without knowing which layers or what rank means in practice — **Better:** Be specific: "For a 7B model with rank=16 targeting q_proj and v_proj, trainable params are roughly 20–30M out of 7B — about 0.3–0.4%; I'd increase rank to 32–64 if the task needs more capacity"
 - **Mistake:** Not distinguishing LoRA from QLoRA — **Better:** Clarify that QLoRA = 4-bit NF4 quantized base model + LoRA adapters, enabling fine-tuning on consumer GPUs (RTX 3090/4090, ~24 GB VRAM); the quantization is on the frozen base weights only, not the trained adapters
+- **Mistake:** Assuming the adapter must be served at full training strength (`s = α/r`) with no way to soften its effect short of retraining — **Better:** Treat adapter scale as an inference-time knob: dial `s` down to diagnose adapter-induced pathologies or to temper over-sharpened behavior, accepting proportionally weaker task adaptation
 
 ---
 
