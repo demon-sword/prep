@@ -48,6 +48,13 @@ Token cost = (input_tokens × price_in) + (output_tokens × price_out). Every do
 - **Prompt caching** (Anthropic cache_control / OpenAI cached_tokens): marks the static prefix as cacheable — 90% discount on cached prefix tokens (Anthropic); typically saves 60-80% of system prompt cost at >10 QPS where the prefix stays hot.
 - **LLMLingua / LongLLMLingua**: perplexity-guided token-level compression achieves 2-5× reduction on system prompts and few-shot examples with <2% quality loss on RAG tasks. The model identifies low-perplexity (redundant) tokens and drops them.
 - **Prompt audit**: manually remove redundant instructions, flatten nested bullet structures, eliminate hedge phrases ("Please note that…", "It is important to understand that…"). A careful prompt audit often achieves 20-30% reduction with zero tooling.
+- **Exact-prefix invalidation checklist** (canonical — other notes link here): provider prefix caching engages only on a byte-identical static prefix, so audit yours for these cache-killers and apply the static-first/dynamic-last ordering rule:
+  - Timestamps or dates rendered into the system prompt ("Today is …") → move to the user message.
+  - Session or request IDs anywhere in the prefix → move dynamic.
+  - User ID or per-user instructions in the system prompt → template per cohort or move to the user message; per-user prefixes get ~0% prefix-cache hit rate.
+  - Reordered few-shot examples (shuffled per request) → fix one canonical order.
+  - Non-deterministic tool outputs pasted ahead of the cached block → append them after it.
+  - Rule: everything static and identical goes first (one `system_prompt_version` in the key), everything dynamic goes last. Verify with the provider's `cached_tokens` counter — if it reads near zero, walk this list top to bottom.
 
 **Step 4 — Compress dynamic tokens (retrieved context)**
 - **Cross-encoder reranking from top-K to top-3**: retrieve top-20 chunks, rerank with a cross-encoder (Cohere Rerank, BGE-Reranker), pass only top-3 to generation. Reduces context from ~4K to ~800 tokens — a 5× reduction in the most expensive dynamic token bucket.
