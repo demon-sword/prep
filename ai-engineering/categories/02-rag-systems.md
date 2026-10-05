@@ -155,6 +155,7 @@ If simple context fits in a single prompt:
 | 33 | Stale indexes, embedding drift | M | `todo` |
 | 34 | Weak evaluation hiding retrieval failures | S | `todo` |
 | 35 | Scholarly source connectors (arXiv, Semantic Scholar, PubMed)? | M | `todo` |
+| 36 | How do you model and import a knowledge graph in Neo4j with Cypher? | M | `todo` |
 
 ---
 
