@@ -88,6 +88,7 @@ The memory footprint scales as: 2 × layers × heads × head_dim × sequence_len
 | [Q2: How do transformers work?](01-002-how-do-transformers-work.md) | Prerequisite — self-attention Q/K/V mechanics underpin why KV cache works |
 | [Q34: Why is LLM inference memory-bounded?](01-034-why-is-llm-inference-memory-bounded.md) | Follow-up — KV cache is the dominant reason inference is memory-bound at decode time |
 | [Q11: How reduce latency in GenAI applications?](07-003-how-reduce-latency-in-genai-applications.md) | Same concept — KV cache is the first lever in any latency reduction discussion |
+| [Q49: What is Multi-Head Latent Attention (MLA)?](01-049-what-is-multi-head-latent-attention-mla.md) | Follow-up — MLA compresses the KV cache to a low-rank latent plus shared rotary key, ~57× smaller than MHA |
 
 ---
 

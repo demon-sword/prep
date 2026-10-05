@@ -120,6 +120,7 @@ The tradeoff to watch is that quantization trades accuracy for bandwidth; specul
 | [Q9: What is KV cache? How does it help in LLM inference?](01-009-what-is-kv-cache-how-does-it-help-in-llm-inference.md) | Prerequisite — KV cache mechanics underpin the memory-bound argument |
 | [Q23: What is grouped query attention (GQA)?](01-023-what-is-grouped-query-attention-gqa-how-does-it-differ-from.md) | Direct mitigation — GQA reduces KV cache size and memory bandwidth per step |
 | [Q33: What is FlashAttention and how does it work?](01-033-what-is-flashattention-and-how-does-it-work.md) | Related optimization — FA reduces HBM reads during prefill via tiling |
+| [Q49: What is Multi-Head Latent Attention (MLA)?](01-049-what-is-multi-head-latent-attention-mla.md) | Direct mitigation — MLA caches a 576-element latent per token instead of full K/V, cutting bytes loaded per decode step |
 
 ---
 
