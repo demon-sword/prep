@@ -11,6 +11,7 @@ When and how to adapt pre-trained LLMs to production tasks — covering PEFT/LoR
 | "When would you fine-tune instead of prompting?" | Fine-tuning decision framework |
 | "Walk me through LoRA / PEFT" | Parameter-efficient fine-tuning |
 | "How does RLHF work? How does DPO improve on it?" | Alignment techniques |
+| "How do you train a decision head whose output is a typed action plus confidence?" | Calibrated-decision training (RLCD) |
 | "How do you reduce inference cost / latency?" | Quantization, speculative decoding |
 | "Design a training pipeline for [math / code / domain]" | End-to-end training system design |
 | "How do you capture user feedback as training signal?" | Implicit feedback + RLHF data flywheel |
@@ -41,6 +42,8 @@ Strong candidates treat fine-tuning as a **last resort on the cost-quality ladde
 - [Q4: What is RLHF and why important?](../answers/04-004-what-is-rlhf-and-why-important.md)
 - [Q8: RLHF pipeline: SFT, reward model, PPO. How does DPO simplify?](../answers/04-008-rlhf-pipeline-sft-reward-model-ppo-how-does-dpo-simplify.md)
 - [Q9: Instruction tuning vs pre-training?](../answers/04-009-instruction-tuning-vs-pre-training.md)
+- [Q13: What is GRPO and when use it over PPO/DPO?](../answers/04-013-grpo-group-relative-policy-optimization.md)
+- [Q15: What is RLCD (calibrated-decision training) and when use it over RLHF/RLVR?](../answers/04-015-rlcd-calibrated-decision-training.md)
 
 ### 3. Training system design at scale
 **When:** "Design a training pipeline for X", "How do you handle compute and data constraints?", "How do you capture implicit feedback as training signal?"
@@ -123,6 +126,8 @@ Step 3 — Inference budget?
 | 10 | Speculative decoding — speed up inference? | M | `todo` |
 | 11 | Convert implicit user behavior (edits, acceptance) into training signals? | S | `todo` |
 | 12 | Quantization — tradeoffs between size, speed, accuracy? | M | `todo` |
+| 13 | What is GRPO and when use it over PPO/DPO? | S | `todo` |
+| 15 | What is RLCD (calibrated-decision training) and when use it over RLHF/RLVR? | S | `todo` |
 
 ---
 

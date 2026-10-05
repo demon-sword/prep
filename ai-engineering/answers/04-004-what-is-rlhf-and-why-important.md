@@ -60,7 +60,15 @@ objective = E[r_θ(prompt, response)] - β · KL(π_RL || π_SFT)
 - **RM brittleness:** the RM generalizes poorly out of distribution. Production systems (Anthropic Constitutional AI, OpenAI RLHF) combine it with rule-based checks.
 - **Training instability:** PPO is notoriously finicky (hyperparameter sensitivity, variance in reward signals). DPO was developed to avoid this entirely.
 
-### Example / Tradeoff
+### Reward design: multiplicative vs constrained vs KL-anchored
+
+How the scalar reward is composed matters as much as where it comes from. Three patterns:
+
+- **Multiplicative (v1):** `r = correctness × format × style` — every factor scales the rest. Simple and sharp when all factors are trustworthy, but one noisy factor (e.g., an over-strict format checker) zeroes out genuinely good responses and the policy learns to satisfice the noisiest gate first.
+- **Constrained / satisficing (v2):** correctness as a threshold gate, then optimize the rest — `r = quality_terms subject to correctness ≥ τ`. Responses below the bar get zero regardless of style; above the bar, style and format compete normally. This matches how verifiable-reward pipelines actually behave (a math answer that is wrong is worthless no matter how well formatted) and degrades gracefully when one quality term is miscalibrated.
+- **KL-anchored:** either pattern plus the `− β · KL(π_RL ‖ π_SFT)` leash from Stage 3. The KL term is not a reward factor but a trust region — it bounds how far the policy may chase any of the above before the reference pulls it back.
+
+Rule of thumb: multiplicative when all reward factors are high-signal; constrained when correctness is binary and non-negotiable (math, code, tool calls with side effects); KL-anchored always — an unanchored policy will find the adversarial corner of whichever composition you chose.
 
 **InstructGPT (OpenAI, 2022) — the canonical RLHF deployment:**
 - Base: GPT-3 175B → SFT on 13K prompt-completion pairs → RM on 33K pairwise comparisons → PPO fine-tuning
@@ -98,6 +106,7 @@ The hard part in practice is that PPO is notoriously unstable, the RM generalize
 
 **Tradeoff / production angle (1 min):**
 "The main failure mode I'd flag is reward hacking: the policy finds responses that score high on the RM but aren't actually better — long, verbose, sycophantic answers are a classic symptom. Mitigation is a tighter KL leash, iterative RM retraining on RL-generated samples, and complementing the RM with rule-based guardrails. Also, the annotation budget is real: InstructGPT used ~33K pairwise comparisons; for a smaller team, DPO with synthetic preference pairs from a stronger judge model (a frontier model) is a viable shortcut."
+"On reward composition: I default to constrained over multiplicative whenever correctness is binary — gate on correctness first, then optimize style — because one noisy factor in a product zeroes out good responses; and the KL leash stays on regardless, since any composition has an adversarial corner."
 
 **Wrap-up (30s):**
 "So RLHF matters because it's the mechanism behind every production-grade assistant today. The three-stage pipeline — SFT, RM, PPO+KL — is the canonical answer, but DPO has largely replaced PPO for practical fine-tuning work. Happy to go deeper on DPO's derivation or reward hacking mitigations."
