@@ -513,50 +513,66 @@
   },
   {
     "id": "33-tiled-matmul",
-    "title": "Implement Tiled Matrix Multiplication (CPU-Emulatable Kernel)",
+    "title": "Implement Naive and Tiled Matrix Multiplication",
     "slug": "tiled-matmul",
-    "group": "optimization",
-    "description": "Multiply two matrices with a tiled loop nest that mirrors a GPU kernel's block/grid decomposition \u2014 each output tile computed from row/column tiles of the inputs with an explicit tile-size parameter. The subtleties: edge tiles when dimensions are not multiples of the tile size, loop order that reuses each loaded tile, and numerical agreement with the naive triple loop. Ships CPU-emulatable only: no GPU backend exists in the sandbox, so the Triton mapping stays a documented correspondence rather than executed code.",
-    "depth": "advanced",
-    "difficulty": "hard",
-    "io_contract": "tiled_matmul(A: np.ndarray, B: np.ndarray, tile: int) -> np.ndarray",
-    "verify": "Assert exact agreement with A @ B on square, tall, and non-multiple-of-tile shapes; assert no out-of-bounds reads on edge tiles by running with dimensions tile-1, tile, and tile+1; and assert a tile-size sweep leaves the result invariant while changing the counted tile-load tally.",
-    "followups": [
-      "How does this loop nest map onto Triton blocks and programs?",
-      "Why does tiling help on a GPU even though total FLOPs are unchanged?",
-      "Where would you place the reduction to keep memory accesses coalesced?"
-    ]
-  },
-  {
-    "id": "34-online-softmax",
-    "title": "Implement Online (Single-Pass) Softmax",
-    "slug": "online-softmax",
-    "group": "optimization",
-    "description": "Compute softmax rows in one pass with running max-and-denominator rescaling instead of the textbook max-then-exponentiate two passes. The subtleties: the rescaling identity that keeps the running denominator correct when a new maximum appears, overflow safety matching the two-pass reference to 1e-6, and why the single-pass form is what fused attention kernels use. Ships CPU-emulatable only: no GPU backend exists in the sandbox.",
-    "depth": "advanced",
-    "difficulty": "medium",
-    "io_contract": "online_softmax(X: np.ndarray) -> np.ndarray  # row-wise softmax, one pass per row",
-    "verify": "Assert max absolute deviation from the two-pass reference below 1e-6 on rows with values spanning 1e3 magnitude including large positive shifts; assert each output row sums to 1 within 1e-9; and assert a single-element row and an all-equal row return exact 1.0 and uniform distributions.",
-    "followups": [
-      "Why does the two-pass version need the max subtraction at all?",
-      "How does this rescaling identity appear inside FlashAttention?",
-      "What breaks if you rescale with a stale maximum?"
-    ]
-  },
-  {
-    "id": "35-parallel-reduction",
-    "title": "Implement Tree Reduction (CPU-Emulatable Kernel)",
-    "slug": "parallel-reduction",
-    "group": "optimization",
-    "description": "Reduce a vector with a tree-structured pairwise summation that mirrors a GPU block reduction \u2014 stride-halving passes over a work-size rounded up to a power of two, with idle lanes explicitly masked. The subtleties: non-power-of-two lengths must neither drop nor double-count tail elements, and tree order changes floating-point rounding versus sequential sum, so agreement is approximate with a stated tolerance. Ships CPU-emulatable only: no GPU backend exists in the sandbox.",
+    "group": "gpu-kernels",
+    "description": "Write the triple-loop matmul a GPU thread block would execute, then the tiled (blocked) version that stages BLOCKxBLOCK tiles in fast on-chip memory before accumulating. Both run CPU-only in NumPy-free Python loops over the tile structure, so the tiling discipline — not the hardware — is what is being rehearsed. The subtleties: edge tiles when the matrix size is not a multiple of the block size, and accumulating in higher precision before rounding back down.",
     "depth": "core",
     "difficulty": "medium",
-    "io_contract": "tree_reduce(x: np.ndarray) -> float",
-    "verify": "Assert agreement with np.sum within 1e-9 relative tolerance on power-of-two and non-power-of-two lengths including length 1; assert a mask-count check proving every element participated exactly once on an indicator vector; and assert determinism across repeated calls on the same input.",
+    "io_contract": "matmul_naive(A: np.ndarray, B: np.ndarray) -> np.ndarray and matmul_tiled(A: np.ndarray, B: np.ndarray, block: int) -> np.ndarray  # C = A @ B",
+    "verify": "Assert both agree with np.matmul to 1e-9 on square, tall, and wide shapes including sizes that are not multiples of the block size; assert a 1xN/Nx1 edge case; and assert float32 inputs accumulated through the tiled path match a float64 reference more closely than a pure-float32 accumulation.",
     "followups": [
-      "Why does tree order change the floating-point result?",
-      "How do idle lanes map onto threads in a real block reduction?",
-      "When is a two-stage (block then grid) reduction needed?"
+      "Why does tiling speed up matmul on a GPU even though it performs the same number of FLOPs?",
+      "How do you pick the block size, and what breaks when it is too large?",
+      "Where does Tensor-Core / split-K tiling diverge from this basic scheme?"
+    ]
+  },
+  {
+    "id": "34-parallel-reduction",
+    "title": "Implement Parallel Tree Reduction and Exclusive Prefix Scan",
+    "slug": "parallel-reduction",
+    "group": "gpu-kernels",
+    "description": "Reduce a vector with a two-element tree that mirrors what one CUDA thread block does in shared memory, then build the Blelloch exclusive prefix scan (up-sweep plus down-sweep) over the same data. The scan must be exclusive — output[i] holds the sum of elements before i — and must handle non-power-of-two lengths by padding with the additive identity rather than by branching inside the sweep.",
+    "depth": "core",
+    "difficulty": "medium",
+    "io_contract": "tree_reduce(x: np.ndarray) -> float and exclusive_scan(x: np.ndarray) -> np.ndarray  # sum; then exclusive prefix sums",
+    "verify": "Assert tree_reduce matches np.sum within tolerance (allclose, since tree order rounds differently than NumPy's summation order) on lengths 1, 7, 1024, and 1000 with positive, negative, and zero entries, exactly for integer inputs; assert exclusive_scan matches np.concatenate([[0], np.cumsum(x)[:-1]]) on power-of-two and non-power-of-two lengths; and assert the scan output has the same length as the input with output[0] == 0.",
+    "followups": [
+      "Why is a tree reduction faster than a sequential accumulation on parallel hardware?",
+      "What changes between an inclusive and an exclusive scan, and where is each used?",
+      "How does a multi-block reduction combine per-block partial sums?"
+    ]
+  },
+  {
+    "id": "35-online-softmax",
+    "title": "Implement Stable and Online Softmax",
+    "slug": "online-softmax",
+    "group": "gpu-kernels",
+    "description": "Write the numerically stable row-wise softmax with max-subtraction, then the single-pass online variant that maintains a running maximum and renormalizes the running numerator as the maximum moves — the scalar algorithm inside every fused GPU softmax kernel. Both must stay finite on logits of +/-1000 where a naive exp overflows, and the two must agree to float precision on random inputs.",
+    "depth": "advanced",
+    "difficulty": "medium",
+    "io_contract": "softmax_stable(logits: np.ndarray) -> np.ndarray and softmax_online(logits: np.ndarray) -> np.ndarray  # row-wise probabilities",
+    "verify": "Assert both rows sum to 1 within 1e-6 in float32 and stay finite for logits of +1000 and -1000; assert both agree with each other to 1e-5 and with a float64 reference to 1e-5 on random logits; assert shift-invariance (adding a constant to a row changes nothing); and assert single-element and single-row edge cases.",
+    "followups": [
+      "Why does the online formulation matter for a fused kernel but not for plain NumPy code?",
+      "How does this rescaling trick generalize to online softmax over blocks (FlashAttention)?",
+      "Where does float32 accumulation error show up, and when must you accumulate in float64?"
+    ]
+  },
+  {
+    "id": "36-triton-style-kernels",
+    "title": "Emulate Triton-Style Blocked Kernels on CPU",
+    "slug": "triton-style-kernels",
+    "group": "gpu-kernels",
+    "description": "Emulate the Triton programming model on the CPU: a grid of programs where each program owns one block of the input, loads it, computes, and stores it back. Implement a blocked vector addition and a fused affine-plus-ReLU kernel through one shared launch helper that partitions work exactly the way program_id and BLOCK do on device. No GPU and no Triton install is required — the launch geometry and masking discipline are the thing being rehearsed, including the tail block whose range overruns the input length.",
+    "depth": "advanced",
+    "difficulty": "hard",
+    "io_contract": "triton_style_add(x: np.ndarray, y: np.ndarray, block: int) -> np.ndarray and triton_style_affine_relu(x: np.ndarray, scale: float, bias: float, block: int) -> np.ndarray  # z = x + y; then relu(scale * x + bias)",
+    "verify": "Assert both match their NumPy one-liners exactly on lengths that are and are not multiples of the block size, including block larger than the input; assert non-contiguous and float32/float64 inputs round-trip with dtype preserved; and assert a block size of 0 or negative raises ValueError.",
+    "followups": [
+      "What does the mask argument do in a real Triton kernel, and what breaks when you omit it?",
+      "How do grid size and block size trade off occupancy against per-program SRAM usage?",
+      "When is fusing the affine and ReLU into one kernel a win over two kernels?"
     ]
   }
 ]
