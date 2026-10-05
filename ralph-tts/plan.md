@@ -42,8 +42,4 @@ created: 2026-09-06
 - [x] 30-objective-metrics — Objective Metrics for TTS
 - [x] 31-serving-economics — Serving Cost Economics for TTS
 - [x] 32-voice-agent-regression — Regression Testing a Voice Agent
-<<<<<<< HEAD
-- [ ] 33-audio-lm-judge — Audio-LM-as-Judge for TTS
-=======
 - [x] 33-audio-lm-judge — Audio-LM-as-Judge Failure Modes
->>>>>>> fm/paper-build-voice
