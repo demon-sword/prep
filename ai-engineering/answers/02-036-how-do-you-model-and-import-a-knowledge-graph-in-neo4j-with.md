@@ -34,11 +34,11 @@ A legal-document knowledge graph models each contract as a `Contract` node linke
 
 **2. MERGE, not CREATE — idempotent re-ingest.** The import loop appends one PDF at a time (the post's `KnowledgeGraphBuilder` pattern: parse → classify → extract → import, per document). Re-running the loop over the same PDF must never duplicate nodes, so every import uses `MERGE` on a stable business key (contract id, party name) instead of `CREATE`. `MERGE` matches-or-creates atomically per pattern; `CREATE` blindly appends a second node on every re-run and silently doubles traversal results.
 
-**3. Import statements (post's shape).** Clean nulls before writing — `apoc.map.clean` strips null/empty extraction fields so optional schema fields don't become junk properties — and cast date strings to real temporal types so range filters work:
+**3. Import statements (post's shape).** Clean nulls before writing — `apoc.map.clean` with an explicit values-to-skip list strips null/empty extraction fields so optional schema fields don't become junk properties — and cast date strings to real temporal types so range filters work:
 
 ```cypher
 MERGE (c:Contract {contractId: $record.contractId})
-SET c += apoc.map.clean($record.contractProps, [], [])
+SET c += apoc.map.clean($record.contractProps, [], [null, ''])
 SET c.effectiveDate = date($record.effectiveDate)
 
 MERGE (p:Party {name: $record.partyName})
@@ -48,7 +48,7 @@ MERGE (l:Location {city: $record.city, state: $record.state})
 MERGE (p)-[:LOCATED_IN]->(l)
 ```
 
-`apoc.map.clean(properties, keysToSkip, valuesToSkip)` drops the null-valued keys that schema extraction leaves behind when a contract omits an optional field. `date()` casts `"2024-03-01"` to a temporal value — without it, `WHERE c.effectiveDate > "2024-01-01"` degrades to string comparison and mis-orders non-ISO formats.
+`apoc.map.clean(properties, keysToSkip, valuesToSkip)` with `[]` keys to skip and `[null, '']` values to skip drops the null- and empty-valued keys that schema extraction leaves behind when a contract omits an optional field — the values list is what does the work; an empty `[]` there would be a no-op. `date()` casts `"2024-03-01"` to a temporal value — without it, `WHERE c.effectiveDate > "2024-01-01"` degrades to string comparison and mis-orders non-ISO formats.
 
 **4. One-command append loop.** Each PDF flows through parse → classify contract type → select the matching Pydantic schema → extract → run the MERGE statements above. Because every write is keyed `MERGE`, the loop is safely re-runnable: new PDFs add nodes/edges, re-processed PDFs converge to the same graph.
 
@@ -83,7 +83,7 @@ The first query is two hops (contract → parties → locations); the second is 
 
 For the import, the critical choice is MERGE on a stable business key — contract id, party name — never CREATE. The pipeline appends PDFs one at a time, and reprocessing a document has to converge to the same graph, not double every node. CREATE would silently duplicate nodes and inflate every traversal count, which is the most common production bug here.
 
-Two more details from the import statements: I clean nulls with apoc.map.clean before SET, because schema extraction leaves optional fields null and those become junk properties. And I cast date strings with date() into real temporal types — otherwise effective-date range filters degrade to string comparison.
+Two more details from the import statements: I clean nulls with apoc.map.clean passing [null, ''] as the values-to-skip list before SET, because schema extraction leaves optional fields null and those become junk properties. And I cast date strings with date() into real temporal types — otherwise effective-date range filters degrade to string comparison.
 
 A concrete example is the two demo queries. 'Locations of all parties' is a two-hop traversal: contract to parties to locations. 'Affiliate agreements in New York' is three hops with a location filter. A vector index can find New York mentions but can't enforce the signed-by path — it returns contracts that merely mention New York. That's exactly the multi-hop gap GraphRAG exists to close."
 
@@ -100,7 +100,7 @@ A concrete example is the two demo queries. 'Locations of all parties' is a two-
 - **Mistake:** Using `CREATE` for the import because "it's faster" — **Better:** Use `MERGE` on a stable business key; `CREATE` duplicates every node on re-ingest and silently doubles traversal results, which is undetectable without count audits.
 - **Mistake:** Writing extracted date strings as plain string properties — **Better:** Cast with `date()`/`datetime()` at import so range filters use temporal comparison; string comparison mis-orders anything outside strict ISO format.
 - **Mistake:** Storing full clause text as node properties — **Better:** Keep node properties scalar and query-relevant, link out to chunk/text ids; bloated properties inflate the AuraDB memory footprint and slow traversals.
-- **Mistake:** Skipping null-cleaning on schema-extraction output — **Better:** Run `apoc.map.clean` before `SET` so optional fields absent from a contract don't become null-valued properties that pollute queries and indexes.
+- **Mistake:** Skipping null-cleaning on schema-extraction output — **Better:** Run `apoc.map.clean` with `[null, '']` as the values-to-skip list before `SET` so optional fields absent from a contract don't become null-valued properties that pollute queries and indexes.
 
 ---
 
@@ -116,4 +116,4 @@ A concrete example is the two demo queries. 'Locations of all parties' is a two-
 
 ## One-liner recall
 
-> Model contracts as Contract/Party/Location nodes with typed relationships, import with MERGE on business keys (never CREATE) plus apoc.map.clean and date casts so the PDF loop is idempotent — then multi-hop questions become traversals that chunk search cannot express.
+> Model contracts as Contract/Party/Location nodes with typed relationships, import with MERGE on business keys (never CREATE) plus apoc.map.clean with a [null, ''] skip list and date casts so the PDF loop is idempotent — then multi-hop questions become traversals that chunk search cannot express.
