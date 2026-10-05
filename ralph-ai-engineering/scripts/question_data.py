@@ -20,7 +20,9 @@ SECTION_BY_SLUG: dict[str, int] = {
     "07-cost-latency":         9,   # §9, not §7
     "08-safety-guardrails":   10,
     "09-system-design-ai":    11,
-    "10-behavioral":          18,
+    "10-behavioral":           18,
+    "11-context-management":   22,
+    "12-multimodal-vlm":       23,
 }
 
 # Human-readable names (used in plan.md and progress.txt)
@@ -35,12 +37,10 @@ NAME_BY_SLUG: dict[str, str] = {
     "08-safety-guardrails":    "Safety & Guardrails",
     "09-system-design-ai":     "System Design — AI",
     "10-behavioral":           "Behavioral",
+    "11-context-management":   "Context Management",
+    "12-multimodal-vlm":       "Multimodal & VLMs",
 }
 
-# NOTE (paper-build-vlm-cat): category "12-multimodal-vlm" exists on disk
-# (categories/12-multimodal-vlm.md + answers/12-0xx) but is NOT wired here yet:
-# SECTION_BY_SLUG needs a source section number in interview-questions.md and no
-# VLM bank section exists — VLM stems land with File AU (C21). Wire it then.
 # Canonical ordering — cat_num (1-based) is the position in this list.
 # This drives the NN- file prefix, independent of source section number.
 SLUGS_IN_ORDER = list(SECTION_BY_SLUG.keys())
@@ -56,7 +56,7 @@ def _slugify(text: str, maxlen: int = 60) -> str:
 @dataclass(frozen=True)
 class Question:
     num: int        # sequential within category (1-based)
-    cat_num: int    # category number 1–10 (drives the NN- file prefix)
+    cat_num: int    # category number 1–12 (drives the NN- file prefix)
     text: str       # verbatim question text (⭐ etc. preserved for display)
 
     @property
@@ -70,7 +70,7 @@ class Question:
 
 @dataclass(frozen=True)
 class Category:
-    num: int                      # 1–10 (position in SLUGS_IN_ORDER)
+    num: int                      # 1–12 (position in SLUGS_IN_ORDER)
     slug: str                     # e.g. "02-rag-systems"
     name: str                     # e.g. "RAG Systems"
     source_section: int           # section number in interview-questions.md
@@ -122,7 +122,7 @@ def _parse_questions(path: Path = QUESTIONS_MD) -> dict[int, list[str]]:
 
 
 def parse_all_categories(path: Path = QUESTIONS_MD) -> list[Category]:
-    """Parse interview-questions.md and return all 10 categories in canonical order."""
+    """Parse interview-questions.md and return all 12 categories in canonical order."""
     raw = _parse_questions(path)
     categories = []
     for cat_num_1based, slug in enumerate(SLUGS_IN_ORDER, start=1):

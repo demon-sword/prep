@@ -2,7 +2,7 @@
 
 **Category:** 12-multimodal-vlm
 **Question #:** 004
-**Source section:** §TBD — no VLM bank section in interview-questions.md yet; stems land with File AU (C21)
+**Source section:** §23 in interview-questions.md
 **Status:** `review`
 **Generated:** paper-build-vlm-cat
 
