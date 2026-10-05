@@ -429,6 +429,7 @@ From LockedIn AI session data:
 - Bias in training data and generated content?
 - Red-team an LLM system?
 - Generated code gets executed — prevent malicious code?
+- Chatbot failure case studies?
 
 ---
 
