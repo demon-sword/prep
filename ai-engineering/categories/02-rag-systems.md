@@ -153,6 +153,7 @@ If simple context fits in a single prompt:
 | 32 | Hallucination when retrieved context is irrelevant or absent | M | `todo` |
 | 33 | Stale indexes, embedding drift | M | `todo` |
 | 34 | Weak evaluation hiding retrieval failures | S | `todo` |
+| 36 | How do you model and import a knowledge graph in Neo4j with Cypher? | M | `todo` |
 
 ---
 
