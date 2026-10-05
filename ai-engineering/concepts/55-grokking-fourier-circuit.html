@@ -1,0 +1,820 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1.0"/>
+  <title>Grokking: The Fourier Circuit — AI Engineering Concepts</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com"/>
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet"/>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg:       #0d0f17;
+      --surface:  #141720;
+      --card:     #1a1e2e;
+      --border:   #252a3d;
+      --accent:   #00d4ff;
+      --purple:   #7c3aed;
+      --green:    #00ff88;
+      --yellow:   #ffd700;
+      --red:      #ff4757;
+      --orange:   #ff9500;
+      --text:     #e2e8f0;
+      --text-dim: #8892a4;
+      --mono:     'JetBrains Mono', monospace;
+      --sans:     'Inter', system-ui, sans-serif;
+    }
+
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: var(--sans);
+      line-height: 1.7;
+      min-height: 100vh;
+    }
+
+    /* ── Header ── */
+    header {
+      background: var(--surface);
+      border-bottom: 1px solid var(--border);
+      padding: 2.5rem 2rem 2rem;
+      text-align: center;
+    }
+    .group-badge {
+      display: inline-block;
+      background: rgba(255,149,0,0.15);
+      color: var(--orange);
+      border: 1px solid rgba(255,149,0,0.35);
+      border-radius: 999px;
+      font-size: .72rem;
+      font-weight: 600;
+      letter-spacing: .08em;
+      text-transform: uppercase;
+      padding: .25rem .85rem;
+      margin-bottom: 1rem;
+    }
+    header h1 {
+      font-size: clamp(1.6rem, 4vw, 2.6rem);
+      font-weight: 700;
+      color: var(--accent);
+      margin-bottom: .6rem;
+    }
+    header h1 span { color: var(--green); }
+    header .tagline {
+      color: var(--text-dim);
+      font-size: 1.05rem;
+      max-width: 720px;
+      margin: 0 auto;
+    }
+
+    /* ── Layout ── */
+    main { max-width: 1100px; margin: 0 auto; padding: 2.5rem 1.5rem 3rem; }
+    section { margin-bottom: 3.5rem; }
+    section > h2 {
+      font-size: 1.45rem;
+      font-weight: 700;
+      color: var(--accent);
+      border-left: 3px solid var(--accent);
+      padding-left: .9rem;
+      margin-bottom: 1.4rem;
+    }
+
+    h3 { font-size: 1.1rem; font-weight: 600; color: var(--yellow); margin: 1.6rem 0 .6rem; }
+    p  { margin-bottom: .9rem; color: var(--text); }
+    ul, ol { margin: .5rem 0 .9rem 1.4rem; }
+    li { margin-bottom: .4rem; font-size: 0.97rem; }
+    code {
+      font-family: var(--mono);
+      font-size: .84rem;
+      background: rgba(0,212,255,.1);
+      color: var(--accent);
+      padding: .1em .45em;
+      border-radius: 4px;
+    }
+    strong { color: var(--yellow); }
+
+    .callout {
+      background: rgba(0,212,255,0.07);
+      border: 1px solid rgba(0,212,255,0.2);
+      border-radius: 8px;
+      padding: 0.9rem 1.2rem;
+      margin: 1rem 0;
+      color: var(--text-dim);
+      font-size: 0.93rem;
+    }
+    .callout strong { color: var(--accent); }
+    .formula-box {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-left: 3px solid var(--yellow);
+      border-radius: 6px;
+      padding: 1rem 1.25rem;
+      margin: 1rem 0 1.2rem;
+      font-family: var(--mono);
+      font-size: 0.88rem;
+      color: var(--yellow);
+      line-height: 1.6;
+      overflow-x: auto;
+    }
+
+    /* ── Card grid for theory ── */
+    .card-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+      gap: 1rem;
+      margin: 1.2rem 0;
+    }
+    .card {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 1rem 1.2rem;
+    }
+    .card h4 { color: var(--accent); font-size: .95rem; margin-bottom: .4rem; }
+    .card p { font-size: .9rem; color: var(--text-dim); margin-bottom: 0; }
+
+    pre {
+      background: #0a0c13;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 1rem 1.25rem;
+      margin: 1rem 0 1.2rem;
+      font-family: var(--mono);
+      font-size: .82rem;
+      line-height: 1.65;
+      color: var(--green);
+      overflow-x: auto;
+    }
+
+    /* ── Visualization ── */
+    .viz-desc { color: var(--text-dim); margin-bottom: 1.2rem; }
+    .viz-panel {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 1.4rem;
+      margin-bottom: 1.6rem;
+    }
+    .viz-panel h3 { margin-top: 0; }
+    .viz-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 1.2rem;
+      align-items: start;
+    }
+    canvas.viz-canvas {
+      width: 100%;
+      background: #0a0c13;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      display: block;
+    }
+    .controls { margin-top: 1rem; }
+    .control-row {
+      display: flex;
+      align-items: center;
+      gap: .8rem;
+      margin-bottom: .7rem;
+      flex-wrap: wrap;
+    }
+    .control-row label {
+      font-family: var(--mono);
+      font-size: .8rem;
+      color: var(--text-dim);
+      min-width: 150px;
+    }
+    .control-row output {
+      font-family: var(--mono);
+      font-size: .82rem;
+      color: var(--yellow);
+      min-width: 56px;
+    }
+    input[type="range"] {
+      flex: 1;
+      min-width: 140px;
+      accent-color: var(--accent);
+    }
+    button {
+      font-family: var(--mono);
+      font-size: .82rem;
+      font-weight: 600;
+      background: rgba(0,212,255,.12);
+      color: var(--accent);
+      border: 1px solid rgba(0,212,255,.4);
+      border-radius: 6px;
+      padding: .45rem 1rem;
+      cursor: pointer;
+    }
+    button:hover { background: rgba(0,212,255,.22); }
+    button:disabled { opacity: .45; cursor: default; }
+    .readout {
+      font-family: var(--mono);
+      font-size: .84rem;
+      color: var(--text-dim);
+      background: #0a0c13;
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: .6rem .9rem;
+      margin-top: .8rem;
+      line-height: 1.7;
+    }
+    .readout b { color: var(--green); }
+    .legend { display: flex; gap: 1.2rem; flex-wrap: wrap; margin: .6rem 0; font-size: .82rem; color: var(--text-dim); }
+    .legend i { display: inline-block; width: 22px; height: 3px; border-radius: 2px; margin-right: .35rem; vertical-align: middle; }
+
+    /* ── Interview line ── */
+    #interview-line blockquote {
+      background: var(--card);
+      border-left: 3px solid var(--green);
+      border-radius: 0 8px 8px 0;
+      padding: 1rem 1.3rem;
+      font-size: 1.02rem;
+      font-style: italic;
+      color: var(--text);
+      margin: 1rem 0;
+    }
+    #interview-line a { color: var(--accent); }
+
+    /* ── Takeaways ── */
+    #takeaways ul { list-style: none; margin-left: 0; }
+    #takeaways li {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: .85rem 1.1rem;
+      margin-bottom: .7rem;
+      font-size: .94rem;
+    }
+    #takeaways li::before { content: "▸ "; color: var(--green); font-weight: 700; }
+
+    /* ── Nav ── */
+    .concept-nav {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 1.2rem 1.5rem;
+      border-top: 1px solid var(--border);
+      max-width: 1100px;
+      margin: 0 auto;
+    }
+    .nav-link {
+      color: var(--accent);
+      text-decoration: none;
+      font-size: .9rem;
+      max-width: 38%;
+    }
+    .nav-link:hover { text-decoration: underline; }
+    .nav-dir { display: block; font-size: .72rem; color: var(--text-dim); text-transform: uppercase; letter-spacing: .08em; }
+    .nav-title { font-weight: 600; }
+    .nav-center { color: var(--text-dim); font-size: .85rem; font-family: var(--mono); }
+    .nav-link.next.disabled { color: var(--text-dim); opacity: .5; cursor: default; }
+
+    @media (max-width: 820px) {
+      .viz-grid { grid-template-columns: 1fr; }
+      .concept-nav { flex-direction: column; gap: 0.8rem; }
+      .nav-link { max-width: 100%; }
+      .nav-center { order: -1; }
+    }
+  </style>
+</head>
+<body>
+
+<header>
+  <div class="group-badge">Training</div>
+  <h1>Grokking <span>Fourier Circuit</span></h1>
+  <p class="tagline">Why test accuracy sits at chance for thousands of steps and then snaps to 100% — the memorization-to-generalization handoff inside a 1-layer transformer, reverse-engineered frequency by frequency. Power et al., 2022; Nanda et al., 2023.</p>
+</header>
+
+<main>
+
+  <!-- ── THEORY ── -->
+  <section id="theory">
+    <h2>Theory</h2>
+
+    <h3>The Phenomenon: Generalization Arrives Late</h3>
+    <p>In 2022, researchers at OpenAI reported something that should not happen under the standard story of training (Power et al., arxiv:2201.02177). Small transformers trained on algorithmic tasks — modular addition, polynomial evaluation, sparse parity — first did the familiar thing: training accuracy climbed to ~100% while test accuracy sat at chance. Then, thousands of optimization steps after memorization was complete, with no change to data, architecture, or hyperparameters, test accuracy suddenly jumped to ~100%. They called it <strong>grokking</strong>: delayed, cliff-like generalization long after the point where every conventional stopping rule would have halted training.</p>
+    <p>The numbers make the puzzle concrete. On <code>a + b mod 113</code> with roughly a third of all pairs shown during training, a 1-layer transformer reaches 100% train accuracy within a few thousand steps. Test accuracy stays near <strong>1/113 ≈ 0.9%</strong> — literal chance — for tens of thousands of steps more. Then, over a comparatively short transition, it climbs to ~100%. Nothing in the train loss announces the jump is coming. If you believe a flat validation metric means "done learning," grokking is the counterexample that breaks the belief.</p>
+
+    <h3>The Laboratory: Modular Addition in One Layer</h3>
+    <p>The follow-up that cracked the case open is Nanda et al. (2023, arxiv:2301.05217), a mechanistic-interpretability study of the same task. The model is deliberately tiny — one transformer layer: token embeddings for <code>a</code> and <code>b</code>, one attention head, an MLP, and an unembedding that scores each candidate answer <code>c</code>. The input format is <code>"a b ="</code> and the model must output <code>(a+b) mod 113</code>. Small enough to fully reverse-engineer, rich enough to grok. Everything below was verified by reading the model's actual weights, not by probing its behavior from outside.</p>
+    <div class="card-grid">
+      <div class="card">
+        <h4>Memorization circuit</h4>
+        <p>High-weight-norm lookup table over training pairs. Fits fast, generalizes never. Dominates early training.</p>
+      </div>
+      <div class="card">
+        <h4>Generalizing circuit</h4>
+        <p>Low-weight-norm Fourier computation of (a+b) mod p. Builds slowly, works on every pair. Wins late.</p>
+      </div>
+      <div class="card">
+        <h4>Weight decay as referee</h4>
+        <p>Penalizes squared weight norm, so it taxes the memorizer more than the generalizer. The cleanup driver.</p>
+      </div>
+    </div>
+
+    <h3>Fourier Features Emerge in the Weights</h3>
+    <p>The first surprise is in the embedding matrix. Take the discrete Fourier transform (DFT) of each neuron's weights across the 113 token positions and a handful of frequencies dominate the spectrum — where a random initialization shows a flat smear. Frequency bins such as <code>k = 8</code> (angular frequency <code>16π/113</code>) carry far more power than their neighbors, and the same sparse set of key frequencies shows up in the MLP neurons and the unembedding. The model has learned to represent each number <code>n</code> as a bundle of sinusoidal features — <code>cos(w·n)</code> and <code>sin(w·n)</code> at a few discrete <code>w</code> — rather than as an opaque one-hot-style vector. This is not a positional encoding handed to the model by the designer; it is a <strong>learned representation</strong> discovered by gradient descent because modular arithmetic is natively a frequency-domain computation.</p>
+    <p>You can run this check yourself on any small trained model with a few lines of NumPy:</p>
+<pre>import numpy as np
+
+def key_frequencies(W_emb, p=113, top=5):
+    # W_emb: (vocab, d_model) embedding matrix
+    spectrum = np.abs(np.fft.rfft(W_emb, axis=0))   # DFT down the token axis
+    power = (spectrum ** 2).sum(axis=1)             # total power per frequency bin
+    power[0] = 0.0                                  # ignore the DC (mean) component
+    return np.argsort(power)[-top:][::-1]           # bins holding the learned signal
+
+freqs = key_frequencies(model.W_E)
+print("dominant frequency bins:", freqs)            # a grokked model: a few sharp peaks
+print("random baseline: flat spectrum, no peaks")   # an untrained model: none</pre>
+    <p>A grokked checkpoint returns a sparse handful of bins; an early-memorization checkpoint returns noise. The spectrum is the cheapest observable fingerprint of whether the generalizing circuit exists yet.</p>
+
+    <h3 id="probes">Sparse Probes Read Sine and Cosine Out of the Embeddings</h3>
+    <p>The second finding is that these sinusoidal features are linearly accessible. A <strong>linear probe</strong> — a single learned weight vector dotted with an embedding, no nonlinearity — can recover <code>sin(w·n)</code> and <code>cos(w·n)</code> for the key frequencies with high accuracy, and the probe weights are sparse: only a few embedding dimensions participate per frequency. That sparsity matters. It means the model dedicates a small subspace to each frequency rather than smearing the signal across all dimensions, which is exactly what lets later layers manipulate one frequency at a time. Probing is the standard tool for asking "does the representation contain X in usable form," and here the answer came back as clean sinusoids — the model stores numbers the way a signal processor would.</p>
+
+    <h3>The Clock Circuit: Addition as Rotation</h3>
+    <p>Once each number lives on circles — one circle per key frequency, with token <code>n</code> sitting at angle <code>2π·k·n/113</code> — modular addition becomes geometry. Adding <code>b</code> to <code>a</code> is rotating <code>b</code> steps around the clock face, and wrapping past 112 back to 0 is just passing 12 o'clock. This is the <strong>clock circuit</strong>: the model's activations arrange the 113 residues on circular manifolds, and the attention-plus-MLP path implements rotation along them. The first interactive demo below renders this directly — pick <code>a</code>, <code>b</code>, and a frequency <code>k</code>, and watch the sum land by rotation. Change <code>k</code> and the same numbers re-scatter to a different circle, because each frequency is its own clock running at its own speed.</p>
+
+    <h3>The Trig-Identity Mechanism</h3>
+    <p>Rotation has to be computed, not just pictured, and the computation runs through a classical identity:</p>
+    <div class="formula-box">
+cos(w·(a+b)) = cos(w·a)·cos(w·b) − sin(w·a)·sin(w·b)<br/>
+sin(w·(a+b)) = sin(w·a)·cos(w·b) + cos(w·a)·sin(w·b)
+    </div>
+    <p>Embeddings supply the <code>cos(w·a)</code>, <code>sin(w·a)</code>, <code>cos(w·b)</code>, <code>sin(w·b)</code> terms; attention moves <code>b</code>'s features into <code>a</code>'s residual stream; the MLP's nonlinearity forms the products; and downstream neurons end up encoding <code>cos(w·(a+b−c))</code>-style patterns that peak exactly when a candidate answer <code>c</code> equals <code>a+b mod p</code>. Individual MLP neurons show diagonal-stripe receptive fields — they fire when <code>a+b = constant</code>, i.e. along lines of slope −1 in (a, b) space. The unembedding then sums each key frequency's contribution: every frequency casts a "vote" shaped like a cosine bump centered on the correct answer, and the votes add up to a sharp peak at <code>c = (a+b) mod 113</code>. No single frequency is decisive; the ensemble is. The second demo's vote panel shows this accumulation: one frequency gives a wavy hint, several together give a verdict.</p>
+
+    <h3>Why It Happens: Excluded Loss and the Cleanup Phase</h3>
+    <p>The mechanism explains <em>how</em> the model generalizes; the training dynamics explain <em>when</em>. Nanda et al. describe three phases. <strong>Memorization</strong> first: the lookup-table circuit fits the training pairs quickly because big, sloppy weights are easy for gradient descent to find. <strong>Circuit formation</strong> second: the Fourier circuit assembles gradually while headline metrics look dead — test accuracy flat at chance, train loss near zero. The evidence that work is happening comes from <strong>excluded loss</strong>, a progress measure constructed to factor out the memorization component so the generalizer's steady improvement becomes visible. It declines smoothly straight through the plateau that ordinary loss curves report as "nothing happening." <strong>Cleanup</strong> third: once the Fourier circuit alone explains the training data, weight decay — which taxes squared norm — collapses the expensive memorization weights while barely touching the efficient generalizer. Test accuracy snaps up. Grokking is regularization selecting the cheaper circuit late, and the ablations confirm causality: weaken weight decay and the cleanup never comes; the model memorizes and stays there.</p>
+    <div class="callout"><strong>The one-sentence version:</strong> grokking is what it looks like when gradient descent finds the bad solution fast, builds the good solution slowly underneath a flat loss curve, and lets weight decay delete the bad one once the good one can carry the data.</div>
+
+    <h3>What This Teaches Beyond Toy Arithmetic</h3>
+    <p>Three lessons transfer. First, <strong>flat metrics can hide progress</strong> — but only in the grokking regime: small data, algorithmic structure, strong weight decay, long horizons. That is a description of toy interpretability setups, not of LLM pre-training, where flat eval with a decayed schedule genuinely means stop. Second, <strong>internal progress measures beat headline loss</strong> when you suspect hidden dynamics: probe accuracy, spectral sparsity of embeddings, or an excluded-loss-style construction tell you whether to keep burning compute. Third, <strong>efficiency bias is real</strong>: regularization does not merely prevent overfitting, it actively selects among competing solutions by weight norm — a fact that also illuminates why heavily regularized fine-tunes sometimes shed memorized behaviors late in training. Scope the lesson correctly and it sharpens your training judgment; over-apply it and you will burn budget training past convergence while citing a toy phenomenon.</p>
+  </section>
+
+  <!-- ── VISUALIZATION ── -->
+  <section id="visualization">
+    <h2>Interactive Visualization</h2>
+    <p class="viz-desc">
+      Two demos. <strong style="color:var(--accent)">Clock geometry</strong>: the 113 residues arranged on a circle at frequency <code>k</code> — watch <code>a + b mod 113</code> land by rotation, and see how each key frequency's cosine vote stacks into a verdict. <strong style="color:var(--green)">Grokking dynamics</strong>: the memorization plateau, the hidden progress visible only in excluded loss, and the cleanup snap — with a weight-decay slider that moves the grokking point.
+    </p>
+
+    <div class="viz-panel">
+      <h3>Demo 1 — Clock Circuit &amp; Frequency Voting</h3>
+      <div class="viz-grid">
+        <div>
+          <canvas id="clockCanvas" class="viz-canvas" width="480" height="360"></canvas>
+          <div class="controls">
+            <div class="control-row">
+              <label for="aSlider">a (start position)</label>
+              <input type="range" id="aSlider" min="0" max="112" value="37"/>
+              <output id="aOut" for="aSlider">37</output>
+            </div>
+            <div class="control-row">
+              <label for="bSlider">b (rotation steps)</label>
+              <input type="range" id="bSlider" min="0" max="112" value="58"/>
+              <output id="bOut" for="bSlider">58</output>
+            </div>
+            <div class="control-row">
+              <label for="kSlider">frequency k</label>
+              <input type="range" id="kSlider" min="1" max="20" value="8"/>
+              <output id="kOut" for="kSlider">8</output>
+            </div>
+            <div class="control-row">
+              <button id="clockAnimate">Animate a + b rotation</button>
+            </div>
+          </div>
+        </div>
+        <div>
+          <canvas id="voteCanvas" class="viz-canvas" width="480" height="360"></canvas>
+          <div class="readout" id="clockReadout">—</div>
+        </div>
+      </div>
+      <div class="legend">
+        <span><i style="background:var(--accent)"></i>a (start)</span>
+        <span><i style="background:var(--green)"></i>rotation by b</span>
+        <span><i style="background:var(--yellow)"></i>a + b mod 113</span>
+      </div>
+    </div>
+
+    <div class="viz-panel">
+      <h3>Demo 2 — Memorization Plateau, Hidden Progress, Cleanup</h3>
+      <canvas id="dynCanvas" class="viz-canvas" width="980" height="340"></canvas>
+      <div class="controls">
+        <div class="control-row">
+          <label for="lamSlider">weight decay λ (relative)</label>
+          <input type="range" id="lamSlider" min="2" max="20" value="10"/>
+          <output id="lamOut" for="lamSlider">1.0</output>
+        </div>
+        <div class="control-row">
+          <label for="timeSlider">optimization step</label>
+          <input type="range" id="timeSlider" min="0" max="40000" step="200" value="40000"/>
+          <output id="timeOut" for="timeSlider">40000</output>
+        </div>
+        <div class="control-row">
+          <button id="dynPlay">Replay training run</button>
+        </div>
+      </div>
+      <div class="readout" id="dynReadout">—</div>
+      <div class="legend">
+        <span><i style="background:var(--accent)"></i>train accuracy</span>
+        <span><i style="background:var(--yellow)"></i>test accuracy</span>
+        <span><i style="background:var(--green)"></i>excluded loss (inverted, dashed)</span>
+      </div>
+    </div>
+  </section>
+
+  <!-- ── INTERVIEW LINE ── -->
+  <section id="interview-line">
+    <h2>Interview Line</h2>
+    <blockquote>
+      "Grokking is delayed generalization in three phases — fast memorization, silent construction of a Fourier circuit that only excluded loss can see, then a weight-decay cleanup that deletes the memorizer — so on small algorithmic runs a flat test curve hides progress, while at LLM scale flat eval still means stop."
+    </blockquote>
+    <p class="viz-desc">Verbal Q&amp;A version with follow-up handling: <a href="../answers/01-050-what-is-grokking.md">What is grokking? (01-050)</a></p>
+  </section>
+
+  <!-- ── TAKEAWAYS ── -->
+  <section id="takeaways">
+    <h2>Key Takeaways</h2>
+    <ul>
+      <li><b>Grokking = memorization circuit first, Fourier circuit second, weight-decay cleanup third</b> — on mod-113 addition the test jump from ~1% to ~100% lands tens of thousands of steps after train hits 100%; the delay is the generalizer's construction time, not a stall.</li>
+      <li><b>Read the spectrum before trusting the plateau</b> — a DFT of the embedding matrix in PyTorch (<code>torch.fft.rfft</code> down the token axis) shows sparse dominant bins like <code>k = 8</code> (<code>16π/113</code>) only once the generalizing circuit exists; log it to Weights &amp; Biases next to loss and you can see phase 2 happening.</li>
+      <li><b>Excluded loss is the template for hidden-progress metrics</b> — whenever headline train/test curves look dead but you suspect circuit formation (small algorithmic fine-tunes, Hugging Face Transformers runs on synthetic tasks), construct a measure that factors out the dominant component instead of staring at the flat line.</li>
+      <li><b>Weight decay is causal, not incidental</b> — the Fourier circuit wins cleanup because it is lower-norm than the lookup table; ablating decay suppresses grokking, so tune decay deliberately on runs where you want generalization under data scarcity rather than leaving the default.</li>
+      <li><b>Scope the lesson or it becomes an excuse</b> — grokking needs small data, algorithmic structure, heavy decay, and long horizons; citing it to extend an LLM pre-train or SFT past a flat held-out eval burns compute, because that regime genuinely converges when the curve says so.</li>
+    </ul>
+  </section>
+
+</main>
+
+<nav class="concept-nav">
+  <a href="41-flash-attention.html" class="nav-link prev">
+    <span class="nav-dir">&#8592; Previous</span>
+    <span class="nav-title">Flash Attention</span>
+  </a>
+  <div class="nav-center">55 &middot; Grokking Fourier Circuit</div>
+  <span class="nav-link next disabled">
+    <span class="nav-dir">Next &#8594;</span>
+    <span class="nav-title">—</span>
+  </span>
+</nav>
+
+<script>
+(function () {
+  "use strict";
+  var P = 113; // modulus: residues 0..112, chance accuracy 1/113
+
+  // ── Demo 1: clock circuit + fourier frequency voting ──
+  var clock = document.getElementById("clockCanvas");
+  var cctx = clock.getContext("2d");
+  var voteC = document.getElementById("voteCanvas");
+  var vctx = voteC.getContext("2d");
+  var aSlider = document.getElementById("aSlider");
+  var bSlider = document.getElementById("bSlider");
+  var kSlider = document.getElementById("kSlider");
+  var aOut = document.getElementById("aOut");
+  var bOut = document.getElementById("bOut");
+  var kOut = document.getElementById("kOut");
+  var clockBtn = document.getElementById("clockAnimate");
+  var clockReadout = document.getElementById("clockReadout");
+
+  // Illustrative subset of key frequencies for the voting demo.
+  // The video's headline example is k=8 (features cos/sin at angular
+  // frequency 16*pi/113); the other two stand in for the handful of additional bins a grokked model learns.
+  var KEY_FREQS = [2, 8, 14];
+
+  var anim = { active: false, pos: 0, target: 0, last: 0 };
+
+  function clockAngle(n, k) {
+    return (2 * Math.PI * k * n) / P - Math.PI / 2;
+  }
+
+  function drawClock() {
+    var W = clock.width, H = clock.height;
+    var cx = W / 2, cy = H / 2 - 8;
+    var R = Math.min(W, H) / 2 - 30;
+    var a = +aSlider.value, b = +bSlider.value, k = +kSlider.value;
+    var r = (a + b) % P;
+    aOut.textContent = a;
+    bOut.textContent = b;
+    kOut.textContent = k;
+
+    cctx.clearRect(0, 0, W, H);
+
+    // ring
+    cctx.beginPath();
+    cctx.arc(cx, cy, R, 0, 2 * Math.PI);
+    cctx.strokeStyle = "#252a3d";
+    cctx.lineWidth = 1.5;
+    cctx.stroke();
+
+    // all 113 residues at this fourier frequency
+    var n, th, x, y;
+    for (n = 0; n < P; n++) {
+      th = clockAngle(n, k);
+      x = cx + R * Math.cos(th);
+      y = cy + R * Math.sin(th);
+      cctx.beginPath();
+      cctx.arc(x, y, 1.6, 0, 2 * Math.PI);
+      cctx.fillStyle = "rgba(136,146,164,0.45)";
+      cctx.fill();
+    }
+
+    // rotation arc from a by b steps (sampled along the circle)
+    cctx.beginPath();
+    var steps = Math.max(b, 1);
+    for (var s = 0; s <= steps; s++) {
+      th = clockAngle((a + s) % P, k);
+      x = cx + R * Math.cos(th);
+      y = cy + R * Math.sin(th);
+      if (s === 0) { cctx.moveTo(x, y); } else { cctx.lineTo(x, y); }
+    }
+    cctx.strokeStyle = "#00ff88";
+    cctx.lineWidth = 2.5;
+    cctx.stroke();
+
+    function dot(nv, color, rad, label) {
+      var t2 = clockAngle(nv, k);
+      var dx = cx + R * Math.cos(t2), dy = cy + R * Math.sin(t2);
+      cctx.beginPath();
+      cctx.arc(dx, dy, rad, 0, 2 * Math.PI);
+      cctx.fillStyle = color;
+      cctx.fill();
+      cctx.font = "600 12px 'JetBrains Mono', monospace";
+      cctx.fillStyle = color;
+      cctx.fillText(label + nv, dx + 9, dy - 7);
+    }
+    dot(a, "#00d4ff", 6, "a=");
+    if (anim.active) { dot(anim.pos, "#e879f9", 5, "m="); }
+    dot(r, "#ffd700", 7, "r=");
+
+    // trig readout for the headline fourier frequency
+    var w = (2 * Math.PI * k) / P;
+    var cv = Math.cos(w * r).toFixed(3);
+    var sv = Math.sin(w * r).toFixed(3);
+    clockReadout.innerHTML =
+      "<b>" + a + " + " + b + " mod 113 = " + r + "</b><br/>" +
+      "clock angle @k=" + k + ": " + (w * r).toFixed(3) + " rad<br/>" +
+      "cos = " + cv + " &nbsp; sin = " + sv +
+      " &nbsp; (identity: cos(w(a+b)) = cos wa·cos wb − sin wa·sin wb)";
+
+    drawVote(a, b, r);
+  }
+
+  function drawVote(a, b, r) {
+    var W = voteC.width, H = voteC.height;
+    var padL = 34, padB = 30, padT = 26;
+    var iw = W - padL - 12, ih = H - padT - padB;
+    vctx.clearRect(0, 0, W, H);
+
+    vctx.font = "600 12px 'JetBrains Mono', monospace";
+    vctx.fillStyle = "#8892a4";
+    vctx.fillText("unembedding vote V(c) = sum of cos bumps @ key freqs", padL, 16);
+
+    // one wavy hint (single fourier frequency) vs the verdict (sum over KEY_FREQS)
+    function vote(c, freqs) {
+      var v = 0, i, wk;
+      for (i = 0; i < freqs.length; i++) {
+        wk = (2 * Math.PI * freqs[i]) / P;
+        v += Math.cos(wk * (a + b - c));
+      }
+      return v / freqs.length;
+    }
+
+    var c, v, x, y;
+    // single-frequency trace (faint)
+    vctx.beginPath();
+    for (c = 0; c < P; c++) {
+      v = vote(c, [KEY_FREQS[1]]);
+      x = padL + (iw * c) / (P - 1);
+      y = padT + ih - ((v + 1) / 2) * ih;
+      if (c === 0) { vctx.moveTo(x, y); } else { vctx.lineTo(x, y); }
+    }
+    vctx.strokeStyle = "rgba(0,212,255,0.45)";
+    vctx.lineWidth = 1.5;
+    vctx.stroke();
+
+    // summed vote (bold)
+    vctx.beginPath();
+    for (c = 0; c < P; c++) {
+      v = vote(c, KEY_FREQS);
+      x = padL + (iw * c) / (P - 1);
+      y = padT + ih - ((v + 1) / 2) * ih;
+      if (c === 0) { vctx.moveTo(x, y); } else { vctx.lineTo(x, y); }
+    }
+    vctx.strokeStyle = "#ffd700";
+    vctx.lineWidth = 2.5;
+    vctx.stroke();
+
+    // peak marker at the correct residue
+    var rx = padL + (iw * r) / (P - 1);
+    vctx.beginPath();
+    vctx.moveTo(rx, padT);
+    vctx.lineTo(rx, padT + ih);
+    vctx.strokeStyle = "rgba(255,215,0,0.5)";
+    vctx.lineWidth = 1.5;
+    vctx.stroke();
+    vctx.fillStyle = "#ffd700";
+    vctx.fillText("c=" + r, rx - 12, padT + ih + 20);
+
+    vctx.fillStyle = "#8892a4";
+    vctx.fillText("c=0", padL - 4, padT + ih + 20);
+    vctx.fillText("c=112", padL + iw - 40, padT + ih + 20);
+    vctx.fillStyle = "rgba(0,212,255,0.8)";
+    vctx.fillText("— single freq (k=8)", padL, H - 6);
+    vctx.fillStyle = "#ffd700";
+    vctx.fillText("— sum over {2, 8, 14}", padL + 170, H - 6);
+  }
+
+  function stepAnim(ts) {
+    if (!anim.active) { return; }
+    if (ts - anim.last > 70) {
+      anim.last = ts;
+      anim.pos = (anim.pos + 1) % P;
+      if (anim.pos === anim.target) {
+        anim.active = false;
+        clockBtn.disabled = false;
+        clockBtn.textContent = "Animate a + b rotation";
+      }
+      drawClock();
+    }
+    if (anim.active) { requestAnimationFrame(stepAnim); }
+  }
+
+  clockBtn.addEventListener("click", function () {
+    var a = +aSlider.value, b = +bSlider.value;
+    anim.pos = a;
+    anim.target = (a + b) % P;
+    anim.last = 0;
+    if (b === 0) { drawClock(); return; }
+    anim.active = true;
+    clockBtn.disabled = true;
+    clockBtn.textContent = "Rotating…";
+    requestAnimationFrame(stepAnim);
+  });
+  aSlider.addEventListener("input", function () { anim.active = false; clockBtn.disabled = false; clockBtn.textContent = "Animate a + b rotation"; drawClock(); });
+  bSlider.addEventListener("input", function () { anim.active = false; clockBtn.disabled = false; clockBtn.textContent = "Animate a + b rotation"; drawClock(); });
+  kSlider.addEventListener("input", drawClock);
+  drawClock();
+
+  // ── Demo 2: grokking dynamics vs weight decay ──
+  var dyn = document.getElementById("dynCanvas");
+  var dctx = dyn.getContext("2d");
+  var lamSlider = document.getElementById("lamSlider");
+  var timeSlider = document.getElementById("timeSlider");
+  var lamOut = document.getElementById("lamOut");
+  var timeOut = document.getElementById("timeOut");
+  var dynPlay = document.getElementById("dynPlay");
+  var dynReadout = document.getElementById("dynReadout");
+
+  var TMAX = 40000;
+  var playing = false;
+
+  function lam() { return +lamSlider.value / 10; }
+  function grokPoint() { return 26000 / lam(); } // stronger decay -> earlier cleanup
+  function trainAcc(t) { return 1 - Math.exp(-t / 1500); }
+  function testAcc(t) {
+    var t0 = grokPoint();
+    return 1 / (1 + Math.exp(-(t - t0) / 1200));
+  }
+  function excludedInv(t) {
+    // inverted excluded loss: smooth hidden progress, leads the snap
+    var t0 = grokPoint();
+    return 1 / (1 + Math.exp(-(t - (t0 - 9000)) / 4000));
+  }
+  function phaseAt(t) {
+    var t0 = grokPoint();
+    if (t < t0 - 6000) { return "1 · Memorization — lookup table fits train, test at chance"; }
+    if (t < t0 - 1500) { return "2 · Circuit formation — fourier circuit builds, curves look dead"; }
+    if (t < t0 + 3000) { return "3 · Cleanup — weight decay deletes the memorizer, test snaps up"; }
+    return "4 · Generalized — fourier circuit carries train and test";
+  }
+
+  function drawDyn() {
+    var W = dyn.width, H = dyn.height;
+    var padL = 46, padB = 30, padT = 24;
+    var iw = W - padL - 16, ih = H - padT - padB;
+    var t = +timeSlider.value;
+    var t0 = grokPoint();
+    lamOut.textContent = lam().toFixed(1);
+    timeOut.textContent = t;
+
+    dctx.clearRect(0, 0, W, H);
+
+    function X(tt) { return padL + (iw * tt) / TMAX; }
+    function Y(a) { return padT + ih - a * ih; }
+
+    // phase bands
+    var bands = [
+      [0, Math.max(t0 - 6000, 0), "rgba(255,71,87,0.07)", "memorize"],
+      [Math.max(t0 - 6000, 0), Math.max(t0 - 1500, 0), "rgba(0,212,255,0.07)", "form"],
+      [Math.max(t0 - 1500, 0), Math.min(t0 + 3000, TMAX), "rgba(255,215,0,0.08)", "cleanup"],
+      [Math.min(t0 + 3000, TMAX), TMAX, "rgba(0,255,136,0.07)", "generalized"]
+    ];
+    var i, b;
+    dctx.font = "10px 'JetBrains Mono', monospace";
+    for (i = 0; i < bands.length; i++) {
+      b = bands[i];
+      if (b[1] <= b[0]) { continue; }
+      dctx.fillStyle = b[2];
+      dctx.fillRect(X(b[0]), padT, X(b[1]) - X(b[0]), ih);
+      if (X(b[1]) - X(b[0]) > 60) {
+        dctx.fillStyle = "#8892a4";
+        dctx.fillText(b[3], X(b[0]) + 6, padT + 14);
+      }
+    }
+
+    // axes
+    dctx.strokeStyle = "#252a3d";
+    dctx.lineWidth = 1;
+    dctx.beginPath();
+    dctx.moveTo(padL, padT);
+    dctx.lineTo(padL, padT + ih);
+    dctx.lineTo(padL + iw, padT + ih);
+    dctx.stroke();
+    dctx.fillStyle = "#8892a4";
+    dctx.fillText("1.0", 14, padT + 8);
+    dctx.fillText("0.0", 14, padT + ih);
+    dctx.fillText("0", padL, padT + ih + 18);
+    dctx.fillText("20k", X(20000) - 8, padT + ih + 18);
+    dctx.fillText("40k steps", X(40000) - 52, padT + ih + 18);
+
+    function trace(fn, upto, color, dashed, width) {
+      dctx.beginPath();
+      var tt, step = 200;
+      for (tt = 0; tt <= upto; tt += step) {
+        var x = X(tt), y = Y(fn(tt));
+        if (tt === 0) { dctx.moveTo(x, y); } else { dctx.lineTo(x, y); }
+      }
+      dctx.strokeStyle = color;
+      dctx.lineWidth = width;
+      dctx.setLineDash(dashed ? [6, 5] : []);
+      dctx.stroke();
+      dctx.setLineDash([]);
+    }
+    trace(trainAcc, t, "#00d4ff", false, 2.5);
+    trace(testAcc, t, "#ffd700", false, 2.5);
+    trace(excludedInv, t, "#00ff88", true, 2);
+
+    // sweep line at current step
+    dctx.beginPath();
+    dctx.moveTo(X(t), padT);
+    dctx.lineTo(X(t), padT + ih);
+    dctx.strokeStyle = "rgba(226,232,240,0.55)";
+    dctx.lineWidth = 1.5;
+    dctx.stroke();
+
+    var tr = trainAcc(t), te = testAcc(t), ex = excludedInv(t);
+    dynReadout.innerHTML =
+      "step <b>" + t + "</b> · λ=" + lam().toFixed(1) +
+      " · train <b>" + (tr * 100).toFixed(1) + "%</b>" +
+      " · test <b>" + (te * 100).toFixed(1) + "%</b>" +
+      " · hidden progress " + (ex * 100).toFixed(0) + "%<br/>" + phaseAt(t);
+  }
+
+  function playTick() {
+    if (!playing) { return; }
+    var t = +timeSlider.value + 200;
+    if (t >= TMAX) {
+      timeSlider.value = TMAX;
+      playing = false;
+      dynPlay.disabled = false;
+      dynPlay.textContent = "Replay training run";
+      drawDyn();
+      return;
+    }
+    timeSlider.value = t;
+    drawDyn();
+    requestAnimationFrame(playTick);
+  }
+
+  dynPlay.addEventListener("click", function () {
+    timeSlider.value = 0;
+    playing = true;
+    dynPlay.disabled = true;
+    dynPlay.textContent = "Training…";
+    var done = function () {
+      if (!playing) { return; }
+      dynPlay.disabled = false;
+      dynPlay.textContent = "Replay training run";
+    };
+    // re-enable the button when the sweep finishes
+    var watcher = setInterval(function () {
+      if (!playing) { clearInterval(watcher); done(); }
+    }, 300);
+    requestAnimationFrame(playTick);
+  });
+  lamSlider.addEventListener("input", drawDyn);
+  timeSlider.addEventListener("input", function () {
+    playing = false;
+    dynPlay.disabled = false;
+    dynPlay.textContent = "Replay training run";
+    drawDyn();
+  });
+  drawDyn();
+})();
+</script>
+
+</body>
+</html>

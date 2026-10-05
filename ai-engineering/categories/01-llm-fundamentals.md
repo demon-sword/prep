@@ -164,6 +164,7 @@ If seq2seq (translation, summarization with fixed input → output):
 | 47 | Overfitting — how prevent it? | E | `todo` |
 | 48 | Imbalanced datasets — how handle? | E | `todo` |
 | 49 | What is Multi-Head Latent Attention (MLA)? How does it shrink the KV cache? | S | `todo` |
+| 50 | What is grokking? | M | `todo` |
 | 52 | Long-form grounded generation (reports, papers)? | M | `todo` |
 
 ---

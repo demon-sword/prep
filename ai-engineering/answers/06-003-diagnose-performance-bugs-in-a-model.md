@@ -106,6 +106,7 @@ Fifth, for production degradation specifically, I check for feature skew — the
 | [Q9: Bias-variance tradeoff?](06-009-bias-variance-tradeoff.md) | Underfitting vs overfitting is the core diagnostic axis from learning curves |
 | [Q13: Debug model that runs but doesn't learn — broadcasting, dimension mismatches?](06-013-debug-model-that-runs-but-doesnt-learn-broadcasting-dimensio.md) | Deeper dive on training-loop-specific bugs |
 | [Q1: Data pre-processing and feature engineering?](06-001-data-pre-processing-and-feature-engineering.md) | Data audit and leakage detection are the first two diagnostic steps |
+| [What is grokking? (01-050)](01-050-what-is-grokking.md) | Plateau diagnostic — a flat validation curve can hide circuit formation, so check an internal progress measure before declaring convergence |
 
 ---
 
