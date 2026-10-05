@@ -931,4 +931,15 @@ Reading guide: if a signal above maps to a bank section you have not studied, tr
 
 ---
 
+## 23. Multimodal & VLMs
+
+Questions on vision-language models: adapters that connect images and video to frozen LLMs, multi-stage training recipes, visual token budgets, and video frame sampling.
+
+- LLaVA two-stage recipe, synthetic captions
+- Qwen-VL scale recipe, DPO, long context
+- DeepSeek-VL, Kimi-VL, MoonViT joint training
+- Video token budget: frame sampling, compression
+
+---
+
 *Last updated: June 2026. Sources linked in [README](./README.md).*
