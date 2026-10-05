@@ -71,6 +71,8 @@ MMLU, BigBench, and HumanEval are the three most commonly cited LLM benchmarks, 
 
 **Production reality:** For a customer support chatbot, none of these benchmarks predicts deflection rate, faithfulness, or p95 latency. The right eval is a **golden dataset** of 200–500 real support queries with human-graded answers, measured via RAGAS (faithfulness, answer relevancy) and business metrics (CSAT, escalation rate). Benchmark scores are a starting shortlist filter, not a deployment gate.
 
+**Worked example — execution accuracy gates model selection:** a team choosing a model for text-to-SQL fixes one schema and a set of N natural-language questions, has each of M candidate models generate SQL, executes every query in a sandbox, and ranks models by result-set match rate — not by MMLU rank. Headline benchmark scores shortlist the candidates; sandbox-executed result-set match is the gate that actually decides. The moral generalises: whenever the task has checkable outputs, replace leaderboard scores with execution accuracy on your own workload.
+
 ---
 
 ## Verbal script

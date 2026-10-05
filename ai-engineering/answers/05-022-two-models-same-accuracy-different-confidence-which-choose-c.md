@@ -45,6 +45,7 @@ Whether the candidate understands model calibration (reliability diagrams, ECE),
 - **Platt scaling** (logistic regression on softmax outputs): fits a sigmoid on a held-out calibration set. Works well for binary classifiers.
 - **Temperature scaling**: single scalar T applied to logits before softmax — `softmax(logits / T)`. T > 1 flattens distribution (fixes overconfidence); T < 1 sharpens it. State-of-the-art default for neural nets (Guo et al. 2017).
 - **Isotonic regression**: non-parametric, fits a monotone mapping from confidence to accuracy. More flexible, needs more calibration data (≥1K samples).
+- **Post-hoc vs training-time:** Platt, temperature, and isotonic are all post-hoc — they remap confidences after training without touching the model. The alternative is training-time calibration objectives (e.g. RLCD-style calibration rewards that penalize confident-and-wrong during optimization), which bake reliability into the weights instead of patching it afterward. Post-hoc is cheaper and sufficient when the base model is strong; reach for training-time objectives when post-hoc rescaling repeatedly fails to hold under shift.
 
 **Step 4 — Choose by decision use case:**
 
