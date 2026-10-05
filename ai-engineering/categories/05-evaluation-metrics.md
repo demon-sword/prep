@@ -32,6 +32,7 @@ Strong candidates understand that evaluation is not a one-time checkpoint but a 
 - [Q17: Golden dataset for evaluation and regression testing?](../answers/05-017-golden-dataset-for-evaluation-and-regression-testing.md)
 - [Q16: "Vibes-based" eval vs formal eval framework?](../answers/05-016-vibes-based-eval-vs-formal-eval-framework.md)
 - [Q20: A/B testing for prompt variations?](../answers/05-020-ab-testing-for-prompt-variations.md)
+- [Q24: How do you run error analysis on eval failures — from open coding to axial categories?](../answers/05-024-error-analysis-method-open-to-axial-coding.md)
 
 ### 2. Hallucination Detection & Mitigation
 **When:** "how do you reduce / measure / detect hallucinations?" / "LLM is confidently wrong — why?" / "medical chatbot factual accuracy?"
@@ -138,6 +139,7 @@ Are you comparing two models or prompt variants?
 | 21 | Test new model before full deployment — canary, interleaved, shadow? | S | `todo` |
 | 22 | Two models, same accuracy, different confidence — which choose? Calibration? | S | `todo` |
 | 23 | Chatbot accuracy dropped 95% → 80% in six weeks — diagnose before retraining? | S | `todo` |
+| 24 | How do you run error analysis on eval failures — open coding to axial categories? | S | `review` |
 
 ---
 
