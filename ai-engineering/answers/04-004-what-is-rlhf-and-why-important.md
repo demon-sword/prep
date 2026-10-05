@@ -70,6 +70,8 @@ How the scalar reward is composed matters as much as where it comes from. Three 
 
 Rule of thumb: multiplicative when all reward factors are high-signal; constrained when correctness is binary and non-negotiable (math, code, tool calls with side effects); KL-anchored always — an unanchored policy will find the adversarial corner of whichever composition you chose.
 
+### Example / Tradeoff
+
 **InstructGPT (OpenAI, 2022) — the canonical RLHF deployment:**
 - Base: GPT-3 175B → SFT on 13K prompt-completion pairs → RM on 33K pairwise comparisons → PPO fine-tuning
 - Result: 1.3B InstructGPT rated as better than 175B GPT-3 by human raters 85% of the time — alignment trumped raw model size

@@ -1,4 +1,4 @@
-# What is RLCD (calibrated-decision training) and when use it over RLHF/RLVR?
+# What is RLCD (calibrated-decision training, not contrastive distillation) and when use it over RLHF/RLVR?
 
 **Category:** 04-fine-tuning-training
 **Question #:** 015
@@ -27,7 +27,7 @@ Understanding that preference rewards and verifiable rewards optimize different 
 ## Answer
 
 ### Concept
-**RLCD (Reinforcement Learning from Calibrated Decisions, "calibrated-decision training")** is a post-training objective whose reward is the *quality of a decision made under the model's own stated probabilities* — typically a proper scoring rule (log-loss, Brier score) over typed outcomes, plus the downstream cost of the action taken. Where RLHF rewards "a human preferred this response" and RLVR rewards "this string matches the checker," RLCD rewards "the action taken at the stated confidence had positive expected value." The point: a model that says "fraud, 0.91" and is right 91% of the time at that confidence level is more useful than a more accurate model whose 0.91 means 0.62 — because thresholds, routing, and escalation policies consume the number, not the label.
+**RLCD (Reinforcement Learning from Calibrated Decisions, "calibrated-decision training")** is a post-training objective whose reward is the *quality of a decision made under the model's own stated probabilities* — typically a proper scoring rule (log-loss, Brier score) over typed outcomes, plus the downstream cost of the action taken. Not to be confused with the earlier, unrelated RLCD of Yang et al. (2023) — Reinforcement Learning from Contrast Distillation — which synthesizes contrastive positive/negative response pairs as preference data; that is a preference-data method in the RLHF family, not a decision-calibration objective, and this note covers only the calibrated-decision meaning. Where RLHF rewards "a human preferred this response" and RLVR rewards "this string matches the checker," RLCD rewards "the action taken at the stated confidence had positive expected value." The point: a model that says "fraud, 0.91" and is right 91% of the time at that confidence level is more useful than a more accurate model whose 0.91 means 0.62 — because thresholds, routing, and escalation policies consume the number, not…
 
 ### Mechanism
 
@@ -47,7 +47,7 @@ R(decision, p, outcome) = S(p, outcome) − λ · cost(action | outcome)
 - Training is RL-flavored (sample decisions, score, policy-gradient update with a KL leash to the SFT reference, same as any post-training loop) but the reward needs no human rater and no string checker — just logged outcomes, which decision systems already record.
 
 **Post-hoc vs training-time calibration (know both):**
-Post-hoc recalibration — temperature scaling (`softmax(logits/T)`), Platt scaling, isotonic regression on a held-out set — remaps stated probabilities without touching weights (see the calibration note for the full treatment). It is cheap and composes with any model. RLCD is the training-time complement: it changes *which* decisions the head makes and how sharply it separates easy from hard cases (resolution), which no post-hoc remap can add. Rule of thumb: RLCD for resolution + honesty jointly during post-training; temperature/Platt afterward as the final honesty pass. One does not replace the other.
+Post-hoc recalibration — temperature scaling (`softmax(logits/T)`), Platt scaling, isotonic regression on a held-out set — remaps stated probabilities without touching weights (see [the calibration note](05-022-two-models-same-accuracy-different-confidence-which-choose-c.md) for the full treatment). It is cheap and composes with any model. RLCD is the training-time complement: it changes *which* decisions the head makes and how sharply it separates easy from hard cases (resolution), which no post-hoc remap can add. Rule of thumb: RLCD for resolution + honesty jointly during post-training; temperature/Platt afterward as the final honesty pass. One does not replace the other.
 
 ### Example / Tradeoff
 
@@ -103,4 +103,4 @@ Head emits `{action ∈ approve, review, deny; p_fraud}`. Logged outcomes give t
 
 ## One-liner recall
 
-> RLHF rewards rater preference and RLVR rewards string correctness, but typed decisions with confidences need RLCD — a proper scoring rule plus the business cost matrix on logged outcomes — because thresholds and routing consume the probability, not the label; finish with post-hoc temperature/Platt scaling.
+> RLCD here means calibrated-decision training (not Yang et al.'s 2023 contrastive-distillation method): RLHF rewards rater preference and RLVR rewards string correctness, but typed decisions with confidences need a proper scoring rule plus the business cost matrix on logged outcomes — because thresholds and routing consume the probability, not the label; finish with post-hoc temperature/Platt scaling.

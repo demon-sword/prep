@@ -53,7 +53,7 @@ The correct statement: GRPO drops the critic; whether you also drop the learned 
 ### Example / Tradeoff
 
 **DeepSeek-R1 (2025) — the canonical GRPO+RLVR deployment:**
-- Base: DeepSeek-V3-Base → cold-start SFT on ~1K long-CoT exemplars → GRPO with rule-based accuracy + format rewards on math/code reasoning prompts → second SFT (rejection-sampled) → final GRPO over all scenarios.
+- Base: DeepSeek-V3-Base → cold-start SFT on a few thousand long-CoT exemplars → GRPO with rule-based accuracy + format rewards on math/code reasoning prompts → second SFT (rejection-sampled) → final GRPO over all scenarios.
 - Rewards were verifiable: math answers checked by exact match, code by execution against hidden tests, plus a format reward enforcing `<think>`/`<answer>` structure. No human preference pairs anywhere in the reasoning loop.
 - Result: R1-Zero (pure RL, no cold start) already matched OpenAI-o1 on AIME/math benchmarks — evidence that group-relative RL on verifiable signal alone can elicit long chain-of-thought reasoning.
 
