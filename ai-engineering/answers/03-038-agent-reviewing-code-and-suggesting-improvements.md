@@ -146,6 +146,7 @@ For eval, I'd track developer acceptance rate (what % of suggestions are applied
 | [Q8: Walk through a production-ready agent architecture](03-008-walk-through-a-production-ready-agent-architecture.md) | Core architecture pattern this design extends |
 | [Q23: Sandbox tool execution safely](03-023-sandbox-tool-execution-safely.md) | Sandboxing linters/SAST in Docker — the safety layer |
 | [Q22: Tool schemas that reduce hallucinated actions](03-022-tool-schemas-that-reduce-hallucinated-actions.md) | Structured output schema discipline for review comments |
+| [Q26: Paper code audit / reproducibility check](05-026-paper-code-audit-reproducibility-check.md) | Claim→code-trace→severity rubric for auditing a paper's released code — the review-side check |
 
 ---
 
