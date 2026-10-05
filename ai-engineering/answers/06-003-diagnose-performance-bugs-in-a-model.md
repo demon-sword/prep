@@ -50,6 +50,7 @@ Model performance bugs fall into five root-cause buckets: **data issues** (leaka
    - Train low, val high → **overfitting** (add dropout/L2, reduce model size, get more data)
    - Val loss decreasing then spiking → **learning rate too high or batch norm issue**
    - Val loss never decreases → data/label bug or architectural mismatch
+   - Flat plateau ≠ done learning: grokking shows train and validation metrics can sit flat for long stretches while internal circuits are still forming, with generalization arriving suddenly much later. Before concluding "not learning," train longer and watch internal signals — not just the headline metric.
 
 5. **Profile inference vs training for production bugs.** If accuracy was fine offline but degraded in production, check:
    - Feature skew: production features computed differently than training (different time windows, imputation logic).
@@ -79,7 +80,7 @@ Second, I audit the data: sample 200 examples to inspect label quality, check fo
 
 Third, I run a single mini-batch overfit test — force the model to memorize 32 examples with a high learning rate. If it can't reach near-zero loss on 32 samples, something is architecturally broken: a detached tensor, wrong loss function, or dimension broadcasting issue. In PyTorch I'd use `set_detect_anomaly(True)` and print tensor shapes at each layer.
 
-Fourth, I plot training curves. High train and val loss → underfitting. Low train, high val → overfitting. Val loss spiking after decreasing → learning rate or batch norm issue. The shape of those curves tells me exactly which lever to pull.
+Fourth, I plot training curves. High train and val loss → underfitting. Low train, high val → overfitting. Val loss spiking after decreasing → learning rate or batch norm issue. The shape of those curves tells me exactly which lever to pull. One caveat I name explicitly: a flat plateau is not proof learning stopped — grokking shows metrics can sit flat while circuits form and generalization arrives suddenly later, so I extend the run before declaring it dead.
 
 Fifth, for production degradation specifically, I check for feature skew — the production pipeline computing features differently than training — and make sure `model.eval()` is called so batch norm uses population statistics, not mini-batch statistics."
 
