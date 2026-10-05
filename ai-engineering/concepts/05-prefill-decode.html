@@ -485,7 +485,10 @@
           The result of prefill is threefold: (1) the hidden states for each token are computed,
           (2) the <em>KV cache</em> is populated for every layer, and (3) only the final
           token's hidden state is projected to produce the first output token — marking the
-          end of TTFT (time-to-first-token).
+          end of TTFT (time-to-first-token). Note the crossover with scale: prefill work is
+          O(S) linear projections plus O(S²) attention, and on a Llama-70B-class model the
+          quadratic attention term overtakes the linear term at roughly ~4K tokens — below that,
+          projections dominate; beyond it, attention dominates and prefill cost grows quadratically.
         </p>
         <div class="info-row">
           <div class="info-chip"><span class="dot" style="background:var(--accent)"></span>Compute-bound</div>
@@ -511,6 +514,9 @@
           so the GPU sits idle waiting for memory transfers. A 70B model at FP16 has
           ~140 GB of weights alone; loading them per token at 2 TB/s HBM bandwidth gives
           ~70 ms/token — hence ~14 tokens/sec theoretical ceiling on a single A100.
+          Newer HBM generations move that ceiling without changing the math: an H100
+          (~3.35 TB/s) cuts the same step to ~42 ms/token, and an H200 (4.8 TB/s, 141 GB)
+          to ~29 ms/token.
         </p>
         <div class="info-row">
           <div class="info-chip"><span class="dot" style="background:var(--green)"></span>Memory-bound</div>
@@ -706,7 +712,8 @@
             node. Even when it fits, every decode step reads the full KV cache from HBM, so
             <code>TBT ∝ seq_len</code>. Tokens-per-second at 128K context can be 10–30× worse
             than at 2K context. <code>GQA</code> (grouped-query attention) and <code>MLA</code>
-            (multi-latent attention, used in DeepSeek) dramatically cut KV cache size.
+            (multi-head latent attention, introduced in DeepSeek-V2) dramatically cut
+            <a href="40-kv-cache.html">KV cache</a> size by compressing what each token stores.
           </p>
         </div>
       </div>

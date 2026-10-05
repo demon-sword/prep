@@ -49,7 +49,7 @@ Quantization reduces the numerical precision of model weights (and optionally ac
    - **AWQ** (Lin et al., 2023): Activation-aware weight quantization — identifies and protects 1% of weights responsible for large activations (outliers). Often beats GPTQ on perplexity at 4-bit.
    - **bitsandbytes**: INT8 and NF4/FP4 quantization via absmax/LLM.int8() outlier decomposition; used in QLoRA during training.
 
-2. **Quantization-Aware Training (QAT)** — simulate quantization during fine-tuning (straight-through estimator for gradients). Best accuracy at target bit-width; requires training budget.
+2. **Quantization-Aware Training (QAT)** — simulate quantization during fine-tuning (straight-through estimator for gradients). Best accuracy at target bit-width. For decoder-only LLMs, rarely run QAT yourself (expensive retrain where PTQ-int4 already works) — instead **prefer official `-qat` builds when they exist** (e.g. Gemma `-qat` releases beat community PTQ at the same size). QAT remains standard practice in vision transformers and edge deployment.
 
 3. **Activation quantization (W8A8 vs W4A16)**: Quantizing activations is harder than weights because activations have dynamic range and outliers. W4A16 (4-bit weights only) is safer than W4A8. Hardware support for W8A8 INT8 GEMM is mature on NVIDIA (TensorRT).
 
@@ -107,6 +107,7 @@ The critical point people miss is that accuracy loss is task-dependent. For RAG-
 - **Mistake:** Conflating QLoRA (4-bit during training) with GPTQ/AWQ (PTQ for inference) — treating them as the same thing — **Better:** Clarify that QLoRA uses NF4 quantization of the frozen base weights during fine-tuning, but the trained adapter is typically merged back into BF16 or separately quantized with GPTQ/AWQ for production serving.
 - **Mistake:** Skipping the calibration dataset quality check — **Better:** Explain that PTQ quantization scale estimates depend on the calibration set's distribution; using out-of-domain data (e.g., Wikipedia for a medical model) leads to poor scales and larger accuracy loss than necessary.
 - **Mistake:** Assuming quantization speeds up prefill as much as decode — **Better:** Clarify that decode is memory-bandwidth-bound (low arithmetic intensity) so quantization helps most there; prefill is compute-bound and benefits less from weight-only quantization (W4A16).
+- **Mistake:** Dismissing QAT entirely for decoder LLMs ("PTQ is always enough") — **Better:** You rarely *run* QAT yourself, but when an official `-qat` build exists (e.g. Gemma `-qat`) prefer it over a community PTQ quant at the same size — weights trained under simulated rounding survive it better than weights rounded after the fact.
 
 ---
 

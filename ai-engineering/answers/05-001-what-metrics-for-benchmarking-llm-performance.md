@@ -40,6 +40,8 @@ LLM benchmarking operates across three distinct layers: **academic benchmarks** 
 | MATH / GSM8K | Mathematical reasoning, chain-of-thought | MATH still discriminates at frontier |
 | MT-Bench | Multi-turn chat quality via a frontier model judge | Good for instruction-following; judge model bias |
 
+Benchmarks shortlist, execution accuracy gates: for a worked example of selecting on sandbox-executed result-set match rather than headline scores, see [Q28: MMLU, BigBench, HumanEval — what does each measure?](01-028-mmlu-bigbench-humaneval-what-does-each-measure-limitations.md).
+
 **Layer 2 — Task-specific offline metrics**
 
 For generative tasks (QA, summarization, RAG):

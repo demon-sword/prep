@@ -40,6 +40,22 @@ During autoregressive decode, generating one token requires loading all model we
 
 At batch size 1, arithmetic intensity ≈ 2 FLOPs/byte — far below the roofline. The GPU is bottlenecked by the bandwidth needed to stream model weights. Increasing batch size multiplies the compute per weight transfer proportionally, raising arithmetic intensity and utilization.
 
+**Step-time equations: why the curve below has that shape**
+
+Each decode step streams two things from HBM: the model weights (P bytes) once, plus every active request's KV cache (KV bytes per request × batch size B). Minimum step time:
+
+```
+t_step ≥ (B·KV + P) / BW
+```
+
+- **B·KV** — KV bytes re-read every step; grows with batch size *and* sequence length.
+- **P** — parameter bytes; fixed per step regardless of batch.
+- **BW** — HBM bandwidth (~2 TB/s on A100).
+
+At B=1 with short context, P dominates: you pay a full weight transfer for a single token. As B grows, the B·KV term rises until it rivals P — that is where adding batch stops being nearly free.
+
+The general split form separates the two terms because they scale differently: the attention term is KV-bound (grows with B × sequence length) while the MLP/linear term is weight-bound (fixed P per step, amortized over B). Roofline each side separately — the step is set by whichever is larger, which is why long-context batches saturate at a smaller B than short-context ones.
+
 **The latency-throughput curve**
 
 | Batch size | GPU utilization | Throughput (tok/s) | TTFT / request latency |
@@ -106,7 +122,35 @@ Result: p95 TTFT ~650 ms at 40 RPS on a single A100 80GB, GPU utilization ~45%.
 
 Result: 1,800 tokens/sec vs 300 tokens/sec at interactive settings — 6× throughput gain at the cost of 5–10× higher per-request latency.
 
+**Worked example: LLaMA-2-13B step time vs batch (A100, BF16, 2K context)**
+
+LLaMA-2-13B in BF16: P ≈ 26 GB of weights; KV ≈ 0.8 MB per token (40 layers × 5120 dim × 2 K/V × 2 bytes), so ≈ 1.7 GB per request at 2K tokens. A100 BW ≈ 2 TB/s. Plugging into t_step ≥ (B·KV + P)/BW:
+
+| Batch (B) | KV re-read (GB) | Min step time | Token throughput |
+|-----------|----------------|---------------|------------------|
+| 1 | 1.7 | ≈ 14 ms | ≈ 70 tok/s |
+| 8 | 13.4 | ≈ 20 ms | ≈ 400 tok/s |
+| 32 | 53.7 | ≈ 40 ms | ≈ 800 tok/s |
+| 128 | 215 | ≈ 120 ms | ≈ 1,050 tok/s (memory-infeasible — see below) |
+
+Read it as the curve made quantitative: 8× the batch costs only ~1.4× the step time (weight transfer amortized), but 32× costs ~3× (KV term now dominates P). The B=128 row does not fit an 80 GB A100 (26 GB weights + 215 GB KV) — the KV budget caps batch before the math does, which is exactly why the `--max-num-seqs` cap in the tuning examples above is a memory decision first and a latency decision second.
+
+**Worked example: FLOPs → wall time, why the KV cache is worth ~890×**
+
+On a toy 6-layer transformer (2048-token prompt + 1000 generated tokens), exact FLOP counting gives ~177 TFLOP without a KV cache (every token recomputes all prefixes) vs ~198 GFLOP with it — roughly a 890× gap. Divide by A100 FP32 throughput (19.5 TFLOPS):
+
+- No cache: 177×10¹² / 19.5×10¹² ≈ **9.0 s**
+- Cached: 198×10⁹ / 19.5×10¹² ≈ **10.1 ms**
+
+Caveat — point back at the roofline section above: this is theoretical-compute time, not measured wall time. Real decode is bandwidth-bound, so actual step time comes from the (B·KV+P)/BW equation, not from dividing FLOPs by peak TFLOPS. The translation still lands the interview point: recompute is seconds, cached decode is milliseconds.
+
 **Key tradeoff to call out:** throughput and latency are not independently tunable — you are always on a curve. The right operating point depends on your SLO and workload mix. For mixed systems, priority queuing with reserved capacity for interactive traffic is the production standard.
+
+### Scheduling distorts mean TTFT
+
+Say each request needs prefill time t and B requests arrive together. Serve them **sequentially**: the last request's TTFT is B·t — it waits behind every earlier prefill. Interleave them with continuous batching and the **mean** TTFT falls to (B+1)/2·t. Same hardware, same work, roughly half the reported mean — the only change is scheduling order.
+
+Interview consequence: mean TTFT is gameable. A scheduler that always prioritizes short prompts reports a great mean while long-context requests starve in the queue. So never quote a mean alone — report the TTFT distribution (p50/p95), and ask how the serving tier trades mean against tail.
 
 ---
 
@@ -138,6 +182,7 @@ The practical settings: for a chat product targeting p95 TTFT under a second, I'
 - **Mistake:** Confusing TTFT latency with total latency in the context of throughput — **Better:** Clarify that throughput optimization (large batches) hurts TTFT the most because requests queue before prefill starts; total latency is affected too, but TTFT is the interactive UX metric that breaks first.
 - **Mistake:** Citing "just use continuous batching" as the full answer — **Better:** Continuous batching reduces static-batch waste but doesn't eliminate the fundamental tradeoff; explain that the max concurrent sequences cap and KV cache budget still determine where you sit on the latency-throughput curve.
 - **Mistake:** Ignoring KV cache memory pressure as a throughput lever — **Better:** KV cache size determines how many concurrent sequences can fit in GPU memory; quantizing the KV cache (e.g., FP8 or INT8 key/value) or using GQA to reduce KV size directly increases sustainable batch size and throughput without changing model weights.
+- **Mistake:** Quoting mean TTFT as the latency SLO without asking how requests are scheduled — **Better:** Mean TTFT is gameable by scheduling order (sequential B·t vs interleaved (B+1)/2·t for the same work); always report the distribution (p50/p95) and check tail behavior for long-context requests.
 
 ---
 

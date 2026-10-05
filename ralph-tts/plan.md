@@ -1,9 +1,9 @@
 # Plan: Text-to-Speech & Voice AI Concepts
 
 ## Meta
-total_concepts: 32
+total_concepts: 33
 done: 32
-remaining: 0
+remaining: 1
 created: 2026-09-06
 
 ## Done
@@ -42,3 +42,4 @@ created: 2026-09-06
 - [x] 30-objective-metrics — Objective Metrics for TTS
 - [x] 31-serving-economics — Serving Cost Economics for TTS
 - [x] 32-voice-agent-regression — Regression Testing a Voice Agent
+- [ ] 33-audio-lm-judge — Audio-LM-as-Judge for TTS

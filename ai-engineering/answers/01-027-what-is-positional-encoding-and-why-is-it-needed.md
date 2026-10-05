@@ -103,6 +103,7 @@ The current dominant approach is RoPE — rotary positional embeddings, used in 
 | [Q22: What is self-attention? How does it differ from multi-head attention?](01-022-what-is-self-attention-how-does-it-differ-from-multi-head-at.md) | Prerequisite — self-attention's permutation-invariance is why positional encoding is needed |
 | [Q5: Explain context windows and their limitations](01-005-explain-context-windows-and-their-limitations.md) | Follow-up — RoPE scaling is the primary mechanism for extending context windows |
 | [Q23: What is grouped query attention (GQA)?](01-023-what-is-grouped-query-attention-gqa-how-does-it-differ-from.md) | Related architecture concept — both are transformer efficiency techniques in the attention layer |
+| [Q49: What is Multi-Head Latent Attention (MLA)?](01-049-what-is-multi-head-latent-attention-mla.md) | Follow-up — MLA decouples RoPE into a separate shared key because rotary rotations do not commute with latent up-projection |
 
 ---
 

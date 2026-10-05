@@ -32,6 +32,7 @@ Strong candidates understand that evaluation is not a one-time checkpoint but a 
 - [Q17: Golden dataset for evaluation and regression testing?](../answers/05-017-golden-dataset-for-evaluation-and-regression-testing.md)
 - [Q16: "Vibes-based" eval vs formal eval framework?](../answers/05-016-vibes-based-eval-vs-formal-eval-framework.md)
 - [Q20: A/B testing for prompt variations?](../answers/05-020-ab-testing-for-prompt-variations.md)
+- [Q24: How do you run error analysis on eval failures — from open coding to axial categories?](../answers/05-024-error-analysis-method-open-to-axial-coding.md)
 
 ### 2. Hallucination Detection & Mitigation
 **When:** "how do you reduce / measure / detect hallucinations?" / "LLM is confidently wrong — why?" / "medical chatbot factual accuracy?"
@@ -56,6 +57,13 @@ Strong candidates understand that evaluation is not a one-time checkpoint but a 
 - [Q21: Test new model before full deployment — canary, interleaved, shadow?](../answers/05-021-test-new-model-before-full-deployment-canary-interleaved-sha.md)
 - [Q22: Two models, same accuracy, different confidence — which choose? Calibration?](../answers/05-022-two-models-same-accuracy-different-confidence-which-choose-c.md)
 - [Q18: Feedback and reinforcement loops — system gets better over time?](../answers/05-018-feedback-and-reinforcement-loops-system-gets-better-over-tim.md)
+
+### 5. Paper & Research-Artefact Review
+**When:** "how do you verify a paper's results before building on them?" / "how would you use an LLM to peer-review?"
+**What:** Published claims need checking against public code (claim inventory, tiered verification, severity-graded verdict), and review itself needs a calibrated instrument (anchored dimensions, evidence-gated scores, measured human agreement).
+**Key questions:**
+- [Q26: How do you audit a paper's code for reproducibility?](../answers/05-026-paper-code-audit-reproducibility-check.md)
+- [Q27: How do you design an LLM-as-reviewer rubric for papers?](../answers/05-027-llm-paper-reviewer-rubric.md)
 
 ---
 
@@ -138,6 +146,9 @@ Are you comparing two models or prompt variants?
 | 21 | Test new model before full deployment — canary, interleaved, shadow? | S | `todo` |
 | 22 | Two models, same accuracy, different confidence — which choose? Calibration? | S | `todo` |
 | 23 | Chatbot accuracy dropped 95% → 80% in six weeks — diagnose before retraining? | S | `todo` |
+| 24 | How do you run error analysis on eval failures — open coding to axial categories? | S | `review` |
+| 26 | How do you audit a paper's code for reproducibility? | S | `todo` |
+| 27 | How do you design an LLM-as-reviewer rubric for papers? | S | `todo` |
 
 ---
 

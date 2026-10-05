@@ -493,6 +493,21 @@
     <p>
       The algorithms inside are llama.cpp's <strong>k-quants</strong>. They are <strong>block-wise</strong>: weights are chunked into small blocks (typically 16 or 32 values) that each carry their own scale (and, for asymmetric types, a min). The <code>_K</code> variants add a second level — a <em>super-block</em> whose own scale quantizes the per-block scales, which is where most of the sub-4-bit efficiency comes from, since the metadata is compressed too. The newer <code>IQ*</code> types go further and use an <em>importance matrix</em> derived from calibration data to decide which values must be preserved.
     </p>
+    <h4 style="font-size:1rem;font-weight:700;margin:1.4rem 0 0.6rem;">The importance matrix — budgeting bits per row, not per tensor</h4>
+    <p>
+      The <code>_K</code> recipe above budgets precision <strong>per tensor</strong>: every attention projection gets Q6_K, every FFN down-projection gets Q4_K. The <strong>importance matrix (imatrix)</strong> goes one granularity finer and budgets <strong>per row</strong>. The idea: run a few hundred samples of representative text through the fp16 model, record each weight row's actual contribution to the layer output, and spend bits where the contribution is large. Rows that barely move the output drop to 2–3 bits; rows that dominate it keep 5–6 bits. The <code>IQ*</code> quant types (IQ2_XS through IQ4_XS) are the k-quants that consume this matrix — same GGUF container, but the packing is driven by measured importance instead of a fixed recipe.
+    </p>
+    <div class="formula-box">
+      importance(row i) = E<sub>x ~ calibration</sub>[ ‖W<sub>i</sub> · x‖² ]<br>
+      i.e. the expected <strong>squared norm of the row's contribution</strong> to the layer output.<br>
+      High ‖Wx‖² → protect at 5–6 bit. Low ‖Wx‖² → safe at 2–3 bit.
+    </div>
+    <p>
+      Contrast this with the static formulas elsewhere on this page: <code>s = max(|W|) / 127</code> looks only at the weight values, never at what flows through them, and GPTQ's Hessian compensation minimizes reconstruction error without asking which rows the activations actually stress. The imatrix asks the activations directly — it is the calibration-set answer to "which rows would hurt most if rounded." In practice that makes IQ quants the best quality-per-byte below 4 bits: IQ4_XS roughly matches Q4_K_M quality at a smaller file, and IQ2_XS is the last stop before Q2_K survival mode.
+    </p>
+    <p>
+      Workflow with llama.cpp, two steps: first generate the matrix (<code>llama-imatrix -m model.gguf -f train-data.txt -o imatrix.dat</code> over a few hundred representative prompts), then quantize with an <code>IQ*</code> type that reads it (<code>llama-quantize --imatrix imatrix.dat model.gguf model-iq4xs.gguf IQ4_XS</code>). Two caveats. First, <strong>scales are searched, not static</strong>: the per-block scale (and min) is chosen by grid-searching candidate values to minimize reconstruction error on the calibration data — the same "search on a small calibration set" idea as AWQ's scale <code>s</code> in §4, applied per block. Garbage calibration domain (e.g. Wikipedia text for a medical chatbot) gives garbage scales, exactly as with GPTQ/AWQ. Second, <strong>the imatrix varies by uploader</strong>: two GGUF files with the same <code>Q4_K_M</code> or <code>IQ4_XS</c…
+    </p>
     <p>
       The other defining feature is <strong>per-tensor mixed precision</strong>: a packing recipe assigns different k-quant types to different tensors in the same model. Q4_K_M (the community sweet spot) uses:
     </p>
@@ -504,13 +519,58 @@
     <p>
       This per-tensor strategy allows Llama 3 70B to run on a single RTX 4090 24GB (with offloading) or, more practically, on a Mac Studio with 192 GB unified memory at ~12 tok/s — usable for batch processing and low-throughput applications. The other common types are Q8_0 (8-bit, effectively lossless), Q6_K, Q5_K_M, Q3_K_M (aggressive compression), and the IQ* importance-matrix quants at 1–4 bits.
     </p>
+    <table class="cmp-table" id="gguf-tags">
+      <thead>
+        <tr><th>Tag</th><th>Effective bits</th><th>When to pick it</th></tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><code>Q8_0</code></td>
+          <td>8</td>
+          <td>Effectively lossless. Pick when RAM allows — the quality reference everything else is judged against.</td>
+        </tr>
+        <tr>
+          <td><code>Q6_K</code> / <code>Q5_K_M</code></td>
+          <td>6 / 5</td>
+          <td>Step up from Q4 when 4-bit degrades your task: code/math/reasoning usually need Q5_K_M or Q6_K.</td>
+        </tr>
+        <tr>
+          <td><code>Q4_K_M</code></td>
+          <td>~4.5</td>
+          <td>Community sweet spot and the Ollama default pull. Best quality-per-byte without an importance matrix.</td>
+        </tr>
+        <tr>
+          <td><code>Q4_K_S</code></td>
+          <td>~4</td>
+          <td>Small variant: same recipe with more tensors at 4-bit. Slightly smaller than <code>_M</code>, slightly worse — the S/M/L suffix is size-vs-quality within one recipe, not a different algorithm.</td>
+        </tr>
+        <tr>
+          <td><code>Q4_0</code> (legacy)</td>
+          <td>4</td>
+          <td><strong>Trap — avoid.</strong> Pre-k-quant legacy type with no super-block scales and no per-tensor mixing. Costs several times the quality loss of Q4_K_M for the same bytes. Old guides still recommend it; do not follow them.</td>
+        </tr>
+        <tr>
+          <td><code>IQ4_XS</code> / <code>IQ3_XS</code></td>
+          <td>4 / 3</td>
+          <td>Importance-matrix quants: better than the same-size K-quant when calibrated on representative data. IQ4_XS ≈ Q4_K_M quality at a smaller file.</td>
+        </tr>
+        <tr>
+          <td><code>IQ2_XS</code> / <code>Q2_K</code></td>
+          <td>2</td>
+          <td>Survival mode: fits where nothing else does, with visible degradation. Prefer IQ2_XS over Q2_K; expect the ~3-bit quality cliff.</td>
+        </tr>
+      </tbody>
+    </table>
 
     <h3>6. PTQ vs QAT</h3>
     <p>
       <strong>Post-Training Quantization (PTQ)</strong> applies quantization to a fully trained model without any retraining. It requires a small calibration dataset (100–1000 samples) to compute scaling factors (dynamic range) or Hessian corrections (GPTQ). PTQ is fast (minutes to hours), requires no training infrastructure, and is sufficient for most production use cases at int8 and int4 precision. All methods described above (LLM.int8(), SmoothQuant, AWQ, GPTQ, the k-quants) are PTQ.
     </p>
     <p>
-      <strong>Quantization-Aware Training (QAT)</strong> inserts fake quantization nodes during training/continued pretraining, so the model learns to produce good outputs under quantized arithmetic. QAT can achieve &lt;0.1% quality loss even at int4, but it requires retraining the full model — expensive and rarely justified for decoder-only LLMs where PTQ-int4 already works well. QAT is more common in vision transformers and edge deployment (TFLite, CoreML) where every bit matters.
+      <strong>Quantization-Aware Training (QAT)</strong> inserts fake quantization nodes during training/continued pretraining, so the model learns to produce good outputs under quantized arithmetic. QAT can achieve &lt;0.1% quality loss even at int4 — but rarely run it yourself for decoder-only LLMs, where PTQ-int4 already works well and a full retrain is expensive. Instead, <strong>prefer official <code>-qat</code> builds when they exist</strong> (e.g. Gemma <code>-qat</code> releases): a factory QAT model beats a community PTQ quant at the same size, because the weights were trained to survive the rounding rather than rounded after the fact. QAT remains standard practice in vision transformers and edge deployment (TFLite, CoreML) where every bit matters.
+    </p>
+    <p>
+      <strong>Localize the error before choosing the quant.</strong> Quantization loss is not uniform: measure per-layer output error (mean-squared error between the fp16 layer output and the quantized layer output on a calibration set) and you get a heatmap with a consistent shape — embedding tables and the first/last transformer layers glow, attention query/key/value projections run hotter than FFN down-projections, middle-layer FFNs stay cool. That measurement is exactly what the §5 importance matrix automates per row, and it is why the Q4_K_M recipe spends Q6_K on attention and only Q4_K on FFN downs. When a quant underperforms, do not guess: profile the per-layer error, raise the bit-width of the hottest layers first (or flag them do-not-quantize), and re-test. See the layer-error heatmap view in the explorer below.
     </p>
 
     <h3>7. How to Choose — Decision Framework</h3>
@@ -545,9 +605,19 @@
           <td>NF4 + double quantization + LoRA adapters. 65B model trains on a single 48GB GPU. QLoRA paper benchmarks show parity with fp16 full finetuning.</td>
         </tr>
         <tr>
+          <td>16 GB laptop (M-series / RTX laptop), 8B model</td>
+          <td><code>Q4_K_M</code> GGUF</td>
+          <td>Work the budget with params × bits / 8: 8B fp16 ≈ 16 GB (no headroom), Q8 ≈ 8–9 GB (tight once KV cache + ~1–2 GB runtime overhead land), Q4_K_M ≈ 5 GB (comfortable). Q4 fits a 16 GB laptop with room for a long context; Q8 only if the context stays short. Rule of thumb: weights + overhead + KV budget must clear total RAM, not just the weight file.</td>
+        </tr>
+        <tr>
+          <td>Fixed RAM budget, aggressive compression (precision-budget workflow)</td>
+          <td><code>IQ*</code> imatrix quants + tier recipe</td>
+          <td>Rank rows by imatrix score, then assign tiers: attention Q/K/V + embeddings stay at 5–6 bit, FFN up/gate at 4 bit, FFN down-projections drop to 2–3 bit, and the hottest layers get do-not-quantize flags. Rebalance tiers until a perplexity gate on your own eval set passes. IQ4_XS first; IQ2_XS only past the ~3-bit cliff with eyes open.</td>
+        </tr>
+        <tr>
           <td>CPU-only / edge deployment</td>
-          <td><code>Q4_0</code> or <code>Q4_K_M</code> GGUF</td>
-          <td>llama.cpp with CPU inference. 7B Q4_K_M runs at ~20 tok/s on M2 Max; 70B at ~3 tok/s on high-end desktop with AVX2.</td>
+          <td><code>Q4_K_M</code> GGUF</td>
+          <td>llama.cpp with CPU inference. 7B Q4_K_M runs at ~20 tok/s on M2 Max; 70B at ~3 tok/s on high-end desktop with AVX2. (Prefer K-quants over legacy <code>Q4_0</code> — same bytes, far less quality loss.)</td>
         </tr>
       </tbody>
     </table>
@@ -570,7 +640,33 @@
         <h4>TensorRT-LLM</h4>
         <p>NVIDIA's framework supports INT8 (post-training and SmoothQuant) and INT4 (AWQ, GPTQ) with custom CUDA kernels. Delivers the highest absolute throughput on A100/H100 — often 30%+ faster than vLLM for the same quantized model — but requires compilation.</p>
       </div>
+      <div class="card">
+        <h4>MLX / mlx-lm</h4>
+        <p>Apple's array framework and the <code>mlx-lm</code> toolkit: the native quant track on Apple Silicon. Convert with <code>mlx-lm.convert --quantize --q-bits 4</code>, serve 4-bit weights with an 8-bit KV path, all in unified memory with no CPU/GPU transfer split. Choose MLX when the fleet is Apple Silicon and Python-first; choose GGUF + llama.cpp when you need cross-platform (CUDA/ROCm/Vulkan) or the per-tensor K-quant recipe control of §5.</p>
+      </div>
     </div>
+
+    <h3 id="ollama-playbook">9. Hands-on: Ollama</h3>
+    <p>
+      Ollama is the fastest way to run the quants above on a laptop: one daemon, one model file, sensible defaults. A bare <code>ollama pull llama3.1:8b</code> fetches the <strong>default tag, which is Q4_K_M</strong> — the §5 sweet spot, not a random choice. When quality matters more than size, ask for a bigger tag explicitly:
+    </p>
+    <div class="formula-box">
+      ollama pull llama3.1:8b&nbsp;&nbsp;# default tag = Q4_K_M<br>
+      ollama pull llama3.1:8b-instruct-q8_0&nbsp;&nbsp;# near-lossless 8-bit<br>
+      ollama pull llama3.1:8b-instruct-q6_K&nbsp;&nbsp;# middle ground for code/math<br>
+      ollama show llama3.1:8b&nbsp;&nbsp;# parameters, template, quantization level<br>
+      ollama ps&nbsp;&nbsp;# what is loaded now, VRAM/RAM footprint, context length
+    </div>
+    <p>
+      Two environment knobs control the memory the weights do <em>not</em> cover — the KV cache (see the KV-cache note 01-009 for why it matters):
+    </p>
+    <div class="formula-box">
+      OLLAMA_KV_CACHE_TYPE=q8_0&nbsp;&nbsp;# quantize the KV cache: q8_0 (safe) or q4_0 (longer context, slight quality cost)<br>
+      OLLAMA_FLASH_ATTENTION=1&nbsp;&nbsp;# memory-efficient attention → fits longer contexts in the same RAM
+    </div>
+    <p>
+      The operator loop: pull Q4_K_M, check <code>ollama ps</code> resident size against the §7 budget (weights + overhead + KV), and only then step up to <code>q8_0</code>/<code>q6_K</code> — or step the KV cache down to <code>q4_0</code> — when the context window, not the weights, is what overflows. Long-context RAG on a 16 GB laptop is usually won in these two variables, not by re-quantizing the weights.
+    </p>
   </section>
 
   <!-- ── VISUALIZATION ── -->
@@ -598,6 +694,10 @@
       <button class="prec-btn" data-prec="int4-gptq">int4 (GPTQ)</button>
       <button class="prec-btn" data-prec="nf4">NF4</button>
     </div>
+    <div class="precision-btns" id="viewBtns" style="margin-top:0.6rem;">
+      <button class="prec-btn active" data-view="vram">VRAM breakdown</button>
+      <button class="prec-btn" data-view="heatmap">Layer-error heatmap</button>
+    </div>
 
     <div class="stat-row">
       <div class="stat-chip">
@@ -618,9 +718,15 @@
       </div>
     </div>
 
-    <div class="viz-canvas-wrap">
+    <div class="viz-canvas-wrap" id="vramWrap">
       <canvas id="vramCanvas" width="1000" height="320"></canvas>
     </div>
+    <div class="viz-canvas-wrap" id="heatWrap" style="display:none;">
+      <canvas id="heatCanvas" width="1000" height="380"></canvas>
+    </div>
+    <p class="viz-desc" id="heatNote" style="display:none;">
+      Per-layer output error (mean-squared error vs the fp16 layer output on a calibration set), normalized per map. The <strong>shape</strong> is the lesson: embeddings, early/late attention, and the final norm glow while mid-layer FFNs stay cool — which is why recipes spend high bits on attention and why the imatrix protects hot rows. Values are illustrative, not measured on a specific model.
+    </p>
 
     <h4 style="font-size:0.85rem;font-weight:600;color:var(--text-dim);text-transform:uppercase;letter-spacing:0.08em;margin-bottom:0.8rem;">Will it fit?</h4>
     <div class="gpu-fit-grid" id="gpuFitGrid">
@@ -633,11 +739,11 @@
     <h2 class="section-title">Key Takeaways</h2>
     <ul>
       <li><strong>Quantization is a memory-bandwidth optimization first, compute optimization second.</strong> The decode phase is memory-bandwidth-bound at real-world batch sizes. Quantization reduces the bytes-per-weight that must be streamed from HBM each token. The throughput ceiling scales linearly with compression ratio — int4 gives you ~4× the theoretical tok/s of fp16 on the same GPU, even ignoring compute savings from int4 matmuls.</li>
-      <li><strong>AWQ protects salient channels by rescaling them, not by keeping them in fp16.</strong> Channels whose <em>activations</em> are large contribute disproportionately to layer output, so AWQ multiplies those weight channels by a searched scale <em>s</em> &gt; 1 and divides the matching activation channel by <em>s</em> — an identity transform that shrinks their relative rounding error. Every weight still lands in group-wise int4; there is no mixed precision and no fp16 channel (that is LLM.int8(), a different method). GPTQ is also weight-only W4A16, but it minimizes layer-wise L2 error with Hessian-based compensation and ignores activation salience. In practice, AWQ-int4 and GPTQ-int4 are within 0.5–1% on MMLU for 70B models, with AWQ tending to handle outlier-heavy models (Mixtral, Llama 3) better.</li>
-      <li><strong>Uniform quantization hurts — outlier channels are the enemy.</strong> In transformer models, ~0.1% of hidden dimensions have activation magnitudes 10–100× larger than average. Uniform int8 quantization of these channels causes catastrophic errors. LLM.int8() solves this by keeping outlier columns in fp16; SmoothQuant solves it by migrating the outlier magnitude to adjacent weight channels. Either way, you must address outliers — they are not a corner case.</li>
-      <li><strong>int4 on 70B+ models is production-safe.</strong> Llama 3 70B int4 (AWQ) scores ~81.5% on MMLU vs ~83.5% at fp16 — a ~2% absolute drop. For most production applications (chat, summarization, RAG, code generation), this is imperceptible. The VRAM savings (140 GB → 35 GB, running on a single 48GB GPU instead of 2×A100s) are transformative. Below 8B parameters, int4 degrades more noticeably — stick with int8 for small models.</li>
-      <li><strong>llama.cpp's k-quants make consumer-hardware LLM deployment practical — GGUF is only the container.</strong> The quality comes from the schemes packed inside the file: block-wise quantization with super-block scales, plus per-tensor mixed precision (Q4_K_M: Q6_K for attention, Q5_K for FFN gates, Q4_K for FFN downs) to squeeze the most out of a 4-bit budget. It's not just for hobbyists — Mac Studios running llama.cpp serve production workloads at small-to-medium scale. The key numbers: 70B Q4_K_M at ~12 tok/s on Mac Studio 192GB; 8B Q4_K_M at ~40 tok/s on M2 Max. Offloading layers to GPU while keeping others on CPU RAM enables running larger models than VRAM alone would allow.</li>
+      <li><strong>Outlier channels are the enemy — AWQ beats them by rescaling, not by keeping fp16.</strong> In transformer models, ~0.1% of hidden dimensions have activation magnitudes 10–100× larger than average, and uniform quantization of these channels causes catastrophic errors. LLM.int8() isolates outlier columns in fp16; SmoothQuant migrates the outlier magnitude into adjacent weights. AWQ instead multiplies activation-salient weight channels by a searched scale <em>s</em> &gt; 1 (dividing the matching activation by <em>s</em>) so they survive rounding — every weight still lands in group-wise int4. GPTQ is also weight-only W4A16 but minimizes layer-wise L2 error with Hessian compensation instead; in practice the two land within 0.5–1% MMLU on 70B models.</li>
+      <li><strong>int4 on 70B+ models is production-safe — and prefer factory QAT over community PTQ.</strong> Llama 3 70B int4 (AWQ) scores ~81.5% on MMLU vs ~83.5% at fp16 — imperceptible for chat, summarization, and RAG, transformative for VRAM (140 GB → 35 GB). Below 8B parameters, int4 degrades more noticeably — stick with int8 for small models. And do not run QAT yourself: official <code>-qat</code> builds (e.g. Gemma) beat community PTQ at the same size because the weights trained under simulated rounding.</li>
+      <li><strong>GGUF is only the container — read the tag, then run it the easy way.</strong> The quality comes from the schemes inside: block-wise k-quants with super-block scales plus per-tensor mixing (Q4_K_M: Q6_K attention, Q5_K FFN gates, Q4_K FFN downs). The tag names the recipe: default to Q4_K_M, step up to <code>Q6_K</code>/<code>Q8_0</code> for code and math, never legacy <code>Q4_0</code>, and treat <code>Q2_K</code> as survival mode past the ~3-bit cliff. Same tag from different uploaders can still differ (different calibration corpora) — verify the exact file on your own eval set. The operator loop is Ollama: default pulls are Q4_K_M, <code>ollama show</code>/<code>ollama ps</code> inspect, and <code>OLLAMA_KV_CACHE_TYPE</code> + <code>OLLAMA_FLASH_ATTENTION</code> win long context on a laptop. On Apple Silicon, MLX (<code>mlx-lm</code>, 4-bit weights + 8-bit KV in unified memory) is the native alternative to GGUF.</li>
       <li><strong>NF4 + double quantization is the information-theoretic ideal for normally distributed weights.</strong> QLoRA's NormalFloat data type allocates quantization levels proportional to the probability mass of a standard normal distribution — it is provably optimal for Gaussian-distributed data. Combined with 8-bit double quantization of scaling factors, NF4 achieves ~4.5 effective bits/parameter (beating uniform int4's 4.0). For QLoRA finetuning, this means the base model fits in ~33 GB instead of ~35 GB for Llama 3 70B — small gap, but enough to matter on a 48GB GPU.</li>
+      <li><strong>When 4 bits are not enough, budget bits per row and localize the error first.</strong> importance(row) = E[‖Wx‖²] over calibration data: rows that move the output keep 5–6 bits, rows that do not drop to 2–3, hottest layers get do-not-quantize flags — IQ4_XS matches Q4_K_M quality at a smaller file. Before choosing, profile per-layer output MSE on a calibration set (the heatmap view above): embeddings, early/late attention, and the final norm glow while mid-layer FFNs stay cool, which is exactly why recipes spend Q6_K on attention. Raise the hottest layers first, re-test, repeat.</li>
     </ul>
   </section>
 
@@ -950,6 +1056,84 @@
 
     drawViz();
   }
+  // ── Layer-error heatmap (illustrative relative MSE vs fp16, normalized) ──
+  const HEAT_COLS = ['int8', 'int4-awq', 'int4-gptq', 'nf4'];
+  const HEAT_ROWS = [
+    { label: 'token embeddings',       errs: [0.42, 0.78, 0.81, 0.75] },
+    { label: 'layers 0-2 · attn Q/K/V', errs: [0.35, 0.66, 0.70, 0.63] },
+    { label: 'layers 0-2 · FFN',        errs: [0.22, 0.48, 0.52, 0.46] },
+    { label: 'mid layers · attn Q/K/V', errs: [0.18, 0.40, 0.44, 0.38] },
+    { label: 'mid layers · FFN',        errs: [0.10, 0.24, 0.27, 0.23] },
+    { label: 'last 2 layers · attn',    errs: [0.30, 0.58, 0.62, 0.55] },
+    { label: 'last 2 layers · FFN',     errs: [0.20, 0.44, 0.47, 0.42] },
+    { label: 'final norm + lm_head',    errs: [0.38, 0.72, 0.75, 0.69] },
+  ];
+
+  function heatColor(v) {
+    // green (#00ff88) -> yellow (#ffd700) -> red (#ff5252)
+    const t = Math.max(0, Math.min(1, v));
+    let r, g, b;
+    if (t < 0.5) {
+      const k = t / 0.5;
+      r = Math.round(k * 255); g = Math.round(255 - k * 40); b = Math.round(136 - k * 136);
+    } else {
+      const k = (t - 0.5) / 0.5;
+      r = 255; g = Math.round(215 - k * 133); b = Math.round(k * 82);
+    }
+    return 'rgb(' + r + ',' + g + ',' + b + ')';
+  }
+
+  function drawHeat() {
+    const canvas = document.getElementById('heatCanvas');
+    const ctx = canvas.getContext('2d');
+    const dpr = window.devicePixelRatio || 1;
+
+    const rect = canvas.parentElement.getBoundingClientRect();
+    const w = rect.width - 32;
+    const h = 380;
+
+    canvas.width = w * dpr;
+    canvas.height = h * dpr;
+    canvas.style.width = w + 'px';
+    canvas.style.height = h + 'px';
+    ctx.scale(dpr, dpr);
+
+    ctx.clearRect(0, 0, w, h);
+
+    const labelW = 210;
+    const gridW = w - labelW - 20;
+    const cellW = gridW / HEAT_COLS.length;
+    const headH = 30;
+    const cellH = Math.min(34, (h - headH - 10) / HEAT_ROWS.length);
+
+    // Column headers
+    ctx.font = 'bold 11px "JetBrains Mono", monospace';
+    ctx.textAlign = 'center';
+    HEAT_COLS.forEach(function(colId, ci) {
+      ctx.fillStyle = PRECISIONS[colId].color;
+      ctx.fillText(PRECISIONS[colId].name, labelW + cellW * ci + cellW / 2, 20);
+    });
+
+    // Rows
+    HEAT_ROWS.forEach(function(row, ri) {
+      const y = headH + ri * cellH;
+      ctx.fillStyle = '#8892a4';
+      ctx.font = '11px "JetBrains Mono", monospace';
+      ctx.textAlign = 'right';
+      ctx.fillText(row.label, labelW - 10, y + cellH / 2 + 4);
+      row.errs.forEach(function(v, ci) {
+        const x = labelW + cellW * ci;
+        ctx.fillStyle = heatColor(v);
+        ctx.globalAlpha = 0.25 + 0.75 * v;
+        ctx.fillRect(x + 2, y + 2, cellW - 4, cellH - 4);
+        ctx.globalAlpha = 1;
+        ctx.fillStyle = '#0d0f17';
+        ctx.font = 'bold 11px "JetBrains Mono", monospace';
+        ctx.textAlign = 'center';
+        ctx.fillText(v.toFixed(2), x + cellW / 2, y + cellH / 2 + 4);
+      });
+    });
+  }
 
   // ── Event handlers ──
   modelSelect.addEventListener('change', function() {
@@ -964,17 +1148,36 @@
     if (!prec) return;
 
     currentPrec = prec;
-    // Update active state
-    document.querySelectorAll('.prec-btn').forEach(b => b.classList.remove('active'));
+    // Update active state (scoped: view toggle buttons keep their own state)
+    precisionBtns.querySelectorAll('.prec-btn').forEach(b => b.classList.remove('active'));
     btn.classList.add('active');
     updateUI();
+  });
+
+  document.getElementById('viewBtns').addEventListener('click', function(e) {
+    const btn = e.target.closest('.prec-btn');
+    if (!btn) return;
+    const view = btn.getAttribute('data-view');
+    if (!view) return;
+
+    this.querySelectorAll('.prec-btn').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    const showHeat = (view === 'heatmap');
+    document.getElementById('vramWrap').style.display = showHeat ? 'none' : '';
+    document.getElementById('heatWrap').style.display = showHeat ? '' : 'none';
+    document.getElementById('heatNote').style.display = showHeat ? '' : 'none';
+    if (showHeat) drawHeat();
+    else drawViz();
   });
 
   // ── Resize handler ──
   let resizeTimeout;
   window.addEventListener('resize', function() {
     clearTimeout(resizeTimeout);
-    resizeTimeout = setTimeout(drawViz, 150);
+    resizeTimeout = setTimeout(function() {
+      drawViz();
+      if (document.getElementById('heatWrap').style.display !== 'none') drawHeat();
+    }, 150);
   });
 
   // ── Init ──

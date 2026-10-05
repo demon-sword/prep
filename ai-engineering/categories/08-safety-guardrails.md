@@ -53,6 +53,7 @@ Strong candidates understand that safety is **layered defense-in-depth, not a si
 **Key questions:**
 - [Q9: Red-team an LLM system?](../answers/08-009-red-team-an-llm-system.md)
 - [Q8: Bias in training data and generated content?](../answers/08-008-bias-in-training-data-and-generated-content.md)
+- [Q11: Chatbot failure case studies?](../answers/08-011-chatbot-failure-case-studies.md)
 
 ---
 
@@ -120,6 +121,7 @@ Step 5 — Red-team before launch
 | 8 | Bias in training data and generated content? | M | `todo` |
 | 9 | Red-team an LLM system? | S | `todo` |
 | 10 | Generated code gets executed — prevent malicious code? | S | `todo` |
+| 11 | Chatbot failure case studies? | M | `todo` |
 
 ---
 

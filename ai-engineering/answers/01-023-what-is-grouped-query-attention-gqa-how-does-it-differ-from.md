@@ -110,6 +110,7 @@ A concrete example: a modern open-weight model uses GQA across all sizes — 8B 
 | [Q22: What is self-attention? How does it differ from multi-head attention?](01-022-what-is-self-attention-how-does-it-differ-from-multi-head-at.md) | Prerequisite — GQA is a variant of MHA; need MHA mechanics first |
 | [Q9: What is KV cache? How does it help in LLM inference?](01-009-what-is-kv-cache-how-does-it-help-in-llm-inference.md) | Core dependency — GQA's primary benefit is reducing KV cache footprint |
 | [Q33: What is FlashAttention and how does it work?](01-033-what-is-flashattention-and-how-does-it-work.md) | Complementary optimization — FlashAttention addresses compute/memory IO; GQA addresses cache size; both deployed together in modern serving stacks |
+| [Q49: What is Multi-Head Latent Attention (MLA)?](01-049-what-is-multi-head-latent-attention-mla.md) | Compressing alternative — MLA shrinks the cache by low-rank compression where GQA shrinks it by head sharing |
 
 ---
 

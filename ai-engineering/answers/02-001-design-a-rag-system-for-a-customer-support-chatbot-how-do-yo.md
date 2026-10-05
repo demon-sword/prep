@@ -123,6 +123,7 @@ In production, I'd track: deflection rate (did the user resolve without escalati
 | [Q21: How evaluate a RAG pipeline? NDCG, MRR, precision@k, recall?](02-021-how-evaluate-a-rag-pipeline-ndcg-mrr-precisionk-recall.md) | Deep-dive on the eval metrics introduced here |
 | [Q17: What is hybrid search? When combine vector + BM25?](02-017-what-is-hybrid-search-when-combine-vector-bm25.md) | Expands on the retrieval strategy recommended in this answer |
 | [Q18: What is re-ranking? Cross-encoder vs bi-encoder?](02-018-what-is-re-ranking-cross-encoder-vs-bi-encoder.md) | Expands on the reranking stage — the biggest precision lever |
+| [Q35: How do you connect scholarly sources into a RAG pipeline?](02-035-scholarly-source-connectors.md) | Source-connector layer for literature-backed RAG — identifiers, versions, citation graph |
 
 ---
 

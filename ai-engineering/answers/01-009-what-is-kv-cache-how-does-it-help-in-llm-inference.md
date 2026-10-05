@@ -34,10 +34,19 @@ During the **prefill phase**, the prompt is processed in parallel and all K/V te
 
 **PagedAttention (vLLM):** The KV cache for a request can be fragmented across non-contiguous GPU memory blocks (like OS paging), eliminating internal fragmentation and enabling much higher throughput. vLLM reports 2–4× throughput gain over naive contiguous allocation because GPU memory is shared more efficiently across concurrent requests.
 
+**KV-cache quantization methods:** Keys and values quantize differently. Keys exhibit large-magnitude outlier channels, so K quantizes best per-channel — and before RoPE is applied, since rotation mixes channels and destroys the outlier structure that per-channel scales exploit. Values show no such channel structure and quantize per-token. KVQuant builds on exactly this split (non-uniform per-channel K, per-token V, plus isolated outlier handling) to reach ~4-bit with near-FP16 quality — ~4× memory cut. KIVI pushes the same asymmetry to ~2-bit with grouped quantization (K per-channel, V per-token). FP8 (E4M3) is the coarse hardware-friendly option: ~2× cut at ~1% quality loss. Interview rule of thumb: quantize K per-channel pre-RoPE and V per-token, isolate outliers — per-tensor or post-RoPE quantization of K is where quality dies.
+
 ### Example / Tradeoff
 A 4K-token conversation with a frontier model scale model: without KV cache each decode step re-processes all 4K tokens (~quadratic cost). With KV cache each step processes exactly 1 new token. Time-to-first-token (TTFT) reflects prefill cost; inter-token latency (ITL) reflects per-decode-step cost. vLLM, TGI (Hugging Face Text Generation Inference), and TensorRT-LLM all implement KV cache as the baseline optimization.
 
 **Tradeoff:** Cache is memory-hungry. A long context or large batch fills GPU HBM, forcing smaller batch sizes (lower throughput). Solutions include quantized KV cache (KVQuant: 4-bit K/V ≈ 4× memory reduction with minimal quality loss), sliding-window attention (Mistral's approach — cache only last W tokens), and cache eviction policies (SnapKV, H2O). There's an inherent tension: longer contexts → bigger cache → less room for batching → lower throughput.
+
+**Sharing caveat:** Cross-layer KV sharing (one layer's K/V reused by neighboring layers) saves *capacity* but not step time — the shared tensors must still be re-read from HBM on every decode step, and decode is memory-bandwidth-bound, so the per-step read cost stays. Sharing shrinks the footprint; it does not make any single step faster.
+
+**Beyond one engine:** LMCache is a named open-source layer that spills KV blocks down a memory hierarchy (GPU → CPU → SSD/shared storage) and shares them across engines and requests, so a common prefix computed under vLLM can be reused under SGLang instead of recomputed. The generic category is KV offloading/sharing; LMCache is one implementation of it.
+
+### Quantitative appendix
+Toy 6-layer transformer, from-scratch FLOP accounting. Counting rule: one matmul of shape (a×b)·(b×c) costs 2abc FLOPs (multiply-add). Per layer: Q/K/V/O projections (4 × 2·T·d·d), attention scores QKᵀ (2·T²·d) plus attention·V (2·T²·d) — the T² terms — and the FFN (~2 × 2·T·d·4d). Summed over the toy config this closes to a no-cache cost of 12,294·T² + 37,764,096·T FLOPs per forward pass over T tokens. Generating 1000 tokens from a 2048-token prompt without cache reprocesses the growing prefix every step: ~177 TFLOPs total. With cache each step processes exactly one new token (no T² term — per-token cost linear in context): ~198 GFLOPs total, ~890× less arithmetic. At A100 FP32 (19.5 TFLOPS) that translates to ~9.0 s vs ~10.1 ms. Interview caveat: FLOPs ≠ wall time — decode is memory-bandwidth-bound (reading the cache dominates) plus CPU/GPU overhead, so realized speedups are smaller; the arithmetic sets the order of magnitude, the roofline decides reality.
 
 ---
 
@@ -56,6 +65,8 @@ The memory footprint scales as: 2 × layers × heads × head_dim × sequence_len
 **Tradeoff / production angle (1 min):**
 "The big production challenge is that KV cache competes with the model weights and the activations for GPU HBM. As batch size or sequence length grows, the cache fills memory and you're forced to reduce batch size — which kills throughput. vLLM's PagedAttention solves a lot of this by managing the cache like virtual memory, allocating it in non-contiguous pages and sharing pages between requests. That alone gives 2–4× throughput improvement. Beyond that, you can quantize the KV cache to INT4/INT8 with KVQuant, or use sliding-window attention like Mistral does, which caps cache size by only attending to the last W tokens rather than the full history."
 
+"Beyond a single engine, there are LMCache-style offloading layers that spill KV blocks to CPU or SSD and share them across engines — a prefix computed under one engine can be reused rather than recomputed."
+
 **Wrap-up (30s):**
 "So KV cache converts per-step cost from O(n²) to O(n) and is foundational to making LLM serving practical. The remaining challenge is memory management at scale — which is where PagedAttention and KV quantization come in. Happy to go deeper on any of those."
 
@@ -66,6 +77,7 @@ The memory footprint scales as: 2 × layers × heads × head_dim × sequence_len
 - **Mistake:** Describing KV cache as just "saving computation" without specifying *what* is cached (K and V tensors from past tokens) and *why* Q is not cached — **Better:** Explain that Q is only needed to compute the current token's attention weights, while K and V are reused by all future tokens, so caching K/V eliminates all redundant re-reads.
 - **Mistake:** Ignoring memory cost — saying KV cache "just makes things faster" without mentioning that it is a major GPU memory consumer that constrains batch size and throughput — **Better:** Quantify the footprint (e.g., 8 GB for a 70B model at 4K tokens) and mention PagedAttention / KV quantization as the production responses.
 - **Mistake:** Conflating TTFT (time to first token, dominated by prefill) with ITL (inter-token latency, dominated by decode + cache reads) — **Better:** Distinguish the two latency phases: prefill processes the full prompt in parallel once; decode processes one token at a time with cached K/V reads.
+- **Mistake:** Claiming cross-layer KV sharing speeds up each decode step — **Better:** Sharing saves capacity (footprint), not time: the shared tensors are still re-read from HBM every step, and bandwidth-bound decode pays that read cost regardless.
 
 ---
 
@@ -76,6 +88,7 @@ The memory footprint scales as: 2 × layers × heads × head_dim × sequence_len
 | [Q2: How do transformers work?](01-002-how-do-transformers-work.md) | Prerequisite — self-attention Q/K/V mechanics underpin why KV cache works |
 | [Q34: Why is LLM inference memory-bounded?](01-034-why-is-llm-inference-memory-bounded.md) | Follow-up — KV cache is the dominant reason inference is memory-bound at decode time |
 | [Q11: How reduce latency in GenAI applications?](07-003-how-reduce-latency-in-genai-applications.md) | Same concept — KV cache is the first lever in any latency reduction discussion |
+| [Q49: What is Multi-Head Latent Attention (MLA)?](01-049-what-is-multi-head-latent-attention-mla.md) | Follow-up — MLA compresses the KV cache to a low-rank latent plus shared rotary key, ~57× smaller than MHA |
 
 ---
 

@@ -118,8 +118,10 @@ The part teams skip is closing the loop. Every confirmed bypass has to become a 
 | Question | Relationship |
 |----------|--------------|
 | [Q4: Protect against prompt injection and jailbreaking?](08-004-protect-against-prompt-injection-and-jailbreaking.md) | prerequisite — the defenses that red-teaming is measuring |
+| [Q11: Chatbot failure case studies?](08-011-chatbot-failure-case-studies.md) | follow-up — named industry failure anecdotes (Air Canada refund-bot ruling, Tahoe pricing jailbreak, fabricated-citation sanctions) mapped to the controls that would have caught them |
 | [Q1: When and how implement LLM guardrails?](08-001-when-and-how-implement-llm-guardrails.md) | related — red-team findings drive guardrail threshold tuning |
 | [Q10: Generated code gets executed — prevent malicious code?](08-010-generated-code-gets-executed-prevent-malicious-code.md) | follow-up — the highest-severity target class in an agentic system |
+| [Q11: Chatbot failure case studies — what went wrong?](08-011-chatbot-failure-case-studies.md) | follow-up — named incidents (Air Canada, Chevy, Avianca) that motivate the red-team program |
 
 ---
 
