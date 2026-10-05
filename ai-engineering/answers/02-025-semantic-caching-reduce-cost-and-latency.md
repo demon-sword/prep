@@ -40,8 +40,8 @@ Semantic caching stores LLM responses keyed by the *meaning* of a query rather t
 
 **Key implementation decisions:**
 - **Similarity threshold**: 0.92–0.97 cosine similarity. Too low (0.85) → wrong answers served for different-intent queries. Too high (0.99) → effectively exact-match, low hit rate.
-- **TTL management**: Cache entries must expire when underlying documents change (event-driven invalidation via webhook/CDC) or on a fixed TTL (1–24 hours depending on content freshness requirements).
-- **Cache scope**: User-level vs global. For personalized responses, scope the cache per user. For factual Q&A (support docs, HR policies), a global shared cache gives the highest hit rate.
+- **TTL tied to KB freshness, not a fixed number:** assign a TTL class per content type — static policy docs 12–24 h, product/changelog content 1–4 h aligned to the re-index cadence, real-time data no cache at all (route around it, per "Where it breaks down"). The TTL is a freshness policy derived from how fast the underlying knowledge changes, with event-driven invalidation (CMS/Confluence webhook → flush) covering mid-TTL updates.
+- **Namespace-scoped invalidation:** partition the cache by knowledge namespace (`kb:pricing:*`, `kb:hr-policy:*`) and include the namespace plus a `kb_version` in the cache key, so a content webhook flushes only the affected namespace via key-prefix delete instead of cold-restarting the whole cache.
 - **Cache backend**: GPTCache (open-source, pluggable backends), Redis + FAISS for custom implementations, or Zep for agent memory + caching combined.
 
 **Math at scale:**
@@ -98,6 +98,7 @@ TTL is the other failure mode. For dynamic content — real-time prices, live in
 - **Mistake:** Describing caching as "just using Redis to store LLM responses keyed by query string" — **Better:** Explain that exact-match string caching has near-zero hit rate for LLM workloads because users rephrase constantly; semantic caching uses embedding cosine similarity to capture paraphrases, which is the key architectural insight.
 - **Mistake:** Ignoring threshold calibration risk — saying "set similarity to 0.9 and you're done" — **Better:** Explain that the threshold must be tuned per domain, validated against a golden set of known-different queries, and that too-low thresholds serve confidently wrong answers (which is worse than a cache miss).
 - **Mistake:** Not mentioning TTL and invalidation strategy — treating the cache as permanent — **Better:** Discuss TTL policy (content-type dependent: hours for static docs, disabled for real-time data) and event-driven invalidation via webhooks/CDC when source documents change.
+- **Mistake:** Using one global TTL for the whole semantic cache — **Better:** Name the staleness-vs-freshness tradeoff per content class (long TTL buys hit rate, sells staleness), scope invalidation by namespace so one doc update doesn't flush everything, and for hot keys use a soft/hard TTL pair: serve stale inside the soft window while revalidating in the background (stale-while-revalidate), hard-expire beyond it. The full production pattern — admission control, quantized vectors, payload offloading, distributed locks, thundering-herd guard — is a serving-systems design of its own; here the interview answer is "TTL class per content type plus namespace flush on webhook."
 
 ---
 
