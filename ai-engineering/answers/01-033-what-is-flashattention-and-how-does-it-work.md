@@ -37,6 +37,21 @@ Standard attention materializes the full N×N attention matrix in HBM:
 
 For N=4096 tokens with d_model=4096, this is ~67 MB of HBM traffic per head — the bandwidth, not the arithmetic, is the bottleneck.
 
+**Arithmetic intensity, per head (why tiling flips the roofline):**
+
+- Per head, attention does `4·N²·d` FLOPs (`2·N²·d` for QK^T, `2·N²·d` for the weighted sum by V) with head dim `d` (typically 128).
+- Standard attention's HBM traffic is dominated by repeated passes over the N×N buffer — write scores, read for softmax, write probabilities, read for the V multiply: ~`4·N²·s` bytes (`s` = bytes per score element, 4 for the FP32 softmax buffer). Intensity saturates at `I ≈ d/s ≈ 128/4 ≈ 32` FLOPs/byte — *independent of sequence length*, so no matter how long the context, standard attention never climbs out of the memory-bound region (A100 ridge: ~156).
+- FlashAttention's traffic is just one read each of Q, K, V plus one write of O: ~`4·N·d·b` bytes (`b` = bytes per element, 2 for BF16). Intensity grows linearly with sequence length: `I ≈ N/b = N/2` FLOPs/byte.
+- The prefill crossover is where `N/2` hits the chip's ridge point:
+
+| Chip | Ridge point | Prefill threshold `N*` |
+|------|-------------|------------------------|
+| A100 80 GB | ~156 FLOPs/byte | ~310 tokens |
+| H100 SXM | ~295 FLOPs/byte | ~590 tokens |
+| TPU v5e | ~240 FLOPs/byte | ~480 tokens |
+
+- So above a few hundred tokens, FlashAttention attention is compute-bound (the kernel earns its keep twice over: O(N) memory *and* full core utilization); below that it is technically still memory-bound, but the traffic is so small it hardly matters. And decode — effectively N=1 query against the full KV cache — sits at `I ≈ 1/2`, hopelessly memory-bound no matter the kernel, which is why decode needs batching, GQA, and PagedAttention rather than a better kernel. (The batch-size version of this crossover — the critical batch `B_crit` where decode itself turns compute-bound — is derived in [Q34: Why is LLM inference memory-bounded?](01-034-why-is-llm-inference-memory-bounded.md).)
+
 FlashAttention (Dao et al., 2022) fixes this via **tiling + recomputation**:
 - **Tiling:** Split Q, K, V into blocks that fit in SRAM (~20 MB on A100). Process each tile entirely in SRAM — never writing the intermediate N×N matrix to HBM.
 - **Online softmax:** Use a numerically stable running max+sum trick (from Milakov & Gimelshein) to compute the softmax incrementally across tiles without materializing the full row.

@@ -55,6 +55,20 @@ LLM inference during the **decode phase** is memory-bandwidth-bound, not compute
 - Increasing batch size is the primary lever: with B=64 requests sharing a decode step, the same weight load serves 64 tokens, raising effective arithmetic intensity.
 - But batch size is limited by KV cache memory — hence vLLM's **PagedAttention**: KV cache blocks are allocated on demand (like OS virtual memory paging), minimizing waste from reserved-but-unused slots, allowing 2–4× larger effective batch sizes.
 
+**How large a batch flips decode to compute-bound (B_crit):**
+
+- Per decode step, FLOPs ≈ `2·P·B` (one multiply-add per parameter per request in the batch) while bytes read ≈ `P·b` (the weights, `b` = bytes/param; KV cache traffic ignored for now). So arithmetic intensity grows linearly with batch: `I(B) ≈ 2·B/b` FLOPs/byte.
+- The roofline crossover is where `I(B)` hits the chip's ridge point (`peak FLOPs / bandwidth`). For BF16 weights (`b=2`), that gives the rule of thumb **`B_crit ≈ ridge-point intensity`**:
+
+| Chip | Peak BF16 | HBM bandwidth | Ridge point | B_crit (BF16) |
+|------|-----------|---------------|-------------|---------------|
+| A100 80 GB | ~312 TFLOPS | ~2 TB/s | ~156 FLOPs/byte | ~150 |
+| H100 SXM | ~989 TFLOPS | ~3.35 TB/s | ~295 FLOPs/byte | ~300 |
+| TPU v5e | ~197 TFLOPS | ~0.82 TB/s | ~240 FLOPs/byte | ~240 |
+
+- This is a *lower bound*: it ignores KV cache traffic, which adds bytes without FLOPs and pushes the true crossover higher — especially at long context.
+- The punchline for the interview: the crossover sits at **hundreds of concurrent requests**, but KV cache capacity caps real batches far below that on a single chip. So decode *stays* memory-bound in practice, and every production lever (GQA, quantization, PagedAttention) is really about serving a bigger batch within the HBM budget. (The mirror-image derivation — per-head attention intensity and the prefill sequence length where attention itself turns compute-bound — lives in [Q33: FlashAttention](01-033-what-is-flashattention-and-how-does-it-work.md).)
+
 ### Example / Tradeoff
 
 **vLLM benchmark (A100 80 GB, LLaMA-2 13B):**
@@ -79,7 +93,7 @@ LLM inference during the **decode phase** is memory-bandwidth-bound, not compute
 
 The KV cache makes this worse. Every decode step also loads cached keys and values for all prior tokens. At long contexts with large batches, the KV cache itself can consume tens of gigabytes of HBM, crowding out space for more requests.
 
-The primary fix is batch size: if you serve 64 requests simultaneously, one weight-load services 64 tokens, pushing arithmetic intensity up toward the compute-bound region. But bigger batches demand more KV cache memory — which is exactly what vLLM's PagedAttention solves. It treats KV cache blocks like OS virtual memory pages, allocating them on demand rather than reserving contiguous chunks upfront. In practice this gives 2–4× more effective batch capacity on the same hardware."
+The primary fix is batch size: if you serve 64 requests simultaneously, one weight-load services 64 tokens, pushing arithmetic intensity up toward the compute-bound region. But bigger batches demand more KV cache memory — which is exactly what vLLM's PagedAttention solves. It treats KV cache blocks like OS virtual memory pages, allocating them on demand rather than reserving contiguous chunks upfront. In practice this gives 2–4× more effective batch capacity on the same hardware. The roofline math says the crossover sits at a batch of a few hundred — around 150 on an A100, 300 on an H100 — but KV cache capacity caps real batches far below that on a single chip, so decode stays memory-bound in practice."
 
 **Tradeoff / production angle (1 min):**
 "There are several complementary levers. GQA — which a modern open-weight model uses — reduces KV heads from 64 to 8, shrinking KV cache by 8× and freeing HBM headroom for more concurrent requests. Quantization (INT4/INT8) halves or quarters the weight data per step, nearly linearly improving decode throughput on bandwidth-limited cards. Speculative decoding converts the bottleneck from many small memory-bound steps to fewer large compute-bound verification steps, roughly doubling throughput for low-entropy outputs.
