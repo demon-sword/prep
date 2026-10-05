@@ -17,7 +17,7 @@ This is asked because tiling is the single most important performance idea in GP
 - `block` — a positive integer tile size. Non-positive values raise `ValueError`. It does not need to divide any dimension; edge tiles are handled, not assumed away.
 - `matmul_naive(A, B)` returns `C` of shape `(m, n)` computed by the `i, j, p` triple loop.
 - `matmul_tiled(A, B, block)` returns the same `C`, computed tile by tile: for each `block × block` output tile, loop over `k` in slabs of width `block`, stage the current `A`-slab and `B`-slab into local tile buffers, and accumulate their partial product into the output tile.
-- Both return a fresh array; neither mutates its inputs. The output dtype follows `np.result_type(A, B)` except that float32 inputs are accumulated in float64 working precision and rounded back at the end (documented below).
+- Both return a fresh array; neither mutates its inputs. The output dtype follows `np.result_type(A, B)`. Float inputs accumulate in float64 working precision and cast back once at the end (float32 inputs therefore track a float64 reference); integer inputs accumulate exactly in Python-int precision and cast back once at the end, so no float rounding ever touches the integer path.
 
 **Edge cases that must hold**
 
@@ -71,13 +71,24 @@ def matmul_naive(A, B):
     """C = A @ B via the plain i, j, p triple loop.
 
     This is the loop nest one GPU thread would execute for its single
-    output element, written out for the whole matrix.
+    output element, written out for the whole matrix. Integer inputs take
+    an exact Python-int path; floats accumulate in float64 working
+    precision so the naive path is the reference-quality baseline the
+    tiled path is compared against.
     """
     A, B = _check_2d(A, B)
     m, k = A.shape
     n = B.shape[1]
-    # Accumulate in float64 working precision so the naive path is the
-    # reference-quality baseline the tiled path is compared against.
+    out_dtype = np.result_type(A, B)
+    if np.issubdtype(out_dtype, np.integer):
+        C = np.zeros((m, n), dtype=object)
+        for i in range(m):
+            for j in range(n):
+                s = 0
+                for p in range(k):
+                    s += int(A[i, p]) * int(B[p, j])
+                C[i, j] = s
+        return np.asarray(C, dtype=out_dtype)
     C = np.zeros((m, n), dtype=np.float64)
     for i in range(m):
         for j in range(n):
@@ -85,7 +96,7 @@ def matmul_naive(A, B):
             for p in range(k):
                 s += float(A[i, p]) * float(B[p, j])
             C[i, j] = s
-    return C.astype(np.result_type(A, B), copy=False)
+    return C.astype(out_dtype, copy=False)
 
 
 def matmul_tiled(A, B, block):
@@ -95,7 +106,9 @@ def matmul_tiled(A, B, block):
     along k. The slab slices are first copied into small local buffers —
     the CPU stand-in for staging a tile into on-chip shared memory —
     then multiplied into the output tile. Edge tiles shrink via min()
-    clamping instead of assuming divisibility.
+    clamping instead of assuming divisibility. Integer inputs accumulate
+    exactly in Python-int precision; floats accumulate tile partials in
+    float64 with a single cast back at the very end.
     """
     if int(block) <= 0:
         raise ValueError(f"block must be positive, got {block}")
@@ -104,6 +117,24 @@ def matmul_tiled(A, B, block):
     m, k = A.shape
     n = B.shape[1]
     out_dtype = np.result_type(A, B)
+    if np.issubdtype(out_dtype, np.integer):
+        # Exact integer path: same tile/slab traversal, but the inner
+        # tile product uses Python ints so large int64 values (beyond
+        # 2**53) never pass through float64.
+        C = np.zeros((m, n), dtype=object)
+        for i0 in range(0, m, block):
+            i1 = min(i0 + block, m)          # shrinks on the bottom edge tile
+            for j0 in range(0, n, block):
+                j1 = min(j0 + block, n)      # shrinks on the right edge tile
+                for p0 in range(0, k, block):
+                    p1 = min(p0 + block, k)  # slabs partition 0..k exactly
+                    for i in range(i0, i1):
+                        for j in range(j0, j1):
+                            s = 0
+                            for p in range(p0, p1):
+                                s += int(A[i, p]) * int(B[p, j])
+                            C[i, j] = C[i, j] + s
+        return np.asarray(C, dtype=out_dtype)
     # One wide accumulator for the whole output: tile partials add into
     # float64, and the single cast back happens at the very end.
     C = np.zeros((m, n), dtype=np.float64)
@@ -158,13 +189,27 @@ assert err_tiled <= err_f32 + 1e-6, \
     f"tiled fp32 accumulation worse than BLAS sgemm: {err_tiled} vs {err_f32}"
 assert err_tiled < 1e-4, f"tiled fp32 error too large: {err_tiled}"
 
-# 4. Non-contiguous inputs behave identically (handled by value, not layout).
+# 4. Integer inputs stay exact, including values beyond 2**53 that
+#    float64 cannot represent (the integer path never touches float).
+Ai = np.array([[2**60 + 1, 3], [5, 7]])
+Bi = np.array([[1, 0], [0, 1]])
+for block in (1, 2, 7):
+    for fn in (matmul_naive, lambda X, Y: matmul_tiled(X, Y, block)):
+        got = fn(Ai, Bi)
+        assert got.dtype == np.result_type(Ai, Bi), "int out dtype wrong"
+        assert np.array_equal(got, Ai), f"int exactness failed block={block}"
+Ci = (np.arange(12).reshape(4, 3) - 5)
+Di = (np.arange(15).reshape(3, 5) - 7)
+assert np.array_equal(matmul_naive(Ci, Di), Ci @ Di), "int naive mismatch"
+assert np.array_equal(matmul_tiled(Ci, Di, 2), Ci @ Di), "int tiled mismatch"
+
+# 5. Non-contiguous inputs behave identically (handled by value, not layout).
 At = np.ascontiguousarray(gen.normal(size=(12, 8))).T  # (8, 12) strided view
 Bt = np.ascontiguousarray(gen.normal(size=(12, 18)))[:, ::2]  # (12, 9) strided
 assert np.allclose(matmul_tiled(At, Bt, 5), At @ Bt, atol=1e-9), \
     "non-contiguous inputs mishandled"
 
-# 5. Contract violations raise instead of silently miscomputing.
+# 6. Contract violations raise instead of silently miscomputing.
 for bad_A, bad_B in [(np.ones((2, 3)), np.ones((4, 2))),
                      (np.ones(3), np.ones((3, 3))),
                      (np.zeros((0, 3)), np.zeros((3, 2)))]:

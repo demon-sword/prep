@@ -16,7 +16,7 @@ This is asked because the jump from "NumPy one-liner" to "kernel that runs on an
 - `x`, `y` — shape `(n,)`, real numeric dtypes, `n >= 1`. For `triton_style_add` the shapes must match exactly; a mismatch raises `ValueError`. Non-1-D or empty inputs raise `ValueError`.
 - `block` — the `BLOCK` compile-time constant: a positive integer. Zero or negative raises `ValueError`. It does not need to divide `n`; the tail program is masked.
 - `scale`, `bias` — Python/NumPy scalars applied as `relu(scale · x + bias)`, elementwise, with `relu(v) = max(v, 0)`.
-- Both functions return a fresh shape-`(n,)` array with dtype `np.result_type` of the inputs (plus the scalars for the affine kernel); inputs are never mutated. A non-contiguous input is handled by value.
+- Both functions return a fresh shape-`(n,)` array and never mutate their inputs. `triton_style_add` returns `np.result_type(x, y)`. `triton_style_affine_relu` is dtype-preserving: integer inputs with integer scale/bias return integers, float32 returns float32, float64 returns float64 (float16 widens to float32) — Python scalars never widen the result. A non-contiguous input is handled by value.
 - Both kernels route through one shared `_launch_grid(n, block)` helper that yields `(program_id, start, end)` triples — the CPU analogue of `program_id(axis=0)` times `BLOCK` — and every per-program slice is clamped to `[start, min(start + block, n)]`, the analogue of the Triton load/store mask.
 
 **Edge cases that must hold**

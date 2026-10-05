@@ -15,7 +15,7 @@ This is asked because reduction and scan are the two collective primitives under
 
 - `x` — shape `(n,)`, any real numeric dtype, `n >= 1`. Empty or non-1-D inputs raise `ValueError`.
 - `tree_reduce(x)` returns a Python `float`: the sum of all elements, combined pairwise in tree order (round by round, adjacent pairs), not left-to-right.
-- `exclusive_scan(x)` returns an array of shape `(n,)` with the same dtype as `x` (upcast to at least float64 for float inputs under 64 bits, int64 for small int inputs — follow `np.result_type(x, 0.0)` for floats and keep integer exactness for ints): `out[0] == 0` and `out[i] == sum(x[:i])` for every `i`.
+- `exclusive_scan(x)` returns an array of shape `(n,)`: float inputs accumulate in float64 working precision and return float64 (narrower floats widen to float64; float64 stays float64), while integer inputs accumulate in and return int64, exact with no float rounding: `out[0] == 0` and `out[i] == sum(x[:i])` for every `i`.
 - Neither function mutates its input. Non-power-of-two lengths are handled by padding the working buffer with zeros (the additive identity) up to the next power of two, once, before either sweep — never by bounds-checking inside the sweep loops.
 
 **Edge cases that must hold**
