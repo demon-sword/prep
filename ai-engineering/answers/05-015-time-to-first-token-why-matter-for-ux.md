@@ -109,6 +109,7 @@ And the fourth lever — semantic caching — is the nuclear option: if the quer
 | [Q11: How do you reduce latency in GenAI applications?](../answers/07-003-how-reduce-latency-in-genai-applications.md) | Broader latency framework of which TTFT is one dimension |
 | [Q9: What is KV cache? How does it help in LLM inference?](../answers/01-009-what-is-kv-cache-how-does-it-help-in-llm-inference.md) | KV cache is the mechanism that prefill populates; understanding it explains TTFT |
 | [Q12: Operational/business metrics: win rate, deflection rate, p95 latency?](05-012-operationalbusiness-metrics-win-rate-deflection-rate-p95-lat.md) | TTFT p95 is one of the production SLOs in the business metrics stack |
+| [Q14: Latency vs throughput for LLM serving?](07-014-latency-vs-throughput-for-llm-serving.md) | Serving-side TTFT math (step-time equations, batching dynamics, why mean TTFT is gameable) behind the UX metric |
 
 ---
 
