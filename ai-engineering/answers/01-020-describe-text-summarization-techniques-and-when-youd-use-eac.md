@@ -111,6 +111,7 @@ On evaluation: ROUGE is a floor, not a ceiling, especially for abstractive outpu
 | [Q5: Explain context windows and their limitations](01-005-explain-context-windows-and-their-limitations.md) | Long-document summarization strategies depend on context window limits |
 | [Q14: How does chunking happen?](01-014-how-does-chunking-happen.md) | Map-Reduce summarization requires the same chunking decisions as RAG indexing |
 | [Q12: What's an RAG model? Explain the complete process](01-012-whats-an-rag-model-explain-the-complete-process.md) | Query-focused summarization is a core component of RAG answer generation |
+| [Q52: How do you generate long-form grounded documents (reports, papers)?](01-052-long-form-grounded-generation.md) | Long-form generation builds on summarization compression for prior-section context |
 
 ---
 
