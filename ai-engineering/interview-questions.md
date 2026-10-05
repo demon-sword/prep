@@ -170,10 +170,11 @@ From LockedIn AI session data:
 - Bias-variance tradeoff?
 - Overfitting — how prevent it?
 - Imbalanced datasets — how handle?
-- How would you automate prompt optimization with evolutionary search against a heuristic?
 - What is multi-head latent attention (MLA)?
 - What is grokking?
 - How did we get from ELIZA to ChatGPT, and why did rule-based chatbots plateau?
+- Long-form grounded generation?
+- Evolutionary prompt search against a heuristic?
 
 ---
 
