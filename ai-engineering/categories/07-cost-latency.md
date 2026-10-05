@@ -56,6 +56,8 @@ Strong candidates understand that **cost and latency in LLM systems are almost a
 - [Q16: Real bottleneck in LLM serving throughput? PagedAttention?](../answers/07-016-real-bottleneck-in-llm-serving-throughput-pagedattention.md)
 - [Q14: Latency vs throughput for LLM serving?](../answers/07-014-latency-vs-throughput-for-llm-serving.md)
 - [Q6: Quantization and model distillation for inference?](../answers/07-006-quantization-and-model-distillation-for-inference.md)
+- [Q17: Disaggregated prefill/decode serving?](../answers/07-017-disaggregated-prefill-decode-serving.md)
+- [Q18: CHEETAH-style inference cost estimator?](../answers/07-018-cheetah-style-inference-cost-estimator.md)
 
 ---
 
@@ -139,6 +141,8 @@ Step 6: Quantization (for self-hosted)?
 | 14 | Latency vs throughput for LLM serving? | S | `todo` |
 | 15 | Benchmark each LLM call in multi-step pipeline? | M | `todo` |
 | 16 | Real bottleneck in LLM serving throughput? PagedAttention? | S | `todo` |
+| 17 | Disaggregated prefill/decode serving? | S | `todo` |
+| 18 | CHEETAH-style inference cost estimator? | S | `todo` |
 
 ---
 
