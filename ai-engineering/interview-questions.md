@@ -170,6 +170,7 @@ From LockedIn AI session data:
 - Bias-variance tradeoff?
 - Overfitting — how prevent it?
 - Imbalanced datasets — how handle?
+- How would you automate prompt optimization with evolutionary search against a heuristic?
 
 ---
 
