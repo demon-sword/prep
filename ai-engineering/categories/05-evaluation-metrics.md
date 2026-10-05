@@ -33,6 +33,7 @@ Strong candidates understand that evaluation is not a one-time checkpoint but a 
 - [Q16: "Vibes-based" eval vs formal eval framework?](../answers/05-016-vibes-based-eval-vs-formal-eval-framework.md)
 - [Q20: A/B testing for prompt variations?](../answers/05-020-ab-testing-for-prompt-variations.md)
 - [Q24: How do you run error analysis on eval failures — from open coding to axial categories?](../answers/05-024-error-analysis-method-open-to-axial-coding.md)
+- [Q28: How do you evaluate a fixed workflow graph with frontier-reference probabilities?](../answers/05-028-workflow-graph-evals.md)
 
 ### 2. Hallucination Detection & Mitigation
 **When:** "how do you reduce / measure / detect hallucinations?" / "LLM is confidently wrong — why?" / "medical chatbot factual accuracy?"
@@ -149,6 +150,7 @@ Are you comparing two models or prompt variants?
 | 24 | How do you run error analysis on eval failures — open coding to axial categories? | S | `review` |
 | 26 | How do you audit a paper's code for reproducibility? | S | `todo` |
 | 27 | How do you design an LLM-as-reviewer rubric for papers? | S | `todo` |
+| 28 | How do you evaluate a fixed workflow graph with frontier-reference probabilities? | S | `todo` |
 
 ---
 
