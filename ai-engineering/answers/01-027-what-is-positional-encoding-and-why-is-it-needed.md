@@ -103,6 +103,7 @@ The current dominant approach is RoPE — rotary positional embeddings, used in 
 | [Q22: What is self-attention? How does it differ from multi-head attention?](01-022-what-is-self-attention-how-does-it-differ-from-multi-head-at.md) | Prerequisite — self-attention's permutation-invariance is why positional encoding is needed |
 | [Q5: Explain context windows and their limitations](01-005-explain-context-windows-and-their-limitations.md) | Follow-up — RoPE scaling is the primary mechanism for extending context windows |
 | [Q23: What is grouped query attention (GQA)?](01-023-what-is-grouped-query-attention-gqa-how-does-it-differ-from.md) | Related architecture concept — both are transformer efficiency techniques in the attention layer |
+| [Q50: What is grokking?](01-050-what-is-grokking.md) | Contrast case — grokking transformers *learn* sparse Fourier features (k = 8, i.e. 16π/113) in embeddings via gradient descent; sinusoidal positional encoding is designer-given, not learned |
 
 ---
 
