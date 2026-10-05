@@ -58,6 +58,10 @@ LLMs generate text **one token at a time in a left-to-right loop**: at each step
 
 **Autoregressive cost:** generating 1,000 output tokens requires 1,000 sequential forward passes (decode steps). This is why output tokens are typically 3–4× more expensive than input tokens per API pricing — and why long generation tasks (e.g. writing a 5,000-word essay) are costly.
 
+**Contrast: parallel decision heads (non-autoregressive)**
+
+Not every model output needs the serial loop. Parallel / non-autoregressive decision heads emit a typed decision (a class, a score vector, a structured judgment) in a single query: all output positions are produced at once from one forward pass, so there is no N-tokens→N-passes multiplier, no growing KV cache across steps, and latency is ~one prefill plus one step (the 70–500 ms class for purpose-built decision models vs seconds for a chat pipeline spelling out an answer token by token). The tradeoff is expressiveness: this works only when the output schema is fixed up front — a decision with known slots — and fails for open-ended text where each token legitimately conditions on the last. Interview line: *"I'd keep autoregressive decode for anything where the output is genuinely sequential, and reach for a parallel decision head when the answer is one typed judgment — paying a full decode trajectory for a single bit of information is the most expensive serving mistake in this stack."*
+
 ---
 
 ## Verbal script

@@ -68,6 +68,8 @@ Strong candidates treat classical ML as a *diagnostic toolkit*, not a historical
 Choosing algorithm for a new task:
   If task = image classification / vision:
     → CNN (ResNet/EfficientNet)  because spatial locality + translation invariance
+  If task = vision-language (captioning, VQA, grounding):
+    → VLM recipe (contrastive-pretrained encoder + adapter + staged align→SFT)  because contrastive pretraining already aligned the embedding space; see [12-multimodal-vlm](12-multimodal-vlm.md)
   If task = sequence (NLP, time-series) with long-range dependencies:
     → Transformer  because global attention, parallelizable training
   If task = sequence with limited compute / edge:

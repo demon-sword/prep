@@ -40,6 +40,7 @@ A GenAI document-processing pipeline transforms raw unstructured documents (PDFs
 |---------------|-----------------|
 | Native PDF | PyMuPDF or pdfplumber — extract text with font/bbox metadata preserved |
 | Scanned PDF / images | AWS Textract (tables + forms) or Google Document AI; fallback Tesseract |
+| Complex PDFs via managed API | LlamaParse (LlamaCloud) — rule-based fast mode (`parse_page_without_llm`, no LLM call per page: cheap, fast, weaker on complex tables) vs LLM modes (vision-LLM table/chart understanding, higher $/latency per page); pick per document complexity |
 | Emails | Python `email`/`mailparser` — strip boilerplate signatures, parse HTML body |
 | HTML / web | BeautifulSoup + readability-lxml to extract article body |
 | Tables | Textract AnalyzeDocument API or Camelot for structured table extraction → Markdown table strings |
@@ -74,6 +75,8 @@ A GenAI document-processing pipeline transforms raw unstructured documents (PDFs
 A legal firm processing 50K contracts (PDFs with tables of clauses, scanned exhibits, email attachments): using PyMuPDF for native PDFs catches ~90% of text cleanly; Textract handles scanned exhibits at ~95% word accuracy. Tables are extracted as Markdown and chunked whole — splitting mid-table causes the LLM to lose column context. Parent-child chunking (1024/256) improves recall@5 from 61% → 79% on clause-lookup queries. Cost: Textract runs ~$0.015/page, so batching scanned pages and caching already-extracted pages in S3 is essential at scale.
 
 **Key tradeoff — accuracy vs cost:** Textract/Document AI gives best accuracy but is expensive per page. Use it only for scanned/image PDFs; PyMuPDF (free, local) for native PDFs. Route by detection heuristic (text layer present? → PyMuPDF; absent → Textract).
+
+**Managed extraction (LlamaCloud):** LlamaExtract adds schema-bound extraction on top of parsing — you hand it a Pydantic schema (e.g. per-contract-type variants) and it returns validated records instead of raw text, which is the direct feed for a knowledge-graph import or a structured store. Modes trade $/quality: fast/cheap modes for clean uniform documents, `BALANCED` for mixed layouts, higher-fidelity modes for tables and exhibits that rule-based parsing mangles. Same routing logic as OCR — default to the cheap path, escalate per document complexity — because LLM-per-page extraction dominates the pipeline bill at 50K-document scale.
 
 ---
 

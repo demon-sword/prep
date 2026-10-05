@@ -58,6 +58,8 @@ Temperature and top-p (nucleus sampling) are two hyperparameters that control ho
 | Creative writing / brainstorming | 1.0–1.2 | 0.95 | Diversity and surprise valued |
 | Embedding generation | N/A | N/A | Embeddings don't use sampling |
 
+**SFT-sharpening caveat:** Supervised fine-tuning itself narrows the distribution before sampling ever enters the picture — NLL/cross-entropy imitation on curated demos rewards the single demonstrated phrasing, so probability mass concentrates on a few token paths. Greedy decoding then amplifies that local pathology: once the top token repeats, each repeated context makes repetition more likely, a self-reinforcing loop. In practice an SFT'd model can loop at `temperature=0` where its base model did not. Raising temperature slightly or adding a repetition penalty masks the symptom; the durable fix is post-training that rewards correctness rather than imitation (preference/RL methods — see 04-004).
+
 **Production gotcha:** Setting `temperature=0` in a RAG pipeline dramatically reduces hallucination risk but can cause the model to get "stuck" in repetitive loops on edge cases. A small temperature like 0.1 is often safer than exactly 0 for long-form generation.
 
 In frameworks like vLLM, sampling parameters are per-request — you can serve different temperature profiles for different endpoint paths (e.g., `/api/code` vs `/api/chat`) from the same model instance.

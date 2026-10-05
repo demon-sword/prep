@@ -1,9 +1,9 @@
 # Plan: AI Engineering Concepts
 
 ## Meta
-total_concepts: 41
-done: 41
-remaining: 0
+total_concepts: 54
+done: 44
+remaining: 10
 created: 2026-06-28
 
 ## Done
@@ -51,3 +51,6 @@ created: 2026-06-28
 - [x] 39-quantization-inference — Quantization for Inference
 - [x] 40-kv-cache — KV Cache Management
 - [x] 41-flash-attention — Flash Attention
+- [x] 52-cuda-programming-model — CUDA Programming Model
+- [x] 53-gpu-profiling-nsight — GPU Profiling with Nsight
+- [x] 54-gpu-hardware-landscape — GPU Hardware Landscape for AI

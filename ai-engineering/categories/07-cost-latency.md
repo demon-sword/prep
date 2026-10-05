@@ -32,6 +32,7 @@ Strong candidates understand that **cost and latency in LLM systems are almost a
 - [Q1: Your app gets 1M queries/day — how optimize cost? ⭐](../answers/07-001-your-app-gets-1m-queriesday-how-optimize-cost.md)
 - [Q2: How reduce token costs at scale? ⭐](../answers/07-002-how-reduce-token-costs-at-scale.md)
 - [Q4: Cost and capacity planning for LLM app at scale?](../answers/07-004-cost-and-capacity-planning-for-llm-app-at-scale.md)
+**Graph-DB hosting note:** Neo4j AuraDB's free tier covers prototype knowledge-graph workloads (including the hybrid vector-index + traversal query pattern in [01-016](../answers/01-016-what-is-graph-rag-how-does-it-differ-from-standard-rag.md)); self-host only when sustained traversal QPS outgrows Aura's instance pricing — graph queries are rarely the cost driver next to LLM tokens.
 
 ### 2. Latency Reduction Stack
 **When:** "how do you reduce latency in GenAI applications?" / "what is TTFT and why does it matter?" / "how do you benchmark each LLM call?"

@@ -73,6 +73,16 @@ ANN search → rerank → build prompt
 LLM call → response → store in L3 cache → return
 ```
 
+### Lifespan
+
+Each layer lives on a different clock — that is the real reason each needs its own invalidation logic:
+
+- **KV / prefix state: one generation at most.** The provider-held KV cache for the static prefix survives minutes of inactivity (typical provider TTL windows run ~5 min–1 h) and dies with the request. Treat it as ephemeral compute savings, never as storage: a prompt update or a cold prefix just means recompute, never staleness.
+- **Prompt artifacts (embeddings, ANN results): minutes–hours.** Embedding vectors are stable until the embedding model is swapped; ANN results stay valid until the next index refresh. TTLs here track the re-indexing cadence (1–4 h), not user behavior.
+- **Semantic responses: indefinite, bounded only by the TTL you choose.** A cached answer has no natural expiry — it is valid until the underlying knowledge changes. So TTL is a freshness *policy* tied to KB update cadence (hours for static docs, disabled for real-time data), plus namespace-scoped invalidation on content webhooks — never a fixed number copied from another layer.
+
+**Named pattern — double caching:** check the semantic cache first, fall through to prefix-cached generation on miss. The L3→L2 flow above already does this: a semantic hit skips the LLM call entirely, while a miss still collects the ~90% prefix discount on static tokens. The two layers never compete — they cover disjoint redundancy (repeated *meaning* vs repeated *prefix*) — so size and tune them independently.
+
 ### Example / Tradeoff
 
 **Before caching (1M queries/day, a frontier model, avg 1 200 input / 300 output tokens):**
@@ -87,12 +97,12 @@ LLM call → response → store in L3 cache → return
 - **Total: ~$6 310/day (53% reduction)**
 
 **Key tradeoffs:**
-| Layer | Hit rate | Staleness risk | Invalidation complexity |
-|-------|----------|----------------|-------------------------|
-| L3 response (semantic) | 20–35% | High (content changes) | Medium — namespace flush |
-| L2 prefix (LLM KV) | 50–90% on static tokens | Low | Low — version system prompt |
-| L1 retrieval (query-result) | 15–25% | Medium (index updates) | Medium — TTL + CDC webhook |
-| L1 embedding | 30–40% | Very low | Low — SHA-256 hash key |
+| Layer | Lifespan | Hit rate | Staleness risk | Invalidation complexity |
+|-------|----------|----------|----------------|-------------------------|
+| L3 response (semantic) | Indefinite (TTL-bound freshness policy) | 20–35% | High (content changes) | Medium — namespace flush |
+| L2 prefix (LLM KV) | One generation (5 min–1 h provider window) | 50–90% on static tokens | None — recompute, never stale | Low — version system prompt |
+| L1 retrieval (query-result) | Minutes–hours (index cadence) | 15–25% | Medium (index updates) | Medium — TTL + CDC webhook |
+| L1 embedding | Stable until model swap | 30–40% | Very low | Low — SHA-256 hash key |
 
 Semantic caching carries false-positive risk: cosine threshold too low (< 0.90) returns wrong answers for semantically close but distinct queries (e.g., "cancel subscription" vs "pause subscription"). Set threshold conservatively (0.93–0.95) and monitor cache accuracy via thumbs-down rate on cached responses separately from non-cached.
 

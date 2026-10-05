@@ -1,0 +1,293 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1.0"/>
+  <title>GPU Profiling with Nsight — AI Engineering Concepts</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com"/>
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&amp;family=JetBrains+Mono:wght@400;500&amp;display=swap" rel="stylesheet"/>
+  <style>
+    :root {
+      --bg: #0d0f17;
+      --surface: #141720;
+      --card: #1a1e2e;
+      --border: #252a3d;
+      --accent: #00d4ff;
+      --purple: #7c3aed;
+      --green: #00ff88;
+      --yellow: #ffd700;
+      --red: #ff4757;
+      --orange: #ff9500;
+      --text: #e2e8f0;
+      --text-dim: #8892a4;
+      --mono: 'JetBrains Mono', monospace;
+      --sans: 'Inter', system-ui, sans-serif;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { background: var(--bg); color: var(--text); font-family: var(--sans); line-height: 1.7; }
+    header { max-width: 1100px; margin: 0 auto; padding: 3rem 2rem 2rem; }
+    .group-badge { display: inline-block; font-size: 0.75rem; font-weight: 600; letter-spacing: 0.12em; text-transform: uppercase; color: var(--accent); border: 1px solid rgba(0,212,255,0.4); border-radius: 999px; padding: 0.25rem 0.9rem; margin-bottom: 1rem; }
+    header h1 { font-size: 2.4rem; line-height: 1.15; font-weight: 700; }
+    header h1 span { color: var(--accent); }
+    .tagline { color: var(--text-dim); font-size: 1.05rem; margin-top: 0.9rem; max-width: 70ch; }
+    main { max-width: 1100px; margin: 0 auto; padding: 0 2rem 2rem; }
+    section { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 2rem; margin-bottom: 1.5rem; }
+    section h2 { font-size: 1.5rem; margin-bottom: 1.2rem; color: var(--accent); font-family: var(--mono); }
+    section h3 { font-size: 1.15rem; margin: 1.8rem 0 0.7rem; color: var(--text); }
+    section p { margin-bottom: 0.9rem; color: var(--text); }
+    section ul, section ol { margin: 0.6rem 0 1rem 1.4rem; }
+    section li { margin-bottom: 0.45rem; }
+    code { font-family: var(--mono); font-size: 0.88em; background: rgba(0,212,255,0.08); color: var(--accent); padding: 0.1em 0.4em; border-radius: 4px; }
+    pre { font-family: var(--mono); font-size: 0.82rem; background: #0a0c12; border: 1px solid var(--border); border-radius: 8px; padding: 1.1rem 1.3rem; overflow-x: auto; margin: 1rem 0; line-height: 1.6; color: #c9d4e8; }
+    .card-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 1rem; margin: 1.2rem 0; }
+    .card { background: var(--card); border: 1px solid var(--border); border-radius: 8px; padding: 1.1rem 1.2rem; }
+    .card h4 { font-size: 0.95rem; margin-bottom: 0.5rem; color: var(--yellow); }
+    .card p { font-size: 0.9rem; color: var(--text-dim); margin: 0; }
+    .viz-desc { color: var(--text-dim); margin-bottom: 1.2rem; }
+    .btn-row { display: flex; flex-wrap: wrap; gap: 0.6rem; margin-bottom: 1.2rem; }
+    button { font-family: var(--mono); font-size: 0.82rem; background: rgba(0,212,255,0.1); color: var(--accent); border: 1px solid rgba(0,212,255,0.4); border-radius: 6px; padding: 0.5rem 1rem; cursor: pointer; transition: background 0.15s; }
+    button:hover { background: rgba(0,212,255,0.22); }
+    button.active { background: rgba(0,255,136,0.15); color: var(--green); border-color: rgba(0,255,136,0.5); }
+    canvas { width: 100%; border: 1px solid var(--border); border-radius: 8px; background: #0a0c12; display: block; cursor: crosshair; }
+    .detail { font-family: var(--mono); font-size: 0.86rem; background: #0a0c12; border: 1px solid var(--border); border-radius: 8px; padding: 1rem 1.2rem; margin-top: 1rem; line-height: 1.8; min-height: 3.5rem; }
+    .detail .good { color: var(--green); }
+    .detail .warn { color: var(--yellow); }
+    .detail .bad { color: var(--red); }
+    .detail .lbl { color: var(--text-dim); }
+    #takeaways ul { list-style: none; margin-left: 0; }
+    #takeaways li { background: var(--card); border: 1px solid var(--border); border-left: 3px solid var(--accent); border-radius: 0 8px 8px 0; padding: 0.8rem 1.1rem; margin-bottom: 0.7rem; }
+    .concept-nav { max-width: 1100px; margin: 0 auto; padding: 1.2rem 2rem 3rem; display: flex; justify-content: space-between; align-items: center; gap: 0.8rem; }
+    .nav-link { color: var(--accent); text-decoration: none; font-size: 0.9rem; border: 1px solid rgba(0,212,255,0.3); border-radius: 6px; padding: 0.5rem 1rem; display: inline-block; max-width: 42%; }
+    .nav-link:hover { background: rgba(0,212,255,0.1); }
+    .nav-dir { display: block; font-size: 0.75rem; color: var(--text-dim); }
+    .nav-center { font-size: 0.8rem; color: var(--text-dim); text-align: center; }
+    @media (max-width: 700px) {
+      header h1 { font-size: 1.7rem; }
+      section { padding: 1.3rem; }
+      .concept-nav { flex-direction: column; }
+      .nav-link { max-width: 100%; width: 100%; text-align: center; }
+      .nav-center { order: -1; }
+    }
+  </style>
+</head>
+<body>
+
+<header>
+  <div class="group-badge">Inference</div>
+  <h1>GPU Profiling <span>with Nsight</span></h1>
+  <p class="tagline">The two-tool workflow that finds where GPU time really goes — Nsight Systems for the system-wide timeline of kernels, copies, and stalls, then Nsight Compute for the per-kernel roofline that tells you exactly which fix to apply.</p>
+</header>
+
+<main>
+
+  <section id="theory">
+    <h2>Theory</h2>
+
+    <h3>Two Tools, Two Questions</h3>
+    <p>GPU profiling answers two questions in strict order, and each question owns one tool. <strong>Nsight Systems (<code>nsys</code>)</strong> answers <em>where is time going</em>: it records a system-wide timeline — CUDA kernel launches, host-to-device and device-to-host copies, NCCL collectives, CPU thread activity, dataloader waits, even OS runtime events — on one shared time axis. <strong>Nsight Compute (<code>ncu</code>)</strong> answers <em>why is this kernel slow</em>: it replays a single kernel and reports SM throughput, DRAM throughput, achieved occupancy, cache hit rates, and a roofline plot placing the kernel on the compute-bound vs memory-bound spectrum. Running <code>ncu</code> before <code>nsys</code> is the classic beginner error: you get a perfect diagnosis of a kernel that accounts for 3% of runtime.</p>
+    <div class="card-grid">
+      <div class="card">
+        <h4>nsys — the timeline</h4>
+        <p>System-wide: kernels, memcpy, NCCL, CPU, dataloader. Low overhead. Always first. Finds gaps and stalls.</p>
+      </div>
+      <div class="card">
+        <h4>ncu — the microscope</h4>
+        <p>One kernel at a time: roofline, occupancy, memory charts, SASS-level hotspots. High overhead (replay). Always second.</p>
+      </div>
+      <div class="card">
+        <h4>The rule</h4>
+        <p>nsys finds the top kernels and the gaps between them; ncu explains the top kernel. Never optimize what nsys has not indicted.</p>
+      </div>
+    </div>
+
+    <h3>Reading an nsys Timeline: Gaps Are the Finding</h3>
+    <p>A healthy inference timeline looks like a solid wall of back-to-back kernel blocks on the GPU row. Real timelines have four recurring pathologies. <strong>Launch gaps</strong> — whitespace between tiny kernels — mean the CPU cannot feed the GPU fast enough; small-batch decode with hundreds of microsecond-scale launches is the textbook case, fixed with CUDA graphs or kernel fusion. <strong>Memcpy in the hot loop</strong> — H2D blocks interleaved with compute — means weights or activations shuttle needlessly; the fixes are pinned memory, batching transfers, and overlapping copies on a separate stream. <strong>Dataloader stalls</strong> — long GPU-idle stretches while CPU rows show data loading — are a host-side bug wearing a GPU costume. <strong>Exposed NCCL</strong> — collective blocks with no compute overlapping them in tensor-parallel serving — means communication is fully on the critical path; overlapping communication with computation (or reducing TP degree) is the lever.</p>
+    <p>SM utilization below ~70% on a serving trace with a non-trivial batch size is the trigger to dig: either the batch is too small to fill the chip, or one of the four pathologies above is fragmenting the timeline.</p>
+
+    <h3>Reading an ncu Report: The Roofline Decides the Fix</h3>
+    <p>Nsight Compute's <strong>SpeedOfLight</strong> section reduces a kernel to two percentages: achieved SM (compute) throughput and achieved DRAM throughput, each against the chip's roof. High DRAM with low SM means memory-bound: optimize access patterns (coalescing, tiling, layout) or reduce bytes (lower precision, KV-cache quantization). High SM with low DRAM means compute-bound: raise arithmetic intensity or pick a faster algorithm (tensor-core layouts, FlashAttention, fused kernels). Both low means latency-bound: occupancy, divergence, or launch overhead — check the <strong>Occupancy</strong> and <strong>Launch Statistics</strong> sections before touching the math.</p>
+    <p>The <strong>Memory Workload Analysis</strong> section then tells you <em>which</em> memory level is biting: L1/TEX hit rate, L2 hit rate, and DRAM bytes per operation. A kernel reading the same weights every decode step with a poor L2 hit rate is the signature that prefix caching or weight-resident layouts would fix; sector-level inefficiency flags uncoalesced access. Source-level analysis (<code>--set full</code> with line attribution) maps SASS hotspots back to your CUDA or Triton lines — this is where a single uncoalesced gather loop gets convicted with evidence.</p>
+
+    <h3>The Command Lines That Matter</h3>
+<pre># 1. Timeline first: profile the app, skip warmup, keep it short.
+nsys profile -o serve_run --capture-range=cudaProfilerApi \
+  --cuda-memory-usage=true python serve.py
+
+# ...with torch.cuda.profiler.start() / .stop() around 20 steady-state steps...
+
+# 2. Summarize without the GUI: top kernels, top gaps.
+nsys stats --report cuda_gpu_kern_sum serve_run.nsys-rep
+nsys stats --report cuda_gpu_mem_time_sum serve_run.nsys-rep
+
+# 3. Microscope on the indicted kernel only (exclusive GPU, representative input).
+ncu --set full --launch-skip 5 --launch-count 1 -f -o top_kernel \
+  python serve.py</pre>
+    <p>Two operational notes. First, <code>ncu</code> replays the kernel many times (once per metric pass), so a full-model <code>ncu</code> run is brutally slow and often numerically fragile — always scope it with launch-skip/count to a representative step. Second, profile steady state: skip warmup iterations (JIT compilation, autotuning, KV-cache fill) with the CUDA-profiler-API capture range, or your first finding will be warmup noise that no optimization can fix.</p>
+
+    <h3>Production Reality: The Fix Playbook</h3>
+    <p>Every nsys/ncu finding maps to a small set of fixes, and senior engineers pattern-match them directly. Launch gaps across hundreds of small kernels → CUDA graphs or torch.compile with <code>mode="reduce-overhead"</code>. H2D copies in the hot path → pinned host memory plus overlapped prefetch streams. Dataloader stalls → more workers, pinned memory, and NVIDIA DALI-style GPU-side preprocessing when the CPU is saturated. Exposed NCCL in tensor-parallel decode → overlap all-reduce with the next layer's compute (as in Megatron-style scheduling) or drop a TP rank. Low achieved occupancy with register pressure → <code>__launch_bounds__</code> and re-measure. Memory-bound attention → FlashAttention or a GQA-friendly kernel, verified by the DRAM number moving, not by faith. The loop is always the same: nsys timeline, ncu roofline, one fix, re-measure — and the re-measure is non-negotiable, because GPU performance intuition is wrong often enough that every optimization ships with a before/after trace attached.</p>
+  </section>
+
+  <section id="visualization">
+    <h2>Visualization</h2>
+    <p class="viz-desc">A simulated Nsight Systems timeline for one decode step: kernel, memcpy, and NCCL rows (click any block for its stats). Toggle the two standard fixes — CUDA-graph batching and overlapped copies — and watch GPU-active time and utilization move. This is the exact before/after shape a real nsys diff shows.</p>
+    <div class="btn-row">
+      <button id="tgl-graphs">Fix: CUDA-graph batching (off)</button>
+      <button id="tgl-overlap">Fix: overlapped copies (off)</button>
+    </div>
+    <canvas id="tl-canvas" width="900" height="300"></canvas>
+    <div class="detail" id="tl-detail"><span class="lbl">Click a timeline block for kernel / copy / collective stats.</span></div>
+  </section>
+
+  <section id="takeaways">
+    <h2>Key Takeaways</h2>
+    <ul>
+      <li>Profile in order: Nsight Systems timeline first (where does time go), Nsight Compute second (why is this kernel slow) — an ncu deep-dive on a 3%-of-runtime kernel is precision wasted, and <code>nsys stats</code> gives you top-kernels tables without opening the GUI.</li>
+      <li>Read gaps, not just blocks: whitespace between microsecond kernels is CPU launch overhead (fix with CUDA graphs or torch.compile reduce-overhead mode), while H2D blocks in the hot loop are a transfer bug fixed with pinned memory and overlapped prefetch on a separate CUDA stream.</li>
+      <li>Let the ncu roofline pick the fix: high DRAM throughput means coalesce, tile, or shrink bytes (FP8, KV-cache quantization); high SM throughput means raise intensity or switch algorithms (FlashAttention, fused Triton kernels); both low means chase occupancy and divergence first.</li>
+      <li>Scope ruthlessly: skip warmup with the cudaProfilerApi capture range around steady-state steps, and replay one representative kernel with <code>--launch-skip/--launch-count</code> — full-model ncu runs are slow, fragile, and usually measure autotuning noise.</li>
+      <li>Close every loop with a re-measured trace: exposed NCCL collectives get overlapped with next-layer compute, dataloader stalls get fixed host-side, and PyTorch Profiler plus the nsys SQLite export (<code>nsys stats --format csv</code>) make the before/after a CI-checkable artifact, not a screenshot.</li>
+    </ul>
+  </section>
+
+</main>
+
+<nav class="concept-nav">
+  <a href="52-cuda-programming-model.html" class="nav-link prev">
+    <span class="nav-dir">&#8592; Previous</span>
+    <span class="nav-title">CUDA Programming Model</span>
+  </a>
+  <div class="nav-center">53 &middot; GPU Profiling with Nsight</div>
+  <a href="54-gpu-hardware-landscape.html" class="nav-link next">
+    <span class="nav-dir">Next &#8594;</span>
+    <span class="nav-title">GPU Hardware Landscape for AI</span>
+  </a>
+</nav>
+
+<script>
+// Simulated nsys timeline: rows of kernel / memcpy / NCCL blocks for one step.
+const $ = (id) => document.getElementById(id);
+const canvas = $('tl-canvas'), ctx = canvas.getContext('2d');
+let useGraphs = false, useOverlap = false;
+let blocks = [];
+let selected = -1;
+
+const ROWS = [
+  { name: 'GPU kernels', y: 0, color: '#00d4ff' },
+  { name: 'H2D memcpy', y: 1, color: '#ffd700' },
+  { name: 'NCCL comm', y: 2, color: '#7c3aed' },
+];
+const ROW_H = 56, TOP = 44, LEFT = 130;
+
+function buildBlocks() {
+  // Base trace: 10 small kernels with launch gaps + blocking copy + exposed NCCL.
+  const kernels = [];
+  let t = 0;
+  const kgap = useGraphs ? 4 : 22;      // CUDA graphs collapse launch gaps
+  const klen = useGraphs ? 46 : 30;     // fused into fewer, denser kernels
+  const n = useGraphs ? 5 : 10;
+  for (let i = 0; i < n; i++) {
+    kernels.push({ row: 0, x: t, w: klen, label: useGraphs ? 'fused_kernel_' + i : 'kernel_' + i,
+      us: klen * 3, occ: useGraphs ? 68 : 41, dram: useGraphs ? 74 : 38,
+      bound: useGraphs ? 'memory-bound (DRAM 74%)' : 'latency-bound (both low)' });
+    t += klen + kgap;
+  }
+  const copyLen = 120;
+  const copyX = useOverlap ? 0 : t;     // overlapped: copy runs under kernels
+  const copy = { row: 1, x: copyX, w: copyLen, label: 'H2D_weights',
+    us: copyLen * 3, occ: 0, dram: 88, bound: useOverlap ? 'overlapped with compute' : 'blocking the critical path' };
+  const nccl = { row: 2, x: t + (useOverlap ? 0 : copyLen + 20), w: 90, label: 'allreduce_tp',
+    us: 270, occ: 12, dram: 20, bound: useOverlap ? 'partially overlapped' : 'fully exposed, no overlap' };
+  blocks = kernels.concat([copy, nccl]);
+  return kernels.length ? (nccl.x + nccl.w) : 1;
+}
+
+function draw(total) {
+  const W = canvas.width, H = canvas.height;
+  ctx.clearRect(0, 0, W, H);
+  const scale = (W - LEFT - 20) / total;
+  ctx.font = '12px JetBrains Mono, monospace';
+  ROWS.forEach((r) => {
+    const y = TOP + r.y * ROW_H;
+    ctx.fillStyle = '#8892a4';
+    ctx.fillText(r.name, 8, y + ROW_H / 2 + 4);
+    ctx.strokeStyle = '#252a3d';
+    ctx.strokeRect(LEFT, y + 6, W - LEFT - 20, ROW_H - 12);
+  });
+  blocks.forEach((b, i) => {
+    const r = ROWS[b.row];
+    const x = LEFT + b.x * scale, w = Math.max(3, b.w * scale);
+    const y = TOP + r.y * ROW_H + 10, h = ROW_H - 20;
+    ctx.fillStyle = i === selected ? r.color : r.color + '55';
+    ctx.strokeStyle = r.color;
+    ctx.fillRect(x, y, w, h);
+    ctx.strokeRect(x + 0.5, y + 0.5, w - 1, h - 1);
+    if (w > 46) {
+      ctx.fillStyle = '#0d0f17';
+      ctx.fillText(b.label.slice(0, Math.floor(w / 8)), x + 4, y + h / 2 + 4);
+    }
+  });
+  // Utilization readout bar
+  let active = 0;
+  blocks.forEach((b) => { if (b.row === 0) active += b.w; });
+  const util = Math.min(99, Math.round((active / total) * 100));
+  ctx.fillStyle = '#8892a4';
+  ctx.fillText('GPU-active (kernel) time: ' + util + '% of step', LEFT, H - 12);
+  ctx.fillStyle = util >= 70 ? '#00ff88' : (util >= 45 ? '#ffd700' : '#ff4757');
+  ctx.fillRect(LEFT, H - 8, 0, 0);
+  return util;
+}
+
+function render(selectKeep) {
+  const total = buildBlocks();
+  const util = draw(total);
+  if (!selectKeep) selected = -1;
+  const cls = util >= 70 ? 'good' : (util >= 45 ? 'warn' : 'bad');
+  let html = 'Step GPU-active time: <b class="' + cls + '">' + util + '%</b> &nbsp;·&nbsp; ' +
+    'graphs: <b>' + (useGraphs ? 'ON' : 'off') + '</b> &nbsp;·&nbsp; overlap: <b>' +
+    (useOverlap ? 'ON' : 'off') + '</b>';
+  if (selected >= 0 && blocks[selected]) {
+    const b = blocks[selected];
+    html += '<br/><span class="lbl">row:</span> ' + ROWS[b.row].name +
+      ' &nbsp; <span class="lbl">op:</span> ' + b.label +
+      ' &nbsp; <span class="lbl">dur:</span> ' + b.us + ' us' +
+      ' &nbsp; <span class="lbl">SM:</span> ' + b.occ + '% &nbsp; <span class="lbl">DRAM:</span> ' +
+      b.dram + '%<br/><span class="lbl">ncu verdict:</span> ' + b.bound;
+  } else {
+    html += '<br/><span class="lbl">Click a timeline block for kernel / copy / collective stats.</span>';
+  }
+  $('tl-detail').innerHTML = html;
+}
+
+canvas.addEventListener('click', (ev) => {
+  const rect = canvas.getBoundingClientRect();
+  const px = (ev.clientX - rect.left) * (canvas.width / rect.width);
+  const py = (ev.clientY - rect.top) * (canvas.height / rect.height);
+  const total = buildBlocks();
+  const scale = (canvas.width - LEFT - 20) / total;
+  selected = -1;
+  blocks.forEach((b, i) => {
+    const x = LEFT + b.x * scale, w = Math.max(3, b.w * scale);
+    const y = TOP + ROWS[b.row].y * ROW_H + 10;
+    if (px >= x && px <= x + w && py >= y && py <= y + ROW_H - 20) selected = i;
+  });
+  render(true);
+});
+
+$('tgl-graphs').addEventListener('click', (e) => {
+  useGraphs = !useGraphs;
+  e.target.classList.toggle('active', useGraphs);
+  e.target.textContent = 'Fix: CUDA-graph batching (' + (useGraphs ? 'on' : 'off') + ')';
+  render(false);
+});
+$('tgl-overlap').addEventListener('click', (e) => {
+  useOverlap = !useOverlap;
+  e.target.classList.toggle('active', useOverlap);
+  e.target.textContent = 'Fix: overlapped copies (' + (useOverlap ? 'on' : 'off') + ')';
+  render(false);
+});
+render(false);
+</script>
+</body>
+</html>

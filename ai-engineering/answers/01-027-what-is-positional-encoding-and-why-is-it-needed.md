@@ -104,6 +104,7 @@ The current dominant approach is RoPE — rotary positional embeddings, used in 
 | [Q5: Explain context windows and their limitations](01-005-explain-context-windows-and-their-limitations.md) | Follow-up — RoPE scaling is the primary mechanism for extending context windows |
 | [Q23: What is grouped query attention (GQA)?](01-023-what-is-grouped-query-attention-gqa-how-does-it-differ-from.md) | Related architecture concept — both are transformer efficiency techniques in the attention layer |
 | [Q49: What is Multi-Head Latent Attention (MLA)?](01-049-what-is-multi-head-latent-attention-mla.md) | Follow-up — MLA decouples RoPE into a separate shared key because rotary rotations do not commute with latent up-projection |
+| [Q50: What is grokking?](01-050-what-is-grokking.md) | Contrast case — grokking transformers *learn* sparse Fourier features (k = 8, i.e. 16π/113) in embeddings via gradient descent; sinusoidal positional encoding is designer-given, not learned |
 
 ---
 

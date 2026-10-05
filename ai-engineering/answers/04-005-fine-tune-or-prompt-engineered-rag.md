@@ -89,8 +89,7 @@ The strongest production pattern is the hybrid: fine-tune for behavior and style
 **Tradeoff / production angle (1 min):**
 "The practical tradeoff is iteration speed. RAG prompt changes deploy in hours; a fine-tuning cycle — data curation, training, eval, regression, deploy — is 1–2 weeks and requires the right infrastructure. So the break-even question is: have I spent more engineering time wrestling with the system prompt than a fine-tune cycle would cost? If yes, it's time to escalate. Also: fine-tuning encodes knowledge at a point in time — if your domain data changes weekly, you're now on a retraining treadmill, which tips the scales back toward RAG for the knowledge component."
 
-**Wrap-up (30s):**
-"So: RAG by default for knowledge gaps and early-stage products; fine-tuning when you have a confirmed behavior gap, ≥1K labeled examples, and prompt iteration has hit a ceiling. The hybrid of fine-tuned model + RAG retrieval is usually the production sweet spot for mature systems. Happy to go deeper on LoRA mechanics or how to build the labeled dataset for fine-tuning."
+"So: RAG by default for knowledge gaps and early-stage products; fine-tuning when you have a confirmed behavior gap, ≥1K labeled examples, and prompt iteration has hit a ceiling. The hybrid of fine-tuned model + RAG retrieval is usually the production sweet spot for mature systems. Packaged for enterprise interviews: PEFT + RAG first, then layer preference or RL methods — DPO, GRPO, PPO — on top for alignment and safety. Happy to go deeper on LoRA mechanics or how to build the labeled dataset for fine-tuning."
 
 ---
 
@@ -114,4 +113,4 @@ The strongest production pattern is the hybrid: fine-tune for behavior and style
 
 ## One-liner recall
 
-> RAG fixes knowledge gaps (missing or stale facts); fine-tuning fixes behavior gaps (bad format, style, schema compliance despite good retrieval) — diagnose root cause with RAGAS context_recall before choosing, and use both together for mature production systems.
+> RAG fixes knowledge gaps (missing or stale facts); fine-tuning fixes behavior gaps (bad format, style, schema compliance despite good retrieval) — diagnose root cause with RAGAS context_recall before choosing, and use both together for mature production systems. Packaged heuristic: PEFT + RAG is the default enterprise stack — LoRA for behavior, retrieval for knowledge — and layer DPO/GRPO/PPO on top only when you need alignment beyond imitation.

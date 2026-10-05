@@ -49,6 +49,7 @@ A strong candidate understands RAG as a **nine-stage production pipeline** — n
 - Q13: Common RAG failure points — how debug them?
 - Q21: How evaluate a RAG pipeline? NDCG, MRR, precision@k, recall?
 - Q34: Weak evaluation hiding retrieval failures
+- **Legal-RAG eval dataset — CUAD:** Atticus CUAD (500+ contracts, 41 clause types) is the standard clause-extraction benchmark for legal RAG — use it as the golden set when your retrieval must find exact contractual language, not just semantically similar passages.
 
 ### 4. Production Scaling & Cost
 **When:** "Scale RAG to 10M+ articles", "How do you reduce latency?", "Semantic caching?", "Cost/latency/accuracy tradeoffs?"
@@ -154,6 +155,7 @@ If simple context fits in a single prompt:
 | 33 | Stale indexes, embedding drift | M | `todo` |
 | 34 | Weak evaluation hiding retrieval failures | S | `todo` |
 | 35 | Scholarly source connectors (arXiv, Semantic Scholar, PubMed)? | M | `todo` |
+| 36 | How do you model and import a knowledge graph in Neo4j with Cypher? | M | `todo` |
 
 ---
 

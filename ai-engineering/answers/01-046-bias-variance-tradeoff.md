@@ -114,6 +114,7 @@ One practical rule: if your train-val gap is larger than your train error, that'
 | [Q47: Overfitting — how prevent it?](01-047-overfitting-how-prevent-it.md) | Direct follow-up — bias-variance diagnosis leads to overfitting mitigations |
 | [Q48: Imbalanced datasets — how handle?](01-048-imbalanced-datasets-how-handle.md) | Same ML fundamentals cluster — class imbalance amplifies variance in rare-class prediction |
 | [Q4: What is the difference between pre-training and fine-tuning?](01-004-what-is-the-difference-between-pre-training-and-fine-tuning.md) | Fine-tuning on small data is where bias-variance reappears in LLM workflows |
+| [Q50: What is grokking?](01-050-what-is-grokking.md) | Delayed-generalization edge case — memorization resolves into a generalizing circuit late |
 
 ---
 
