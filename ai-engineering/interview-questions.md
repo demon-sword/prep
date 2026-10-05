@@ -170,6 +170,7 @@ From LockedIn AI session data:
 - Bias-variance tradeoff?
 - Overfitting — how prevent it?
 - Imbalanced datasets — how handle?
+- How did we get from ELIZA to ChatGPT, and why did rule-based chatbots plateau?
 
 ---
 
@@ -894,6 +895,34 @@ Questions on managing context windows, long-document handling, memory strategies
 - What role does KV cache play in managing context efficiently at inference time?
 - How do you avoid context pollution when retrieved chunks are irrelevant?
 - Describe a production incident caused by poor context management and how you'd prevent it.
+
+## 23. Multimodal / VLM (answers category 12)
+
+Questions for the new `12-multimodal-vlm` answers category (vision-language models). The matching `12-0xx` recipe notes are owned by the category lane; these stems define the interview surface.
+
+- What is the difference between an LLM, a VLM, and a multimodal LLM?
+- How do vision-language models connect an image encoder to a language model?
+- Compare contrastive (CLIP/SigLIP), captioning (CapPa), and joint (CoCa) vision-encoder pretraining.
+- How do VLMs handle high-resolution images without exploding the token budget?
+- What do the LLaVA and Qwen-VL training recipes teach about building a VLM on a budget?
+- How do video-language models tokenize video, and what does it cost?
+- Which open VLMs would you shortlist for a production assistant, and on what criteria?
+
+---
+
+## Appendix A: Market demand signals (comment-section skills)
+
+Demand sample, not a question set: skill names volunteered by 100+ commenters on a viral 100%-remote AI Engineer job ad (70 LPA fixed, 2+ yrs). Commenter content is supporting signal only — the ad itself asks for production AI systems, modern AI/ML tech, and shipping reliability, all covered by the bank above. Every named skill already has a home in this repo:
+
+| Skill signal | Where prep covers it | Why it matters for interviews |
+|---|---|---|
+| LangGraph | `ai-engineering/categories/03-agents-tool-use.md`, answers `01-017` (reflection) | Agent orchestration is the most-cited production skill; expect "how do you structure a multi-step agent" |
+| MCP (Model Context Protocol) | `system-design/claude/answers/03-mcp-tool-use-ui.md` | Tool-use standardization; expect "how do you expose tools to an agent safely" |
+| GraphRAG | answers `01-016` (graph RAG vs standard RAG) | Multi-hop retrieval over entity graphs; expect "when does vanilla RAG fail" |
+| ReAct prompting | Bank §3 Agents stems (ReAct, Plan-and-Execute) | Baseline agent pattern; expect a whiteboard walkthrough with tool calls |
+| Multi-cloud LLM APIs | `system-design/claude/answers/09-api-design-provider-abstraction.md` | Provider abstraction and failover; expect "how do you avoid single-vendor lock-in" |
+
+Reading guide: if a signal above maps to a bank section you have not studied, treat that section as prioritized — the market is telling you what production interviews probe.
 
 ---
 
