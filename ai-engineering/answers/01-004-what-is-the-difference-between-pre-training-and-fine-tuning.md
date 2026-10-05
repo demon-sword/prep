@@ -27,6 +27,8 @@ Understanding of the full LLM training lifecycle — how base models acquire gen
 ## Answer
 
 ### Concept
+The idea predates deep learning: in Shannon's guessing game, the next letter of English text is highly predictable from enough preceding context — language has low entropy given context. Next-token prediction is that game at scale: asking a model to guess what comes next, trillions of times, forces it to internalize grammar, facts, and reasoning patterns as a side effect of compression.
+
 **Pre-training** is the foundational training phase where a model learns language structure, world knowledge, and reasoning patterns by predicting the next token over hundreds of billions to trillions of tokens of internet text, books, and code. It trains all model weights from scratch using a self-supervised objective. Pre-training produces a *base model* that is good at completing text but not at following instructions or being safe.
 
 **Fine-tuning** starts from the pre-trained base model and continues training on a smaller, curated dataset to adapt the model's behavior — without needing to re-learn language from scratch. Fine-tuning can target: instruction-following format (SFT), human preference alignment (RLHF/DPO), or domain-specific knowledge and style (domain adaptation).

@@ -61,6 +61,8 @@ Input → [Conv → BN → ReLU]× N → Pooling → ... → GAP → FC → Soft
 
 **ResNet skip connection** — the key insight: `H(x) = F(x) + x`. If F(x) = 0, the identity is preserved. This makes it easy to train very deep networks (gradients flow through the skip path, bypassing vanishing-gradient bottleneck).
 
+**Degradation is optimization failure, not overfitting** — the result that motivated ResNet: simply stacking more plain conv layers makes *training* error worse, not just test error. A deeper net could in principle mimic a shallower one by learning identity mappings in the extra layers (the identity-construction argument), so the fact that it trains worse indicts the optimizer, not model capacity. Skip connections fix exactly this by making identity the default the residual only has to perturb. A trained ResNet even behaves like an ensemble of mostly-shallow paths (Veit et al. 2016): deleting or shuffling individual residual blocks barely hurts accuracy, because gradient mass concentrates on short effective paths.
+
 ### Example / Tradeoff
 
 **Production example — image classification pipeline:**
@@ -77,6 +79,8 @@ Input → [Conv → BN → ReLU]× N → Pooling → ... → GAP → FC → Soft
 | Inference latency | Fast (optimised CUDA kernels) | Slower at same accuracy |
 | Inductive bias | Translation invariance, locality | None (learns all structure) |
 | Best use case | <1M samples, edge/mobile | Large-scale, pretraining+fine-tuning |
+| Self-supervised masking | Awkward (convolutions need dense grids) | Natural (patches are droppable sets — MAE drops ~75% of patches for a 3–4× pre-train speedup, no color-destroying augments needed) |
+| High-norm artifact tokens | Rare (dense local features) | Present in large pre-trained ViTs — absorbed by extra register tokens (DINOv2) that soak up global context |
 
 **Key hyperparameters:**
 - Filter size: 3×3 (standard), 1×1 (channel mixing, bottleneck), 5×5 (wider RF at cost)
@@ -103,7 +107,7 @@ Max pooling downsamples the feature map by a factor of k and builds in translati
 The breakthrough that made very deep CNNs trainable was ResNet's skip connection: output = F(x) + x. If the layer learns nothing, the identity is preserved. Gradients can flow directly through the skip path, bypassing the vanishing gradient problem, and you can train networks hundreds of layers deep."
 
 **Tradeoff / production angle (1 min):**
-"The key tradeoff I think about is CNN vs Vision Transformer. On small to mid-size datasets — say, under a million images — a ResNet-50 or EfficientNet will outperform a ViT because the spatial inductive biases are free priors. ViT has to learn locality from scratch and needs massive pretraining data to do so. But at the scale of ImageNet-21k or JFT-3B, ViT dominates. In 2026 practice, most production image classifiers on constrained data still use ResNet or EfficientNet; ViT is the right choice when you're fine-tuning a foundation model. For mobile/edge, I'd reach for MobileNetV3 or EfficientNet-Lite with INT8 quantization to hit sub-10ms on-device."
+"The key tradeoff I think about is CNN vs Vision Transformer. On small to mid-size datasets — say, under a million images — a ResNet-50 or EfficientNet will outperform a ViT because the spatial inductive biases are free priors. ViT has to learn locality from scratch and needs massive pretraining data to do so. But at the scale of ImageNet-21k or JFT-3B, ViT dominates. In 2026 practice, most production image classifiers on constrained data still use ResNet or EfficientNet; ViT is the right choice when you're fine-tuning a foundation model. For mobile/edge, I'd reach for MobileNetV3 or EfficientNet-Lite with INT8 quantization to hit sub-10ms on-device. One more asymmetry worth naming: self-supervised pre-training favors ViTs — masked autoencoders drop most image patches for a multi-fold pre-train speedup, a trick convolutions can't exploit because they need dense grids."
 
 **Wrap-up (30s):**
 "So the key insight is: CNNs encode spatial priors directly in their architecture — local filters, weight sharing, pooling — which makes them data-efficient and fast. ResNet skip connections solved depth. ViTs have overtaken CNNs at scale, but CNNs remain the default for edge inference and smaller datasets. Happy to go deeper on any layer — depthwise separable convolutions, dilated convolutions for segmentation, or the ConvNeXt modernisation."
@@ -112,7 +116,7 @@ The breakthrough that made very deep CNNs trainable was ResNet's skip connection
 
 ## Pitfalls
 
-- **Mistake:** Describing only the "conv + pooling" basics without mentioning skip connections (ResNet) or batch normalization — **Better:** Explain that vanilla deep CNNs didn't scale due to vanishing gradients; ResNet's skip connections solved this and are the reason modern CNNs work at 50–200 layers.
+- **Mistake:** Describing only the "conv + pooling" basics without mentioning skip connections (ResNet) or batch normalization — **Better:** Explain that plain deep CNNs hit *degradation* — training error gets worse as layers are added, an optimization failure rather than overfitting (a deeper net could mimic a shallower one via identity layers, yet trains worse); ResNet's skip connections make identity the default and are the reason modern CNNs work at 50–200 layers.
 - **Mistake:** Saying CNNs are "outdated" or "replaced by Transformers" without nuance — **Better:** Distinguish the use case: CNNs are still dominant for data-constrained / edge / mobile scenarios; ViT excels at scale with large pretraining data. ConvNeXt (2022) shows CNNs can match ViTs when modernised.
 - **Mistake:** Confusing translation invariance (pooling) with translation equivariance (convolution) — **Better:** Convolution is equivariant (the feature map shifts with the input), pooling induces invariance (small shifts don't change pooled output); being precise here signals depth.
 
