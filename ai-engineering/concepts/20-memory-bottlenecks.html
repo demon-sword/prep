@@ -518,6 +518,35 @@
     <div class="callout">
       <strong>Production Reality:</strong> At Mistral/Meta scale, full fine-tuning a 70B model requires 16–64 A100 (80GB) GPUs — costing $100–500/hr on cloud providers. LoRA + QLoRA democratized fine-tuning to run on 2×A100 or even a single A100 for 7–13B models. The DeepSpeed ZeRO optimizer further shards optimizer states across GPUs to enable even larger models on given hardware.
     </div>
+
+    <h3>10. Unified / Shared Memory vs Dedicated VRAM (and the MIG Aside)</h3>
+    <p>
+      So far every number assumed a datacenter GPU with its own dedicated HBM. Not all GPUs look like that.
+      <strong>Integrated GPUs</strong> (Intel Iris, AMD APUs, Apple M-series) have no dedicated VRAM hardware at all:
+      they carve the GPU's working set out of system RAM. <strong>Shared GPU memory</strong> is system DRAM
+      dynamically allocated to the GPU when it runs out of dedicated memory — physically on the CPU side, at
+      CPU-memory bandwidth, not HBM bandwidth. <strong>Apple unified memory</strong> is the friendliest version of
+      this: CPU and GPU share one physical pool, so an oversize model that would OOM a discrete card can still load
+      (the pool is large), but inference runs at unified-memory bandwidth — fine for local tools like llama.cpp on a
+      Mac Studio, not a substitute for HBM in serving.
+    </p>
+    <p>
+      Practical rule: on datacenter GPUs (A100/H100) you can ignore shared memory entirely — sizing is HBM capacity
+      vs weights + KV + overhead, as in §§1–4. Shared/unified memory only enters inference sizing for local or edge
+      runs, where the question flips from "does it fit in HBM" to "does the shared pool hold weights + KV at
+      acceptable bandwidth." Note the terminology trap: this "shared memory" has nothing to do with CUDA
+      <strong>SMEM</strong> (on-chip shared memory per streaming multiprocessor for thread cooperation) — different
+      layer, different scale, covered in the FlashAttention page.
+    </p>
+
+    <div class="callout">
+      <strong>MIG aside:</strong> before LLMs, teams routinely shared one GPU across several small vision/NLP models
+      with MIG (Multi-Instance GPU) slices — each model needed little memory and little compute, so partitioning
+      worked. LLMs broke that expectation: a 60 GB model on an 80 GB card looks like it fits "on paper," but weights
+      are only the down payment — the KV cache grows at runtime with context and concurrency (§§1–4), and that growth
+      needs headroom no static partition leaves behind. MIG slices (e.g. 7× ~10 GB on an A100) are far too small for
+      LLM serving except toy models — plan one GPU (or tensor-parallel group) per served LLM, not co-location.
+    </div>
   </section>
 
   <!-- ══════════════════════════════════════════════════════ VISUALIZATION -->
@@ -562,19 +591,13 @@
         <strong>Optimizer states dwarf weights.</strong> Adam's m and v tensors (both FP32) add 8 bytes per parameter on top of the 4-byte FP32 weight — meaning optimizer states alone are 2× the weight memory. For 7B params: weights ~14 GB, optimizer states ~56 GB.
       </li>
       <li>
-        <strong>Mixed precision doesn't eliminate FP32 copies.</strong> BF16 training still requires a full FP32 master weight copy for optimizer updates. The GPU memory savings from mixed precision come from reduced bandwidth during forward/backward, not smaller optimizer state footprint.
-      </li>
-      <li>
-        <strong>Activation memory is the sneaky killer.</strong> With batch_size=8 and 4K seq_len, activations can exceed 60 GB for a 7B model — dwarfing weight memory. Enable <code>gradient_checkpointing</code> in HuggingFace Transformers by default for any non-trivial training run; the 33% compute overhead is always worth the 10-20× memory reduction.
-      </li>
-      <li>
-        <strong>QLoRA is the practical baseline.</strong> 4-bit NF4 quantization (bitsandbytes) + LoRA enables 7B fine-tuning on a single 24 GB GPU and 70B fine-tuning on 2×A100. The quality gap vs. full BF16 is minimal for most fine-tuning tasks (Dettmers et al., 2023 showed within 1-2% of full fine-tuning).
-      </li>
-      <li>
-        <strong>8-bit Adam (bitsandbytes) is a free lunch.</strong> Quantizing optimizer states to INT8 cuts Adam's optimizer overhead by ~4× with negligible training quality impact. For full fine-tuning where you can't use LoRA, this is the first optimization to reach for.
+        <strong>Precision buys memory, not magic.</strong> BF16 training still requires a full FP32 master weight copy for optimizer updates — the savings come from reduced bandwidth, not smaller optimizer state. Conversely, 8-bit Adam (bitsandbytes) quantizes optimizer states to INT8 for ~4× less Adam overhead with negligible quality impact: the first knob to reach for in full fine-tuning.
       </li>
       <li>
         <strong>Batch size and gradient accumulation decouple compute from memory.</strong> Effective batch size = per-GPU batch × gradient accumulation steps. Training with batch=1 and accumulation=8 matches the gradient statistics of batch=8 while using 8× less activation memory per step.
+      </li>
+      <li>
+        <strong>Unified memory loads what HBM cannot — at bandwidth cost; MIG slices cannot serve LLMs.</strong> Apple unified memory and iGPU carve-outs let oversize models load from a shared CPU/GPU pool, which is why local llama.cpp runs work on a Mac Studio — but inference then runs at system-memory bandwidth, not HBM. And MIG partitioning belongs to the small-model era: LLM KV-cache growth needs headroom no static slice leaves behind, so plan one GPU (or tensor-parallel group) per served model.
       </li>
     </ul>
   </section>

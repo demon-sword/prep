@@ -72,6 +72,11 @@ Instrument every stage with a timer and trace with a correlation ID. Typical bre
 - **Continuous batching**: unlike static batching, new requests join in-flight batches → lower queue wait time at high throughput
 - **GPU co-location**: place embedding and LLM inference on the same machine to avoid network hop for embeddings
 
+**Layer 6 — Match the serving pattern to the decision SLA (real-time automation)**
+- When the task is a typed decision (approve/deny, classify, route) rather than open-ended text, the latency budget changes shape: autoregressive decode cost scales with output tokens, so a single-token or few-token constrained decision collapses decode to ~1 step and total latency ≈ prefill + one step — a p95 100–500 ms automation SLA instead of a seconds-long chat SLA (frontier chat pipelines run 200 ms–5 s end-to-end; purpose-built decision models report 70–500 ms on automation tasks).
+- Serve the two paths differently: real-time decisions go to the fast path — small/tier-1 model, single-token constrained output (`max_tokens: 1` plus a schema-constrained grammar), co-located with the caller to skip the network hop — while open-ended generation stays on the chat path with streaming. A complexity router that misclassifies a decision as chat pays the full decode trajectory for one bit of information.
+- Backend complement: the timeout/breaker side of the same SLA budget lives in the backend track's load-balancing `#interview-line` (`../../backend/concepts/09-load-balancing.html#interview-line`) — detection-lag windows and client-side timeouts have to cover whatever serving latency remains.
+
 ### Example / Tradeoff
 
 **Concrete p95 latency before/after for a RAG support chatbot (target: p95 < 2s TTFT):**
@@ -106,7 +111,7 @@ Fourth, model tiering. A small fast model is roughly 3-4× faster than a frontie
 For self-hosted systems, I'd look at vLLM's PagedAttention for continuous batching and consistent decode throughput, and speculative decoding for structured outputs like JSON or SQL — a small draft model generates candidates that the large model verifies in one forward pass, giving 2-4× decode speedup."
 
 **Tradeoff / production angle (1 min):**
-"The key tradeoffs: the semantic cache threshold is the trickiest parameter — too aggressive and you return wrong cached answers; too conservative and hit rate collapses. I'd tune it per query class. Streaming adds infrastructure complexity and means you can't do post-processing before the user sees output. Speculative decoding only helps on predictable outputs; it degrades on highly creative or long-form generation. And model tiering requires a complexity router that itself needs to be fast — otherwise you eat back the savings on the routing latency."
+"The key tradeoffs: the semantic cache threshold is the trickiest parameter — too aggressive and you return wrong cached answers; too conservative and hit rate collapses. I'd tune it per query class. Streaming adds infrastructure complexity and means you can't do post-processing before the user sees output. Speculative decoding only helps on predictable outputs; it degrades on highly creative or long-form generation. And model tiering requires a complexity router that itself needs to be fast — otherwise you eat back the savings on the routing latency. When the use case is a real-time decision rather than chat, I'd split the serving path: single-token constrained output on a small co-located model holds a 100–500 ms p95 SLA that the chat path structurally cannot."
 
 **Wrap-up (30s):**
 "So the playbook is: profile first to find the bottleneck, add streaming immediately for UX, implement semantic caching for the skip-call wins, then reduce prefill via compression and context trimming, then tier models, then optimize serving infrastructure. I can go deeper on any of these or talk through how I'd set the p95 SLO and instrument each stage."

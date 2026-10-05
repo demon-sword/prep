@@ -91,6 +91,10 @@ PagedAttention solves memory management; continuous batching (iteration-level sc
    → Chunked prefill interleaves prefill with decode to avoid decode stalls
 ```
 
+**Decision-SLA serving: when the output is a typed decision, not a sequence**
+
+The stack above assumes open-ended generation where decode dominates. When each request needs a single typed decision (approve/deny, classify, route — one constrained token, not N autoregressive steps), decode collapses to ~1 step and the bottleneck flips: throughput is governed by prefill compute plus request rate, not by KV-cache capacity or batch size. Two consequences for the serving design: (1) PagedAttention's fragmentation win shrinks — single-step decodes hold almost no KV per request — while prefix caching and KV-cache-aware routing matter more, because the shared prompt prefix is nearly the entire KV footprint, so routing same-prefix requests to the node already holding their KV blocks (see the KV/prefix-affinity routing subsection under Production Deployment Patterns in `../concepts/38-production-llm-serving.html#theory`) directly multiplies effective capacity; (2) the SLA becomes a per-request prefill budget — small model, short context, co-located caller — which is how purpose-built decision serving holds 70–500 ms end-to-end where a frontier chat pipeline spends seconds traversing a full decode trajectory for one bit of information.
+
 ### Example / Tradeoff
 
 **vLLM vs HuggingFace TGI on LLaMA-13B (Kwon et al. 2023):**
