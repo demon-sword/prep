@@ -90,6 +90,8 @@ If you only have API access (e.g. OpenAI):
 
 Key tradeoff: AWQ INT4 on complex math/code tasks can degrade by 3-5%; for RAG factual Q&A, degradation is typically <1% (faithfulness 0.94→0.92). Always validate on your golden task set before switching to INT4 in production.
 
+**Bigger-at-4-bit rule:** Given a fixed RAM budget, a bigger model quantized to 4-bit usually beats a smaller model at 8-bit — e.g. a 70B-class model at AWQ INT4 (~35 GB) outperforms a ~35B-parameter model at INT8 in the same ~35 GB footprint, because the size advantage outweighs the 1–3% quantization loss. The rule reverses around ~3-bit: below that, the quantization cliff (Q3/Q2) destroys more quality than extra parameters add, and smaller models degrade first — so at extreme compression, prefer the smaller model at higher precision.
+
 ---
 
 ## Verbal script
@@ -107,7 +109,7 @@ Concretely, a 70B-class open-weight model in BF16 requires two A100 80GB GPUs at
 Knowledge distillation is a different lever. You use the big teacher model — say a frontier model — to generate high-quality completions for your task-specific dataset, then fine-tune a smaller student like a small open-weight model (7–8B class) on those synthetic examples using SFT. The student learns the teacher's behavior, not its weights. Phi-2, a small open-weight model (7–8B class), and DistilBERT were all produced this way. The tradeoff is training cost upfront — days of GPU time — but the resulting model is permanently smaller and can be further quantized."
 
 **Tradeoff / production angle (1 min):**
-"The key production decision is: quantize first, distill only if needed. PTQ takes hours and no training data; distillation takes weeks and a curated dataset. I always benchmark INT4 against my golden task set before deploying — for RAG factual Q&A the quality loss is typically under 1%; for math-heavy or multi-step reasoning tasks, INT4 can lose 3-5%, which may not be acceptable.
+"The key production decision is: quantize first, distill only if needed. PTQ takes hours and no training data; distillation takes weeks and a curated dataset. One rule of thumb I use: in a fixed RAM budget, the bigger model at 4-bit usually beats the smaller model at 8-bit — until you drop toward 3-bit, where the quantization cliff reverses it. I always benchmark INT4 against my golden task set before deploying — for RAG factual Q&A the quality loss is typically under 1%; for math-heavy or multi-step reasoning tasks, INT4 can lose 3-5%, which may not be acceptable.
 
 The other common trap is validating quantization accuracy on generic benchmarks like MMLU instead of your actual production tasks. A model that scores 85% on MMLU at INT8 can still fail your specific legal extraction or medical coding task if those rely on rare tokens that quantization degrades."
 
