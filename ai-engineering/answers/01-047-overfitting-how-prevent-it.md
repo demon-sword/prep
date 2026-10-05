@@ -105,6 +105,7 @@ A concrete example: when fine-tuning a small open-weight model (7–8B class) on
 | [Q46: Bias-variance tradeoff](01-046-bias-variance-tradeoff.md) | Prerequisite — overfitting is the high-variance failure mode |
 | [Q48: Imbalanced datasets — how handle?](01-048-imbalanced-datasets-how-handle.md) | Follow-up — imbalance amplifies overfitting on minority class |
 | [Q4: What is the difference between pre-training and fine-tuning?](01-004-what-is-the-difference-between-pre-training-and-fine-tuning.md) | LLM context — fine-tuning on small datasets is the primary overfitting risk for LLM engineers |
+| [Q50: What is grokking?](01-050-what-is-grokking.md) | Adjacent phenomenon — grokking's train-val gap closes late via weight-decay cleanup |
 
 ---
 

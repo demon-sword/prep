@@ -162,6 +162,7 @@ If seq2seq (translation, summarization with fixed input → output):
 | 46 | Bias-variance tradeoff? | E | `todo` |
 | 47 | Overfitting — how prevent it? | E | `todo` |
 | 48 | Imbalanced datasets — how handle? | E | `todo` |
+| 50 | What is grokking? | M | `todo` |
 
 ---
 
